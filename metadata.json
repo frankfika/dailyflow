@@ -1,0 +1,6 @@
+{
+  "name": "DailyFlow",
+  "description": "A local-first intelligent planner for Markdown-native workflows with automatic rollover, project management, and mindmaps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

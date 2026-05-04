@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-background: #F9F7F2;
+  --color-surface: #EAE7DF;
+  --color-surface-white: #FFFFFF;
+  --color-border: #DED9CE;
+  
+  --color-text-main: #4A4439;
+  --color-text-heading: #3F4238;
+  --color-text-muted: #8B8679;
+  
+  --color-accent: #6B705C;
+  --color-accent-light: #F0EDE6;
+  --color-accent-warm: #CB997E;
+  --color-accent-highlight: #FFE8D6;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+}
+
+/* Editorial Typography */
+.editorial-hero {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Floating Elements */
+.floating-card {
+  background: var(--color-surface-white);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 20px 50px rgba(107, 112, 92, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.floating-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 50px rgba(107, 112, 92, 0.08);
+}
+
+/* Command Pill */
+.command-pill {
+  background: var(--color-accent);
+  color: var(--color-surface-white);
+  border-radius: 9999px;
+  box-shadow: 0 10px 30px rgba(107, 112, 92, 0.2);
+}
+
+/* Custom Scrollbar */
+@utility scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

@@ -1,0 +1,1385 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { GoogleGenAI, Type } from '@google/genai';
+import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Check, Command, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle } from 'lucide-react';
+import Editor from 'react-simple-code-editor';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-markdown';
+import 'prismjs/themes/prism.css';
+import { filesApi, tasksApi, rolloverApi } from './api/client';
+
+type Task = {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'done' | 'migrated';
+  tags?: string[];
+  project?: string;
+  deadline?: string;
+  priority?: 'high' | 'medium' | 'low';
+  source_date?: string;
+};
+
+// Data is now loaded from backend API
+
+const TAG_COLORS = [
+  "bg-blue-100 text-blue-700 border-blue-200",
+  "bg-emerald-100 text-emerald-700 border-emerald-200",
+  "bg-violet-100 text-violet-700 border-violet-200",
+  "bg-amber-100 text-amber-700 border-amber-200",
+  "bg-rose-100 text-rose-700 border-rose-200",
+  "bg-cyan-100 text-cyan-700 border-cyan-200",
+  "bg-pink-100 text-pink-700 border-pink-200",
+  "bg-indigo-100 text-indigo-700 border-indigo-200",
+];
+
+const getTagColor = (tag: string) => {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+};
+
+function getTodayStr(): string {
+  const d = new Date();
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().split('T')[0];
+}
+
+export default function App() {
+  const todayStr = getTodayStr();
+  const [currentFileDate, setCurrentFileDate] = useState(todayStr);
+  const [filesMap, setFilesMap] = useState<Record<string, string>>({});
+  const [markdown, setMarkdown] = useState<string>('');
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'mindmap'>('today');
+  const [isRollingOver, setIsRollingOver] = useState(false);
+  const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
+  const [lastSyncedMD, setLastSyncedMD] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showBrainDump, setShowBrainDump] = useState(false);
+  const [brainDumpText, setBrainDumpText] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
+  const [tagInputValue, setTagInputValue] = useState('');
+  const [newTaskDeadline, setNewTaskDeadline] = useState<string>('');
+  const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
+
+  const [showAISummary, setShowAISummary] = useState(false);
+  const [summaryPeriod, setSummaryPeriod] = useState<'7days' | '30days' | 'all'>('7days');
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+  const [language, setLanguage] = useState<'en' | 'zh'>('en');
+  const [syncInterval, setSyncInterval] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([]);
+  const markdownRef = React.useRef(markdown);
+
+  // Load file list on mount
+  useEffect(() => {
+    let cancelled = false;
+    const loadFileList = async () => {
+      try {
+        const files = await filesApi.list();
+        const map: Record<string, string> = {};
+        // Load content for all files in parallel
+        await Promise.allSettled(
+          files.map(async (f) => {
+            const data = await filesApi.get(f);
+            if (data) map[f] = data.content;
+          })
+        );
+        if (!cancelled) {
+          setFilesMap(prev => ({ ...prev, ...map }));
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.error('Failed to load file list', e);
+          setLoadError('Failed to load files. Is the backend running?');
+        }
+      }
+    };
+    loadFileList();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load current date's tasks from API
+  const loadTasksForDate = useCallback(async (date: string) => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await filesApi.get(date);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [date]: data.content }));
+      } else {
+        setMarkdown('');
+        setTasks([]);
+        setLastSyncedMD('');
+      }
+    } catch (e) {
+      console.error('Failed to load tasks', e);
+      setLoadError('Failed to load tasks. Is the backend running?');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTasksForDate(currentFileDate);
+  }, [currentFileDate, loadTasksForDate]);
+
+  useEffect(() => {
+    markdownRef.current = markdown;
+  }, [markdown]);
+
+  useEffect(() => {
+    if (syncInterval > 0) {
+      const intervalId = setInterval(() => {
+        setIsSyncing(true);
+        setTimeout(() => {
+          setLastSyncedMD(markdownRef.current);
+          filesApi.update(currentFileDate, markdownRef.current).catch(console.error);
+          setIsSyncing(false);
+        }, 1500);
+      }, syncInterval * 60000);
+      return () => clearInterval(intervalId);
+    }
+  }, [syncInterval, currentFileDate]);
+
+  // Load all pending tasks for projects view when switching to projects tab
+  useEffect(() => {
+    if (activeTab !== 'projects') return;
+    let cancelled = false;
+    const loadAllPending = async () => {
+      try {
+        const files = await filesApi.list();
+        if (cancelled) return;
+        const results = await Promise.all(files.map(f => filesApi.get(f)));
+        if (cancelled) return;
+        const pending: Task[] = [];
+        results.forEach((data) => {
+          if (!data) return;
+          (data.tasks as Task[]).forEach((t) => {
+            if (t.status === 'todo') {
+              pending.push({ ...t, source_date: t.source_date || data.date });
+            }
+          });
+        });
+        if (!cancelled) setAllPendingTasks(pending);
+      } catch (e) {
+        if (!cancelled) console.error('Failed to load pending tasks', e);
+      }
+    };
+    loadAllPending();
+    return () => { cancelled = true; };
+  }, [activeTab, currentFileDate]);
+
+  const hasChanges = markdown !== lastSyncedMD;
+
+  const generateAISummary = async () => {
+    setIsGeneratingSummary(true);
+    setAiSummary(null);
+    try {
+      const allDates = Object.keys(filesMap).sort((a,b) => b.localeCompare(a));
+      let filteredDates = allDates;
+      
+      const now = new Date('2026-05-04T00:00:00Z');
+      if (summaryPeriod === '7days') {
+        filteredDates = allDates.filter(d => {
+           const date = new Date(`${d}T00:00:00Z`);
+           const diffTime = Math.abs(now.getTime() - date.getTime());
+           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+           return diffDays <= 7;
+        });
+      } else if (summaryPeriod === '30days') {
+        filteredDates = allDates.filter(d => {
+           const date = new Date(`${d}T00:00:00Z`);
+           const diffTime = Math.abs(now.getTime() - date.getTime());
+           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+           return diffDays <= 30;
+        });
+      }
+      
+      let contextStr = "Here are my notes and tasks for the selected period:\n\n";
+      filteredDates.forEach(date => {
+         contextStr += `--- Date: ${date} ---\n${filesMap[date]}\n\n`;
+      });
+      
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}`,
+      });
+      
+      setAiSummary(response.text?.trim() || "No summary generated.");
+    } catch (e) {
+      console.error(e);
+      setAiSummary("Failed to generate AI summary. Ensure the API key is configured.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const processBrainDump = async () => {
+    if (!brainDumpText.trim()) return;
+    setIsProcessingBrainDump(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Extract a list of actionable tasks from the following text:\n\n"${brainDumpText}"\n\nAssign reasonable tags (e.g., 'work', 'personal', 'tasks'). Assign priorities (low, medium, high), deadlines (YYYY-MM-DD), and projects if implied.`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                project: { type: Type.STRING },
+                deadline: { type: Type.STRING },
+                priority: { type: Type.STRING }
+              },
+              required: ['title', 'tags']
+            }
+          }
+        }
+      });
+      
+      try {
+        const jsonStr = response.text.trim();
+        const extracted = JSON.parse(jsonStr) as any[];
+        
+        const newTasks: Task[] = extracted.map((t, idx) => ({
+          id: `t_${Date.now()}_${idx}`,
+          title: t.title,
+          status: 'todo',
+          tags: Array.isArray(t.tags) && t.tags.length > 0 ? t.tags.map((tag: string) => tag.toLowerCase()) : ['tasks'],
+          source_date: currentFileDate,
+          project: t.project,
+          deadline: t.deadline,
+          priority: t.priority as any
+        }));
+        
+        // Add new tasks via API
+        for (const nt of newTasks) {
+          await tasksApi.create(currentFileDate, nt);
+        }
+        // Refresh markdown and re-sync tasks with server-side parsed IDs
+        const fileData = await filesApi.get(currentFileDate);
+        if (fileData) {
+          setMarkdown(fileData.content);
+          setTasks(fileData.tasks as Task[]);
+          setLastSyncedMD(fileData.content);
+          setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
+        }
+        setBrainDumpText('');
+        setShowBrainDump(false);
+      } catch (e) {
+        console.error("Failed to parse", e);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to process with AI.");
+    } finally {
+      setIsProcessingBrainDump(false);
+    }
+  };
+
+  // When date changes, load tasks
+  const handleToggleTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    const newStatus = task.status === 'todo' ? 'done' : 'todo';
+    try {
+      await tasksApi.updateStatus(id, currentFileDate, newStatus);
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+      // Refresh markdown after task change
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+    } catch (e) {
+      console.error('Failed to toggle task', e);
+    }
+  };
+
+  const handleRollover = async () => {
+    setIsRollingOver(true);
+    try {
+      const result = await rolloverApi.apply(currentFileDate);
+      if (result.success) {
+        // Refresh current date content
+        const data = await filesApi.get(currentFileDate);
+        if (data) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        }
+        // Refresh file list
+        const files = await filesApi.list();
+        const map = { ...filesMap };
+        await Promise.allSettled(
+          files.map(async (f) => {
+            if (!map[f]) {
+              const d = await filesApi.get(f);
+              if (d) map[f] = d.content;
+            }
+          })
+        );
+        setFilesMap(map);
+      }
+    } catch (e) {
+      console.error('Rollover failed', e);
+    } finally {
+      setIsRollingOver(false);
+    }
+  };
+
+  const handleGitSync = async () => {
+    setIsSyncing(true);
+    try {
+      await filesApi.update(currentFileDate, markdown);
+      setLastSyncedMD(markdown);
+    } catch (e) {
+      console.error('Sync failed', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleEditTask = async (id: string, newTitle: string, newDescription?: string) => {
+    try {
+      await tasksApi.edit(id, currentFileDate, newTitle, newDescription);
+      // Refresh markdown and re-sync tasks (server may have stable IDs)
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+    } catch (e) {
+      console.error('Failed to edit task', e);
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    try {
+      await tasksApi.delete(id, currentFileDate);
+      // Refresh markdown and re-sync tasks
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+    } catch (e) {
+      console.error('Failed to delete task', e);
+    }
+  };
+
+  const todayTasks = tasks.filter(t => t.status !== 'migrated');
+  const categories = Array.from(new Set(todayTasks.flatMap(t => t.tags || [])));
+
+  const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
+  const recentDates = allDates.filter(d => d >= '2026-04-27');
+  const archivedDates = allDates.filter(d => d < '2026-04-27');
+  
+  const archivedMonths: Record<string, string[]> = {};
+  archivedDates.forEach(d => {
+    const dateObj = new Date(`${d}T00:00:00Z`);
+    const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const monthName = monthFormatter.format(dateObj); // e.g. "April 2026"
+    if (!archivedMonths[monthName]) archivedMonths[monthName] = [];
+    archivedMonths[monthName].push(d);
+  });
+
+  const [expandedArchiveMonths, setExpandedArchiveMonths] = useState<Record<string, boolean>>({});
+
+  const toggleArchiveMonth = (month: string) => {
+    setExpandedArchiveMonths(prev => ({ ...prev, [month]: !prev[month] }));
+  };
+
+  return (
+    <div className="h-screen w-full bg-background flex overflow-hidden text-text-main relative">
+      {/* Sidebar Overlay for Mobile */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/20 z-20 lg:hidden backdrop-blur-sm"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar */}
+      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 bg-surface flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'}`}>
+        <div className="p-8 w-64">
+          <div className="flex flex-col gap-1 mb-10">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-accent text-white flex items-center justify-center font-serif text-lg font-bold rounded-lg shadow-sm">D</div>
+              <span className="font-sans text-xs uppercase tracking-widest font-bold text-text-heading">DailyFlow</span>
+            </div>
+            <div className="mt-2 pl-11 text-[10px] uppercase tracking-widest font-bold text-text-muted opacity-80">
+              {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date('2026-05-04T00:00:00Z'))}
+            </div>
+          </div>
+          
+          <nav className="space-y-8 pb-6">
+            <div>
+              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4 flex items-center justify-between">
+                <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
+                <button 
+                  onClick={async () => {
+                    const today = getTodayStr();
+                    if (!filesMap[today]) {
+                      try {
+                        await filesApi.create(today, '## Tasks\n');
+                        setFilesMap(prev => ({ ...prev, [today]: '## Tasks\n' }));
+                      } catch (e) {
+                        console.error('Failed to create note', e);
+                      }
+                    }
+                    setCurrentFileDate(today);
+                  }}
+                  className="p-1 rounded-md bg-text-muted/10 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors flex items-center gap-1"
+                  title="New Daily Note"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </h3>
+              <ul className="space-y-3 text-sm font-sans">
+                {recentDates.map(date => (
+                  <li 
+                    key={date}
+                    onClick={() => setCurrentFileDate(date)}
+                    className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                  >
+                    {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
+                    <span className={currentFileDate !== date ? "ml-4" : ""}>
+                      {date}
+                    </span>
+                  </li>
+                ))}
+
+                {Object.keys(archivedMonths).length > 0 && (
+                  <li className="pt-2">
+                    <span className="text-[10px] uppercase tracking-widest text-text-muted font-bold block mb-3">{language === 'zh' ? '归档' : 'Archive'}</span>
+                    <ul className="space-y-2">
+                      {Object.keys(archivedMonths).map(monthName => (
+                        <li key={monthName} className="space-y-2">
+                          <button 
+                            onClick={() => toggleArchiveMonth(monthName)}
+                            className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
+                          >
+                            {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            <span className="ml-[2px]">{monthName}</span>
+                          </button>
+                          {expandedArchiveMonths[monthName] && (
+                            <ul className="space-y-3 pl-4 border-l border-border/50 ml-6 pb-2">
+                              {archivedMonths[monthName].map(date => (
+                                <li 
+                                  key={date}
+                                  onClick={() => setCurrentFileDate(date)}
+                                  className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                                >
+                                  {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
+                                  <span className={currentFileDate !== date ? "" : ""}>
+                                    {date}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
+              <ul className="space-y-3 text-sm font-sans">
+                <li 
+                  onClick={() => { setActiveTab('today'); setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                >
+                  <span className="ml-4">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
+                </li>
+                <li 
+                  onClick={() => { setActiveTab('projects'); setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'projects' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                >
+                  <span className="ml-4">{language === 'zh' ? '项目概览' : 'Projects Focus'}</span>
+                </li>
+              </ul>
+            </div>
+
+            {categories.length > 0 && (
+              <div>
+                <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '分类' : 'Categories'}</h3>
+                <ul className="space-y-3 text-sm font-sans">
+                  {categories.map(c => (
+                    <li 
+                       key={c} 
+                       onClick={() => { setSelectedCategory(selectedCategory === c ? null : c); setIsSidebarOpen(false); }}
+                       className={`flex items-center gap-3 cursor-pointer transition-colors ${selectedCategory === c ? 'text-accent font-semibold' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                    >
+                      <div className={`ml-4 w-3 h-3 rounded-sm flex-shrink-0 border flex items-center justify-center transition-colors ${selectedCategory === c ? 'bg-accent border-accent text-white' : 'border-border'}`}>
+                         {selectedCategory === c && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                      </div>
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div>
+               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '洞察' : 'Insights'}</h3>
+               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
+                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setShowAISummary(true)}>
+                   <Sparkles className="ml-4 w-3.5 h-3.5" />
+                   <span>{language === 'zh' ? 'AI 总结' : 'AI Summary'}</span>
+                 </li>
+               </ul>
+            </div>
+
+            <div>
+               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '设置' : 'Settings'}</h3>
+               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
+                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setShowSettings(true)}>
+                   <Settings className="ml-4 w-3.5 h-3.5" />
+                   <span>{language === 'zh' ? '全局设置' : 'Configuration'}</span>
+                 </li>
+               </ul>
+            </div>
+          </nav>
+          <li 
+            className="pt-2 mt-auto lg:hidden"
+          >
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="flex w-full items-center gap-3 p-3 mt-4 rounded-xl cursor-pointer hover:bg-accent/10 transition-colors text-text-muted justify-center border border-border"
+            >
+              <X className="w-4 h-4" />
+              <span className="text-[10px] uppercase tracking-widest font-bold">
+                {language === 'zh' ? '关闭' : 'Close'}
+              </span>
+            </button>
+          </li>
+        </div>
+
+        <div className="mt-auto p-8 border-t border-border flex flex-col gap-4">
+          <div>
+            <span className="text-[10px] uppercase font-sans tracking-widest font-bold text-text-muted opacity-60">{language === 'zh' ? '版本控制' : 'Version Control'}</span>
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-accent-highlight border border-[#edcdb6]'}`}></div>
+                <span className="text-xs font-medium text-text-main pr-1">{hasChanges ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes') : (language === 'zh' ? '已是最新' : 'Up to date')}</span>
+              </div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={handleGitSync}
+            disabled={isSyncing || !hasChanges}
+            className="w-full bg-surface-white border border-border text-text-main py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+          >
+            {isSyncing ? (language === 'zh' ? '正在同步...' : 'Syncing...') : (language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub')}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full">
+        <header className="h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border bg-background/80 backdrop-blur-md z-10 shrink-0">
+          <div className="flex items-center gap-3 md:gap-4 text-xs font-sans tracking-widest font-bold uppercase overflow-hidden whitespace-nowrap">
+            <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
+              <Menu className="w-5 h-5"/>
+            </button>
+            <span className="text-text-muted opacity-60 hidden sm:inline shrink-0">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
+            <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
+            <span className="text-accent truncate">{currentFileDate}.md</span>
+          </div>
+          
+          <div className="flex items-center gap-6">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex bg-surface rounded-full p-1 border border-border"
+            >
+              <button
+                onClick={() => setViewMode('visual')}
+                className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-full text-[10px] font-sans uppercase tracking-widest font-bold transition-all ${viewMode === 'visual' ? 'bg-white shadow-sm text-accent' : 'text-text-muted hover:text-text-main'}`}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{language === 'zh' ? '可视化页面' : 'Visual'}</span>
+              </button>
+              <button
+                onClick={() => setViewMode('markdown')}
+                className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-full text-[10px] font-sans uppercase tracking-widest font-bold transition-all ${viewMode === 'markdown' ? 'bg-white shadow-sm text-accent' : 'text-text-muted hover:text-text-main'}`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{language === 'zh' ? 'Markdown 原文' : 'Raw Markdown'}</span>
+              </button>
+            </motion.div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto w-full p-4 md:p-8 lg:p-12 pb-32">
+          <div className="max-w-4xl mx-auto w-full">
+            {/* Loading state */}
+            {isLoading && (
+              <div className="flex flex-col items-center justify-center py-32 gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                <span className="font-sans text-sm text-text-muted">{language === 'zh' ? '加载中...' : 'Loading...'}</span>
+              </div>
+            )}
+            {/* Error state */}
+            {!isLoading && loadError && (
+              <div className="flex flex-col items-center justify-center py-32 gap-4">
+                <AlertCircle className="w-10 h-10 text-red-400" />
+                <p className="font-sans text-sm text-red-500">{loadError}</p>
+                <button
+                  onClick={() => loadTasksForDate(currentFileDate)}
+                  className="mt-2 px-4 py-2 bg-accent text-white rounded-full text-xs font-bold uppercase tracking-widest"
+                >
+                  {language === 'zh' ? '重试' : 'Retry'}
+                </button>
+              </div>
+            )}
+            {/* Empty state */}
+            {!isLoading && !loadError && tasks.length === 0 && viewMode === 'visual' && activeTab === 'today' && (
+              <div className="flex flex-col items-center justify-center py-32 gap-4">
+                <Calendar className="w-12 h-12 text-text-muted opacity-30" />
+                <p className="font-serif italic text-xl text-text-muted">{language === 'zh' ? '今天还没有任务' : 'No tasks for today'}</p>
+                <p className="font-sans text-sm text-text-muted opacity-60">{language === 'zh' ? '使用下方的输入框添加您的第一个任务' : 'Add your first task using the input below'}</p>
+              </div>
+            )}
+            {!isLoading && !loadError && (viewMode === 'visual' ? (
+              activeTab === 'today' ? (
+                <motion.div
+                  key="visual-today"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="space-y-10"
+                >
+                  <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/50 pb-6">
+                    <h1 className="text-xl font-serif font-medium text-text-heading tracking-tight flex items-baseline gap-2">
+                      <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
+                      <span className="text-text-muted">
+                        {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
+                      </span>
+                    </h1>
+                    
+                    {categories.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setSelectedCategory(null)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-bold transition-all ${
+                            selectedCategory === null 
+                              ? 'bg-text-heading text-white shadow-sm' 
+                              : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
+                          }`}
+                        >
+                          {language === 'zh' ? '全部' : 'All'}
+                        </button>
+                        {categories.map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setSelectedCategory(selectedCategory === c ? null : c)}
+                            className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-bold transition-all ${
+                              selectedCategory === c
+                                ? 'bg-accent text-white shadow-sm'
+                                : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
+                            }`}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+
+                  {/* Rollover Notification (if applicable) */}
+                  {Object.keys(filesMap).some(date => date < currentFileDate) && (
+                    <div className="bg-surface p-6 rounded-[24px] flex flex-col md:flex-row md:items-center justify-between border border-border shadow-sm gap-4">
+                      <div className="flex items-center space-x-3 text-text-heading">
+                        <CornerUpRight className="w-5 h-5 opacity-60 flex-shrink-0" />
+                        <span className="text-sm font-bold italic font-serif">
+                          {language === 'zh' ? '您有来自前几天的未完成任务。' : 'You have unfinished tasks from previous days.'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={handleRollover}
+                        disabled={isRollingOver}
+                        className="bg-background border border-border text-text-main px-6 py-2.5 rounded-full text-[10px] font-sans tracking-widest font-bold uppercase shadow-sm hover:!bg-white hover:text-accent transition-all disabled:opacity-50"
+                      >
+                        {isRollingOver ? (language === 'zh' ? '正在结转...' : 'Rolling Over...') : (language === 'zh' ? '立即结转' : 'Rollover Now')}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* New Task Input */}
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="fixed inset-x-0 bottom-0 z-40 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
+                  >
+                      {showBrainDump && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="bg-surface border border-accent/20 rounded-[24px] p-6 shadow-sm overflow-hidden"
+                        >
+                           <div className="flex justify-between items-center mb-4">
+                             <div className="flex items-center gap-2">
+                               <Sparkles className="w-4 h-4 text-accent" />
+                               <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
+                             </div>
+                             <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
+                           </div>
+                           <textarea
+                             autoFocus
+                             className="w-full bg-background border border-border/50 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
+                             placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
+                             value={brainDumpText}
+                             onChange={e => setBrainDumpText(e.target.value)}
+                           />
+                           <div className="mt-4 flex justify-end">
+                             <button
+                               onClick={processBrainDump}
+                               disabled={isProcessingBrainDump || !brainDumpText.trim()}
+                               className="bg-accent text-white px-6 py-2 rounded-full font-sans text-[10px] font-bold uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                             >
+                               {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                               <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
+                             </button>
+                           </div>
+                        </motion.div>
+                      )}
+
+                    <div className="relative rounded-2xl bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3 mt-4">
+                      <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
+                        <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <textarea 
+                          placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
+                          className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
+                          value={newTaskTitle}
+                          rows={1}
+                          onChange={e => {
+                            setNewTaskTitle(e.target.value);
+                            e.target.style.height = 'inherit';
+                            e.target.style.height = `${e.target.scrollHeight}px`;
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey && newTaskTitle.trim()) {
+                              e.preventDefault();
+                              document.getElementById('add-task-btn')?.click();
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
+                          {/* Tags Input */}
+                          <div className="flex-1 flex bg-surface rounded-xl border border-border/80 focus-within:border-accent focus-within:bg-surface-white min-w-[140px] max-w-full flex-wrap items-center px-2 py-1 gap-1.5 transition-colors">
+                            {newTaskTagsList.map(tag => (
+                              <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
+                                {tag}
+                                <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setNewTaskTagsList(prev => prev.filter(t => t !== tag))} />
+                              </span>
+                            ))}
+                            <input
+                              type="text"
+                              list="category-options"
+                              className="flex-1 bg-transparent text-[11px] uppercase tracking-widest font-bold px-2 py-1.5 outline-none text-text-heading placeholder:text-text-muted/60 min-w-[80px]"
+                              placeholder={newTaskTagsList.length === 0 ? (language === 'zh' ? '添加标签...' : 'Tags...') : ''}
+                              value={tagInputValue}
+                              onChange={e => setTagInputValue(e.target.value)}
+                              onKeyDown={e => {
+                                if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
+                                  e.preventDefault();
+                                  const newTag = tagInputValue.trim().toLowerCase();
+                                  if (!newTaskTagsList.includes(newTag)) {
+                                    setNewTaskTagsList([...newTaskTagsList, newTag]);
+                                  }
+                                  setTagInputValue('');
+                                } else if (e.key === 'Backspace' && !tagInputValue && newTaskTagsList.length > 0) {
+                                  setNewTaskTagsList(newTaskTagsList.slice(0, -1));
+                                } else if (e.key === 'Enter' && !tagInputValue.trim() && newTaskTitle.trim()) {
+                                  e.preventDefault();
+                                  document.getElementById('add-task-btn')?.click();
+                                }
+                              }}
+                            />
+                          </div>
+                          
+                          <datalist id="category-options">
+                            {categories.map(c => <option key={c} value={c} />)}
+                            {!categories.includes('Tasks') && <option value="Tasks" />}
+                          </datalist>
+
+                          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                            {/* Deadline Button */}
+                            <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
+                              <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
+                              <input
+                                type="date"
+                                className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-[#a15f5f]' : 'text-text-muted'}`}
+                                value={newTaskDeadline}
+                                onChange={e => setNewTaskDeadline(e.target.value)}
+                                onClick={(e) => {
+                                  try { (e.target as HTMLInputElement).showPicker(); } catch(err){}
+                                }}
+                              />
+                            </label>
+
+                            {/* AI Button */}
+                            <button
+                              onClick={() => setShowBrainDump(!showBrainDump)}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100 flex items-center justify-center rounded-xl transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
+                              title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
+                            >
+                              <Sparkles className="w-4 h-4" />
+                            </button>
+
+                            {/* Submit button */}
+                            <button
+                              id="add-task-btn"
+                              disabled={!newTaskTitle.trim()}
+                              onClick={() => {
+                                if (newTaskTitle.trim()) {
+                                  const titleLines = newTaskTitle.trim().split('\n');
+                                  const title = titleLines[0].trim();
+                                  const description = titleLines.slice(1).join('\n').trim() || undefined;
+                                  
+                                  const tags = [...newTaskTagsList];
+                                  if (tagInputValue.trim()) {
+                                    const newTag = tagInputValue.trim().toLowerCase();
+                                    if (!tags.includes(newTag)) tags.push(newTag);
+                                  }
+                                  if (tags.length === 0) {
+                                    tags.push((selectedCategory || 'Tasks').toLowerCase());
+                                  }
+                                  
+                                  let finalDeadline = newTaskDeadline;
+                                  if (!finalDeadline) {
+                                    const d = new Date();
+                                    const offset = d.getTimezoneOffset() * 60000;
+                                    finalDeadline = new Date(d.getTime() - offset).toISOString().split('T')[0];
+                                  }
+
+                                  const newTask: Task = {
+                                    id: `t_${Date.now()}`,
+                                    title,
+                                    description,
+                                    status: 'todo',
+                                    tags,
+                                    deadline: finalDeadline,
+                                    source_date: currentFileDate
+                                  };
+                                  // Optimistic UI update
+                                  setTasks(prev => [...prev, newTask]);
+                                  // Create via API
+                                  tasksApi.create(currentFileDate, newTask).then(() => {
+                                    // Refresh markdown
+                                    return filesApi.get(currentFileDate);
+                                  }).then(data => {
+                                    if (data) {
+                                      setMarkdown(data.content);
+                                      setLastSyncedMD(data.content);
+                                      setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+                                    }
+                                  }).catch(console.error);
+                                  setNewTaskTitle('');
+                                  setNewTaskTagsList([]);
+                                  setTagInputValue('');
+                                  setNewTaskDeadline('');
+                                }
+                              }}
+                              className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-xl text-[12px] uppercase font-sans tracking-widest font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
+                                newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
+                              } flex-1 sm:flex-none`}
+                            >
+                              <span>{language === 'zh' ? '添加任务' : 'Add Task'}</span>
+                              <CornerUpRight className={`w-4 h-4 ${newTaskTitle.trim() ? 'opacity-80' : 'opacity-0'} hidden sm:block transition-opacity`} />
+                            </button>
+                          </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                  {categories.map(category => {
+                    if (selectedCategory && selectedCategory !== category) return null;
+                    const catTasks = todayTasks.filter(t => t.tags?.includes(category));
+                    if (catTasks.length === 0 && category !== 'Tasks') return null;
+                    
+                    return (
+                      <div key={category} className="space-y-5">
+                        <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
+                          <span>{category}</span>
+                          <span className="h-px bg-border flex-1 block w-full"></span>
+                        </h2>
+                        
+                        <div className="space-y-4">
+                          <AnimatePresence>
+                            {catTasks.map(task => (
+                              <TaskCard 
+                                key={task.id} 
+                                task={task} 
+                                language={language}
+                                onToggle={() => handleToggleTask(task.id)} 
+                                onEdit={(newTitle, newDesc) => handleEditTask(task.id, newTitle, newDesc)}
+                                onDelete={() => handleDeleteTask(task.id)}
+                              />
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+
+                </motion.div>
+              ) : activeTab === 'projects' ? (
+                <motion.div
+                  key="visual-projects"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="space-y-12"
+                >
+                  <div className="mb-8">
+                    <h1 className="text-4xl font-serif font-light text-text-heading tracking-tight italic mb-2">
+                       {language === 'zh' ? '项目概览' : 'Projects Focus'}
+                    </h1>
+                    <p className="text-text-muted font-sans text-sm">
+                       {language === 'zh' ? '按类别查看所有待办任务。' : 'View all pending tasks organized by category.'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                    {(() => {
+                      const projectCats = Array.from(new Set(allPendingTasks.flatMap(t => t.tags || [])));
+
+                      if (projectCats.length === 0) {
+                        return (
+                          <div className="col-span-full py-20 text-center bg-surface-white rounded-[32px] border border-border/50 shadow-sm mt-8">
+                            <Briefcase className="w-12 h-12 text-text-muted mx-auto mb-6 opacity-30 stroke-[1.5]" />
+                            <h3 className="font-serif italic text-3xl text-text-muted font-light">{language === 'zh' ? '暂无活跃项目。' : 'No active projects.'}</h3>
+                          </div>
+                        );
+                      }
+
+                      return projectCats.map(cat => {
+                        const catTasks = allPendingTasks.filter(t => t.tags?.includes(cat));
+                        return (
+                          <div key={cat} className="bg-surface-white rounded-[32px] border border-border shadow-sm p-6 overflow-hidden flex flex-col h-[500px]">
+                            <h2 className="flex items-center gap-3 text-[14px] uppercase tracking-widest font-bold text-text-heading mb-6 shrink-0">
+                               <Briefcase className="w-4 h-4 text-accent" />
+                               <span className="truncate">{cat}</span>
+                               <span className="ml-auto text-[10px] text-text-muted bg-surface px-2 py-1 rounded-full">{catTasks.length}</span>
+                            </h2>
+                            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                              {catTasks.map(task => (
+                                <div key={task.id + task.source_date} className="p-4 rounded-2xl bg-surface border border-border/50 hover:border-accent/40 transition-colors">
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-5 h-5 rounded border border-border/80 flex items-center justify-center shrink-0 mt-0.5 bg-background shadow-inner"></div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-text-heading text-sm break-words leading-tight">{task.title}</p>
+                                      <p className="text-[10px] text-text-muted font-sans font-bold tracking-widest uppercase mt-3 flex items-center gap-1.5 opacity-60">
+                                        <Calendar className="w-3 h-3" />
+                                        {task.source_date}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="py-32 text-center bg-surface-white rounded-[48px] border border-border/50 shadow-sm mt-8">
+                  <h2 className="editorial-hero text-5xl text-text-muted italic mb-6 leading-tight">{language === 'zh' ? '正在建设中' : 'Under Construction'}</h2>
+                  <p className="font-sans text-[10px] font-bold text-text-muted uppercase tracking-widest">{activeTab} {language === 'zh' ? '视图敬请期待。' : 'view coming soon.'}</p>
+                </div>
+              )
+            ) : (
+              /* Markdown Editor View */
+              <motion.div
+                key="markdown-editor"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-surface-white rounded-[32px] border border-border/50 p-10 shadow-sm"
+              >
+                <div className="font-mono text-sm leading-relaxed text-text-heading">
+                  <Editor
+                    value={markdown}
+                    onValueChange={code => setMarkdown(code)}
+                    highlight={code => Prism.highlight(code, Prism.languages.markdown, 'markdown')}
+                    padding={10}
+                    style={{
+                       fontFamily: '"JetBrains Mono", monospace',
+                       fontSize: 15,
+                       backgroundColor: 'transparent',
+                       minHeight: '400px',
+                       outline: 'none'
+                     }}
+                     className="focus:outline-none editor-container"
+                   />
+                 </div>
+               </motion.div>
+             )
+            )}
+          </div>
+        </div>
+ 
+         {/* Command Pill */}
+         <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
+           <motion.div 
+             initial={{ y: 50, opacity: 0 }}
+             animate={{ y: 0, opacity: 1 }}
+             transition={{ delay: 0.3, type: 'spring', damping: 20 }}
+             className="command-pill px-8 py-4 flex items-center space-x-4 pointer-events-auto border border-white/10"
+           >
+             <Command className="w-4 h-4 opacity-70" />
+             <span className="font-sans text-[10px] uppercase font-bold tracking-widest">
+               <span className="opacity-60">dailyflow / </span>
+               <span className="opacity-100">{currentFileDate}</span>
+             </span>
+             <div className="w-1.5 h-1.5 rounded-full bg-accent-highlight animate-pulse ml-3 shadow-[0_0_8px_rgba(255,232,214,0.6)]" />
+           </motion.div>
+         </div>
+       </main>
+
+       {showAISummary && (
+         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+           <motion.div 
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ opacity: 1, scale: 1 }}
+             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-2xl w-full relative flex flex-col max-h-[85vh]"
+           >
+             <button onClick={() => setShowAISummary(false)} className="absolute top-8 right-8 text-text-muted hover:text-text-heading transition-colors">
+               <X className="w-5 h-5" />
+             </button>
+             <h2 className="font-serif text-3xl text-text-heading italic mb-6 flex items-center gap-3">
+                <Sparkles className="w-7 h-7 text-accent" />
+                {language === 'zh' ? 'AI 洞察' : 'AI Summary'}
+             </h2>
+             
+             <div className="flex gap-2 mb-6">
+                <button 
+                  onClick={() => setSummaryPeriod('7days')}
+                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === '7days' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
+                >
+                  {language === 'zh' ? '最近 7 天' : 'Last 7 Days'}
+                </button>
+                <button 
+                  onClick={() => setSummaryPeriod('30days')}
+                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === '30days' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
+                >
+                  {language === 'zh' ? '最近 30 天' : 'Last 30 Days'}
+                </button>
+                <button 
+                  onClick={() => setSummaryPeriod('all')}
+                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === 'all' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
+                >
+                  {language === 'zh' ? '全部时间' : 'All Time'}
+                </button>
+             </div>
+
+             <div className="flex-1 overflow-y-auto min-h-[300px] border border-border/50 rounded-2xl p-6 bg-surface mb-6 relative">
+               {isGeneratingSummary ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-accent">
+                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                    <span className="font-sans font-bold text-xs uppercase tracking-widest animate-pulse">{language === 'zh' ? '正在分析洞察...' : 'Analyzing insights...'}</span>
+                  </div>
+               ) : aiSummary ? (
+                  <div className="markdown-body font-sans text-sm text-text-main prose prose-slate max-w-none">
+                    <ReactMarkdown>{aiSummary}</ReactMarkdown>
+                  </div>
+               ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-text-muted opacity-60">
+                    <Sparkles className="w-8 h-8 mb-4 stroke-[1.5]" />
+                    <span className="font-sans font-medium text-sm text-center max-w-sm">
+                       {language === 'zh' ? '选择一个时间段并生成总结，以发现您的工作模式并可视化您的进展。' : 'Select a time period and generate a summary to uncover patterns in your work and visualize your progress.'}
+                    </span>
+                  </div>
+               )}
+             </div>
+
+             <div className="flex justify-end pt-2">
+                <button 
+                  onClick={generateAISummary}
+                  disabled={isGeneratingSummary}
+                  className="bg-text-heading text-white px-6 py-3 rounded-full font-sans font-bold text-[11px] uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 transition-transform active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{language === 'zh' ? '生成洞察' : 'Generate Insights'}</span>
+                </button>
+             </div>
+           </motion.div>
+         </div>
+       )}
+
+       {showSettings && (
+         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+           <motion.div 
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ opacity: 1, scale: 1 }}
+             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-md w-full relative"
+           >
+             <h2 className="font-serif text-2xl text-text-heading italic mb-6">
+               {language === 'zh' ? '全局设置' : 'Configuration'}
+             </h2>
+             <div className="space-y-6">
+                <div>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 flex items-center justify-between">
+                     <span>{language === 'zh' ? '界面语言' : 'Language'}</span>
+                   </h3>
+                   <div className="flex bg-surface p-1 rounded-xl shadow-inner border border-border/50">
+                     <button
+                       onClick={() => setLanguage('en')}
+                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                     >
+                       English
+                     </button>
+                     <button
+                       onClick={() => setLanguage('zh')}
+                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                     >
+                       中文
+                     </button>
+                   </div>
+                </div>
+                <div>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 flex items-center justify-between">
+                     <span>{language === 'zh' ? 'GitHub 同步' : 'GitHub Sync'}</span>
+                     <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full">Pro</span>
+                   </h3>
+                   <div className="space-y-4">
+                     <select
+                       value={syncInterval}
+                       onChange={e => setSyncInterval(Number(e.target.value))}
+                       className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-sans font-medium text-text-main"
+                     >
+                       <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
+                       <option value={1}>{language === 'zh' ? '每 1 分钟自动同步一次' : 'Auto sync every 1 minute'}</option>
+                       <option value={5}>{language === 'zh' ? '每 5 分钟自动同步一次' : 'Auto sync every 5 minutes'}</option>
+                       <option value={10}>{language === 'zh' ? '每 10 分钟自动同步一次' : 'Auto sync every 10 minutes'}</option>
+                     </select>
+                     <input type="text" placeholder={language === 'zh' ? "GitHub 仓库 (例如 user/dailyflow)" : "GitHub Repository (e.g., user/dailyflow)"} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono" />
+                     <input type="password" placeholder={language === 'zh' ? "个人访问令牌" : "Personal Access Token"} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono" />
+
+                   </div>
+                   <p className="text-xs text-text-muted mt-3 font-medium">Your data is synced as simple markdown files.</p>
+                </div>
+                <hr className="border-border" />
+                <div>
+                  <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">Theme</h3>
+                  <div className="flex space-x-4">
+                    <button className="flex-1 py-2 rounded-xl bg-accent text-white font-sans text-xs font-bold uppercase tracking-widest shadow-sm">Light</button>
+                    <button disabled className="flex-1 py-2 rounded-xl bg-background border border-border text-text-muted font-sans text-xs font-bold uppercase tracking-widest opacity-50 cursor-not-allowed">Dark</button>
+                  </div>
+                </div>
+                <div className="pt-4 flex justify-end gap-3">
+                  <button onClick={() => setShowSettings(false)} className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors">Cancel</button>
+                  <button onClick={() => { setShowSettings(false); alert("Settings saved locally."); }} className="bg-text-heading text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm">Save</button>
+                </div>
+             </div>
+           </motion.div>
+         </div>
+       )}
+     </div>
+  );
+}
+
+interface TaskCardProps {
+  task: Task;
+  language: 'en' | 'zh';
+  onToggle: () => void;
+  onEdit: (newTitle: string, newDesc?: string) => void;
+  onDelete: () => void;
+}
+
+const TaskCard: React.FC<TaskCardProps> = ({ task, language, onToggle, onEdit, onDelete }) => {
+  const isDone = task.status === 'done';
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(task.title + (task.description ? '\n' + task.description : ''));
+
+  const submitEdit = () => {
+    if (editContent.trim()) {
+      const lines = editContent.trim().split('\n');
+      const newTitle = lines[0].trim();
+      const newDesc = lines.slice(1).join('\n').trim() || undefined;
+      onEdit(newTitle, newDesc);
+    } else {
+      setEditContent(task.title + (task.description ? '\n' + task.description : ''));
+    }
+    setIsEditing(false);
+  };
+  
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      whileHover={{ scale: 1.01 }}
+      className={`group relative floating-card rounded-[24px] p-6 flex items-start space-x-5
+        ${isDone ? 'bg-background border-border/30 shadow-none opacity-60' : 'bg-surface-white border-border/80'}`}
+    >
+      <button 
+        onClick={onToggle}
+        className="mt-1 flex-shrink-0 hover:scale-110 transition-transform focus:outline-none"
+      >
+        {isDone ? (
+          <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center shadow-sm">
+            <Check className="w-3.5 h-3.5 text-white" />
+          </div>
+        ) : (
+          <div className="w-6 h-6 rounded-full border-2 border-border flex items-center justify-center text-transparent hover:border-accent hover:text-accent transition-colors">
+            <Check className="w-3.5 h-3.5" />
+          </div>
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0 pr-[72px] sm:pr-16 xl:pr-8">
+        {isEditing ? (
+          <div className="flex items-start">
+            <textarea 
+              autoFocus
+              ref={(el) => {
+                if (el) {
+                  el.style.height = 'inherit';
+                  el.style.height = `${el.scrollHeight}px`;
+                }
+              }}
+              value={editContent}
+              onChange={(e) => {
+                setEditContent(e.target.value);
+                e.target.style.height = 'inherit';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              onBlur={submitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                   e.preventDefault();
+                   submitEdit();
+                }
+                if (e.key === 'Escape') {
+                  setEditContent(task.title + (task.description ? '\n' + task.description : ''));
+                  setIsEditing(false);
+                }
+              }}
+              rows={1}
+              onFocus={(e) => {
+                e.target.style.height = 'inherit';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              className="bg-transparent border-b border-accent outline-none font-serif text-xl leading-snug w-full text-text-heading resize-none overflow-hidden min-h-[32px]"
+            />
+          </div>
+        ) : (
+          <div>
+            <h3 
+              onDoubleClick={() => !isDone && setIsEditing(true)}
+              className={`font-serif text-xl leading-snug transition-colors cursor-text ${isDone ? 'text-text-muted line-through' : 'text-text-heading hover:text-accent'}`}
+              title={language === 'zh' ? '双击编辑' : 'Double-click to edit'}
+            >
+              {task.title}
+            </h3>
+            {task.description && (
+              <div 
+                onDoubleClick={() => !isDone && setIsEditing(true)}
+                className={`mt-2 text-[13px] tracking-wide whitespace-pre-wrap leading-relaxed cursor-text ${isDone ? 'text-text-muted/60' : 'text-text-muted/90 max-w-[90%]'}`}
+              >
+                {task.description}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {(!isDone && (task.project || task.deadline || task.priority || task.source_date !== '2026-05-04' || (task.tags && task.tags.length > 0))) && (
+          <div className="flex flex-wrap gap-2 mt-4 mt-3">
+            {task.source_date && task.source_date !== '2026-05-04' && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-accent-highlight text-[#966b4d] text-[10px] font-sans font-bold tracking-widest uppercase border border-[#edcdb6]">
+                <CornerUpRight className="w-3 h-3" />
+                <span>{language === 'zh' ? '已结转' : 'Migrated'}</span>
+              </span>
+            )}
+            {task.tags && task.tags.filter((t: string) => t !== 'tasks').map((tag: string) => (
+              <span key={tag} className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-sans font-bold tracking-widest uppercase border ${getTagColor(tag)}`}>
+                <span>#{tag}</span>
+              </span>
+            ))}
+            {task.project && (
+              <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-surface text-text-main text-[10px] font-sans font-bold tracking-widest uppercase border border-border">
+                <Briefcase className="w-3 h-3 opacity-60" />
+                <span>{task.project}</span>
+              </span>
+            )}
+            {task.deadline && (
+              <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#faedec] text-[#a15f5f] border border-[#ecd5d5] text-[10px] font-sans font-bold tracking-widest uppercase">
+                <Calendar className="w-3 h-3" />
+                <span>{task.deadline}</span>
+              </span>
+            )}
+            {task.priority === 'high' && (
+              <span className="inline-flex items-center justify-center space-x-1 px-2.5 py-1 rounded-md bg-accent text-white text-[10px] font-sans font-bold tracking-widest uppercase shadow-sm shadow-accent/20">
+                <span>Priority</span>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="absolute xl:top-6 sm:top-[22px] top-[14px] xl:right-6 sm:right-6 right-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center xl:space-x-2 space-x-1">
+        {!isDone && !isEditing && (
+          <button onClick={() => setIsEditing(true)} className="p-2 sm:p-1.5 text-text-muted hover:text-accent transition-colors rounded-lg sm:bg-surface border border-border/50 sm:border-transparent bg-surface-white sm:bg-transparent shadow-sm sm:shadow-none">
+            <Edit2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          </button>
+        )}
+        <button onClick={onDelete} className="p-2 sm:p-1.5 text-text-muted hover:text-red-500 transition-colors rounded-lg sm:bg-surface hover:bg-red-50 border border-border/50 sm:border-transparent bg-surface-white sm:bg-transparent shadow-sm sm:shadow-none">
+          <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
