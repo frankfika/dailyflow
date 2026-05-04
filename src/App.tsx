@@ -401,6 +401,10 @@ export default function App() {
 
   const todayTasks = tasks.filter(t => t.status !== 'migrated');
   const categories = Array.from(new Set(todayTasks.flatMap(t => t.tags || [])));
+  // Always include 'Tasks' as fallback for untagged tasks
+  if (categories.length === 0 && todayTasks.length > 0) {
+    categories.push('Tasks');
+  }
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentDates = allDates.filter(d => d >= '2026-04-27');
@@ -943,8 +947,11 @@ export default function App() {
                   </motion.div>
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
-                    const catTasks = todayTasks.filter(t => t.tags?.includes(category));
-                    if (catTasks.length === 0 && category !== 'Tasks') return null;
+                    // For 'Tasks' fallback category, show untagged tasks (empty tags or no tags)
+                    const catTasks = category === 'Tasks'
+                      ? todayTasks.filter(t => !t.tags || t.tags.length === 0)
+                      : todayTasks.filter(t => t.tags?.includes(category));
+                    if (catTasks.length === 0) return null;
                     
                     return (
                       <div key={category} className="space-y-5">
