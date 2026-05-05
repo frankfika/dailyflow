@@ -1392,9 +1392,9 @@ export default function App() {
                    <input
                      type="text"
                      value={workspaceRoot}
-                     readOnly
+                     onChange={e => setWorkspaceRoot(e.target.value)}
                      placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono opacity-60"
+                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
                    />
                    <p className="text-xs text-text-muted mt-1.5">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
                 </div>
@@ -1405,10 +1405,10 @@ export default function App() {
                      DeepSeek API Key
                    </h3>
                    <input
-                     type="password"
+                     type="text"
                      value={deepseekApiKey}
                      onChange={e => setDeepseekApiKey(e.target.value)}
-                     placeholder={language === 'zh' ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxx' : 'sk-xxxxxxxxxxxxxxxxxxxxxxxx'}
+                     placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
                    />
                 </div>
@@ -1473,6 +1473,7 @@ export default function App() {
                       const config = await configApi.get();
                       await configApi.update({
                         ...config,
+                        workspaceRoot: workspaceRoot.trim(),
                         deepseekApiKey: deepseekApiKey.trim(),
                       });
                       setGithubRepo(config.githubRepo || null);
