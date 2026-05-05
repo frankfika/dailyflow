@@ -2,7 +2,6 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GoogleGenAI, Type } from '@google/genai';
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -11,7 +10,7 @@ import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/themes/prism.css';
-import { filesApi, tasksApi, rolloverApi } from './api/client';
+import { filesApi, tasksApi, rolloverApi, gitApi, configApi } from './api/client';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { Projects } from './components/Projects';
 import { AISummaryModal } from './components/AISummaryModal';
@@ -70,6 +69,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
+  const [showTaskInput, setShowTaskInput] = useState(false);
   const [brainDumpText, setBrainDumpText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
@@ -90,6 +90,10 @@ export default function App() {
   const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([]);
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
+  const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
+  const [githubRepo, setGithubRepo] = useState<string | null>(null);
+  const [deepseekApiKey, setDeepseekApiKey] = useState<string>('');
+  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const markdownRef = React.useRef(markdown);
 
   // Check first run on mount
@@ -105,7 +109,18 @@ export default function App() {
         setIsFirstRun(false);
       }
     };
+    const loadConfigData = async () => {
+      try {
+        const config = await configApi.get();
+        setGithubRepo(config.githubRepo || null);
+        setDeepseekApiKey(config.deepseekApiKey || '');
+        setWorkspaceRoot(config.workspaceRoot || '');
+      } catch (e) {
+        // ignore
+      }
+    };
     checkFirstRun();
+    loadConfigData();
   }, []);
 
   // Load file list on mount
@@ -185,6 +200,22 @@ export default function App() {
     }
   }, [syncInterval, currentFileDate]);
 
+  // Keyboard shortcut: Cmd/Ctrl+N to toggle task input, Escape to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        setShowTaskInput(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setShowTaskInput(false);
+        setShowBrainDump(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Load all pending tasks for projects view when switching to projects tab
   useEffect(() => {
     if (activeTab !== 'projects') return;
@@ -243,17 +274,27 @@ export default function App() {
       filteredDates.forEach(date => {
          contextStr += `--- Date: ${date} ---\n${filesMap[date]}\n\n`;
       });
-      
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}`,
+
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepseekApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: 'You are a helpful personal assistant. Summarize notes concisely in Markdown.' },
+            { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
+          ],
+        }),
       });
-      
-      setAiSummary(response.text?.trim() || "No summary generated.");
+      if (!res.ok) throw new Error(`DeepSeek error: ${res.status}`);
+      const data = await res.json();
+      setAiSummary(data.choices?.[0]?.message?.content?.trim() || "No summary generated.");
     } catch (e) {
       console.error(e);
-      setAiSummary("Failed to generate AI summary. Ensure the API key is configured.");
+      setAiSummary("Failed to generate AI summary. Ensure the DeepSeek API key is configured in Settings.");
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -263,61 +304,54 @@ export default function App() {
     if (!brainDumpText.trim()) return;
     setIsProcessingBrainDump(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Extract a list of actionable tasks from the following text:\n\n"${brainDumpText}"\n\nAssign reasonable tags (e.g., 'work', 'personal', 'tasks'). Assign priorities (low, medium, high), deadlines (YYYY-MM-DD), and projects if implied.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                project: { type: Type.STRING },
-                deadline: { type: Type.STRING },
-                priority: { type: Type.STRING }
-              },
-              required: ['title', 'tags']
-            }
-          }
-        }
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepseekApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.' },
+            { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"` },
+          ],
+        }),
       });
-      
-      try {
-        const jsonStr = response.text.trim();
-        const extracted = JSON.parse(jsonStr) as any[];
-        
-        const newTasks: Task[] = extracted.map((t, idx) => ({
-          id: `t_${Date.now()}_${idx}`,
-          title: t.title,
-          status: 'todo',
-          tags: Array.isArray(t.tags) && t.tags.length > 0 ? t.tags.map((tag: string) => tag.toLowerCase()) : ['tasks'],
-          source_date: currentFileDate,
-          project: t.project,
-          deadline: t.deadline,
-          priority: t.priority as any
-        }));
-        
-        // Add new tasks via API
-        for (const nt of newTasks) {
-          await tasksApi.create(currentFileDate, nt);
-        }
-        // Refresh markdown and re-sync tasks with server-side parsed IDs
-        const fileData = await filesApi.get(currentFileDate);
-        if (fileData) {
-          setMarkdown(fileData.content);
-          setTasks(fileData.tasks as Task[]);
-          setLastSyncedMD(fileData.content);
-          setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
-        }
-        setBrainDumpText('');
-        setShowBrainDump(false);
-      } catch (e) {
-        console.error("Failed to parse", e);
+      if (!res.ok) throw new Error(`DeepSeek error: ${res.status}`);
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content?.trim() || '';
+
+      // Strip markdown code fences if present
+      const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+      const extracted = JSON.parse(jsonStr) as any[];
+
+      const newTasks: Task[] = extracted.map((t, idx) => ({
+        id: `t_${Date.now()}_${idx}`,
+        title: t.title,
+        status: 'todo',
+        tags: Array.isArray(t.tags) && t.tags.length > 0 ? t.tags.map((tag: string) => tag.toLowerCase()) : ['tasks'],
+        source_date: currentFileDate,
+        project: t.project,
+        deadline: t.deadline,
+        priority: t.priority as any
+      }));
+
+      // Add new tasks via API
+      for (const nt of newTasks) {
+        await tasksApi.create(currentFileDate, nt);
       }
+      // Refresh markdown and re-sync tasks with server-side parsed IDs
+      const fileData = await filesApi.get(currentFileDate);
+      if (fileData) {
+        setMarkdown(fileData.content);
+        setTasks(fileData.tasks as Task[]);
+        setLastSyncedMD(fileData.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
+      }
+      setBrainDumpText('');
+      setShowBrainDump(false);
+      setShowTaskInput(false);
     } catch (e) {
       console.error(e);
       alert("Failed to process with AI.");
@@ -360,18 +394,14 @@ export default function App() {
           setLastSyncedMD(data.content);
           setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
         }
-        // Refresh file list
-        const files = await filesApi.list();
-        const map = { ...filesMap };
-        await Promise.allSettled(
-          files.map(async (f) => {
-            if (!map[f]) {
-              const d = await filesApi.get(f);
-              if (d) map[f] = d.content;
-            }
-          })
-        );
-        setFilesMap(map);
+        // Remove rolled-over dates from filesMap so the button disappears
+        setFilesMap(prev => {
+          const next = { ...prev };
+          Object.keys(next).forEach(date => {
+            if (date < currentFileDate) delete next[date];
+          });
+          return next;
+        });
       }
     } catch (e) {
       console.error('Rollover failed', e);
@@ -383,10 +413,36 @@ export default function App() {
   const handleGitSync = async () => {
     setIsSyncing(true);
     try {
+      // 1. 先保存当前文件到后端
       await filesApi.update(currentFileDate, markdown);
       setLastSyncedMD(markdown);
-    } catch (e) {
+
+      // 2. 生成提交信息
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.toTimeString().split(' ')[0];
+      const commitMessage = `Update daily notes: ${dateStr} ${timeStr}`;
+
+      // 3. 调用 Git 同步 API
+      const result = await gitApi.sync(commitMessage);
+
+      if (result.success) {
+        alert(language === 'zh'
+          ? `成功提交并推送到 GitHub!\n提交哈希: ${result.commitHash?.substring(0, 7)}`
+          : `Successfully committed and pushed to GitHub!\nCommit: ${result.commitHash?.substring(0, 7)}`
+        );
+      } else {
+        const errorMsg = result.stage === 'commit'
+          ? (language === 'zh' ? '提交失败' : 'Commit failed')
+          : (language === 'zh' ? '推送失败' : 'Push failed');
+        alert(`${errorMsg}: ${result.error}`);
+      }
+    } catch (e: any) {
       console.error('Sync failed', e);
+      alert(language === 'zh'
+        ? `同步失败: ${e.message}`
+        : `Sync failed: ${e.message}`
+      );
     } finally {
       setIsSyncing(false);
     }
@@ -427,7 +483,8 @@ export default function App() {
   const todayTasks = tasks.filter(t => t.status !== 'migrated');
   const categories = Array.from(new Set(todayTasks.flatMap(t => t.tags || [])));
   // Always include 'Tasks' as fallback for untagged tasks
-  if (categories.length === 0 && todayTasks.length > 0) {
+  const hasUntaggedTasks = todayTasks.some(t => !t.tags || t.tags.length === 0 || t.tags.includes('Tasks'));
+  if (hasUntaggedTasks && !categories.includes('Tasks')) {
     categories.push('Tasks');
   }
 
@@ -651,21 +708,51 @@ export default function App() {
         <div className="mt-auto p-8 border-t border-border flex flex-col gap-4">
           <div>
             <span className="text-[10px] uppercase font-sans tracking-widest font-bold text-text-muted opacity-60">{language === 'zh' ? '版本控制' : 'Version Control'}</span>
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-accent-highlight border border-[#edcdb6]'}`}></div>
-                <span className="text-xs font-medium text-text-main pr-1">{hasChanges ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes') : (language === 'zh' ? '已是最新' : 'Up to date')}</span>
+
+            {!githubRepo ? (
+              /* 未配置 GitHub 仓库时显示引导 */
+              <div className="mt-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
+                <p className="text-[10px] text-text-muted leading-relaxed mb-2">
+                  {language === 'zh'
+                    ? '配置 GitHub 仓库，自动备份你的笔记。'
+                    : 'Connect a GitHub repo to back up your notes automatically.'}
+                </p>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="w-full py-1.5 rounded-lg bg-accent text-white text-[10px] uppercase tracking-widest font-bold hover:bg-accent/90 transition-colors"
+                >
+                  {language === 'zh' ? '→ 前往 Configuration 配置' : '→ Go to Configuration'}
+                </button>
               </div>
-            </div>
+            ) : (
+              /* 已配置时显示同步状态 */
+              <>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-accent-highlight border border-[#edcdb6]'}`}></div>
+                    <span className="text-xs font-medium text-text-main pr-1">
+                      {hasChanges
+                        ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes')
+                        : (language === 'zh' ? '已是最新' : 'Up to date')}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-text-muted mt-1 truncate opacity-60" title={githubRepo}>
+                  {githubRepo.replace('https://github.com/', '')}
+                </p>
+              </>
+            )}
           </div>
-          
-          <button 
-            onClick={handleGitSync}
-            disabled={isSyncing || !hasChanges}
-            className="w-full bg-surface-white border border-border text-text-main py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
-          >
-            {isSyncing ? (language === 'zh' ? '正在同步...' : 'Syncing...') : (language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub')}
-          </button>
+
+          {githubRepo && (
+            <button
+              onClick={handleGitSync}
+              disabled={isSyncing || !hasChanges}
+              className="w-full bg-surface-white border border-border text-text-main py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+            >
+              {isSyncing ? (language === 'zh' ? '正在同步...' : 'Syncing...') : (language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub')}
+            </button>
+          )}
         </div>
       </aside>
 
@@ -787,246 +874,338 @@ export default function App() {
 
 
                   {/* Rollover Notification (if applicable) */}
-                  {Object.keys(filesMap).some(date => date < currentFileDate) && (
-                    <div className="bg-surface p-6 rounded-[24px] flex flex-col md:flex-row md:items-center justify-between border border-border shadow-sm gap-4">
-                      <div className="flex items-center space-x-3 text-text-heading">
-                        <CornerUpRight className="w-5 h-5 opacity-60 flex-shrink-0" />
-                        <span className="text-sm font-bold italic font-serif">
-                          {language === 'zh' ? '您有来自前几天的未完成任务。' : 'You have unfinished tasks from previous days.'}
+                  {/* Show rollover only if there are previous-day files AND current file hasn't already received migrated tasks */}
+                  {Object.keys(filesMap).some(date => date < currentFileDate) && !tasks.some(t => t.source_date && t.source_date !== currentFileDate) && (
+                    <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-xl bg-accent/5 border border-accent/10">
+                      <div className="flex items-center gap-2 text-text-heading min-w-0">
+                        <CornerUpRight className="w-3.5 h-3.5 opacity-50 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate">
+                          {language === 'zh' ? '有前几天的未完成任务' : 'Unfinished tasks from previous days'}
                         </span>
                       </div>
-                      <button 
+                      <button
                         onClick={handleRollover}
                         disabled={isRollingOver}
-                        className="bg-background border border-border text-text-main px-6 py-2.5 rounded-full text-[10px] font-sans tracking-widest font-bold uppercase shadow-sm hover:!bg-white hover:text-accent transition-all disabled:opacity-50"
+                        className="flex-shrink-0 px-3 py-1 rounded-lg bg-accent text-white text-[10px] font-sans tracking-widest font-bold uppercase hover:bg-accent/90 transition-colors disabled:opacity-50"
                       >
-                        {isRollingOver ? (language === 'zh' ? '正在结转...' : 'Rolling Over...') : (language === 'zh' ? '立即结转' : 'Rollover Now')}
+                        {isRollingOver ? (language === 'zh' ? '...' : '...') : (language === 'zh' ? '结转' : 'Rollover')}
                       </button>
                     </div>
                   )}
 
-                  {/* New Task Input */}
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    className="fixed inset-x-0 bottom-0 z-40 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
-                  >
-                      {showBrainDump && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="bg-surface border border-accent/20 rounded-[24px] p-6 shadow-sm overflow-hidden"
-                        >
-                           <div className="flex justify-between items-center mb-4">
-                             <div className="flex items-center gap-2">
-                               <Sparkles className="w-4 h-4 text-accent" />
-                               <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
-                             </div>
-                             <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
-                           </div>
-                           <textarea
-                             autoFocus
-                             className="w-full bg-background border border-border/50 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
-                             placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
-                             value={brainDumpText}
-                             onChange={e => setBrainDumpText(e.target.value)}
-                           />
-                           <div className="mt-4 flex justify-end">
-                             <button
-                               onClick={processBrainDump}
-                               disabled={isProcessingBrainDump || !brainDumpText.trim()}
-                               className="bg-accent text-white px-6 py-2 rounded-full font-sans text-[10px] font-bold uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                             >
-                               {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                               <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
-                             </button>
-                           </div>
-                        </motion.div>
-                      )}
+                  {/* FAB: Add Task */}
+                  {!showTaskInput && (
+                    <motion.button
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => setShowTaskInput(true)}
+                      className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-accent text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow"
+                      title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
+                    >
+                      <Plus className="w-6 h-6" />
+                    </motion.button>
+                  )}
 
-                    <div className="relative rounded-2xl bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3 mt-4">
-                      <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
-                        <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
-                          <Plus className="w-5 h-5" />
+                  {/* Task Input Panel */}
+                  {showTaskInput && (
+                    <>
+                      <div
+                        className="fixed inset-0 bg-black/10 z-40 sm:hidden"
+                        onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        className="fixed inset-x-0 bottom-0 z-50 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
+                          <button
+                            onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
+                            className="text-text-muted hover:text-text-heading p-1"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
-                        <textarea 
-                          placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
-                          className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
-                          value={newTaskTitle}
-                          rows={1}
-                          onChange={e => {
-                            setNewTaskTitle(e.target.value);
-                            e.target.style.height = 'inherit';
-                            e.target.style.height = `${e.target.scrollHeight}px`;
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && !e.shiftKey && newTaskTitle.trim()) {
-                              e.preventDefault();
-                              document.getElementById('add-task-btn')?.click();
-                            }
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
-                          {/* Tags Input */}
-                          <div className="flex-1 flex bg-surface rounded-xl border border-border/80 focus-within:border-accent focus-within:bg-surface-white min-w-[140px] max-w-full flex-wrap items-center px-2 py-1 gap-1.5 transition-colors">
-                            {newTaskTagsList.map(tag => (
-                              <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
-                                {tag}
-                                <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setNewTaskTagsList(prev => prev.filter(t => t !== tag))} />
-                              </span>
-                            ))}
-                            <input
-                              type="text"
-                              list="category-options"
-                              className="flex-1 bg-transparent text-[11px] uppercase tracking-widest font-bold px-2 py-1.5 outline-none text-text-heading placeholder:text-text-muted/60 min-w-[80px]"
-                              placeholder={newTaskTagsList.length === 0 ? (language === 'zh' ? '添加标签...' : 'Tags...') : ''}
-                              value={tagInputValue}
-                              onChange={e => setTagInputValue(e.target.value)}
+                        {showBrainDump && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="bg-surface border border-accent/20 rounded-[24px] p-6 shadow-sm overflow-hidden"
+                          >
+                             <div className="flex justify-between items-center mb-4">
+                               <div className="flex items-center gap-2">
+                                 <Sparkles className="w-4 h-4 text-accent" />
+                                 <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
+                               </div>
+                               <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
+                             </div>
+                             <textarea
+                               autoFocus
+                               className="w-full bg-background border border-border/50 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
+                               placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
+                               value={brainDumpText}
+                               onChange={e => setBrainDumpText(e.target.value)}
+                             />
+                             <div className="mt-4 flex justify-end">
+                               <button
+                                 onClick={processBrainDump}
+                                 disabled={isProcessingBrainDump || !brainDumpText.trim()}
+                                 className="bg-accent text-white px-6 py-2 rounded-full font-sans text-[10px] font-bold uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                               >
+                                 {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                 <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
+                               </button>
+                             </div>
+                          </motion.div>
+                        )}
+
+                        <div className="relative rounded-2xl bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
+                          <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
+                            <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
+                              <Plus className="w-5 h-5" />
+                            </div>
+                            <textarea
+                              autoFocus
+                              placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
+                              className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
+                              value={newTaskTitle}
+                              rows={1}
+                              onChange={e => {
+                                setNewTaskTitle(e.target.value);
+                                e.target.style.height = 'inherit';
+                                e.target.style.height = `${e.target.scrollHeight}px`;
+                              }}
                               onKeyDown={e => {
-                                if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
-                                  e.preventDefault();
-                                  const newTag = tagInputValue.trim().toLowerCase();
-                                  if (!newTaskTagsList.includes(newTag)) {
-                                    setNewTaskTagsList([...newTaskTagsList, newTag]);
-                                  }
-                                  setTagInputValue('');
-                                } else if (e.key === 'Backspace' && !tagInputValue && newTaskTagsList.length > 0) {
-                                  setNewTaskTagsList(newTaskTagsList.slice(0, -1));
-                                } else if (e.key === 'Enter' && !tagInputValue.trim() && newTaskTitle.trim()) {
+                                if (e.key === 'Enter' && !e.shiftKey && newTaskTitle.trim()) {
                                   e.preventDefault();
                                   document.getElementById('add-task-btn')?.click();
                                 }
                               }}
                             />
                           </div>
-                          
-                          <datalist id="category-options">
-                            {categories.map(c => <option key={c} value={c} />)}
-                            {!categories.includes('Tasks') && <option value="Tasks" />}
-                          </datalist>
 
-                          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-                            {/* Deadline Button */}
-                            <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
-                              <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
-                              <input
-                                type="date"
-                                className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-[#a15f5f]' : 'text-text-muted'}`}
-                                value={newTaskDeadline}
-                                onChange={e => setNewTaskDeadline(e.target.value)}
-                                onClick={(e) => {
-                                  try { (e.target as HTMLInputElement).showPicker(); } catch(err){}
-                                }}
-                              />
-                            </label>
+                          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
+                              {/* Quick Tag Selection */}
+                              <div className="flex-1 flex flex-col gap-2">
+                                {/* Selected Tags */}
+                                {newTaskTagsList.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {newTaskTagsList.map(tag => (
+                                      <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
+                                        {tag}
+                                        <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setNewTaskTagsList(prev => prev.filter(t => t !== tag))} />
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
 
-                            {/* AI Button */}
-                            <button
-                              onClick={() => setShowBrainDump(!showBrainDump)}
-                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100 flex items-center justify-center rounded-xl transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
-                              title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
-                            >
-                              <Sparkles className="w-4 h-4" />
-                            </button>
+                                {/* Available Tags as Buttons */}
+                                <div className="flex flex-wrap gap-1.5">
+                                  {categories.filter(c => !newTaskTagsList.includes(c)).map(cat => (
+                                    <button
+                                      key={cat}
+                                      type="button"
+                                      onClick={() => {
+                                        if (!newTaskTagsList.includes(cat)) {
+                                          setNewTaskTagsList([...newTaskTagsList, cat]);
+                                        }
+                                      }}
+                                      className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-60 hover:opacity-100 hover:scale-105 active:scale-95`}
+                                    >
+                                      + {cat}
+                                    </button>
+                                  ))}
 
-                            {/* Submit button */}
-                            <button
-                              id="add-task-btn"
-                              disabled={!newTaskTitle.trim()}
-                              onClick={() => {
-                                if (newTaskTitle.trim()) {
-                                  const titleLines = newTaskTitle.trim().split('\n');
-                                  const title = titleLines[0].trim();
-                                  const description = titleLines.slice(1).join('\n').trim() || undefined;
-                                  
-                                  const tags = [...newTaskTagsList];
-                                  if (tagInputValue.trim()) {
-                                    const newTag = tagInputValue.trim().toLowerCase();
-                                    if (!tags.includes(newTag)) tags.push(newTag);
-                                  }
-                                  if (tags.length === 0) {
-                                    tags.push((selectedCategory || 'Tasks').toLowerCase());
-                                  }
-                                  
-                                  let finalDeadline = newTaskDeadline;
-                                  if (!finalDeadline) {
-                                    const d = new Date();
-                                    const offset = d.getTimezoneOffset() * 60000;
-                                    finalDeadline = new Date(d.getTime() - offset).toISOString().split('T')[0];
-                                  }
+                                  {/* Custom Tag Input */}
+                                  <div className="flex items-center gap-1 bg-surface rounded-lg border border-border/80 focus-within:border-accent px-2 py-1 transition-colors">
+                                    <input
+                                      type="text"
+                                      className="bg-transparent text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted/60 w-20"
+                                      placeholder={language === 'zh' ? '自定义...' : 'Custom...'}
+                                      value={tagInputValue}
+                                      onChange={e => setTagInputValue(e.target.value)}
+                                      onKeyDown={e => {
+                                        if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
+                                          e.preventDefault();
+                                          const newTag = tagInputValue.trim().toLowerCase();
+                                          if (!newTaskTagsList.includes(newTag)) {
+                                            setNewTaskTagsList([...newTaskTagsList, newTag]);
+                                          }
+                                          setTagInputValue('');
+                                        } else if (e.key === 'Enter' && !tagInputValue.trim() && newTaskTitle.trim()) {
+                                          e.preventDefault();
+                                          document.getElementById('add-task-btn')?.click();
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
 
-                                  const newTask: Task = {
-                                    id: `t_${Date.now()}`,
-                                    title,
-                                    description,
-                                    status: 'todo',
-                                    tags,
-                                    deadline: finalDeadline,
-                                    source_date: currentFileDate
-                                  };
-                                  // Optimistic UI update
-                                  setTasks(prev => [...prev, newTask]);
-                                  // Create via API
-                                  tasksApi.create(currentFileDate, newTask).then(() => {
-                                    // Refresh markdown AND tasks with server-side stable IDs
-                                    return filesApi.get(currentFileDate);
-                                  }).then(data => {
-                                    if (data) {
-                                      setMarkdown(data.content);
-                                      setTasks(data.tasks as Task[]);
-                                      setLastSyncedMD(data.content);
-                                      setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+                              <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                                {/* Deadline Button */}
+                                <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
+                                  <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
+                                  <input
+                                    type="date"
+                                    className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-[#a15f5f]' : 'text-text-muted'}`}
+                                    value={newTaskDeadline}
+                                    onChange={e => setNewTaskDeadline(e.target.value)}
+                                    onClick={(e) => {
+                                      try { (e.target as HTMLInputElement).showPicker(); } catch(err){}
+                                    }}
+                                  />
+                                </label>
+
+                                {/* AI Button */}
+                                <button
+                                  onClick={() => setShowBrainDump(!showBrainDump)}
+                                  className="bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100 flex items-center justify-center rounded-xl transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
+                                  title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
+                                >
+                                  <Sparkles className="w-4 h-4" />
+                                </button>
+
+                                {/* Submit button */}
+                                <button
+                                  id="add-task-btn"
+                                  disabled={!newTaskTitle.trim()}
+                                  onClick={() => {
+                                    if (newTaskTitle.trim()) {
+                                      const titleLines = newTaskTitle.trim().split('\n');
+                                      const title = titleLines[0].trim();
+                                      const description = titleLines.slice(1).join('\n').trim() || undefined;
+
+                                      const tags = [...newTaskTagsList];
+                                      if (tagInputValue.trim()) {
+                                        const newTag = tagInputValue.trim().toLowerCase();
+                                        if (!tags.includes(newTag)) tags.push(newTag);
+                                      }
+                                      if (tags.length === 0) {
+                                        tags.push((selectedCategory || 'Tasks').toLowerCase());
+                                      }
+
+                                      let finalDeadline = newTaskDeadline;
+                                      if (!finalDeadline) {
+                                        const d = new Date();
+                                        const offset = d.getTimezoneOffset() * 60000;
+                                        finalDeadline = new Date(d.getTime() - offset).toISOString().split('T')[0];
+                                      }
+
+                                      const newTask: Task = {
+                                        id: `t_${Date.now()}`,
+                                        title,
+                                        description,
+                                        status: 'todo',
+                                        tags,
+                                        deadline: finalDeadline,
+                                        source_date: currentFileDate
+                                      };
+                                      // Optimistic UI update
+                                      setTasks(prev => [...prev, newTask]);
+                                      // Create via API
+                                      tasksApi.create(currentFileDate, newTask).then(() => {
+                                        // Refresh markdown AND tasks with server-side stable IDs
+                                        return filesApi.get(currentFileDate);
+                                      }).then(data => {
+                                        if (data) {
+                                          setMarkdown(data.content);
+                                          setTasks(data.tasks as Task[]);
+                                          setLastSyncedMD(data.content);
+                                          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+                                        }
+                                      }).catch(console.error);
+                                      setNewTaskTitle('');
+                                      setNewTaskTagsList([]);
+                                      setTagInputValue('');
+                                      setNewTaskDeadline('');
+                                      setShowTaskInput(false);
                                     }
-                                  }).catch(console.error);
-                                  setNewTaskTitle('');
-                                  setNewTaskTagsList([]);
-                                  setTagInputValue('');
-                                  setNewTaskDeadline('');
-                                }
-                              }}
-                              className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-xl text-[12px] uppercase font-sans tracking-widest font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
-                                newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
-                              } flex-1 sm:flex-none`}
-                            >
-                              <span>{language === 'zh' ? '添加任务' : 'Add Task'}</span>
-                              <CornerUpRight className={`w-4 h-4 ${newTaskTitle.trim() ? 'opacity-80' : 'opacity-0'} hidden sm:block transition-opacity`} />
-                            </button>
+                                  }}
+                                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-xl text-[12px] uppercase font-sans tracking-widest font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
+                                    newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
+                                  } flex-1 sm:flex-none`}
+                                >
+                                  <span>{language === 'zh' ? '添加任务' : 'Add Task'}</span>
+                                  <CornerUpRight className={`w-4 h-4 ${newTaskTitle.trim() ? 'opacity-80' : 'opacity-0'} hidden sm:block transition-opacity`} />
+                                </button>
+                              </div>
                           </div>
-                      </div>
-                    </div>
-                  </motion.div>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
-                    // For 'Tasks' fallback category, show untagged tasks (empty tags or no tags)
                     const catTasks = category === 'Tasks'
-                      ? todayTasks.filter(t => !t.tags || t.tags.length === 0)
+                      ? todayTasks.filter(t => !t.tags || t.tags.length === 0 || t.tags.includes('Tasks'))
                       : todayTasks.filter(t => t.tags?.includes(category));
-                    if (catTasks.length === 0) return null;
-                    
+
+                    const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
+                    const doneCatTasks = catTasks.filter(t => t.status === 'done');
+                    if (pendingCatTasks.length === 0 && doneCatTasks.length === 0) return null;
+
+                    const showDone = showDoneByCategory[category] ?? false;
+
                     return (
                       <div key={category} className="space-y-5">
                         <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
                           <span>{category}</span>
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
-                        
+
                         <div className="space-y-4">
                           <AnimatePresence>
-                            {catTasks.map(task => (
-                              <TaskCard 
-                                key={task.id} 
-                                task={task} 
+                            {pendingCatTasks.slice().reverse().map(task => (
+                              <TaskCard
+                                key={task.id}
+                                task={task}
                                 language={language}
-                                onToggle={() => handleToggleTask(task.id)} 
+                                onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(newTitle, newDesc) => handleEditTask(task.id, newTitle, newDesc)}
                                 onDelete={() => handleDeleteTask(task.id)}
                               />
                             ))}
                           </AnimatePresence>
                         </div>
+
+                        {doneCatTasks.length > 0 && (
+                          <div className="mt-2">
+                            <button
+                              onClick={() => setShowDoneByCategory(prev => ({ ...prev, [category]: !prev[category] }))}
+                              className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                            >
+                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
+                              {language === 'zh' ? `已完成 (${doneCatTasks.length})` : `Done (${doneCatTasks.length})`}
+                            </button>
+                            <AnimatePresence>
+                              {showDone && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden space-y-4 mt-3"
+                                >
+                                  {doneCatTasks.slice().reverse().map(task => (
+                                    <TaskCard
+                                      key={task.id}
+                                      task={task}
+                                      language={language}
+                                      onToggle={() => handleToggleTask(task.id)}
+                                      onEdit={(newTitle, newDesc) => handleEditTask(task.id, newTitle, newDesc)}
+                                      onDelete={() => handleDeleteTask(task.id)}
+                                    />
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1073,7 +1252,7 @@ export default function App() {
                                <span className="ml-auto text-[10px] text-text-muted bg-surface px-2 py-1 rounded-full">{catTasks.length}</span>
                             </h2>
                             <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                              {catTasks.map(task => (
+                              {catTasks.slice().reverse().map(task => (
                                 <div key={task.id + task.source_date} className="p-4 rounded-2xl bg-surface border border-border/50 hover:border-accent/40 transition-colors">
                                   <div className="flex items-start gap-3">
                                     <div className="w-5 h-5 rounded border border-border/80 flex items-center justify-center shrink-0 mt-0.5 bg-background shadow-inner"></div>
@@ -1222,15 +1401,46 @@ export default function App() {
 
        {showSettings && (
          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-           <motion.div 
+           <motion.div
              initial={{ opacity: 0, scale: 0.95 }}
              animate={{ opacity: 1, scale: 1 }}
-             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-md w-full relative"
+             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-md w-full relative max-h-[85vh] overflow-y-auto"
            >
              <h2 className="font-serif text-2xl text-text-heading italic mb-6">
                {language === 'zh' ? '全局设置' : 'Configuration'}
              </h2>
              <div className="space-y-6">
+                {/* Workspace Path */}
+                <div>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
+                     {language === 'zh' ? '工作区路径' : 'Workspace Path'}
+                   </h3>
+                   <input
+                     type="text"
+                     value={workspaceRoot}
+                     readOnly
+                     placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
+                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono opacity-60"
+                   />
+                   <p className="text-xs text-text-muted mt-1.5">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
+                </div>
+
+                {/* DeepSeek API Key */}
+                <div>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
+                     DeepSeek API Key
+                   </h3>
+                   <input
+                     type="password"
+                     value={deepseekApiKey}
+                     onChange={e => setDeepseekApiKey(e.target.value)}
+                     placeholder={language === 'zh' ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxx' : 'sk-xxxxxxxxxxxxxxxxxxxxxxxx'}
+                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
+                   />
+                </div>
+
+                <hr className="border-border" />
+
                 <div>
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 flex items-center justify-between">
                      <span>{language === 'zh' ? '界面语言' : 'Language'}</span>
@@ -1282,7 +1492,18 @@ export default function App() {
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                   <button onClick={() => setShowSettings(false)} className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors">Cancel</button>
-                  <button onClick={() => { setShowSettings(false); alert("Settings saved locally."); }} className="bg-text-heading text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm">Save</button>
+                  <button onClick={async () => {
+                    setShowSettings(false);
+                    // Persist config changes
+                    try {
+                      const config = await configApi.get();
+                      await configApi.update({
+                        ...config,
+                        deepseekApiKey: deepseekApiKey.trim(),
+                      });
+                      setGithubRepo(config.githubRepo || null);
+                    } catch (e) {}
+                  }} className="bg-text-heading text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm">Save</button>
                 </div>
              </div>
            </motion.div>
