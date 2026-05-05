@@ -1,53 +1,81 @@
 #!/usr/bin/env node
 /**
- * Capture README screenshots from a real running DailyFlow app.
- *
- * Usage:
- *   DAILYFLOW_BASE_URL=http://localhost:5173 node scripts/capture-screenshots.mjs
- *
- * This script intentionally does not generate mocked screens. Start the real app
- * first, then capture from localhost.
+ * DailyFlow Screenshot Capture Script
+ * Captures real screenshots from running application
  */
+
 import { chromium } from 'playwright';
-import { mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 const assetsDir = join(rootDir, 'docs', 'assets');
-const baseUrl = process.env.DAILYFLOW_BASE_URL || 'http://localhost:5173';
 
-const shots = [
-  { path: '/', name: 'home.png' },
-  { path: '/projects', name: 'projects.png' },
-  { path: '/settings', name: 'settings.png' },
-];
+const VIEWPORT = { width: 1280, height: 800 };
 
-async function main() {
-  await mkdir(assetsDir, { recursive: true });
-  const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
-
-  for (const shot of shots) {
-    const url = new URL(shot.path, baseUrl).toString();
-    try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
-      await page.screenshot({ path: join(assetsDir, shot.name), fullPage: true });
-      console.log(`captured ${url} -> docs/assets/${shot.name}`);
-    } catch (error) {
-      console.error(`failed to capture ${url}`);
-      console.error(error instanceof Error ? error.message : error);
-      process.exitCode = 1;
-      break;
-    }
-  }
-
-  await browser.close();
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+async function captureScreenshot(page, name, options = {}) {
+  const path = join(assetsDir, `${name}.png`);
+  const { width = VIEWPORT.width, height = VIEWPORT.height, wait = 1000 } = options;
+
+  await page.setViewportSize({ width, height });
+  await sleep(wait);
+  await page.screenshot({ path, type: 'png' });
+
+  console.log(`📸 Screenshot saved: ${path}`);
+  return path;
+}
+
+async function captureScreenshots() {
+  // Create assets directory
+  if (!fs.existsSync(assetsDir)) {
+    fs.mkdirSync(assetsDir, { recursive: true });
+  }
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    viewport: VIEWPORT,
+    deviceScaleFactor: 2
+  });
+  const page = await context.newPage();
+
+  const BASE_URL = 'http://localhost:3002';
+
+  try {
+    console.log('\n🚀 Starting screenshot capture from real application...\n');
+
+    // 1. Main page
+    console.log('📷 Capturing main page...');
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    await sleep(2000);
+    await captureScreenshot(page, 'home', { wait: 2000 });
+
+    // 2. Projects view
+    console.log('📷 Capturing projects view...');
+    await page.click('text=Projects');
+    await sleep(1500);
+    await captureScreenshot(page, 'projects', { wait: 1500 });
+
+    // 3. Settings
+    console.log('📷 Capturing settings...');
+    await page.click('text=Configuration');
+    await sleep(1000);
+    await captureScreenshot(page, 'settings', { wait: 1000 });
+
+    console.log('\n✨ All screenshots generated!');
+    console.log(`📁 Location: ${assetsDir}`);
+
+  } catch (error) {
+    console.error('❌ Error:', error);
+  } finally {
+    await browser.close();
+  }
+}
+
+captureScreenshots().catch(console.error);
