@@ -1387,19 +1387,30 @@ export default function App() {
        )}
 
        {showSettings && (
-         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
            <motion.div
              initial={{ opacity: 0, scale: 0.95 }}
              animate={{ opacity: 1, scale: 1 }}
-             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-md w-full relative max-h-[85vh] overflow-y-auto"
+             className="bg-surface-white border border-border shadow-xl rounded-[24px] w-full max-w-2xl relative flex flex-col max-h-[90vh]"
            >
-             <h2 className="font-serif text-2xl text-text-heading italic mb-6">
-               {language === 'zh' ? '全局设置' : 'Configuration'}
-             </h2>
-             <div className="space-y-6">
+             {/* Header with Close Button */}
+             <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
+               <h2 className="font-serif text-2xl text-text-heading italic">
+                 {language === 'zh' ? '全局设置' : 'Configuration'}
+               </h2>
+               <button
+                 onClick={() => setShowSettings(false)}
+                 className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-lg hover:bg-surface"
+               >
+                 <X className="w-5 h-5" />
+               </button>
+             </div>
+
+             {/* Scrollable Content */}
+             <div className="overflow-y-auto p-6 space-y-5">
                 {/* Workspace Path */}
                 <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
                      {language === 'zh' ? '工作区路径' : 'Workspace Path'}
                    </h3>
                    <div className="flex gap-2">
@@ -1408,7 +1419,7 @@ export default function App() {
                        value={workspaceRoot}
                        onChange={e => setWorkspaceRoot(e.target.value)}
                        placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                       className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
+                       className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
                      />
                      <button
                        onClick={async () => {
@@ -1427,17 +1438,17 @@ export default function App() {
                            alert('Failed to open folder picker: ' + e.message);
                          }
                        }}
-                       className="px-4 py-3 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors whitespace-nowrap"
+                       className="px-3 py-2 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors whitespace-nowrap"
                      >
                        {language === 'zh' ? '浏览' : 'Browse'}
                      </button>
                    </div>
-                   <p className="text-xs text-text-muted mt-1.5">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
+                   <p className="text-xs text-text-muted mt-1">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
                 </div>
 
                 {/* DeepSeek API Key */}
                 <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
                      DeepSeek API Key
                    </h3>
                    <div className="relative">
@@ -1446,85 +1457,122 @@ export default function App() {
                        value={deepseekApiKey}
                        onChange={e => setDeepseekApiKey(e.target.value)}
                        placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                       className="w-full bg-background border border-border rounded-xl px-4 py-3 pr-12 text-sm outline-none focus:border-accent transition-colors font-mono"
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
                      />
                      <button
                        type="button"
                        onClick={() => setShowApiKey(!showApiKey)}
-                       className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
+                       className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
                      >
                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                      </button>
                    </div>
+                   <p className="text-xs text-text-muted mt-1">
+                     {language === 'zh' ? '用于AI总结功能。' : 'Used for AI summary feature. '}
+                     <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                       {language === 'zh' ? '获取API Key' : 'Get API Key'}
+                     </a>
+                   </p>
                 </div>
 
                 <hr className="border-border" />
 
+                {/* Language */}
                 <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 flex items-center justify-between">
-                     <span>{language === 'zh' ? '界面语言' : 'Language'}</span>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                     {language === 'zh' ? '界面语言' : 'Language'}
                    </h3>
-                   <div className="flex bg-surface p-1 rounded-xl shadow-inner border border-border/50">
+                   <div className="flex bg-surface p-1 rounded-lg shadow-inner border border-border/50 gap-1">
                      <button
                        onClick={() => setLanguage('en')}
-                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
                      >
                        English
                      </button>
                      <button
                        onClick={() => setLanguage('zh')}
-                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
                      >
                        中文
                      </button>
                    </div>
                 </div>
+
+                <hr className="border-border" />
+
+                {/* GitHub Sync */}
                 <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3 flex items-center justify-between">
-                     <span>{language === 'zh' ? 'GitHub 同步' : 'GitHub Sync'}</span>
-                     <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full">Pro</span>
-                   </h3>
-                   <div className="space-y-4">
+                   <div className="flex items-center justify-between mb-2">
+                     <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted">
+                       {language === 'zh' ? 'GitHub 同步' : 'GitHub Sync'}
+                     </h3>
+                     <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">Beta</span>
+                   </div>
+
+                   {/* Tutorial */}
+                   <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 mb-3">
+                     <p className="text-xs text-text-main font-medium mb-2">
+                       {language === 'zh' ? '📖 如何设置 GitHub 同步：' : '📖 How to setup GitHub sync:'}
+                     </p>
+                     <ol className="text-xs text-text-muted space-y-1 list-decimal list-inside">
+                       <li>{language === 'zh' ? '在 GitHub 创建一个新的私有仓库' : 'Create a new private repository on GitHub'}</li>
+                       <li>{language === 'zh' ? '生成一个 Personal Access Token (Settings → Developer settings → Personal access tokens → Tokens (classic))' : 'Generate a Personal Access Token (Settings → Developer settings → Personal access tokens → Tokens (classic))'}</li>
+                       <li>{language === 'zh' ? '勾选 "repo" 权限' : 'Check "repo" scope'}</li>
+                       <li>{language === 'zh' ? '在下方填写仓库名称和 Token' : 'Fill in repository name and token below'}</li>
+                       <li>{language === 'zh' ? '选择自动同步间隔或手动同步' : 'Choose auto-sync interval or manual sync'}</li>
+                     </ol>
+                   </div>
+
+                   <div className="space-y-3">
                      <select
                        value={syncInterval}
                        onChange={e => setSyncInterval(Number(e.target.value))}
-                       className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-sans font-medium text-text-main"
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
                      >
                        <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
-                       <option value={1}>{language === 'zh' ? '每 1 分钟自动同步一次' : 'Auto sync every 1 minute'}</option>
-                       <option value={5}>{language === 'zh' ? '每 5 分钟自动同步一次' : 'Auto sync every 5 minutes'}</option>
-                       <option value={10}>{language === 'zh' ? '每 10 分钟自动同步一次' : 'Auto sync every 10 minutes'}</option>
+                       <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
+                       <option value={5}>{language === 'zh' ? '每 5 分钟' : 'Every 5 minutes'}</option>
+                       <option value={10}>{language === 'zh' ? '每 10 分钟' : 'Every 10 minutes'}</option>
                      </select>
-                     <input type="text" placeholder={language === 'zh' ? "GitHub 仓库 (例如 user/dailyflow)" : "GitHub Repository (e.g., user/dailyflow)"} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono" />
-                     <input type="password" placeholder={language === 'zh' ? "个人访问令牌" : "Personal Access Token"} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono" />
-
+                     <input
+                       type="text"
+                       placeholder={language === 'zh' ? "仓库名称 (例如 username/dailyflow)" : "Repository (e.g., username/dailyflow)"}
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                     />
+                     <input
+                       type="password"
+                       placeholder={language === 'zh' ? "Personal Access Token" : "Personal Access Token"}
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                     />
                    </div>
-                   <p className="text-xs text-text-muted mt-3 font-medium">Your data is synced as simple markdown files.</p>
                 </div>
-                <hr className="border-border" />
-                <div>
-                  <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">Theme</h3>
-                  <div className="flex space-x-4">
-                    <button className="flex-1 py-2 rounded-xl bg-accent text-white font-sans text-xs font-bold uppercase tracking-widest shadow-sm">Light</button>
-                    <button disabled className="flex-1 py-2 rounded-xl bg-background border border-border text-text-muted font-sans text-xs font-bold uppercase tracking-widest opacity-50 cursor-not-allowed">Dark</button>
-                  </div>
-                </div>
-                <div className="pt-4 flex justify-end gap-3">
-                  <button onClick={() => setShowSettings(false)} className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors">Cancel</button>
-                  <button onClick={async () => {
-                    setShowSettings(false);
-                    // Persist config changes
-                    try {
-                      const config = await configApi.get();
-                      await configApi.update({
-                        ...config,
-                        workspaceRoot: workspaceRoot.trim(),
-                        deepseekApiKey: deepseekApiKey.trim(),
-                      });
-                      setGithubRepo(config.githubRepo || null);
-                    } catch (e) {}
-                  }} className="bg-text-heading text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm">Save</button>
-                </div>
+             </div>
+
+             {/* Footer with Save Button */}
+             <div className="border-t border-border p-4 flex justify-end gap-3">
+               <button
+                 onClick={() => setShowSettings(false)}
+                 className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors"
+               >
+                 {language === 'zh' ? '取消' : 'Cancel'}
+               </button>
+               <button
+                 onClick={async () => {
+                   setShowSettings(false);
+                   try {
+                     const config = await configApi.get();
+                     await configApi.update({
+                       ...config,
+                       workspaceRoot: workspaceRoot.trim(),
+                       deepseekApiKey: deepseekApiKey.trim(),
+                     });
+                     setGithubRepo(config.githubRepo || null);
+                   } catch (e) {}
+                 }}
+                 className="bg-accent text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm hover:bg-accent/90 transition-colors"
+               >
+                 {language === 'zh' ? '保存' : 'Save'}
+               </button>
              </div>
            </motion.div>
          </div>
