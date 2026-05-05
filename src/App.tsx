@@ -1558,16 +1558,64 @@ export default function App() {
                </button>
                <button
                  onClick={async () => {
+                   const oldWorkspaceRoot = workspaceRoot;
                    setShowSettings(false);
                    try {
                      const config = await configApi.get();
+                     const workspaceChanged = oldWorkspaceRoot !== config.workspaceRoot;
+
                      await configApi.update({
                        ...config,
                        workspaceRoot: workspaceRoot.trim(),
                        deepseekApiKey: deepseekApiKey.trim(),
                      });
                      setGithubRepo(config.githubRepo || null);
-                   } catch (e) {}
+
+                     // If workspace path changed, reload everything
+                     if (workspaceChanged) {
+                       // Clear current state
+                       setFilesMap({});
+                       setTasks([]);
+                       setMarkdown('');
+
+                       // Reload file list from new workspace
+                       try {
+                         const files = await filesApi.list();
+                         const newFilesMap: Record<string, string> = {};
+                         for (const file of files) {
+                           const data = await filesApi.get(file);
+                           if (data) {
+                             newFilesMap[file] = data.content;
+                           }
+                         }
+                         setFilesMap(newFilesMap);
+
+                         // Switch to today's date
+                         const today = getTodayStr();
+                         setCurrentFileDate(today);
+
+                         // Load today's file if it exists
+                         if (newFilesMap[today]) {
+                           const data = await filesApi.get(today);
+                           if (data) {
+                             setMarkdown(data.content);
+                             setTasks(data.tasks as Task[]);
+                             setLastSyncedMD(data.content);
+                           }
+                         }
+                       } catch (e) {
+                         console.error('Failed to reload workspace:', e);
+                         alert(language === 'zh'
+                           ? '重新加载工作区失败，请检查路径是否正确'
+                           : 'Failed to reload workspace. Please check if the path is correct.');
+                       }
+                     }
+                   } catch (e) {
+                     console.error('Failed to save config:', e);
+                     alert(language === 'zh'
+                       ? '保存配置失败'
+                       : 'Failed to save configuration');
+                   }
                  }}
                  className="bg-accent text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm hover:bg-accent/90 transition-colors"
                >
