@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Check, Command, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle } from 'lucide-react';
+import { Check, Command, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
@@ -93,6 +93,7 @@ export default function App() {
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [deepseekApiKey, setDeepseekApiKey] = useState<string>('');
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const markdownRef = React.useRef(markdown);
 
@@ -1389,13 +1390,36 @@ export default function App() {
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
                      {language === 'zh' ? '工作区路径' : 'Workspace Path'}
                    </h3>
-                   <input
-                     type="text"
-                     value={workspaceRoot}
-                     onChange={e => setWorkspaceRoot(e.target.value)}
-                     placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
-                   />
+                   <div className="flex gap-2">
+                     <input
+                       type="text"
+                       value={workspaceRoot}
+                       onChange={e => setWorkspaceRoot(e.target.value)}
+                       placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
+                       className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
+                     />
+                     <button
+                       onClick={async () => {
+                         try {
+                           const res = await fetch('http://localhost:3003/api/config/choose-folder');
+                           if (res.ok) {
+                             const data = await res.json();
+                             if (data.path) {
+                               setWorkspaceRoot(data.path);
+                             }
+                           } else {
+                             const error = await res.json();
+                             alert(error.error || 'Failed to open folder picker');
+                           }
+                         } catch (e: any) {
+                           alert('Failed to open folder picker: ' + e.message);
+                         }
+                       }}
+                       className="px-4 py-3 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors whitespace-nowrap"
+                     >
+                       {language === 'zh' ? '浏览' : 'Browse'}
+                     </button>
+                   </div>
                    <p className="text-xs text-text-muted mt-1.5">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
                 </div>
 
@@ -1404,13 +1428,22 @@ export default function App() {
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-3">
                      DeepSeek API Key
                    </h3>
-                   <input
-                     type="text"
-                     value={deepseekApiKey}
-                     onChange={e => setDeepseekApiKey(e.target.value)}
-                     placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                     className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors font-mono"
-                   />
+                   <div className="relative">
+                     <input
+                       type={showApiKey ? "text" : "password"}
+                       value={deepseekApiKey}
+                       onChange={e => setDeepseekApiKey(e.target.value)}
+                       placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+                       className="w-full bg-background border border-border rounded-xl px-4 py-3 pr-12 text-sm outline-none focus:border-accent transition-colors font-mono"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowApiKey(!showApiKey)}
+                       className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
+                     >
+                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                     </button>
+                   </div>
                 </div>
 
                 <hr className="border-border" />
