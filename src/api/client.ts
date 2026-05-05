@@ -25,6 +25,8 @@ export interface ConfigData {
   dailyPathTemplate: string;
   rolloverTrigger: string;
   rolloverSkipTags: string[];
+  githubRepo?: string;
+  deepseekApiKey?: string;
 }
 
 export interface RolloverPreviewData {
@@ -100,11 +102,22 @@ export const tasksApi = {
     if (!res.ok) throw new Error('Failed to create task');
   },
 
-  async edit(taskId: string, date: string, title: string, description?: string): Promise<void> {
+  async edit(
+    taskId: string,
+    date: string,
+    updates: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      deadline?: string;
+      priority?: 'high' | 'medium' | 'low';
+      project?: string;
+    }
+  ): Promise<void> {
     const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, title, description }),
+      body: JSON.stringify({ date, ...updates }),
     });
     if (!res.ok) throw new Error('Failed to edit task');
   },
@@ -217,5 +230,60 @@ export const projectsApi = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete project');
+  },
+};
+
+export interface GitStatus {
+  hasChanges: boolean;
+  branch: string;
+  ahead: number;
+  behind: number;
+  staged: string[];
+  unstaged: string[];
+  untracked: string[];
+}
+
+export interface GitSyncResult {
+  success: boolean;
+  commitHash?: string;
+  message?: string;
+  error?: string;
+  stage?: string;
+}
+
+/**
+ * Git 操作 API
+ */
+export const gitApi = {
+  async getStatus(): Promise<GitStatus> {
+    const res = await fetch(`${API_BASE}/git/status`);
+    if (!res.ok) throw new Error('Failed to get git status');
+    return res.json();
+  },
+
+  async sync(message: string): Promise<GitSyncResult> {
+    const res = await fetch(`${API_BASE}/git/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    if (!res.ok) throw new Error('Failed to sync');
+    return res.json();
+  },
+
+  async init(): Promise<{ success: boolean; error?: string }> {
+    const res = await fetch(`${API_BASE}/git/init`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to init git repo');
+    return res.json();
+  },
+
+  async setRemote(): Promise<{ success: boolean; error?: string }> {
+    const res = await fetch(`${API_BASE}/git/set-remote`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to set remote');
+    return res.json();
   },
 };

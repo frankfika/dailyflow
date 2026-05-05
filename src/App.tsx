@@ -449,9 +449,19 @@ export default function App() {
     }
   };
 
-  const handleEditTask = async (id: string, newTitle: string, newDescription?: string) => {
+  const handleEditTask = async (
+    id: string,
+    updates: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      deadline?: string;
+      priority?: 'high' | 'medium' | 'low';
+      project?: string;
+    }
+  ) => {
     try {
-      await tasksApi.edit(id, currentFileDate, newTitle, newDescription);
+      await tasksApi.edit(id, currentFileDate, updates);
       // Refresh markdown and re-sync tasks (server may have stable IDs)
       const data = await filesApi.get(currentFileDate);
       if (data) {
@@ -1140,8 +1150,9 @@ export default function App() {
                                 key={task.id}
                                 task={task}
                                 language={language}
+                                categories={categories}
                                 onToggle={() => handleToggleTask(task.id)}
-                                onEdit={(newTitle, newDesc) => handleEditTask(task.id, newTitle, newDesc)}
+                                onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
                               />
                             ))}
@@ -1171,8 +1182,9 @@ export default function App() {
                                       key={task.id}
                                       task={task}
                                       language={language}
+                                      categories={categories}
                                       onToggle={() => handleToggleTask(task.id)}
-                                      onEdit={(newTitle, newDesc) => handleEditTask(task.id, newTitle, newDesc)}
+                                      onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
                                     />
                                   ))}
@@ -1524,22 +1536,39 @@ export default function App() {
 interface TaskCardProps {
   task: Task;
   language: 'en' | 'zh';
+  categories: string[];
   onToggle: () => void;
-  onEdit: (newTitle: string, newDesc?: string) => void;
+  onEdit: (updates: {
+    title?: string;
+    description?: string;
+    tags?: string[];
+    deadline?: string;
+    priority?: 'high' | 'medium' | 'low';
+    project?: string;
+  }) => void;
   onDelete: () => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, language, onToggle, onEdit, onDelete }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggle, onEdit, onDelete }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(task.title + (task.description ? '\n' + task.description : ''));
+  const [editTags, setEditTags] = useState<string[]>(task.tags || []);
+  const [editDeadline, setEditDeadline] = useState<string>(task.deadline || '');
+  const [tagInputValue, setTagInputValue] = useState('');
 
   const submitEdit = () => {
     if (editContent.trim()) {
       const lines = editContent.trim().split('\n');
       const newTitle = lines[0].trim();
       const newDesc = lines.slice(1).join('\n').trim() || undefined;
-      onEdit(newTitle, newDesc);
+
+      onEdit({
+        title: newTitle,
+        description: newDesc,
+        tags: editTags,
+        deadline: editDeadline || undefined,
+      });
     } else {
       setEditContent(task.title + (task.description ? '\n' + task.description : ''));
     }
@@ -1573,8 +1602,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, onToggle, onEdit, o
 
       <div className="flex-1 min-w-0 pr-[72px] sm:pr-16 xl:pr-8">
         {isEditing ? (
-          <div className="flex items-start">
-            <textarea 
+          <div className="space-y-3">
+            {/* Title and Description */}
+            <textarea
               autoFocus
               ref={(el) => {
                 if (el) {
@@ -1588,24 +1618,111 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, onToggle, onEdit, o
                 e.target.style.height = 'inherit';
                 e.target.style.height = `${e.target.scrollHeight}px`;
               }}
-              onBlur={submitEdit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                   e.preventDefault();
-                   submitEdit();
-                }
                 if (e.key === 'Escape') {
                   setEditContent(task.title + (task.description ? '\n' + task.description : ''));
+                  setEditTags(task.tags || []);
+                  setEditDeadline(task.deadline || '');
                   setIsEditing(false);
                 }
               }}
               rows={1}
-              onFocus={(e) => {
-                e.target.style.height = 'inherit';
-                e.target.style.height = `${e.target.scrollHeight}px`;
-              }}
+              placeholder={language === 'zh' ? '任务标题...' : 'Task title...'}
               className="bg-transparent border-b border-accent outline-none font-serif text-xl leading-snug w-full text-text-heading resize-none overflow-hidden min-h-[32px]"
             />
+
+            {/* Tags Selection */}
+            <div className="flex flex-col gap-2">
+              {editTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {editTags.map(tag => (
+                    <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
+                      {tag}
+                      <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setEditTags(prev => prev.filter(t => t !== tag))} />
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-1.5">
+                {categories.filter(c => !editTags.includes(c)).map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      if (!editTags.includes(cat)) {
+                        setEditTags([...editTags, cat]);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-60 hover:opacity-100 hover:scale-105 active:scale-95`}
+                  >
+                    + {cat}
+                  </button>
+                ))}
+
+                <div className="flex items-center gap-1 bg-surface rounded-lg border border-border/80 focus-within:border-accent px-2 py-1 transition-colors">
+                  <input
+                    type="text"
+                    className="bg-transparent text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted/60 w-20"
+                    placeholder={language === 'zh' ? '自定义...' : 'Custom...'}
+                    value={tagInputValue}
+                    onChange={e => setTagInputValue(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
+                        e.preventDefault();
+                        const newTag = tagInputValue.trim().toLowerCase();
+                        if (!editTags.includes(newTag)) {
+                          setEditTags([...editTags, newTag]);
+                        }
+                        setTagInputValue('');
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Deadline */}
+            <div className="flex items-center gap-2">
+              <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all cursor-pointer ${editDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'}`}>
+                <Calendar className="w-3.5 h-3.5" />
+                <input
+                  type="date"
+                  className="bg-transparent outline-none border-none text-[10px] uppercase tracking-widest font-bold cursor-pointer"
+                  value={editDeadline}
+                  onChange={e => setEditDeadline(e.target.value)}
+                />
+              </label>
+              {editDeadline && (
+                <button
+                  onClick={() => setEditDeadline('')}
+                  className="text-text-muted hover:text-red-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Save/Cancel Buttons */}
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={submitEdit}
+                className="px-4 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors"
+              >
+                {language === 'zh' ? '保存' : 'Save'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditContent(task.title + (task.description ? '\n' + task.description : ''));
+                  setEditTags(task.tags || []);
+                  setEditDeadline(task.deadline || '');
+                  setIsEditing(false);
+                }}
+                className="px-4 py-2 bg-surface text-text-muted rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-surface-white transition-colors"
+              >
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+            </div>
           </div>
         ) : (
           <div>
