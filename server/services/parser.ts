@@ -192,6 +192,101 @@ export function editTaskInMarkdown(
 }
 
 /**
+ * 完整编辑任务（包括所有属性：title, description, tags, deadline, priority, project）
+ */
+export function editTaskFullInMarkdown(
+  md: string,
+  taskLine: number,
+  updates: {
+    title?: string;
+    description?: string;
+    tags?: string[];
+    deadline?: string;
+    priority?: 'high' | 'medium' | 'low';
+    project?: string;
+  },
+  currentDate?: string
+): string {
+  const lines = md.split('\n');
+  if (taskLine < 0 || taskLine >= lines.length) return md;
+
+  const line = lines[taskLine];
+  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX ])\]\s+(.*)$/);
+  if (!taskMatch) return md;
+
+  const indent = taskMatch[1];
+  const bullet = taskMatch[2];
+  const checkbox = taskMatch[3];
+  const originalContent = taskMatch[4];
+
+  // 提取原有的ID和migrated标记
+  const idMatch = originalContent.match(/\^id-([a-zA-Z0-9_-]+)/);
+  const taskId = idMatch ? idMatch[1] : undefined;
+
+  const migratedMatch = originalContent.match(/↗\s*migrated:(\S+)/);
+  const sourceDateFromMigrated = migratedMatch ? migratedMatch[1] : undefined;
+
+  // 构建新的任务行
+  const title = updates.title !== undefined ? updates.title : originalContent.replace(/\s*(#[^\s]+|\^id-[^\s]+|↗\s*migrated:\S+)/g, '').trim();
+
+  let newLine = `${indent}${bullet} [${checkbox}] ${title}`;
+
+  // 添加tags
+  if (updates.tags && updates.tags.length > 0) {
+    const filteredTags = updates.tags.filter(t => t && t !== 'tasks');
+    if (filteredTags.length > 0) {
+      newLine += ` ${filteredTags.map(t => `#${t.replace(/\s+/g, '-')}`).join(' ')}`;
+    }
+  }
+
+  // 添加project
+  if (updates.project) {
+    newLine += ` #project:${updates.project.replace(/ /g, '_')}`;
+  }
+
+  // 添加deadline
+  if (updates.deadline) {
+    newLine += ` #deadline:${updates.deadline}`;
+  }
+
+  // 添加priority
+  if (updates.priority) {
+    newLine += ` #priority:${updates.priority}`;
+  }
+
+  // 保留migrated标记
+  if (sourceDateFromMigrated && sourceDateFromMigrated !== currentDate) {
+    newLine += ` ↗ migrated:${sourceDateFromMigrated}`;
+  }
+
+  // 保留ID
+  if (taskId) {
+    newLine += ` ^id-${taskId}`;
+  }
+
+  lines[taskLine] = newLine;
+
+  // 处理描述
+  let descEnd = taskLine + 1;
+  while (descEnd < lines.length && lines[descEnd].match(/^\s{2,}/) && !lines[descEnd].match(/^\s*[-*]\s+\[/)) {
+    descEnd++;
+  }
+
+  const before = lines.slice(0, taskLine + 1);
+  const after = lines.slice(descEnd);
+
+  if (updates.description === undefined) {
+    // 保留原有描述
+    return [...before, ...lines.slice(taskLine + 1, descEnd), ...after].join('\n');
+  }
+
+  const descLines = updates.description
+    ? updates.description.split('\n').map(d => `  ${d}`)
+    : [];
+  return [...before, ...descLines, ...after].join('\n');
+}
+
+/**
  * 在文件末尾追加一个新任务行（保留原文档其余内容）
  */
 export function appendTaskToMarkdown(md: string, task: Task, currentDate?: string): string {
