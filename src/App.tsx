@@ -645,9 +645,13 @@ export default function App() {
                 <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '分类' : 'Categories'}</h3>
                 <ul className="space-y-3 text-sm font-sans">
                   {categories.map(c => (
-                    <li 
-                       key={c} 
-                       onClick={() => { setSelectedCategory(selectedCategory === c ? null : c); setIsSidebarOpen(false); }}
+                    <li
+                       key={c}
+                       onClick={() => {
+                         setActiveTab('today');
+                         setSelectedCategory(selectedCategory === c ? null : c);
+                         setIsSidebarOpen(false);
+                       }}
                        className={`flex items-center gap-3 cursor-pointer transition-colors ${selectedCategory === c ? 'text-accent font-semibold' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                     >
                       <div className={`ml-4 w-3 h-3 rounded-sm flex-shrink-0 border flex items-center justify-center transition-colors ${selectedCategory === c ? 'bg-accent border-accent text-white' : 'border-border'}`}>
@@ -659,36 +663,6 @@ export default function App() {
                 </ul>
               </div>
             )}
-
-            <div>
-               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
-               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
-                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setCurrentView('projects')}>
-                   <Briefcase className="ml-4 w-3.5 h-3.5" />
-                   <span>{language === 'zh' ? '项目管理' : 'Projects'}</span>
-                 </li>
-               </ul>
-            </div>
-
-            <div>
-               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '洞察' : 'Insights'}</h3>
-               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
-                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setShowAISummary(true)}>
-                   <Sparkles className="ml-4 w-3.5 h-3.5" />
-                   <span>{language === 'zh' ? 'AI 总结' : 'AI Summary'}</span>
-                 </li>
-               </ul>
-            </div>
-
-            <div>
-               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '设置' : 'Settings'}</h3>
-               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
-                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setShowSettings(true)}>
-                   <Settings className="ml-4 w-3.5 h-3.5" />
-                   <span>{language === 'zh' ? '全局设置' : 'Configuration'}</span>
-                 </li>
-               </ul>
-            </div>
           </nav>
           <li 
             className="pt-2 mt-auto lg:hidden"
