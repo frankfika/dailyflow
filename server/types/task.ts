@@ -22,6 +22,7 @@ export interface Config {
   dailyPathTemplate: string;
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
+  githubRepo?: string;
 }
 
 export interface RolloverPreview {
@@ -29,4 +30,16 @@ export interface RolloverPreview {
   toDate: string;
   tasksToMigrate: Task[];
   targetContent: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'active' | 'completed' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+  tags?: string[];
+  deadline?: string;
+  filePath?: string; // 项目文件的路径
 }

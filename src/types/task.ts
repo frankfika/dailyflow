@@ -22,4 +22,17 @@ export type ConfigData = {
   dailyPathTemplate: string;
   rolloverTrigger: string;
   rolloverSkipTags: string[];
+  githubRepo?: string;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'active' | 'completed' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+  tags?: string[];
+  deadline?: string;
+  filePath?: string;
 };

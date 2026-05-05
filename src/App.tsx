@@ -12,6 +12,9 @@ import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/themes/prism.css';
 import { filesApi, tasksApi, rolloverApi } from './api/client';
+import { WorkspaceSetup } from './components/WorkspaceSetup';
+import { Projects } from './components/Projects';
+import { AISummaryModal } from './components/AISummaryModal';
 
 type Task = {
   id: string;
@@ -59,6 +62,7 @@ export default function App() {
   const [markdown, setMarkdown] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'mindmap'>('today');
+  const [currentView, setCurrentView] = useState<'daily' | 'projects'>('daily');
   const [isRollingOver, setIsRollingOver] = useState(false);
   const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
   const [lastSyncedMD, setLastSyncedMD] = useState('');
@@ -84,10 +88,31 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([]);
+  const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
+  const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const markdownRef = React.useRef(markdown);
+
+  // Check first run on mount
+  useEffect(() => {
+    const checkFirstRun = async () => {
+      try {
+        const response = await fetch('http://localhost:3003/api/config/check-first-run');
+        const data = await response.json();
+        setIsFirstRun(data.isFirstRun);
+        setShowWorkspaceSetup(data.isFirstRun);
+      } catch (e) {
+        console.error('Failed to check first run', e);
+        setIsFirstRun(false);
+      }
+    };
+    checkFirstRun();
+  }, []);
 
   // Load file list on mount
   useEffect(() => {
+    // Skip loading if showing workspace setup
+    if (showWorkspaceSetup) return;
+
     let cancelled = false;
     const loadFileList = async () => {
       try {
@@ -425,6 +450,19 @@ export default function App() {
     setExpandedArchiveMonths(prev => ({ ...prev, [month]: !prev[month] }));
   };
 
+  // Handle workspace setup completion
+  const handleWorkspaceSetupComplete = () => {
+    setShowWorkspaceSetup(false);
+    setIsFirstRun(false);
+    // Reload the app
+    window.location.reload();
+  };
+
+  // Show workspace setup if first run
+  if (showWorkspaceSetup) {
+    return <WorkspaceSetup onComplete={handleWorkspaceSetupComplete} language={language} />;
+  }
+
   return (
     <div className="h-screen w-full bg-background flex overflow-hidden text-text-main relative">
       {/* Sidebar Overlay for Mobile */}
@@ -566,6 +604,16 @@ export default function App() {
             )}
 
             <div>
+               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
+               <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
+                 <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setCurrentView('projects')}>
+                   <Briefcase className="ml-4 w-3.5 h-3.5" />
+                   <span>{language === 'zh' ? '项目管理' : 'Projects'}</span>
+                 </li>
+               </ul>
+            </div>
+
+            <div>
                <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '洞察' : 'Insights'}</h3>
                <ul className="space-y-3 text-sm font-sans text-text-muted opacity-60">
                  <li className="flex items-center gap-3 cursor-pointer hover:opacity-100 hover:text-text-heading transition-colors" onClick={() => setShowAISummary(true)}>
@@ -623,6 +671,10 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full">
+        {currentView === 'projects' ? (
+          <Projects language={language} />
+        ) : (
+          <>
         <header className="h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border bg-background/80 backdrop-blur-md z-10 shrink-0">
           <div className="flex items-center gap-3 md:gap-4 text-xs font-sans tracking-widest font-bold uppercase overflow-hidden whitespace-nowrap">
             <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
@@ -919,11 +971,12 @@ export default function App() {
                                   setTasks(prev => [...prev, newTask]);
                                   // Create via API
                                   tasksApi.create(currentFileDate, newTask).then(() => {
-                                    // Refresh markdown
+                                    // Refresh markdown AND tasks with server-side stable IDs
                                     return filesApi.get(currentFileDate);
                                   }).then(data => {
                                     if (data) {
                                       setMarkdown(data.content);
+                                      setTasks(data.tasks as Task[]);
                                       setLastSyncedMD(data.content);
                                       setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
                                     }
@@ -1093,6 +1146,8 @@ export default function App() {
              <div className="w-1.5 h-1.5 rounded-full bg-accent-highlight animate-pulse ml-3 shadow-[0_0_8px_rgba(255,232,214,0.6)]" />
            </motion.div>
          </div>
+         </>
+        )}
        </main>
 
        {showAISummary && (

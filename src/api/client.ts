@@ -163,3 +163,59 @@ export const configApi = {
     if (!res.ok) throw new Error('Failed to update config');
   },
 };
+
+export interface ProjectData {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'active' | 'completed' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+  tags?: string[];
+  deadline?: string;
+  filePath?: string;
+}
+
+/**
+ * 项目管理 API
+ */
+export const projectsApi = {
+  async getAll(): Promise<ProjectData[]> {
+    const res = await fetch(`${API_BASE}/projects`);
+    if (!res.ok) throw new Error('Failed to fetch projects');
+    return res.json();
+  },
+
+  async getById(id: string): Promise<ProjectData> {
+    const res = await fetch(`${API_BASE}/projects/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch project');
+    return res.json();
+  },
+
+  async create(project: Omit<ProjectData, 'id' | 'createdAt' | 'updatedAt' | 'filePath'>): Promise<ProjectData> {
+    const res = await fetch(`${API_BASE}/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    });
+    if (!res.ok) throw new Error('Failed to create project');
+    return res.json();
+  },
+
+  async update(id: string, updates: Partial<Omit<ProjectData, 'id' | 'createdAt' | 'filePath'>>): Promise<ProjectData> {
+    const res = await fetch(`${API_BASE}/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Failed to update project');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/projects/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete project');
+  },
+};

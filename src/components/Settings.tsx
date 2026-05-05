@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Folder, Check, AlertCircle, Github } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { configApi } from '../api/client';
 import type { ConfigData } from '../types/task';
@@ -24,12 +24,25 @@ export function Settings({
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingWorkspace, setIsEditingWorkspace] = useState(false);
+  const [newWorkspacePath, setNewWorkspacePath] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  const [githubRepo, setGithubRepo] = useState('');
+  const [isValidatingGithub, setIsValidatingGithub] = useState(false);
+  const [githubValidationResult, setGithubValidationResult] = useState<{ valid: boolean; error?: string; repoName?: string } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       loadConfig();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (config?.githubRepo) {
+      setGithubRepo(config.githubRepo);
+    }
+  }, [config]);
 
   const loadConfig = async () => {
     setIsLoading(true);
@@ -43,16 +56,93 @@ export function Settings({
     }
   };
 
+  const handleValidateWorkspace = async () => {
+    if (!newWorkspacePath.trim()) {
+      setValidationError(language === 'zh' ? '请输入工作区路径' : 'Please enter workspace path');
+      return;
+    }
+
+    setIsValidating(true);
+    setValidationError('');
+
+    try {
+      const response = await fetch('http://localhost:3003/api/config/validate-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newWorkspacePath }),
+      });
+
+      const result = await response.json();
+      if (!result.valid) {
+        setValidationError(language === 'zh' ? '路径无效或不存在' : 'Path is invalid or does not exist');
+      }
+    } catch (e) {
+      setValidationError(language === 'zh' ? '验证失败' : 'Validation failed');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleSaveWorkspace = async () => {
+    if (!config || !newWorkspacePath.trim()) return;
+
+    setIsSaving(true);
+    try {
+      await configApi.update({
+        ...config,
+        workspaceRoot: newWorkspacePath,
+      });
+      setIsEditingWorkspace(false);
+      setNewWorkspacePath('');
+      await loadConfig();
+      // Reload the app to apply new workspace
+      window.location.reload();
+    } catch (e) {
+      console.error('Failed to save workspace', e);
+      setValidationError(language === 'zh' ? '保存失败' : 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!config) return;
     setIsSaving(true);
     try {
-      await configApi.update(config);
+      await configApi.update({
+        ...config,
+        githubRepo: githubRepo || undefined,
+      });
       onClose();
     } catch (e) {
       console.error('Failed to save config', e);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleValidateGithub = async () => {
+    if (!githubRepo.trim()) {
+      setGithubValidationResult({ valid: false, error: language === 'zh' ? '请输入 GitHub 仓库链接' : 'Please enter GitHub repository URL' });
+      return;
+    }
+
+    setIsValidatingGithub(true);
+    setGithubValidationResult(null);
+
+    try {
+      const response = await fetch('http://localhost:3003/api/config/validate-github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl: githubRepo }),
+      });
+
+      const result = await response.json();
+      setGithubValidationResult(result);
+    } catch (e) {
+      setGithubValidationResult({ valid: false, error: language === 'zh' ? '验证失败' : 'Validation failed' });
+    } finally {
+      setIsValidatingGithub(false);
     }
   };
 
@@ -121,12 +211,121 @@ export function Settings({
               </select>
             </div>
 
-            {/* Workspace Path (read-only) */}
+            {/* Workspace Path */}
             {config && (
               <div>
-                <label className="block text-sm font-medium mb-2">Workspace</label>
-                <div className="bg-accent/5 rounded-xl px-4 py-3 text-sm font-mono text-muted-foreground break-all">
-                  {config.workspaceRoot}
+                <label className="block text-sm font-medium mb-2">
+                  {language === 'zh' ? '工作区路径' : 'Workspace Path'}
+                </label>
+                {isEditingWorkspace ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newWorkspacePath}
+                        onChange={e => setNewWorkspacePath(e.target.value)}
+                        placeholder={config.workspaceRoot}
+                        className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+                      />
+                      <button
+                        onClick={handleValidateWorkspace}
+                        disabled={isValidating}
+                        className="px-4 py-3 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isValidating ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    {validationError && (
+                      <div className="flex items-center gap-2 text-sm text-red-600">
+                        <AlertCircle className="w-4 h-4" />
+                        {validationError}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveWorkspace}
+                        disabled={isSaving || !newWorkspacePath.trim() || !!validationError}
+                        className="flex-1 py-2 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                      >
+                        {language === 'zh' ? '保存' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditingWorkspace(false);
+                          setNewWorkspacePath('');
+                          setValidationError('');
+                        }}
+                        className="flex-1 py-2 rounded-xl bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors"
+                      >
+                        {language === 'zh' ? '取消' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-accent/5 rounded-xl px-4 py-3 text-sm font-mono text-muted-foreground break-all">
+                      {config.workspaceRoot}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsEditingWorkspace(true);
+                        setNewWorkspacePath(config.workspaceRoot);
+                      }}
+                      className="px-4 py-3 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors flex items-center gap-2"
+                    >
+                      <Folder className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* GitHub Repository */}
+            {config && (
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  {language === 'zh' ? 'GitHub 仓库' : 'GitHub Repository'}
+                </label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={githubRepo}
+                      onChange={e => setGithubRepo(e.target.value)}
+                      placeholder="https://github.com/username/repo"
+                      className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+                    />
+                    <button
+                      onClick={handleValidateGithub}
+                      disabled={isValidatingGithub}
+                      className="px-4 py-3 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isValidatingGithub ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Github className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  {githubValidationResult && (
+                    <div className={`flex items-center gap-2 text-sm ${githubValidationResult.valid ? 'text-green-600' : 'text-red-600'}`}>
+                      {githubValidationResult.valid ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>{githubValidationResult.repoName || (language === 'zh' ? '仓库验证成功' : 'Repository verified')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-4 h-4" />
+                          <span>{githubValidationResult.error}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
