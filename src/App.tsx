@@ -92,7 +92,10 @@ export default function App() {
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
-  const [deepseekApiKey, setDeepseekApiKey] = useState<string>('');
+  const [aiProvider, setAiProvider] = useState<'deepseek' | 'anthropic' | 'openai' | 'custom'>('deepseek');
+  const [aiApiKey, setAiApiKey] = useState<string>('');
+  const [aiModel, setAiModel] = useState<string>('');
+  const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const markdownRef = React.useRef(markdown);
@@ -114,7 +117,10 @@ export default function App() {
       try {
         const config = await configApi.get();
         setGithubRepo(config.githubRepo || null);
-        setDeepseekApiKey(config.deepseekApiKey || '');
+        setAiProvider(config.aiProvider || 'deepseek');
+        setAiApiKey(config.aiApiKey || '');
+        setAiModel(config.aiModel || '');
+        setAiBaseUrl(config.aiBaseUrl || '');
         setWorkspaceRoot(config.workspaceRoot || '');
       } catch (e) {
         // ignore
@@ -253,49 +259,89 @@ export default function App() {
     try {
       const allDates = Object.keys(filesMap).sort((a,b) => b.localeCompare(a));
       let filteredDates = allDates;
-      
+
       const now = new Date('2026-05-04T00:00:00Z');
       if (summaryPeriod === '7days') {
         filteredDates = allDates.filter(d => {
            const date = new Date(`${d}T00:00:00Z`);
            const diffTime = Math.abs(now.getTime() - date.getTime());
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
            return diffDays <= 7;
         });
       } else if (summaryPeriod === '30days') {
         filteredDates = allDates.filter(d => {
            const date = new Date(`${d}T00:00:00Z`);
            const diffTime = Math.abs(now.getTime() - date.getTime());
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
            return diffDays <= 30;
         });
       }
-      
+
       let contextStr = "Here are my notes and tasks for the selected period:\n\n";
       filteredDates.forEach(date => {
          contextStr += `--- Date: ${date} ---\n${filesMap[date]}\n\n`;
       });
 
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
+      // Determine API endpoint and model based on provider
+      let apiUrl = '';
+      let model = aiModel;
+
+      if (aiProvider === 'deepseek') {
+        apiUrl = 'https://api.deepseek.com/chat/completions';
+        model = model || 'deepseek-chat';
+      } else if (aiProvider === 'anthropic') {
+        apiUrl = 'https://api.anthropic.com/v1/messages';
+        model = model || 'claude-3-5-sonnet-20241022';
+      } else if (aiProvider === 'openai') {
+        apiUrl = 'https://api.openai.com/v1/chat/completions';
+        model = model || 'gpt-4o';
+      } else if (aiProvider === 'custom' && aiBaseUrl) {
+        apiUrl = aiBaseUrl;
+        model = model || 'default';
+      }
+
+      if (!apiUrl || !aiApiKey) {
+        throw new Error('AI provider not configured. Please set up AI configuration in Settings.');
+      }
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekApiKey}`,
+          'Authorization': `Bearer ${aiApiKey}`,
+          ...(aiProvider === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: 'You are a helpful personal assistant. Summarize notes concisely in Markdown.' },
-            { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
-          ],
+          model,
+          ...(aiProvider === 'anthropic' ? {
+            max_tokens: 2048,
+            messages: [
+              { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
+            ],
+          } : {
+            messages: [
+              { role: 'system', content: 'You are a helpful personal assistant. Summarize notes concisely in Markdown.' },
+              { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
+            ],
+          }),
         }),
       });
-      if (!res.ok) throw new Error(`DeepSeek error: ${res.status}`);
+
+      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
       const data = await res.json();
-      setAiSummary(data.choices?.[0]?.message?.content?.trim() || "No summary generated.");
-    } catch (e) {
+
+      // Extract response based on provider
+      let summary = '';
+      if (aiProvider === 'anthropic') {
+        summary = data.content?.[0]?.text?.trim() || "No summary generated.";
+      } else {
+        summary = data.choices?.[0]?.message?.content?.trim() || "No summary generated.";
+      }
+
+      setAiSummary(summary);
+    } catch (e: any) {
       console.error(e);
-      setAiSummary("Failed to generate AI summary. Ensure the DeepSeek API key is configured in Settings.");
+      setAiSummary(`Failed to generate AI summary: ${e.message}. Please check your AI configuration in Settings.`);
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -305,23 +351,61 @@ export default function App() {
     if (!brainDumpText.trim()) return;
     setIsProcessingBrainDump(true);
     try {
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
+      // Determine API endpoint and model based on provider
+      let apiUrl = '';
+      let model = aiModel;
+
+      if (aiProvider === 'deepseek') {
+        apiUrl = 'https://api.deepseek.com/chat/completions';
+        model = model || 'deepseek-chat';
+      } else if (aiProvider === 'anthropic') {
+        apiUrl = 'https://api.anthropic.com/v1/messages';
+        model = model || 'claude-3-5-sonnet-20241022';
+      } else if (aiProvider === 'openai') {
+        apiUrl = 'https://api.openai.com/v1/chat/completions';
+        model = model || 'gpt-4o';
+      } else if (aiProvider === 'custom' && aiBaseUrl) {
+        apiUrl = aiBaseUrl;
+        model = model || 'default';
+      }
+
+      if (!apiUrl || !aiApiKey) {
+        throw new Error('AI provider not configured');
+      }
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekApiKey}`,
+          'Authorization': `Bearer ${aiApiKey}`,
+          ...(aiProvider === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.' },
-            { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"` },
-          ],
+          model,
+          ...(aiProvider === 'anthropic' ? {
+            max_tokens: 2048,
+            messages: [
+              { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional).\n\n"${brainDumpText}"` },
+            ],
+          } : {
+            messages: [
+              { role: 'system', content: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.' },
+              { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"` },
+            ],
+          }),
         }),
       });
-      if (!res.ok) throw new Error(`DeepSeek error: ${res.status}`);
+
+      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
       const data = await res.json();
-      const content = data.choices?.[0]?.message?.content?.trim() || '';
+
+      // Extract response based on provider
+      let content = '';
+      if (aiProvider === 'anthropic') {
+        content = data.content?.[0]?.text?.trim() || '';
+      } else {
+        content = data.choices?.[0]?.message?.content?.trim() || '';
+      }
 
       // Strip markdown code fences if present
       const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
@@ -1446,17 +1530,38 @@ export default function App() {
                    <p className="text-xs text-text-muted mt-1">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
                 </div>
 
-                {/* DeepSeek API Key */}
+                {/* AI Configuration */}
                 <div>
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                     DeepSeek API Key
+                     {language === 'zh' ? 'AI 模型配置' : 'AI Model Configuration'}
                    </h3>
-                   <div className="relative">
+
+                   {/* Provider Selection */}
+                   <select
+                     value={aiProvider}
+                     onChange={e => {
+                       const provider = e.target.value as 'deepseek' | 'anthropic' | 'openai' | 'custom';
+                       setAiProvider(provider);
+                       // Set default models
+                       if (provider === 'deepseek') setAiModel('deepseek-chat');
+                       else if (provider === 'anthropic') setAiModel('claude-3-5-sonnet-20241022');
+                       else if (provider === 'openai') setAiModel('gpt-4o');
+                     }}
+                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
+                   >
+                     <option value="deepseek">DeepSeek</option>
+                     <option value="anthropic">Anthropic (Claude)</option>
+                     <option value="openai">OpenAI (GPT)</option>
+                     <option value="custom">{language === 'zh' ? '自定义' : 'Custom'}</option>
+                   </select>
+
+                   {/* API Key */}
+                   <div className="relative mb-2">
                      <input
                        type={showApiKey ? "text" : "password"}
-                       value={deepseekApiKey}
-                       onChange={e => setDeepseekApiKey(e.target.value)}
-                       placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+                       value={aiApiKey}
+                       onChange={e => setAiApiKey(e.target.value)}
+                       placeholder={language === 'zh' ? 'API Key' : 'API Key'}
                        className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
                      />
                      <button
@@ -1467,11 +1572,44 @@ export default function App() {
                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                      </button>
                    </div>
+
+                   {/* Model Name */}
+                   <input
+                     type="text"
+                     value={aiModel}
+                     onChange={e => setAiModel(e.target.value)}
+                     placeholder={language === 'zh' ? '模型名称 (可选)' : 'Model name (optional)'}
+                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
+                   />
+
+                   {/* Custom Base URL */}
+                   {aiProvider === 'custom' && (
+                     <input
+                       type="text"
+                       value={aiBaseUrl}
+                       onChange={e => setAiBaseUrl(e.target.value)}
+                       placeholder={language === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
+                     />
+                   )}
+
                    <p className="text-xs text-text-muted mt-1">
-                     {language === 'zh' ? '用于AI总结功能。' : 'Used for AI summary feature. '}
-                     <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                       {language === 'zh' ? '获取API Key' : 'Get API Key'}
-                     </a>
+                     {language === 'zh' ? '用于 AI 总结和 Brain Dump 功能。' : 'Used for AI Summary and Brain Dump features. '}
+                     {aiProvider === 'deepseek' && (
+                       <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                         {language === 'zh' ? '获取 DeepSeek API Key' : 'Get DeepSeek API Key'}
+                       </a>
+                     )}
+                     {aiProvider === 'anthropic' && (
+                       <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                         {language === 'zh' ? '获取 Anthropic API Key' : 'Get Anthropic API Key'}
+                       </a>
+                     )}
+                     {aiProvider === 'openai' && (
+                       <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                         {language === 'zh' ? '获取 OpenAI API Key' : 'Get OpenAI API Key'}
+                       </a>
+                     )}
                    </p>
                 </div>
 
@@ -1567,7 +1705,10 @@ export default function App() {
                      await configApi.update({
                        ...config,
                        workspaceRoot: workspaceRoot.trim(),
-                       deepseekApiKey: deepseekApiKey.trim(),
+                       aiProvider,
+                       aiApiKey: aiApiKey.trim(),
+                       aiModel: aiModel.trim(),
+                       aiBaseUrl: aiBaseUrl.trim(),
                      });
                      setGithubRepo(config.githubRepo || null);
 
