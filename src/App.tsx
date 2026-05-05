@@ -92,6 +92,11 @@ export default function App() {
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
+  const [githubRepoInput, setGithubRepoInput] = useState<string>('');
+  const [githubToken, setGithubToken] = useState<string>('');
+  const [showGithubToken, setShowGithubToken] = useState<boolean>(false);
+  const [githubVerifyStatus, setGithubVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [githubVerifyMsg, setGithubVerifyMsg] = useState<string>('');
   const [aiProvider, setAiProvider] = useState<'deepseek' | 'anthropic' | 'openai' | 'custom'>('deepseek');
   const [aiApiKey, setAiApiKey] = useState<string>('');
   const [aiModel, setAiModel] = useState<string>('');
@@ -1647,41 +1652,167 @@ export default function App() {
                      <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">Beta</span>
                    </div>
 
-                   {/* Tutorial */}
+                   {/* Detailed Tutorial */}
                    <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 mb-3">
                      <p className="text-xs text-text-main font-medium mb-2">
-                       {language === 'zh' ? '📖 如何设置 GitHub 同步：' : '📖 How to setup GitHub sync:'}
+                       {language === 'zh' ? '📖 详细配置步骤：' : '📖 Detailed Setup Guide:'}
                      </p>
-                     <ol className="text-xs text-text-muted space-y-1 list-decimal list-inside">
-                       <li>{language === 'zh' ? '在 GitHub 创建一个新的私有仓库' : 'Create a new private repository on GitHub'}</li>
-                       <li>{language === 'zh' ? '生成一个 Personal Access Token (Settings → Developer settings → Personal access tokens → Tokens (classic))' : 'Generate a Personal Access Token (Settings → Developer settings → Personal access tokens → Tokens (classic))'}</li>
-                       <li>{language === 'zh' ? '勾选 "repo" 权限' : 'Check "repo" scope'}</li>
-                       <li>{language === 'zh' ? '在下方填写仓库名称和 Token' : 'Fill in repository name and token below'}</li>
-                       <li>{language === 'zh' ? '选择自动同步间隔或手动同步' : 'Choose auto-sync interval or manual sync'}</li>
+                     <ol className="text-xs text-text-muted space-y-2 list-decimal list-inside">
+                       <li>
+                         <strong>{language === 'zh' ? '创建 GitHub 仓库' : 'Create GitHub Repository'}</strong>
+                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                           <li>{language === 'zh' ? '访问 github.com，点击右上角 "+" → "New repository"' : 'Go to github.com, click "+" → "New repository"'}</li>
+                           <li>{language === 'zh' ? '输入仓库名称（如 dailyflow-notes）' : 'Enter repository name (e.g., dailyflow-notes)'}</li>
+                           <li>{language === 'zh' ? '选择 "Private"（私有仓库）' : 'Select "Private" repository'}</li>
+                           <li>{language === 'zh' ? '点击 "Create repository"' : 'Click "Create repository"'}</li>
+                         </ul>
+                       </li>
+                       <li>
+                         <strong>{language === 'zh' ? '生成 Personal Access Token' : 'Generate Personal Access Token'}</strong>
+                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                           <li>{language === 'zh' ? '访问 github.com/settings/tokens' : 'Go to github.com/settings/tokens'}</li>
+                           <li>{language === 'zh' ? '点击 "Generate new token" → "Generate new token (classic)"' : 'Click "Generate new token" → "Generate new token (classic)"'}</li>
+                           <li>{language === 'zh' ? '输入 Note（如 "DailyFlow Sync"）' : 'Enter Note (e.g., "DailyFlow Sync")'}</li>
+                           <li>{language === 'zh' ? '勾选 "repo" 权限（完整仓库访问）' : 'Check "repo" scope (full repository access)'}</li>
+                           <li>{language === 'zh' ? '点击 "Generate token"，复制生成的 token' : 'Click "Generate token", copy the generated token'}</li>
+                         </ul>
+                       </li>
+                       <li>
+                         <strong>{language === 'zh' ? '填写配置并测试' : 'Fill Configuration and Test'}</strong>
+                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                           <li>{language === 'zh' ? '在下方填写仓库名称（格式：username/repo-name）' : 'Fill in repository name below (format: username/repo-name)'}</li>
+                           <li>{language === 'zh' ? '粘贴刚才复制的 Personal Access Token' : 'Paste the Personal Access Token you just copied'}</li>
+                           <li>{language === 'zh' ? '点击 "测试连接" 验证配置是否正确' : 'Click "Test Connection" to verify configuration'}</li>
+                         </ul>
+                       </li>
                      </ol>
                    </div>
 
                    <div className="space-y-3">
-                     <select
-                       value={syncInterval}
-                       onChange={e => setSyncInterval(Number(e.target.value))}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
+                     {/* Sync Interval */}
+                     <div>
+                       <label className="text-xs text-text-muted mb-1 block">
+                         {language === 'zh' ? '同步频率' : 'Sync Frequency'}
+                       </label>
+                       <select
+                         value={syncInterval}
+                         onChange={e => setSyncInterval(Number(e.target.value))}
+                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
+                       >
+                         <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
+                         <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
+                         <option value={5}>{language === 'zh' ? '每 5 分钟' : 'Every 5 minutes'}</option>
+                         <option value={10}>{language === 'zh' ? '每 10 分钟' : 'Every 10 minutes'}</option>
+                       </select>
+                     </div>
+
+                     {/* Repository */}
+                     <div>
+                       <label className="text-xs text-text-muted mb-1 block">
+                         {language === 'zh' ? '仓库名称' : 'Repository Name'}
+                       </label>
+                       <input
+                         type="text"
+                         value={githubRepoInput}
+                         onChange={e => setGithubRepoInput(e.target.value)}
+                         placeholder={language === 'zh' ? "username/dailyflow-notes" : "username/dailyflow-notes"}
+                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                       />
+                     </div>
+
+                     {/* Token */}
+                     <div>
+                       <label className="text-xs text-text-muted mb-1 block">
+                         Personal Access Token
+                       </label>
+                       <div className="relative">
+                         <input
+                           type={showGithubToken ? "text" : "password"}
+                           value={githubToken}
+                           onChange={e => setGithubToken(e.target.value)}
+                           placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                           className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
+                         />
+                         <button
+                           type="button"
+                           onClick={() => setShowGithubToken(!showGithubToken)}
+                           className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
+                         >
+                           {showGithubToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                         </button>
+                       </div>
+                     </div>
+
+                     {/* Test Connection Button */}
+                     <button
+                       onClick={async () => {
+                         if (!githubRepoInput || !githubToken) {
+                           setGithubVerifyStatus('error');
+                           setGithubVerifyMsg(language === 'zh' ? '请填写仓库名称和 Token' : 'Please fill in repository name and token');
+                           return;
+                         }
+
+                         setGithubVerifyStatus('loading');
+                         setGithubVerifyMsg('');
+
+                         try {
+                           const [owner, repo] = githubRepoInput.split('/');
+                           if (!owner || !repo) {
+                             throw new Error(language === 'zh' ? '仓库名称格式错误，应为 username/repo-name' : 'Invalid repository format, should be username/repo-name');
+                           }
+
+                           const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+                             headers: {
+                               'Authorization': `Bearer ${githubToken}`,
+                               'Accept': 'application/vnd.github.v3+json',
+                             },
+                           });
+
+                           if (res.ok) {
+                             const data = await res.json();
+                             setGithubVerifyStatus('success');
+                             setGithubVerifyMsg(language === 'zh'
+                               ? `✓ 连接成功！仓库：${data.full_name}${data.private ? ' (私有)' : ' (公开)'}`
+                               : `✓ Connection successful! Repository: ${data.full_name}${data.private ? ' (private)' : ' (public)'}`
+                             );
+                           } else if (res.status === 404) {
+                             setGithubVerifyStatus('error');
+                             setGithubVerifyMsg(language === 'zh' ? '✗ 仓库不存在或无权访问' : '✗ Repository not found or no access');
+                           } else if (res.status === 401) {
+                             setGithubVerifyStatus('error');
+                             setGithubVerifyMsg(language === 'zh' ? '✗ Token 无效或已过期' : '✗ Invalid or expired token');
+                           } else {
+                             setGithubVerifyStatus('error');
+                             setGithubVerifyMsg(language === 'zh' ? `✗ 验证失败：${res.status}` : `✗ Verification failed: ${res.status}`);
+                           }
+                         } catch (e: any) {
+                           setGithubVerifyStatus('error');
+                           setGithubVerifyMsg(language === 'zh' ? `✗ 错误：${e.message}` : `✗ Error: ${e.message}`);
+                         }
+                       }}
+                       disabled={githubVerifyStatus === 'loading'}
+                       className="w-full py-2 bg-surface border border-border rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-surface-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                      >
-                       <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
-                       <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
-                       <option value={5}>{language === 'zh' ? '每 5 分钟' : 'Every 5 minutes'}</option>
-                       <option value={10}>{language === 'zh' ? '每 10 分钟' : 'Every 10 minutes'}</option>
-                     </select>
-                     <input
-                       type="text"
-                       placeholder={language === 'zh' ? "仓库名称 (例如 username/dailyflow)" : "Repository (e.g., username/dailyflow)"}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
-                     />
-                     <input
-                       type="password"
-                       placeholder={language === 'zh' ? "Personal Access Token" : "Personal Access Token"}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
-                     />
+                       {githubVerifyStatus === 'loading' ? (
+                         <>
+                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                           <span>{language === 'zh' ? '验证中...' : 'Verifying...'}</span>
+                         </>
+                       ) : (
+                         <span>{language === 'zh' ? '测试连接' : 'Test Connection'}</span>
+                       )}
+                     </button>
+
+                     {/* Verification Result */}
+                     {githubVerifyMsg && (
+                       <div className={`text-xs p-2 rounded-lg ${
+                         githubVerifyStatus === 'success'
+                           ? 'bg-green-50 text-green-700 border border-green-200'
+                           : 'bg-red-50 text-red-700 border border-red-200'
+                       }`}>
+                         {githubVerifyMsg}
+                       </div>
+                     )}
                    </div>
                 </div>
              </div>
