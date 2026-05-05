@@ -23,6 +23,11 @@ export interface Config {
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
   githubRepo?: string;
+  // AI Configuration
+  aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
+  aiApiKey?: string;
+  aiModel?: string;
+  aiBaseUrl?: string; // For custom providers
 }
 
 export interface RolloverPreview {
