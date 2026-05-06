@@ -1,21 +1,17 @@
 <div align="center">
 
-![DailyFlow](./docs/assets/logo.svg)
-
 # DailyFlow
-
-> Local-First Smart Daily Task Manager · 本地优先的智能日程管理系统
+> Local-first Markdown Task Manager · 让任务自然流动
 
 ![Main Interface](./docs/assets/home.png)
 
-### Transform Markdown Notes into Smart Task Workspace
+### Drop In → Auto-organize → Tasks Flow
 
-![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-Web-green?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.1-blue?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-macOS|Windows|Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
-![React](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react)
 
-[Features](#-features) • [Screenshots](#-screenshots) • [Quick Start](#-quick-start) • [Tech Stack](#-tech-stack)
+[Features](#-features) • [Screenshots](#-screenshots) • [Quick Start](#-quick-start) • [Architecture](#-architecture)
 
 [简体中文](./README.md) | __English__
 
@@ -24,150 +20,150 @@
 
 ## Introduction
 
-DailyFlow is a **local-first** smart daily task management system designed for users who work with Markdown and Obsidian. It's not just another closed Todo App, but an intelligent workspace that enhances your existing workflow.
+DailyFlow is a **local-first** Markdown-based daily task management software: using Markdown files as the primary data source, a web interface to improve operational efficiency, and automatic task migration, project tracking, and AI summaries to reduce the daily burden of repetitive task organization.
 
-### Why Choose DailyFlow?
+### Why DailyFlow?
 
 | Traditional Way | DailyFlow |
 |----------------|-----------|
-| Manually copy-paste unfinished tasks | Auto-rollover to next day |
-| Tasks scattered across files | Unified project management view |
-| Plain text editing only | Visual task list + Markdown editor |
-| No AI assistance | AI-powered summary and task generation |
-| Data locked in apps | Your data, your files (Markdown) |
+| Manually copy incomplete tasks daily | Auto-migrate, zero omissions |
+| Tasks scattered across files | Unified project management |
+| Commercial tools lock your data | Markdown files, fully controllable |
+| Multi-device sync depends on cloud | GitHub sync, fully open source |
 
-## ✨ Features
+## Features
 
-### 1. Smart Task Rollover
-Automatically migrate unfinished tasks to the next day without manual copy-paste:
+### 1. Automatic Task Rollover
+Incomplete tasks automatically migrate to tomorrow, maintaining work continuity:
 
-- **Auto Detection**: Scan yesterday's Markdown file and extract unfinished tasks
-- **Smart Tagging**: Preserve all task metadata (tags, deadlines, priority)
-- **Source Tracking**: Mark task source date for easy tracing
+- **Smart Migration**: Only `- [ ]` incomplete tasks migrate, completed tasks stay
+- **Complete Subtasks**: Indented subtasks, notes, attachments all migrate together
+- **Skip Tags**: Tasks with `#no-rollover` won't migrate
+- **Scheduled Dates**: `#scheduled:YYYY-MM-DD` controls when tasks appear
 
-![Task List](./docs/assets/tasks.png)
+### 2. Project Tracking
+Long-term projects no longer scatter across daily notes:
 
-### 2. Project Management
-Organize long-term tasks into projects and track progress:
+- Project cards showing progress and status
+- Subtask trees with multi-level nesting
+- Daily progress logging
+- Attached files and references
 
-- **Project View**: Dedicated project management interface
-- **Status Tracking**: Active, Completed, Archived
-- **Task Association**: Project tasks auto-sync to daily view
+### 3. GitHub Sync
+Local-first with version history and multi-device sync:
 
-![Project Management](./docs/assets/projects.png)
+- Automatic commits create readable history
+- Manual or auto push to GitHub
+- Conflict detection and resolution hints
+- Private repository support
 
-### 3. AI Smart Assistant
-Boost productivity with AI:
+### 4. AI Smart Summary
+Analyze recent tasks with AI, generate progress summaries:
 
-- **Smart Summary**: Auto-summarize work achievements over time
-- **Task Generation**: Generate structured tasks from natural language
-- **Custom Prompts**: Support custom AI prompt templates
+- Support for DeepSeek, Claude, OpenAI and more
+- 7-day / 30-day / all-time ranges
+- Automatic completion rate and priority task identification
 
-### 4. Workspace Configuration
-Flexible workspace management:
+### 5. Multi AI Provider Support
+Flexible configuration for your preferred AI service:
 
-- **First-Run Wizard**: Guide users to set workspace path
-- **Path Validation**: Auto-validate and create workspace directory
-- **GitHub Sync**: Configure GitHub repository for data sync
+- **DeepSeek** - Cost effective
+- **Anthropic Claude** - High quality reasoning
+- **OpenAI GPT** - General purpose
+- **Custom** - Any OpenAI-compatible API
 
-## 📸 Screenshots
+## Screenshots
 
-| Main Interface | Project Management | Features |
-|---------------|-------------------|----------|
-| ![Main](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) | ![Features](./docs/assets/features.png) |
+| Today View | Projects View | Settings |
+|------------|---------------|----------|
+| ![Today](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) | ![Settings](./docs/assets/settings.png) |
 
-## 🚀 Quick Start
+| Workspace Setup |
+|-----------------|
+| ![Workspace](./docs/assets/workspace-setup.png) |
 
-### Install Dependencies
+## Quick Start
+
+### Requirements
+
+- Node.js 18+
+- npm or yarn
+- Git (for version sync)
+
+### Installation
 
 ```bash
+# Clone the project
 git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
+
+# Install dependencies
 npm install
-```
 
-### Start Application
-
-```bash
-# Start both frontend and backend
+# Start development server
 npm run dev:all
-
-# Or start separately
-npm run dev      # Frontend (http://localhost:3002)
-npm run server   # Backend (http://localhost:3003)
 ```
 
-### First Use
+Visit http://localhost:3000
 
-1. Visit http://localhost:3002
-2. Follow the wizard to set workspace path (can be Obsidian directory)
-3. Start using!
+### Configure Workspace
 
-## 🛠️ Tech Stack
+1. Workspace setup will appear on first launch
+2. Select your Markdown notes root directory (e.g., `~/Obsidian/daily/`)
+3. Set up GitHub sync (optional)
+4. Start using!
 
-```text
-Frontend   React 19 + TypeScript + Vite + Tailwind CSS
-Backend    Express.js + TypeScript
-Storage    Markdown files (local file system)
-AI         Google Gemini API
-Testing    Vitest + Testing Library
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Frontend (React)                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ Today    │  │ Projects │  │ Settings │  │ AI     │ │
+│  │ View     │  │ View     │  │          │  │ Summary│ │
+│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+└────────────────────────┬────────────────────────────────┘
+                         │ REST API
+┌────────────────────────┴────────────────────────────────┐
+│                    Backend (Express)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ Config   │  │ Parser   │  │ Rollover │  │ Git    │ │
+│  │ Service  │  │ Service  │  │ Service  │  │ Service│ │
+│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────┴────────────────────────────────┐
+│                    Local File System                      │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  ~/Obsidian/daily/                               │   │
+│  │  ├── 2026-05-01.md                                │   │
+│  │  ├── 2026-05-02.md                                │   │
+│  │  └── projects/                                    │   │
+│  │      └── example.md                               │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## 📁 Project Structure
+## Tech Stack
 
-```text
-dailyflow/
-├── src/                    # Frontend source code
-│   ├── components/         # React components
-│   ├── api/               # API client
-│   └── types/             # TypeScript type definitions
-├── server/                # Backend source code
-│   ├── routes/            # API routes
-│   ├── services/          # Business logic
-│   └── types/             # Type definitions
-├── docs/                  # Documentation and assets
-└── scripts/               # Utility scripts
-```
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19 + TypeScript |
+| UI | Tailwind CSS + Lucide Icons |
+| Animation | Motion (Framer Motion) |
+| Backend | Express.js + TypeScript |
+| Markdown | react-markdown + Prism |
+| Testing | Vitest + Playwright |
 
-## 🎯 Core Features
+## Changelog
 
-- ✅ **Local-First**: All data stored in local Markdown files
-- ✅ **Obsidian Compatible**: Fully compatible with Obsidian Markdown format
-- ✅ **Auto Task Rollover**: Unfinished tasks auto-migrate to next day
-- ✅ **Project Management**: Dedicated project management view
-- ✅ **AI Smart Assistant**: Use AI to generate tasks and summaries
-- ✅ **GitHub Sync**: Support GitHub repository sync
-- ✅ **Visual Editing**: Visual task list + Markdown editor
+### v0.1 (2026-05-06)
+- ✨ GitHub sync functionality
+- ✨ Multi AI provider configuration
+- ✨ E2E testing infrastructure
+- ✨ ContextSwitcher component
+- 🐛 Bug fixes and UX improvements
 
-## 📝 Changelog
+## License
 
-### v1.0.0 (2026-05)
-- ✨ Add workspace configuration (first-run wizard, path validation)
-- ✨ Implement project management system (full CRUD operations)
-- ✨ Add AI summary enhancements (custom date ranges, prompt templates)
-- ✨ Add GitHub repository validation
-- 🐛 Fix task deletion state sync bug
-- 🔧 Update backend port from 3002 to 3003
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details
-
-## 🤝 Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-## 📮 Contact
-
-- GitHub: [@frankfika](https://github.com/frankfika)
-- Issues: [GitHub Issues](https://github.com/frankfika/dailyflow/issues)
-
----
-
-<div align="center">
-
-**[⬆ Back to Top](#dailyflow)**
-
-Made with ❤️ by DailyFlow Team
-
-</div>
+MIT License

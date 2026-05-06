@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * DailyFlow Screenshot Capture Script
- * Captures real screenshots from running application
+ * Screenshot capture script for DailyFlow README
+ * Captures real screenshots from localhost:3000
  */
 
 import { chromium } from 'playwright';
@@ -22,18 +22,17 @@ async function sleep(ms) {
 
 async function captureScreenshot(page, name, options = {}) {
   const path = join(assetsDir, `${name}.png`);
-  const { width = VIEWPORT.width, height = VIEWPORT.height, wait = 1000 } = options;
+  const { width = VIEWPORT.width, height = VIEWPORT.height, wait = 1500 } = options;
 
   await page.setViewportSize({ width, height });
   await sleep(wait);
-  await page.screenshot({ path, type: 'png' });
+  await page.screenshot({ path, type: 'png', fullPage: false });
 
   console.log(`📸 Screenshot saved: ${path}`);
   return path;
 }
 
 async function captureScreenshots() {
-  // Create assets directory
   if (!fs.existsSync(assetsDir)) {
     fs.mkdirSync(assetsDir, { recursive: true });
   }
@@ -45,34 +44,45 @@ async function captureScreenshots() {
   });
   const page = await context.newPage();
 
-  const BASE_URL = 'http://localhost:3002';
+  const BASE_URL = 'http://localhost:3000';
 
   try {
-    console.log('\n🚀 Starting screenshot capture from real application...\n');
+    console.log('\n📷 Starting screenshot capture for DailyFlow...\n');
 
-    // 1. Main page
-    console.log('📷 Capturing main page...');
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    // 1. Main/Home page (Today view)
+    console.log('📷 Capturing Today view...');
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
     await sleep(2000);
     await captureScreenshot(page, 'home', { wait: 2000 });
 
     // 2. Projects view
-    console.log('📷 Capturing projects view...');
-    await page.click('text=Projects');
+    console.log('📷 Capturing Projects view...');
+    await page.click('text=Projects', { timeout: 5000 }).catch(() => {});
     await sleep(1500);
     await captureScreenshot(page, 'projects', { wait: 1500 });
 
-    // 3. Settings
-    console.log('📷 Capturing settings...');
-    await page.click('text=Configuration');
+    // 3. Settings page
+    console.log('📷 Capturing Settings page...');
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
     await sleep(1000);
-    await captureScreenshot(page, 'settings', { wait: 1000 });
 
-    console.log('\n✨ All screenshots generated!');
+    const settingsBtn = page.locator('button').filter({ has: page.locator('svg') }).last();
+    await settingsBtn.click().catch(() => {});
+    await sleep(1500);
+    await captureScreenshot(page, 'settings', { wait: 1500 });
+
+    // 4. Workspace Setup
+    console.log('📷 Capturing Workspace Setup...');
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
+    await sleep(2000);
+    await captureScreenshot(page, 'workspace-setup', { wait: 2000 });
+
+    console.log('\n✨ All screenshots captured successfully!');
     console.log(`📁 Location: ${assetsDir}`);
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ Error:', error.message);
+    console.log('\n⚠️  Make sure app is running at localhost:3000');
   } finally {
     await browser.close();
   }
