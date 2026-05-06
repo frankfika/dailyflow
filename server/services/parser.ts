@@ -19,17 +19,22 @@ export function parseMarkdown(md: string): Task[] {
   const tasks: Task[] = [];
   let currentCategory = 'Tasks';
 
-  lines.forEach((line, index) => {
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
     // 解析分类标题（## Work, ## Personal 等）
     const categoryMatch = line.match(/^##\s+(.+)$/);
     if (categoryMatch) {
       currentCategory = categoryMatch[1].trim().toLowerCase();
-      return;
+      i++;
+      continue;
     }
 
     // 解析任务行：- [ ] 或 - [x]
     const taskMatch = line.match(/^\s*[-*]\s+\[([xX ]+)\]\s+(.*)$/);
     if (taskMatch) {
+      const taskLineIndex = i;
       const isDone = taskMatch[1].toLowerCase() === 'x';
       let content = taskMatch[2];
 
@@ -73,21 +78,74 @@ export function parseMarkdown(md: string): Task[] {
       }
       extractedTags.forEach(t => tags.add(t));
 
+      // 解析描述（支持空行分隔的多段落）
+      let descriptionLines = [];
+      let descIdx = i + 1;
+      const descEnd = findDescriptionEnd(lines, descIdx);
+      for (let d = descIdx; d < descEnd; d++) {
+        descriptionLines.push(lines[d].trim());
+      }
+      const description = descriptionLines.length > 0 ? descriptionLines.join('\n') : undefined;
+
       tasks.push({
-        id: explicitId || `t${index}_${hashStr(content)}`,
+        id: explicitId || `t${taskLineIndex}_${hashStr(content)}`,
         title: content,
+        description,
         status: isDone ? 'done' : 'todo',
         tags: Array.from(tags),
         project,
         deadline,
         priority,
         source_date,
-        line: index
+        line: taskLineIndex
       });
+
+      i = descIdx;
+    } else {
+      i++;
     }
-  });
+  }
 
   return tasks;
+}
+
+/**
+ * 找到任务描述块的结束索引（descEnd 指向第一个不属于 description 的行）
+ * 支持多段落描述（缩进行 + 段落间空行）
+ * 规则：
+ *   - 新任务行 -> 停止
+ *   - 缩进行 -> 属于描述
+ *   - 空行 -> 向前看：下一个非空行是缩进则属于描述，否则停止
+ *   - 非空非缩进 -> 停止
+ *   - 文件末尾 -> 停止
+ */
+function findDescriptionEnd(lines: string[], startIdx: number): number {
+  let idx = startIdx;
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (line.match(/^\s*[-*]\s+\[/)) break;
+
+    const isEmpty = line.trim() === '';
+    const isIndented = line.match(/^\s{2,}/);
+
+    if (!isEmpty && !isIndented) break;
+
+    if (isIndented) {
+      idx++;
+      continue;
+    }
+
+    // 空行：向前看判断
+    let nextIdx = idx + 1;
+    while (nextIdx < lines.length && lines[nextIdx].trim() === '') nextIdx++;
+
+    if (nextIdx >= lines.length) break;
+    if (lines[nextIdx].match(/^\s*[-*]\s+\[/)) break;
+    if (!lines[nextIdx].match(/^\s{2,}/)) break;
+
+    idx++;
+  }
+  return idx;
 }
 
 /**
@@ -111,6 +169,11 @@ function taskToLine(task: Task, currentDate?: string): string {
   }
   if (task.id) {
     line += ` ^id-${task.id}`;
+  }
+
+  if (task.description) {
+    const descLines = task.description.split('\n').map(d => `  ${d}`);
+    line += '\n' + descLines.join('\n');
   }
 
   return line;
@@ -172,10 +235,7 @@ export function editTaskInMarkdown(
   lines[taskLine] = `${indent}${bullet} [${checkbox}] ${newTitle}${metaSuffix}`;
 
   // 处理描述：如果显式提供了 newDescription，则替换原有描述行
-  let descEnd = taskLine + 1;
-  while (descEnd < lines.length && lines[descEnd].match(/^\s{2,}/) && !lines[descEnd].match(/^\s*[-*]\s+\[/)) {
-    descEnd++;
-  }
+  const descEnd = findDescriptionEnd(lines, taskLine + 1);
 
   const before = lines.slice(0, taskLine + 1);
   const after = lines.slice(descEnd);
@@ -267,10 +327,7 @@ export function editTaskFullInMarkdown(
   lines[taskLine] = newLine;
 
   // 处理描述
-  let descEnd = taskLine + 1;
-  while (descEnd < lines.length && lines[descEnd].match(/^\s{2,}/) && !lines[descEnd].match(/^\s*[-*]\s+\[/)) {
-    descEnd++;
-  }
+  const descEnd = findDescriptionEnd(lines, taskLine + 1);
 
   const before = lines.slice(0, taskLine + 1);
   const after = lines.slice(descEnd);
@@ -303,9 +360,6 @@ export function appendTaskToMarkdown(md: string, task: Task, currentDate?: strin
 export function removeTaskFromMarkdown(md: string, taskLine: number): string {
   const lines = md.split('\n');
   if (taskLine < 0 || taskLine >= lines.length) return md;
-  let end = taskLine + 1;
-  while (end < lines.length && lines[end].match(/^\s{2,}/) && !lines[end].match(/^\s*[-*]\s+\[/)) {
-    end++;
-  }
+  const end = findDescriptionEnd(lines, taskLine + 1);
   return [...lines.slice(0, taskLine), ...lines.slice(end)].join('\n');
 }

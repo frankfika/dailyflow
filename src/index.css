@@ -7,6 +7,22 @@
   --font-serif: Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
+  --color-background: #F8FAFC;
+  --color-surface: #F1F5F9;
+  --color-surface-white: #FFFFFF;
+  --color-border: #E2E8F0;
+  
+  --color-text-main: #334155;
+  --color-text-heading: #0F172A;
+  --color-text-muted: #64748B;
+  
+  --color-accent: #3B82F6;
+  --color-accent-light: #EFF6FF;
+  --color-accent-warm: #60A5FA;
+  --color-accent-highlight: #DBEAFE;
+}
+
+:root[data-context="life"] {
   --color-background: #F9F7F2;
   --color-surface: #EAE7DF;
   --color-surface-white: #FFFFFF;
@@ -26,6 +42,7 @@ body {
   background-color: var(--color-background);
   color: var(--color-text-main);
   font-family: var(--font-sans);
+  transition: background-color 0.7s ease, color 0.7s ease;
 }
 
 /* Editorial Typography */

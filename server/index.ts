@@ -5,6 +5,7 @@ import tasksRouter from './routes/tasks.js';
 import rolloverRouter from './routes/rollover.js';
 import configRouter from './routes/config.js';
 import projectsRouter from './routes/projects.js';
+import gitRouter from './routes/git.js';
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -19,6 +20,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/rollover', rolloverRouter);
 app.use('/api/config', configRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/git', gitRouter);
 
 // 健康检查
 app.get('/health', (req, res) => {

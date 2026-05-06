@@ -26,7 +26,14 @@ export interface ConfigData {
   rolloverTrigger: string;
   rolloverSkipTags: string[];
   githubRepo?: string;
+  githubToken?: string;
+  activeContext?: 'work' | 'life';
   deepseekApiKey?: string;
+  aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
+  aiApiKey?: string;
+  aiModel?: string;
+  aiBaseUrl?: string;
+  aiFormat?: 'openai' | 'anthropic';
 }
 
 export interface RolloverPreviewData {

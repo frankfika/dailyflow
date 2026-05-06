@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { loadConfig, saveConfig } from '../services/config.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
+const execAsync = promisify(exec);
 const router = Router();
 
 /**
@@ -81,7 +84,12 @@ router.post('/validate-path', async (req, res) => {
 router.get('/check-first-run', async (req, res) => {
   try {
     const config = await loadConfig();
-    // 如果工作区路径不存在，认为是首次运行
+    // 如果 aiApiKey 未设置，认为是首次运行（需要完成设置向导）
+    if (!config.aiApiKey) {
+      res.json({ isFirstRun: true });
+      return;
+    }
+    // 再检查工作区路径是否存在
     try {
       await fs.access(config.workspaceRoot, fs.constants.R_OK);
       res.json({ isFirstRun: false });
@@ -91,6 +99,49 @@ router.get('/check-first-run', async (req, res) => {
   } catch (error: any) {
     console.error('Error checking first run:', error);
     res.json({ isFirstRun: true });
+  }
+});
+
+/**
+ * GET /api/config/choose-folder - 弹出系统文件夹选择对话框
+ */
+router.get('/choose-folder', async (req, res) => {
+  try {
+    let chosenPath = '';
+    const platform = process.platform;
+
+    if (platform === 'darwin') {
+      // macOS: use osascript
+      const { stdout } = await execAsync(
+        `osascript -e 'POSIX path of (choose folder with prompt "Select DailyFlow Workspace")'`
+      );
+      chosenPath = stdout.trim();
+    } else if (platform === 'linux') {
+      // Linux: try zenity
+      try {
+        const { stdout } = await execAsync(`zenity --file-selection --directory --title="Select DailyFlow Workspace"`);
+        chosenPath = stdout.trim();
+      } catch {
+        return res.status(500).json({ error: 'zenity not available. Please install zenity or enter path manually.' });
+      }
+    } else if (platform === 'win32') {
+      // Windows: try PowerShell
+      const { stdout } = await execAsync(
+        `powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select DailyFlow Workspace'; $f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK | Out-Null; $f.SelectedPath"`
+      );
+      chosenPath = stdout.trim();
+    } else {
+      return res.status(500).json({ error: 'Folder picker not supported on this platform' });
+    }
+
+    if (!chosenPath) {
+      return res.status(400).json({ error: 'No folder selected' });
+    }
+
+    res.json({ path: chosenPath });
+  } catch (error: any) {
+    console.error('Error opening folder picker:', error);
+    res.status(500).json({ error: error.message || 'Failed to open folder picker' });
   }
 });
 

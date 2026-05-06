@@ -5,13 +5,18 @@ import { projectsApi, type ProjectData } from '../api/client';
 
 interface ProjectsProps {
   language: 'en' | 'zh';
+  activeContext?: 'work' | 'life';
 }
 
-export function Projects({ language }: ProjectsProps) {
+export function Projects({ language, activeContext = 'work' }: ProjectsProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectData | null>(null);
+
+  const filteredProjects = activeContext === 'life'
+    ? projects.filter(p => p.tags?.includes('life'))
+    : projects.filter(p => p.tags?.includes('work') || !p.tags?.some(tag => ['work', 'life'].includes(tag)));
 
   useEffect(() => {
     loadProjects();
@@ -94,14 +99,14 @@ export function Projects({ language }: ProjectsProps) {
 
       {/* Projects Grid */}
       <div className="flex-1 overflow-y-auto p-6">
-        {projects.length === 0 ? (
+        {filteredProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <FolderOpen className="w-16 h-16 mb-4 opacity-50" />
             <p>{t.noProjects}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map(project => (
+            {filteredProjects.map(project => (
               <ProjectCard
                 key={project.id}
                 project={project}
@@ -226,6 +231,9 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
   const [status, setStatus] = useState<'active' | 'completed' | 'archived'>(project?.status || 'active');
   const [deadline, setDeadline] = useState(project?.deadline || '');
   const [tags, setTags] = useState(project?.tags?.join(', ') || '');
+  const [context, setContext] = useState<'work' | 'life' | null>(
+    project?.tags?.includes('work') ? 'work' : project?.tags?.includes('life') ? 'life' : null
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -233,12 +241,16 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
 
     setIsSaving(true);
     try {
+      const finalTags = tags.trim() ? tags.split(',').map(t => t.trim()) : [];
+      if (context && !finalTags.some(t => ['work', 'life'].includes(t))) {
+        finalTags.push(context);
+      }
       await onSave({
         name: name.trim(),
         description: description.trim() || undefined,
         status,
         deadline: deadline || undefined,
-        tags: tags.trim() ? tags.split(',').map(t => t.trim()) : undefined,
+        tags: finalTags.length > 0 ? finalTags : undefined,
       });
     } catch (e) {
       console.error('Failed to save project', e);
@@ -262,6 +274,10 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
     active: language === 'zh' ? '进行中' : 'Active',
     completed: language === 'zh' ? '已完成' : 'Completed',
     archived: language === 'zh' ? '已归档' : 'Archived',
+    contextLabel: language === 'zh' ? '场景' : 'Context',
+    work: language === 'zh' ? '工作' : 'Work',
+    life: language === 'zh' ? '生活' : 'Life',
+    all: language === 'zh' ? '无' : 'None',
   };
 
   return (
@@ -318,6 +334,46 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               <option value="completed">{t.completed}</option>
               <option value="archived">{t.archived}</option>
             </select>
+          </div>
+
+          {/* Context */}
+          <div>
+            <label className="block text-sm font-medium mb-2">{t.contextLabel}</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setContext('work')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                  context === 'work'
+                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                    : 'bg-surface text-text-muted border-border hover:text-text-main'
+                }`}
+              >
+                {t.work}
+              </button>
+              <button
+                type="button"
+                onClick={() => setContext('life')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                  context === 'life'
+                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                    : 'bg-surface text-text-muted border-border hover:text-text-main'
+                }`}
+              >
+                {t.life}
+              </button>
+              <button
+                type="button"
+                onClick={() => setContext(null)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                  context === null
+                    ? 'bg-text-heading text-white border-text-heading shadow-sm'
+                    : 'bg-surface text-text-muted border-border hover:text-text-main'
+                }`}
+              >
+                {t.all}
+              </button>
+            </div>
           </div>
 
           {/* Deadline */}

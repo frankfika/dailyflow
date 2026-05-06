@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Check, Command, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
@@ -14,6 +14,7 @@ import { filesApi, tasksApi, rolloverApi, gitApi, configApi } from './api/client
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { Projects } from './components/Projects';
 import { AISummaryModal } from './components/AISummaryModal';
+import { ContextSwitcher } from './components/ContextSwitcher';
 
 type Task = {
   id: string;
@@ -62,7 +63,6 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'mindmap'>('today');
   const [currentView, setCurrentView] = useState<'daily' | 'projects'>('daily');
-  const [isRollingOver, setIsRollingOver] = useState(false);
   const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -101,8 +101,12 @@ export default function App() {
   const [aiApiKey, setAiApiKey] = useState<string>('');
   const [aiModel, setAiModel] = useState<string>('');
   const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
+  const [aiFormat, setAiFormat] = useState<'openai' | 'anthropic'>('openai');
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github'>('general');
+  const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
+  const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const markdownRef = React.useRef(markdown);
 
   // Check first run on mount
@@ -122,11 +126,16 @@ export default function App() {
       try {
         const config = await configApi.get();
         setGithubRepo(config.githubRepo || null);
+        setGithubRepoInput(config.githubRepo || '');
+        setGithubToken(config.githubToken || '');
         setAiProvider(config.aiProvider || 'deepseek');
         setAiApiKey(config.aiApiKey || '');
         setAiModel(config.aiModel || '');
         setAiBaseUrl(config.aiBaseUrl || '');
+        setAiFormat(config.aiFormat || 'openai');
         setWorkspaceRoot(config.workspaceRoot || '');
+        setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
+        setRolloverTrigger(config.rolloverTrigger || 'manual');
       } catch (e) {
         // ignore
       }
@@ -134,6 +143,27 @@ export default function App() {
     checkFirstRun();
     loadConfigData();
   }, []);
+
+  // Save activeContext when it changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-context', activeContext);
+    
+    const saveActiveContext = async () => {
+      try {
+        const config = await configApi.get();
+        await configApi.update({
+          ...config,
+          activeContext,
+        });
+      } catch (e) {
+        console.error('Failed to save activeContext', e);
+      }
+    };
+    // Only save if we've already loaded config (isFirstRun is not null)
+    if (isFirstRun !== null) {
+      saveActiveContext();
+    }
+  }, [activeContext, isFirstRun]);
 
   // Load file list on mount
   useEffect(() => {
@@ -171,6 +201,18 @@ export default function App() {
     setIsLoading(true);
     setLoadError(null);
     try {
+      // Auto rollover unfinished tasks from previous dates only when configured
+      if (rolloverTrigger === 'on_app_open') {
+        try {
+          const rolloverResult = await rolloverApi.apply(date);
+          if (rolloverResult.migratedCount > 0) {
+            console.log(`Auto-rollover: migrated ${rolloverResult.migratedCount} tasks`);
+          }
+        } catch (rolloverErr) {
+          console.error('Auto-rollover failed', rolloverErr);
+        }
+      }
+
       const data = await filesApi.get(date);
       if (data) {
         setMarkdown(data.content);
@@ -188,7 +230,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [rolloverTrigger]);
 
   useEffect(() => {
     loadTasksForDate(currentFileDate);
@@ -262,6 +304,7 @@ export default function App() {
     setIsGeneratingSummary(true);
     setAiSummary(null);
     try {
+      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic');
       const allDates = Object.keys(filesMap).sort((a,b) => b.localeCompare(a));
       let filteredDates = allDates;
 
@@ -294,7 +337,7 @@ export default function App() {
       if (aiProvider === 'deepseek') {
         apiUrl = 'https://api.deepseek.com/chat/completions';
         model = model || 'deepseek-chat';
-      } else if (aiProvider === 'anthropic') {
+      } else if (isAnthropicFormat) {
         apiUrl = 'https://api.anthropic.com/v1/messages';
         model = model || 'claude-3-5-sonnet-20241022';
       } else if (aiProvider === 'openai') {
@@ -314,11 +357,11 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${aiApiKey}`,
-          ...(aiProvider === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
+          ...(isAnthropicFormat ? { 'anthropic-version': '2023-06-01' } : {}),
         },
         body: JSON.stringify({
           model,
-          ...(aiProvider === 'anthropic' ? {
+          ...(isAnthropicFormat ? {
             max_tokens: 2048,
             messages: [
               { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
@@ -337,7 +380,7 @@ export default function App() {
 
       // Extract response based on provider
       let summary = '';
-      if (aiProvider === 'anthropic') {
+      if (isAnthropicFormat) {
         summary = data.content?.[0]?.text?.trim() || "No summary generated.";
       } else {
         summary = data.choices?.[0]?.message?.content?.trim() || "No summary generated.";
@@ -356,6 +399,7 @@ export default function App() {
     if (!brainDumpText.trim()) return;
     setIsProcessingBrainDump(true);
     try {
+      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic');
       // Determine API endpoint and model based on provider
       let apiUrl = '';
       let model = aiModel;
@@ -363,7 +407,7 @@ export default function App() {
       if (aiProvider === 'deepseek') {
         apiUrl = 'https://api.deepseek.com/chat/completions';
         model = model || 'deepseek-chat';
-      } else if (aiProvider === 'anthropic') {
+      } else if (isAnthropicFormat) {
         apiUrl = 'https://api.anthropic.com/v1/messages';
         model = model || 'claude-3-5-sonnet-20241022';
       } else if (aiProvider === 'openai') {
@@ -383,11 +427,11 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${aiApiKey}`,
-          ...(aiProvider === 'anthropic' ? { 'anthropic-version': '2023-06-01' } : {}),
+          ...(isAnthropicFormat ? { 'anthropic-version': '2023-06-01' } : {}),
         },
         body: JSON.stringify({
           model,
-          ...(aiProvider === 'anthropic' ? {
+          ...(isAnthropicFormat ? {
             max_tokens: 2048,
             messages: [
               { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional).\n\n"${brainDumpText}"` },
@@ -406,7 +450,7 @@ export default function App() {
 
       // Extract response based on provider
       let content = '';
-      if (aiProvider === 'anthropic') {
+      if (isAnthropicFormat) {
         content = data.content?.[0]?.text?.trim() || '';
       } else {
         content = data.choices?.[0]?.message?.content?.trim() || '';
@@ -416,16 +460,24 @@ export default function App() {
       const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
       const extracted = JSON.parse(jsonStr) as any[];
 
-      const newTasks: Task[] = extracted.map((t, idx) => ({
-        id: `t_${Date.now()}_${idx}`,
-        title: t.title,
-        status: 'todo',
-        tags: Array.isArray(t.tags) && t.tags.length > 0 ? t.tags.map((tag: string) => tag.toLowerCase()) : ['tasks'],
-        source_date: currentFileDate,
-        project: t.project,
-        deadline: t.deadline,
-        priority: t.priority as any
-      }));
+      const newTasks: Task[] = extracted.map((t, idx) => {
+        const tags = Array.isArray(t.tags) && t.tags.length > 0
+          ? t.tags.map((tag: string) => tag.toLowerCase())
+          : [];
+        if (!tags.some((tag: string) => ['work', 'life'].includes(tag))) {
+          tags.push(activeContext);
+        }
+        return {
+          id: `t_${Date.now()}_${idx}`,
+          title: t.title,
+          status: 'todo',
+          tags,
+          source_date: currentFileDate,
+          project: t.project,
+          deadline: t.deadline,
+          priority: t.priority as any
+        };
+      });
 
       // Add new tasks via API
       for (const nt of newTasks) {
@@ -468,35 +520,6 @@ export default function App() {
       }
     } catch (e) {
       console.error('Failed to toggle task', e);
-    }
-  };
-
-  const handleRollover = async () => {
-    setIsRollingOver(true);
-    try {
-      const result = await rolloverApi.apply(currentFileDate);
-      if (result.success) {
-        // Refresh current date content
-        const data = await filesApi.get(currentFileDate);
-        if (data) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
-        }
-        // Remove rolled-over dates from filesMap so the button disappears
-        setFilesMap(prev => {
-          const next = { ...prev };
-          Object.keys(next).forEach(date => {
-            if (date < currentFileDate) delete next[date];
-          });
-          return next;
-        });
-      }
-    } catch (e) {
-      console.error('Rollover failed', e);
-    } finally {
-      setIsRollingOver(false);
     }
   };
 
@@ -580,13 +603,13 @@ export default function App() {
     }
   };
 
-  const todayTasks = tasks.filter(t => t.status !== 'migrated');
+  // Work context: show work tasks + tasks without work/life (default to work)
+  // Life context: only show life tasks
+  const contextFilteredTasks = activeContext === 'life'
+    ? tasks.filter(t => t.tags?.includes('life'))
+    : tasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
+  const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
   const categories = Array.from(new Set(todayTasks.flatMap(t => t.tags || [])));
-  // Always include 'Tasks' as fallback for untagged tasks
-  const hasUntaggedTasks = todayTasks.some(t => !t.tags || t.tags.length === 0 || t.tags.includes('Tasks'));
-  if (hasUntaggedTasks && !categories.includes('Tasks')) {
-    categories.push('Tasks');
-  }
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentDates = allDates.filter(d => d >= '2026-04-27');
@@ -621,11 +644,13 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-full bg-background flex overflow-hidden text-text-main relative">
+    <div
+      className="h-screen w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-background"
+    >
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {isSidebarOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -636,7 +661,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Sidebar */}
-      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 bg-surface flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'}`}>
+      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-700 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'} bg-surface`}>
         <div className="p-8 w-64">
           <div className="flex flex-col gap-1 mb-10">
             <div className="flex items-center gap-3">
@@ -672,18 +697,22 @@ export default function App() {
                 </button>
               </h3>
               <ul className="space-y-3 text-sm font-sans">
-                {recentDates.map(date => (
-                  <li 
-                    key={date}
-                    onClick={() => setCurrentFileDate(date)}
-                    className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  >
-                    {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
-                    <span className={currentFileDate !== date ? "ml-4" : ""}>
-                      {date}
-                    </span>
-                  </li>
-                ))}
+                {recentDates.map(date => {
+                  const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+                  return (
+                    <li
+                      key={date}
+                      onClick={() => setCurrentFileDate(date)}
+                      className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                    >
+                      {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
+                      <span className={currentFileDate !== date ? "ml-4" : ""}>
+                        {date}
+                        <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
+                      </span>
+                    </li>
+                  );
+                })}
 
                 {Object.keys(archivedMonths).length > 0 && (
                   <li className="pt-2">
@@ -700,18 +729,22 @@ export default function App() {
                           </button>
                           {expandedArchiveMonths[monthName] && (
                             <ul className="space-y-3 pl-4 border-l border-border/50 ml-6 pb-2">
-                              {archivedMonths[monthName].map(date => (
-                                <li 
-                                  key={date}
-                                  onClick={() => setCurrentFileDate(date)}
-                                  className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                                >
-                                  {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
-                                  <span className={currentFileDate !== date ? "" : ""}>
-                                    {date}
-                                  </span>
-                                </li>
-                              ))}
+                              {archivedMonths[monthName].map(date => {
+                                const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+                                return (
+                                  <li
+                                    key={date}
+                                    onClick={() => setCurrentFileDate(date)}
+                                    className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                                  >
+                                    {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
+                                    <span className={currentFileDate !== date ? "" : ""}>
+                                      {date}
+                                      <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
+                                    </span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </li>
@@ -831,12 +864,12 @@ export default function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full">
+      <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
         {currentView === 'projects' ? (
-          <Projects language={language} />
+          <Projects language={language} activeContext={activeContext} />
         ) : (
           <>
-        <header className="h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border bg-background/80 backdrop-blur-md z-10 shrink-0">
+        <header className={`h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border backdrop-blur-md z-10 shrink-0 transition-colors duration-700 bg-background/80`}>
           <div className="flex items-center gap-3 md:gap-4 text-xs font-sans tracking-widest font-bold uppercase overflow-hidden whitespace-nowrap">
             <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
               <Menu className="w-5 h-5"/>
@@ -846,7 +879,12 @@ export default function App() {
             <span className="text-accent truncate">{currentFileDate}.md</span>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <ContextSwitcher
+              activeContext={activeContext}
+              onChange={setActiveContext}
+              language={language}
+            />
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -946,26 +984,6 @@ export default function App() {
                     )}
                   </div>
 
-
-                  {/* Rollover Notification (if applicable) */}
-                  {/* Show rollover only if there are previous-day files AND current file hasn't already received migrated tasks */}
-                  {Object.keys(filesMap).some(date => date < currentFileDate) && !tasks.some(t => t.source_date && t.source_date !== currentFileDate) && (
-                    <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-xl bg-accent/5 border border-accent/10">
-                      <div className="flex items-center gap-2 text-text-heading min-w-0">
-                        <CornerUpRight className="w-3.5 h-3.5 opacity-50 flex-shrink-0" />
-                        <span className="text-xs font-medium truncate">
-                          {language === 'zh' ? '有前几天的未完成任务' : 'Unfinished tasks from previous days'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleRollover}
-                        disabled={isRollingOver}
-                        className="flex-shrink-0 px-3 py-1 rounded-lg bg-accent text-white text-[10px] font-sans tracking-widest font-bold uppercase hover:bg-accent/90 transition-colors disabled:opacity-50"
-                      >
-                        {isRollingOver ? (language === 'zh' ? '...' : '...') : (language === 'zh' ? '结转' : 'Rollover')}
-                      </button>
-                    </div>
-                  )}
 
                   {/* FAB: Add Task */}
                   {!showTaskInput && (
@@ -1159,8 +1177,8 @@ export default function App() {
                                         const newTag = tagInputValue.trim().toLowerCase();
                                         if (!tags.includes(newTag)) tags.push(newTag);
                                       }
-                                      if (tags.length === 0) {
-                                        tags.push((selectedCategory || 'Tasks').toLowerCase());
+                                      if (!tags.some(t => ['work', 'life'].includes(t))) {
+                                        tags.push(activeContext);
                                       }
 
                                       let finalDeadline = newTaskDeadline;
@@ -1215,9 +1233,7 @@ export default function App() {
                   )}
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
-                    const catTasks = category === 'Tasks'
-                      ? todayTasks.filter(t => !t.tags || t.tags.length === 0 || t.tags.includes('Tasks'))
-                      : todayTasks.filter(t => t.tags?.includes(category));
+                    const catTasks = todayTasks.filter(t => t.tags?.includes(category));
 
                     const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
                     const doneCatTasks = catTasks.filter(t => t.status === 'done');
@@ -1240,6 +1256,7 @@ export default function App() {
                                 task={task}
                                 language={language}
                                 categories={categories}
+                                currentFileDate={currentFileDate}
                                 onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
@@ -1272,6 +1289,7 @@ export default function App() {
                                       task={task}
                                       language={language}
                                       categories={categories}
+                                      currentFileDate={currentFileDate}
                                       onToggle={() => handleToggleTask(task.id)}
                                       onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
@@ -1307,7 +1325,10 @@ export default function App() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                     {(() => {
-                      const projectCats = Array.from(new Set(allPendingTasks.flatMap(t => t.tags || [])));
+                      const filteredPending = activeContext === 'life'
+                        ? allPendingTasks.filter(t => t.tags?.includes('life'))
+                        : allPendingTasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
+                      const projectCats = Array.from(new Set(filteredPending.flatMap(t => t.tags || [])));
 
                       if (projectCats.length === 0) {
                         return (
@@ -1319,7 +1340,7 @@ export default function App() {
                       }
 
                       return projectCats.map(cat => {
-                        const catTasks = allPendingTasks.filter(t => t.tags?.includes(cat));
+                        const catTasks = filteredPending.filter(t => t.tags?.includes(cat));
                         return (
                           <div key={cat} className="bg-surface-white rounded-[32px] border border-border shadow-sm p-6 overflow-hidden flex flex-col h-[500px]">
                             <h2 className="flex items-center gap-3 text-[14px] uppercase tracking-widest font-bold text-text-heading mb-6 shrink-0">
@@ -1384,24 +1405,7 @@ export default function App() {
             )}
           </div>
         </div>
- 
-         {/* Command Pill */}
-         <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
-           <motion.div 
-             initial={{ y: 50, opacity: 0 }}
-             animate={{ y: 0, opacity: 1 }}
-             transition={{ delay: 0.3, type: 'spring', damping: 20 }}
-             className="command-pill px-8 py-4 flex items-center space-x-4 pointer-events-auto border border-white/10"
-           >
-             <Command className="w-4 h-4 opacity-70" />
-             <span className="font-sans text-[10px] uppercase font-bold tracking-widest">
-               <span className="opacity-60">dailyflow / </span>
-               <span className="opacity-100">{currentFileDate}</span>
-             </span>
-             <div className="w-1.5 h-1.5 rounded-full bg-accent-highlight animate-pulse ml-3 shadow-[0_0_8px_rgba(255,232,214,0.6)]" />
-           </motion.div>
-         </div>
-         </>
+        </>
         )}
        </main>
 
@@ -1495,8 +1499,44 @@ export default function App() {
                </button>
              </div>
 
+             {/* Tabs */}
+             <div className="flex border-b border-border px-6">
+               <button
+                 onClick={() => setConfigTab('general')}
+                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+                   configTab === 'general'
+                     ? 'border-accent text-accent'
+                     : 'border-transparent text-text-muted hover:text-text-heading'
+                 }`}
+               >
+                 {language === 'zh' ? '通用' : 'General'}
+               </button>
+               <button
+                 onClick={() => setConfigTab('ai')}
+                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+                   configTab === 'ai'
+                     ? 'border-accent text-accent'
+                     : 'border-transparent text-text-muted hover:text-text-heading'
+                 }`}
+               >
+                 AI
+               </button>
+               <button
+                 onClick={() => setConfigTab('github')}
+                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+                   configTab === 'github'
+                     ? 'border-accent text-accent'
+                     : 'border-transparent text-text-muted hover:text-text-heading'
+                 }`}
+               >
+                 GitHub
+               </button>
+             </div>
+
              {/* Scrollable Content */}
              <div className="overflow-y-auto p-6 space-y-5">
+               {configTab === 'general' && (
+                 <div className="space-y-5">
                 {/* Workspace Path */}
                 <div>
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
@@ -1535,7 +1575,34 @@ export default function App() {
                    <p className="text-xs text-text-muted mt-1">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
                 </div>
 
-                {/* AI Configuration */}
+                <hr className="border-border" />
+
+                {/* Language */}
+                <div>
+                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                     {language === 'zh' ? '界面语言' : 'Language'}
+                   </h3>
+                   <div className="flex bg-surface p-1 rounded-lg shadow-inner border border-border/50 gap-1">
+                     <button
+                       onClick={() => setLanguage('en')}
+                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                     >
+                       English
+                     </button>
+                     <button
+                       onClick={() => setLanguage('zh')}
+                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                     >
+                       中文
+                     </button>
+                   </div>
+                </div>
+                </div>
+              )}
+
+              {configTab === 'ai' && (
+                <div className="space-y-5">
+                  {/* AI Configuration */}
                 <div>
                    <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
                      {language === 'zh' ? 'AI 模型配置' : 'AI Model Configuration'}
@@ -1598,6 +1665,18 @@ export default function App() {
                      />
                    )}
 
+                   {/* Format Selection for Custom */}
+                   {aiProvider === 'custom' && (
+                     <select
+                       value={aiFormat}
+                       onChange={e => setAiFormat(e.target.value as 'openai' | 'anthropic')}
+                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
+                     >
+                       <option value="openai">OpenAI Format</option>
+                       <option value="anthropic">Anthropic Format</option>
+                     </select>
+                   )}
+
                    <p className="text-xs text-text-muted mt-1">
                      {language === 'zh' ? '用于 AI 总结和 Brain Dump 功能。' : 'Used for AI Summary and Brain Dump features. '}
                      {aiProvider === 'deepseek' && (
@@ -1617,33 +1696,14 @@ export default function App() {
                      )}
                    </p>
                 </div>
-
-                <hr className="border-border" />
-
-                {/* Language */}
-                <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                     {language === 'zh' ? '界面语言' : 'Language'}
-                   </h3>
-                   <div className="flex bg-surface p-1 rounded-lg shadow-inner border border-border/50 gap-1">
-                     <button
-                       onClick={() => setLanguage('en')}
-                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
-                     >
-                       English
-                     </button>
-                     <button
-                       onClick={() => setLanguage('zh')}
-                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
-                     >
-                       中文
-                     </button>
-                   </div>
                 </div>
+              )}
 
-                <hr className="border-border" />
+              {configTab === 'github' && (
+                <div className="space-y-5">
+                  <hr className="border-border" />
 
-                {/* GitHub Sync */}
+                  {/* GitHub Sync */}
                 <div>
                    <div className="flex items-center justify-between mb-2">
                      <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted">
@@ -1815,6 +1875,8 @@ export default function App() {
                      )}
                    </div>
                 </div>
+                </div>
+              )}
              </div>
 
              {/* Footer with Save Button */}
@@ -1836,12 +1898,15 @@ export default function App() {
                      await configApi.update({
                        ...config,
                        workspaceRoot: workspaceRoot.trim(),
+                       githubRepo: githubRepoInput.trim() || undefined,
+                       githubToken: githubToken.trim() || undefined,
                        aiProvider,
                        aiApiKey: aiApiKey.trim(),
                        aiModel: aiModel.trim(),
                        aiBaseUrl: aiBaseUrl.trim(),
+                       aiFormat,
                      });
-                     setGithubRepo(config.githubRepo || null);
+                     setGithubRepo(githubRepoInput.trim() || null);
 
                      // If workspace path changed, reload everything
                      if (workspaceChanged) {
@@ -1905,6 +1970,7 @@ interface TaskCardProps {
   task: Task;
   language: 'en' | 'zh';
   categories: string[];
+  currentFileDate: string;
   onToggle: () => void;
   onEdit: (updates: {
     title?: string;
@@ -1917,7 +1983,7 @@ interface TaskCardProps {
   onDelete: () => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggle, onEdit, onDelete }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, currentFileDate, onToggle, onEdit, onDelete }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(task.title + (task.description ? '\n' + task.description : ''));
@@ -1925,11 +1991,20 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
   const [editDeadline, setEditDeadline] = useState<string>(task.deadline || '');
   const [tagInputValue, setTagInputValue] = useState('');
 
+  // Sync local state when task prop changes from backend update
+  useEffect(() => {
+    if (!isEditing) {
+      setEditContent(task.title + (task.description ? '\n' + task.description : ''));
+      setEditTags(task.tags || []);
+      setEditDeadline(task.deadline || '');
+    }
+  }, [task, isEditing]);
+
   const submitEdit = () => {
     if (editContent.trim()) {
       const lines = editContent.trim().split('\n');
       const newTitle = lines[0].trim();
-      const newDesc = lines.slice(1).join('\n').trim() || undefined;
+      const newDesc = lines.slice(1).join('\n').trim() || ""; // pass empty string instead of undefined to clear description
 
       onEdit({
         title: newTitle,
@@ -1970,7 +2045,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
 
       <div className="flex-1 min-w-0 pr-[72px] sm:pr-16 xl:pr-8">
         {isEditing ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {/* Title and Description */}
             <textarea
               autoFocus
@@ -1996,23 +2071,43 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
               }}
               rows={1}
               placeholder={language === 'zh' ? '任务标题...' : 'Task title...'}
-              className="bg-transparent border-b border-accent outline-none font-serif text-xl leading-snug w-full text-text-heading resize-none overflow-hidden min-h-[32px]"
+              className="bg-transparent border-b border-border focus:border-accent outline-none font-serif text-xl leading-snug w-full text-text-heading resize-none overflow-hidden min-h-[32px] pb-1 transition-colors"
             />
 
-            {/* Tags Selection */}
-            <div className="flex flex-col gap-2">
-              {editTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {editTags.map(tag => (
-                    <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
-                      {tag}
-                      <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setEditTags(prev => prev.filter(t => t !== tag))} />
-                    </span>
-                  ))}
-                </div>
-              )}
+            {/* Metadata Grid (Deadline & Tags) */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Deadline */}
+              <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${editDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border hover:bg-surface-white'}`}>
+                <Calendar className="w-3.5 h-3.5" />
+                <input
+                  type="date"
+                  className="bg-transparent outline-none border-none text-[10px] uppercase tracking-widest font-bold cursor-pointer"
+                  value={editDeadline}
+                  onChange={e => setEditDeadline(e.target.value)}
+                />
+                {editDeadline && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setEditDeadline('');
+                    }}
+                    className="ml-1 text-[#a15f5f] opacity-60 hover:opacity-100 hover:text-red-600 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </label>
 
-              <div className="flex flex-wrap gap-1.5">
+              {/* Selected Tags */}
+              {editTags.map(tag => (
+                <span key={tag} className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold flex items-center gap-1.5 group border ${getTagColor(tag)} cursor-default`}>
+                  {tag}
+                  <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setEditTags(prev => prev.filter(t => t !== tag))} />
+                </span>
+              ))}
+
+              {/* Add Tags */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 {categories.filter(c => !editTags.includes(c)).map(cat => (
                   <button
                     key={cat}
@@ -2022,63 +2117,34 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
                         setEditTags([...editTags, cat]);
                       }
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-60 hover:opacity-100 hover:scale-105 active:scale-95`}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-50 hover:opacity-100 hover:scale-105 active:scale-95`}
                   >
                     + {cat}
                   </button>
                 ))}
 
-                <div className="flex items-center gap-1 bg-surface rounded-lg border border-border/80 focus-within:border-accent px-2 py-1 transition-colors">
-                  <input
-                    type="text"
-                    className="bg-transparent text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted/60 w-20"
-                    placeholder={language === 'zh' ? '自定义...' : 'Custom...'}
-                    value={tagInputValue}
-                    onChange={e => setTagInputValue(e.target.value)}
-                    onKeyDown={e => {
-                      if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
-                        e.preventDefault();
-                        const newTag = tagInputValue.trim().toLowerCase();
-                        if (!editTags.includes(newTag)) {
-                          setEditTags([...editTags, newTag]);
-                        }
-                        setTagInputValue('');
+                <input
+                  type="text"
+                  className="bg-surface border border-border focus:border-accent rounded-lg px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted w-24 transition-colors"
+                  placeholder={language === 'zh' ? '+ 自定义' : '+ Custom'}
+                  value={tagInputValue}
+                  onChange={e => setTagInputValue(e.target.value)}
+                  onKeyDown={e => {
+                    if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
+                      e.preventDefault();
+                      const newTag = tagInputValue.trim().toLowerCase();
+                      if (!editTags.includes(newTag)) {
+                        setEditTags([...editTags, newTag]);
                       }
-                    }}
-                  />
-                </div>
+                      setTagInputValue('');
+                    }
+                  }}
+                />
               </div>
             </div>
 
-            {/* Deadline */}
-            <div className="flex items-center gap-2">
-              <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all cursor-pointer ${editDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'}`}>
-                <Calendar className="w-3.5 h-3.5" />
-                <input
-                  type="date"
-                  className="bg-transparent outline-none border-none text-[10px] uppercase tracking-widest font-bold cursor-pointer"
-                  value={editDeadline}
-                  onChange={e => setEditDeadline(e.target.value)}
-                />
-              </label>
-              {editDeadline && (
-                <button
-                  onClick={() => setEditDeadline('')}
-                  className="text-text-muted hover:text-red-500 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Save/Cancel Buttons */}
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={submitEdit}
-                className="px-4 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors"
-              >
-                {language === 'zh' ? '保存' : 'Save'}
-              </button>
+            {/* Save/Cancel Actions */}
+            <div className="flex justify-end gap-3 pt-2 border-t border-border/50">
               <button
                 onClick={() => {
                   setEditContent(task.title + (task.description ? '\n' + task.description : ''));
@@ -2086,9 +2152,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
                   setEditDeadline(task.deadline || '');
                   setIsEditing(false);
                 }}
-                className="px-4 py-2 bg-surface text-text-muted rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-surface-white transition-colors"
+                className="px-4 py-1.5 text-text-muted hover:text-text-heading text-xs uppercase font-bold tracking-widest transition-colors"
               >
                 {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button
+                onClick={submitEdit}
+                className="px-6 py-1.5 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors shadow-sm"
+              >
+                {language === 'zh' ? '保存' : 'Save'}
               </button>
             </div>
           </div>
@@ -2112,9 +2184,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, onToggl
           </div>
         )}
         
-        {(!isDone && (task.project || task.deadline || task.priority || task.source_date !== '2026-05-04' || (task.tags && task.tags.length > 0))) && (
+        {(!isDone && (task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0))) && (
           <div className="flex flex-wrap gap-2 mt-4 mt-3">
-            {task.source_date && task.source_date !== '2026-05-04' && (
+            {task.source_date && task.source_date !== currentFileDate && (
               <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-accent-highlight text-[#966b4d] text-[10px] font-sans font-bold tracking-widest uppercase border border-[#edcdb6]">
                 <CornerUpRight className="w-3 h-3" />
                 <span>{language === 'zh' ? '已结转' : 'Migrated'}</span>

@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
-import { Folder, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Folder, Check, AlertCircle, Loader2, Key, FolderOpen } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { configApi } from '../api/client';
 
 interface WorkspaceSetupProps {
@@ -10,36 +10,78 @@ interface WorkspaceSetupProps {
 
 export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   const [workspacePath, setWorkspacePath] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    // Try to get Desktop path from backend, fallback to placeholder
+    fetch('http://localhost:3003/api/config/choose-folder')
+      .then(() => {
+        // Backend supports picker, set a sensible default
+        setWorkspacePath('');
+      })
+      .catch(() => {
+        setWorkspacePath('');
+      });
+  }, []);
+
   const t = {
     title: language === 'zh' ? '欢迎使用 DailyFlow' : 'Welcome to DailyFlow',
     subtitle: language === 'zh'
-      ? '请选择你的工作区目录，这是存储所有日记和任务的地方'
-      : 'Choose your workspace directory where all notes and tasks will be stored',
-    pathLabel: language === 'zh' ? '工作区路径' : 'Workspace Path',
-    pathPlaceholder: language === 'zh'
-      ? '例如：/Users/你的用户名/Documents/Notes'
-      : 'e.g., /Users/yourname/Documents/Notes',
-    browseBtn: language === 'zh' ? '浏览...' : 'Browse...',
-    exampleTitle: language === 'zh' ? '示例：' : 'Examples:',
-    example1: language === 'zh'
-      ? 'Obsidian 目录：/Users/你的用户名/Documents/Obsidian'
-      : 'Obsidian vault: /Users/yourname/Documents/Obsidian',
-    example2: language === 'zh'
-      ? '新建目录：/Users/你的用户名/Documents/DailyFlow'
-      : 'New directory: /Users/yourname/Documents/DailyFlow',
-    validateBtn: language === 'zh' ? '验证路径' : 'Validate Path',
-    continueBtn: language === 'zh' ? '继续' : 'Continue',
-    validPath: language === 'zh' ? '路径有效' : 'Path is valid',
-    invalidPath: language === 'zh' ? '路径无效或不存在' : 'Path is invalid or does not exist',
+      ? '设置你的工作区，所有日记和任务将存储在这里'
+      : 'Set up your workspace where all notes and tasks will be stored',
+    pathLabel: language === 'zh' ? '工作区目录' : 'Workspace Directory',
+    pickFolderBtn: language === 'zh' ? '选择文件夹…' : 'Choose Folder…',
+    noFolderPicked: language === 'zh' ? '尚未选择文件夹' : 'No folder selected',
+    pathHint: language === 'zh'
+      ? '点击按钮在 Finder 中选择或新建一个文件夹'
+      : 'Click the button to select or create a folder in Finder',
+    apiKeyLabel: language === 'zh' ? 'DeepSeek API Key' : 'DeepSeek API Key',
+    apiKeyPlaceholder: language === 'zh'
+      ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxx'
+      : 'sk-xxxxxxxxxxxxxxxxxxxxxxxx',
+    apiKeyHint: language === 'zh'
+      ? '用于 AI 脑暴和任务提取，可在 deepseek.com 获取'
+      : 'Used for AI brain dump and task extraction. Get yours at deepseek.com',
+    exampleTitle: language === 'zh' ? '小贴士：' : 'Tips:',
+    tip1: language === 'zh'
+      ? '工作区是一个普通文件夹，你可以随时用任何编辑器打开里面的 .md 文件'
+      : 'The workspace is a plain folder. You can open .md files with any editor anytime.',
+    tip2: language === 'zh'
+      ? 'API Key 仅保存在本地，不会上传到任何服务器'
+      : 'Your API Key is stored locally and never uploaded to any server.',
+    continueBtn: language === 'zh' ? '开始' : 'Get Started',
+    invalidPath: language === 'zh' ? '路径无效或无法创建' : 'Path is invalid or cannot be created',
+    missingKey: language === 'zh' ? '请输入 DeepSeek API Key' : 'Please enter your DeepSeek API Key',
+    missingPath: language === 'zh' ? '请选择一个工作区文件夹' : 'Please choose a workspace folder',
+  };
+
+  const handlePickFolder = async () => {
+    setIsPickingFolder(true);
+    setError('');
+    try {
+      const res = await fetch('http://localhost:3003/api/config/choose-folder');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to pick folder');
+      }
+      const data = await res.json();
+      if (data.path) {
+        setWorkspacePath(data.path);
+      }
+    } catch (e: any) {
+      setError(e.message || t.invalidPath);
+    } finally {
+      setIsPickingFolder(false);
+    }
   };
 
   const handleValidate = async () => {
     if (!workspacePath.trim()) {
-      setError(language === 'zh' ? '请输入工作区路径' : 'Please enter workspace path');
+      setError(t.missingPath);
       return;
     }
 
@@ -47,16 +89,13 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      // 验证路径（通过后端 API）
       const response = await fetch(`http://localhost:3003/api/config/validate-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: workspacePath }),
+        body: JSON.stringify({ path: workspacePath, create: true }),
       });
 
-      if (!response.ok) {
-        throw new Error('Validation failed');
-      }
+      if (!response.ok) throw new Error('Validation failed');
 
       const result = await response.json();
       if (!result.valid) {
@@ -71,7 +110,11 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
 
   const handleContinue = async () => {
     if (!workspacePath.trim()) {
-      setError(language === 'zh' ? '请输入工作区路径' : 'Please enter workspace path');
+      setError(t.missingPath);
+      return;
+    }
+    if (!apiKey.trim()) {
+      setError(t.missingKey);
       return;
     }
 
@@ -84,6 +127,9 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
         dailyPathTemplate: 'Daily/{year}/{month}/{date}.md',
         rolloverTrigger: 'manual',
         rolloverSkipTags: ['no-rollover'],
+        aiProvider: 'deepseek',
+        aiApiKey: apiKey.trim(),
+        aiModel: 'deepseek-chat',
       });
       onComplete();
     } catch (e) {
@@ -98,7 +144,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-background rounded-2xl border border-border w-full max-w-2xl p-8 shadow-2xl"
+        className="bg-background rounded-2xl border border-border w-full max-w-lg p-8 shadow-2xl"
       >
         {/* Header */}
         <div className="text-center mb-8">
@@ -106,61 +152,96 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
             <Folder className="w-8 h-8 text-accent" />
           </div>
           <h1 className="text-2xl font-bold mb-2">{t.title}</h1>
-          <p className="text-muted-foreground">{t.subtitle}</p>
+          <p className="text-muted-foreground text-sm">{t.subtitle}</p>
         </div>
 
         {/* Form */}
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* Workspace Path */}
           <div>
-            <label className="block text-sm font-medium mb-2">{t.pathLabel}</label>
-            <div className="flex gap-2">
+            <label className="block text-sm font-medium mb-1.5">{t.pathLabel}</label>
+
+            {/* Primary: Choose Folder button */}
+            <button
+              onClick={handlePickFolder}
+              disabled={isPickingFolder}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-all text-sm font-medium text-text-heading disabled:opacity-50"
+            >
+              {isPickingFolder ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FolderOpen className="w-4 h-4" />
+              )}
+              {workspacePath ? (
+                <span className="truncate max-w-[280px]">{workspacePath}</span>
+              ) : (
+                t.pickFolderBtn
+              )}
+            </button>
+
+            {/* Fallback: manual path input (small, below) */}
+            <div className="mt-2 flex gap-2">
               <input
                 type="text"
                 value={workspacePath}
                 onChange={e => setWorkspacePath(e.target.value)}
-                placeholder={t.pathPlaceholder}
-                className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+                placeholder={t.noFolderPicked}
+                className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-accent transition-colors font-mono text-text-muted"
               />
               <button
                 onClick={handleValidate}
                 disabled={isValidating}
-                className="px-4 py-3 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-2 py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest"
               >
-                {isValidating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
-                {t.validateBtn}
+                {isValidating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                {language === 'zh' ? '验证' : 'Check'}
               </button>
             </div>
-            {error && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
-                <AlertCircle className="w-4 h-4" />
-                {error}
-              </div>
-            )}
+            <p className="mt-1.5 text-xs text-text-muted">{t.pathHint}</p>
           </div>
 
-          {/* Examples */}
-          <div className="bg-accent/5 rounded-xl p-4">
-            <p className="text-sm font-medium mb-2">{t.exampleTitle}</p>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• {t.example1}</li>
-              <li>• {t.example2}</li>
+          {/* DeepSeek API Key */}
+          <div>
+            <label className="block text-sm font-medium mb-1.5">{t.apiKeyLabel}</label>
+            <div className="flex items-center gap-2 bg-background border border-border rounded-xl px-4 py-2.5 focus-within:border-accent transition-colors">
+              <Key className="w-4 h-4 text-text-muted shrink-0" />
+              <input
+                type="password"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder={t.apiKeyPlaceholder}
+                className="flex-1 bg-transparent text-sm outline-none text-text-heading placeholder:text-text-muted/50"
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-text-muted">{t.apiKeyHint}</p>
+          </div>
+
+          {/* Tips */}
+          <div className="bg-accent/5 rounded-xl p-4 space-y-1.5">
+            <p className="text-sm font-medium">{t.exampleTitle}</p>
+            <ul className="text-xs text-text-muted space-y-1">
+              <li>• {t.tip1}</li>
+              <li>• {t.tip2}</li>
             </ul>
           </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
 
           {/* Continue Button */}
           <button
             onClick={handleContinue}
-            disabled={isSaving || !workspacePath.trim()}
+            disabled={isSaving || !workspacePath.trim() || !apiKey.trim()}
             className="w-full py-3 rounded-xl bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {language === 'zh' ? '保存中...' : 'Saving...'}
+                {language === 'zh' ? '保存中…' : 'Saving…'}
               </>
             ) : (
               t.continueBtn

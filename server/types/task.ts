@@ -1,6 +1,7 @@
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   status: 'todo' | 'done';
   tags?: string[];
   project?: string;
@@ -23,11 +24,14 @@ export interface Config {
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
   githubRepo?: string;
+  githubToken?: string;
+  activeContext?: 'work' | 'life';
   // AI Configuration
   aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   aiApiKey?: string;
   aiModel?: string;
   aiBaseUrl?: string; // For custom providers
+  aiFormat?: 'openai' | 'anthropic'; // Protocol format for custom providers
 }
 
 export interface RolloverPreview {
