@@ -10,6 +10,7 @@ export const TAG_COLORS = [
 ];
 
 export function getTagColor(tag: string): string {
+  if (tag === 'delayed') return 'bg-orange-100 text-orange-700 border-orange-200';
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
     hash = tag.charCodeAt(i) + ((hash << 5) - hash);

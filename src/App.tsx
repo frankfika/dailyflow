@@ -2392,7 +2392,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
             {task.source_date && task.source_date !== currentFileDate && (
               <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-accent-highlight text-[#966b4d] text-[10px] font-sans font-bold tracking-widest uppercase border border-[#edcdb6]">
                 <CornerUpRight className="w-3 h-3" />
-                <span>{language === 'zh' ? '已结转' : 'Migrated'}</span>
+                <span>{language === 'zh' ? `结转自 ${task.source_date}` : `from ${task.source_date}`}</span>
               </span>
             )}
             {task.tags && task.tags.filter((t: string) => t !== 'tasks').map((tag: string) => (
