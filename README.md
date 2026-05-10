@@ -7,7 +7,7 @@
 
 ### 扔进去 → 自动整理 → 任务流动
 
-![Version](https://img.shields.io/badge/Version-0.1-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.2-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS|Windows|Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
 
@@ -88,6 +88,7 @@ DailyFlow 是一款**本地优先**的 Markdown 日程管理软件：用 Markdow
 
 - Node.js 18+
 - npm 或 yarn
+- Rust（用于 Tauri 桌面应用）
 - Git（用于版本同步）
 
 ### 安装
@@ -99,8 +100,21 @@ cd dailyflow
 
 # 安装依赖
 npm install
+```
 
-# 启动开发服务器
+### 启动方式
+
+**桌面应用（推荐）**
+
+```bash
+npm run tauri dev
+```
+
+Tauri 会自动启动前端 + 后端，并打开原生桌面窗口。
+
+**浏览器模式**
+
+```bash
 npm run dev:all
 ```
 
@@ -148,6 +162,7 @@ npm run dev:all
 
 | 层级 | 技术 |
 |------|------|
+| 桌面框架 | Tauri 2 (Rust) |
 | 前端框架 | React 19 + TypeScript |
 | UI 库 | Tailwind CSS + Lucide Icons |
 | 动画 | Motion (Framer Motion) |
@@ -157,9 +172,19 @@ npm run dev:all
 
 ## 更新日志
 
+### v0.2 (2026-05-10)
+- ✨ Tauri 桌面应用支持（`npm run tauri dev` 启动原生窗口）
+- 🐛 修复任务 ID 不稳定导致删除后其他任务消失的 bug
+- 🐛 修复 parser 默认分类 `Tasks` 被错误加入 tag 的 bug
+- 🐛 修复 `work`/`life` context tag 出现在分类列表的 bug
+- 🐛 修复无 category tag 的任务不显示的 bug
+- 🐛 修复添加任务时 deadline 被强制设为今天的 bug
+- 🐛 修复归档日期硬编码问题（改为动态 14 天滚动窗口）
+- 🐛 修复 config.json 损坏时服务崩溃的 bug
+
 ### v0.1 (2026-05-06)
 - ✨ GitHub 同步功能
-- ✨ AI Provider 多provider 配置
+- ✨ AI Provider 多 provider 配置
 - ✨ E2E 测试基础设施
 - ✨ ContextSwitcher 组件
 - 🐛 修复多项 bug 和体验优化
