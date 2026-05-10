@@ -88,6 +88,7 @@ export default function App() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
+  const [rolloverBanner, setRolloverBanner] = useState<{ count: number; fromDate: string } | null>(null);
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
@@ -216,13 +217,7 @@ export default function App() {
         try {
           const rolloverResult = await rolloverApi.apply(date);
           if (rolloverResult.migratedCount > 0) {
-            setToast({
-              message: language === 'zh'
-                ? `已自动迁移 ${rolloverResult.migratedCount} 个未完成任务`
-                : `Auto-migrated ${rolloverResult.migratedCount} unfinished tasks`,
-              type: 'info'
-            });
-            setTimeout(() => setToast(null), 2500);
+            setRolloverBanner({ count: rolloverResult.migratedCount, fromDate: rolloverResult.fromDate || date });
           }
         } catch (rolloverErr) {
           console.error('Auto-rollover failed', rolloverErr);
@@ -598,8 +593,10 @@ export default function App() {
         setLastSyncedMD(data.content);
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
+      showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
     } catch (e) {
       console.error('Failed to edit task', e);
+      showToast(language === 'zh' ? '更新失败' : 'Failed to update task', 'error');
     }
   };
 
@@ -614,8 +611,10 @@ export default function App() {
         setLastSyncedMD(data.content);
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
+      showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
     } catch (e) {
       console.error('Failed to delete task', e);
+      showToast(language === 'zh' ? '删除失败' : 'Failed to delete task', 'error');
     }
   };
 
@@ -1133,6 +1132,35 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Auto-rollover Banner */}
+                  {rolloverBanner && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-sm"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CornerUpRight className="w-4 h-4 shrink-0" />
+                        <span className="font-medium">
+                          {language === 'zh'
+                            ? `已从 ${rolloverBanner.fromDate} 迁移 ${rolloverBanner.count} 个未完成任务`
+                            : `Migrated ${rolloverBanner.count} unfinished tasks from ${rolloverBanner.fromDate}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => { setRolloverBanner(null); handleManualRollover(); }}
+                          className="text-[10px] uppercase tracking-widest font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {language === 'zh' ? '查看详情' : 'Details'}
+                        </button>
+                        <button onClick={() => setRolloverBanner(null)} className="text-blue-400 hover:text-blue-700">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
 
                   {/* FAB: Add Task */}
                   {!showTaskInput && (
@@ -1289,11 +1317,11 @@ export default function App() {
 
                               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                                 {/* Deadline Button */}
-                                <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
+                                <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
                                   <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
                                   <input
                                     type="date"
-                                    className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-[#a15f5f]' : 'text-text-muted'}`}
+                                    className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-blue-600' : 'text-text-muted'}`}
                                     value={newTaskDeadline}
                                     onChange={e => setNewTaskDeadline(e.target.value)}
                                     onClick={(e) => {
@@ -1354,7 +1382,11 @@ export default function App() {
                                           setLastSyncedMD(data.content);
                                           setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
                                         }
-                                      }).catch(console.error);
+                                        showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
+                                      }).catch((e) => {
+                                        console.error(e);
+                                        showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
+                                      });
                                       setNewTaskTitle('');
                                       setNewTaskTagsList([]);
                                       setTagInputValue('');
@@ -1460,7 +1492,7 @@ export default function App() {
                     return (
                       <div className="space-y-5">
                         <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
-                          <span>{language === 'zh' ? 'Tasks' : 'Tasks'}</span>
+                          <span>{language === 'zh' ? '收集箱' : 'Inbox'}</span>
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
                         <div className="space-y-4">
@@ -1527,6 +1559,11 @@ export default function App() {
                           <CornerUpRight className="w-3 h-3" />
                           {language === 'zh' ? `已迁移 (${migratedTasks.length})` : `Migrated (${migratedTasks.length})`}
                         </button>
+                        {showMigrated && (
+                          <p className="text-[11px] text-text-muted/70 pl-5 -mt-1">
+                            {language === 'zh' ? '这些任务已被迁移到更新的日期' : 'These tasks were moved to a newer date'}
+                          </p>
+                        )}
                         <AnimatePresence>
                           {showMigrated && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-3 overflow-hidden">
@@ -1535,9 +1572,12 @@ export default function App() {
                                   <CornerUpRight className="w-3.5 h-3.5 text-text-muted shrink-0" />
                                   <span className="text-sm text-text-muted line-through flex-1 truncate">{task.title}</span>
                                   {task.source_date && (
-                                    <span className="text-[10px] text-text-muted shrink-0">
-                                      {language === 'zh' ? `→ ${task.source_date}` : `→ ${task.source_date}`}
-                                    </span>
+                                    <button
+                                      onClick={() => setCurrentFileDate(task.source_date!)}
+                                      className="text-[10px] text-accent hover:underline shrink-0"
+                                    >
+                                      {language === 'zh' ? `查看 ${task.source_date}` : `View ${task.source_date}`}
+                                    </button>
                                   )}
                                 </div>
                               ))}
@@ -2229,6 +2269,7 @@ interface TaskCardProps {
 const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, currentFileDate, onToggle, onEdit, onDelete }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editContent, setEditContent] = useState(task.title + (task.description ? '\n' + task.description : ''));
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState<string>(task.deadline || '');
@@ -2320,7 +2361,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
             {/* Metadata Grid (Deadline & Tags) */}
             <div className="flex flex-wrap items-center gap-3">
               {/* Deadline */}
-              <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${editDeadline ? 'bg-[#faedec] text-[#a15f5f] border-[#ecd5d5]' : 'bg-surface text-text-muted border-border hover:bg-surface-white'}`}>
+              <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${editDeadline ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-surface text-text-muted border-border hover:bg-surface-white'}`}>
                 <Calendar className="w-3.5 h-3.5" />
                 <input
                   type="date"
@@ -2334,7 +2375,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
                       e.preventDefault();
                       setEditDeadline('');
                     }}
-                    className="ml-1 text-[#a15f5f] opacity-60 hover:opacity-100 hover:text-red-600 transition-colors"
+                    className="ml-1 text-blue-600 opacity-60 hover:opacity-100 hover:text-red-600 transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -2447,7 +2488,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
               </span>
             )}
             {task.deadline && (
-              <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#faedec] text-[#a15f5f] border border-[#ecd5d5] text-[10px] font-sans font-bold tracking-widest uppercase">
+              <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-sans font-bold tracking-widest uppercase">
                 <Calendar className="w-3 h-3" />
                 <span>{task.deadline}</span>
               </span>
@@ -2467,9 +2508,26 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
             <Edit2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
         )}
-        <button onClick={onDelete} className="p-2 sm:p-1.5 text-text-muted hover:text-red-500 transition-colors rounded-lg sm:bg-surface hover:bg-red-50 border border-border/50 sm:border-transparent bg-surface-white sm:bg-transparent shadow-sm sm:shadow-none">
-          <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-        </button>
+        {confirmingDelete ? (
+          <button
+            onClick={() => { onDelete(); setConfirmingDelete(false); }}
+            onBlur={() => setConfirmingDelete(false)}
+            autoFocus
+            className="px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg animate-pulse whitespace-nowrap"
+          >
+            {language === 'zh' ? '确认删除?' : 'Confirm?'}
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              setConfirmingDelete(true);
+              setTimeout(() => setConfirmingDelete(false), 3000);
+            }}
+            className="p-2 sm:p-1.5 text-text-muted hover:text-red-500 transition-colors rounded-lg sm:bg-surface hover:bg-red-50 border border-border/50 sm:border-transparent bg-surface-white sm:bg-transparent shadow-sm sm:shadow-none"
+          >
+            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          </button>
+        )}
       </div>
     </motion.div>
   );
