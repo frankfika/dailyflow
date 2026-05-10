@@ -1,17 +1,21 @@
 <div align="center">
 
+<img src="./docs/assets/logo.png" width="128" height="128" alt="DailyFlow Logo" />
+
 # DailyFlow
-> 让任务自然流动 · Local-first Markdown Task Manager
 
-![主界面](./docs/assets/home.png)
+> 本地优先的每日任务管理工具 · Local-First Daily Task Management
 
-### 扔进去 → 自动整理 → 任务流动
+![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-0.2-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-macOS|Windows|Linux-green?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
+### Markdown 驱动，自动迁移未完成任务，让你专注于当下
 
-[核心功能](#-核心功能) • [界面预览](#-界面预览) • [快速开始](#-快速开始) • [架构](#-架构)
+![Version](https://img.shields.io/badge/Version-0.2.0-blue?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
+![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
+![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
+
+[核心功能](#-核心功能) • [界面预览](#-界面预览) • [快速开始](#-快速开始) • [架构设计](#-架构设计)
 
 __简体中文__ | [English](./README_EN.md)
 
@@ -20,175 +24,168 @@ __简体中文__ | [English](./README_EN.md)
 
 ## 项目简介
 
-DailyFlow 是一款**本地优先**的 Markdown 日程管理软件：用 Markdown 文件作为主数据，用 Web 界面提升操作效率，用自动迁移、项目追踪和 AI 摘要减少每天重复整理任务的负担。
+DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Markdown 文件为数据源，自动处理跨日任务迁移，让你不再需要每天手动整理昨天的未完成事项。
 
 ### 为什么选择 DailyFlow？
 
 | 传统方式 | DailyFlow |
-|----------|-----------|
-| 每天手动复制未完成任务 | 自动迁移，零遗漏 |
-| 任务散落在各个文件里 | 项目统一管理，进度清晰 |
-| 商业工具锁定数据 | Markdown 文件，完全可控 |
-| 多设备同步依赖云服务 | GitHub 同步，完全开源 |
+|---------|-----------|
+| 每天手动复制未完成任务到新页面 | 自动迁移，打开即用 |
+| 任务数据锁在某个 SaaS 平台 | 本地 Markdown 文件，完全可控 |
+| 需要网络才能使用 | 离线优先，随时可用 |
+| 复杂的项目管理界面 | 极简设计，专注当日 |
+| 与 Obsidian 等工具不兼容 | 原生 Markdown，无缝衔接 |
 
-## 核心功能
+## ✨ 核心功能
 
-### 1. 自动任务迁移
-未完成的任务自动迁移到明天，保持工作连续性：
+### 1. 自动任务迁移 (Rollover)
 
-- **智能迁移**：只迁移 `- [ ]` 未完成任务，已完成自动保留
-- **子任务完整**：缩进的子任务、说明、附件一并迁移
-- **跳过标记**：添加 `#no-rollover` 标签的任务不迁移
-- **日期调度**：`#scheduled:YYYY-MM-DD` 控制任务出现时间
+未完成的任务会在你打开应用时自动迁移到今天，并保留来源日期标记。也支持手动预览和确认迁移。
 
-### 2. 项目追踪
-长期项目不再散落在每日日记里：
+- **自动迁移**：打开应用时检测并迁移
+- **手动迁移**：预览待迁移任务，确认后执行
+- **来源追踪**：每个迁移任务标注原始日期
 
-- 项目卡片展示进度和状态
-- 子任务树支持多层级嵌套
-- 每日记录推进情况
-- 关联附件和参考资料
+### 2. 可视化 + Markdown 双模式
 
-### 3. GitHub 同步
-保持本地优先，同时获得版本历史和多设备同步：
+在精美的可视化界面和原始 Markdown 之间自由切换。数据始终以 Markdown 存储，你可以用任何编辑器打开。
 
-- 自动 commit 形成可读历史
-- 手动或自动 push 到 GitHub
-- 冲突检测与解决提示
-- 支持私有仓库
+### 3. AI Brain Dump
 
-### 4. AI 智能摘要
-用 AI 分析近期任务，生成进度摘要：
+把零散想法一股脑倒进去，AI 自动提取任务、分类、设置截止日期。支持 DeepSeek、OpenAI、Anthropic 等多种 AI 服务。
 
-- 支持 DeepSeek、Claude、OpenAI 等多 provider
-- 7天/30天/全部时间范围
-- 自动识别完成率和高优先级任务
+### 4. 工作/生活上下文切换
 
-### 5. 多 AI Provider 支持
-灵活配置你喜欢的 AI 服务：
+一键切换工作和生活模式，任务自动按上下文过滤，互不干扰。
 
-- **DeepSeek** - 性价比高
-- **Anthropic Claude** - 高质量推理
-- **OpenAI GPT** - 通用能力强
-- **自定义** - 支持任何 OpenAI 兼容 API
+### 5. 项目概览
 
-## 界面预览
+跨日期聚合所有待办任务，按分类/项目维度查看全局进度。
 
-| 今日视图 | 项目视图 | 设置页面 |
-|----------|----------|----------|
-| ![Today](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) | ![Settings](./docs/assets/settings.png) |
+### 6. Git 同步
 
-| 工作区设置 |
-|------------|
-| ![Workspace](./docs/assets/workspace-setup.png) |
+一键提交到 GitHub，自动备份你的所有笔记和任务数据。
 
-## 快速开始
+## 📸 界面预览
 
-### 环境要求
+| 主界面 | 添加任务 |
+|--------|---------|
+| ![主界面](./docs/assets/home.png) | ![添加任务](./docs/assets/add-task.png) |
 
-- Node.js 18+
-- npm 或 yarn
-- Rust（用于 Tauri 桌面应用）
-- Git（用于版本同步）
+| 项目概览 | Markdown 编辑 |
+|---------|--------------|
+| ![项目概览](./docs/assets/projects.png) | ![Markdown](./docs/assets/markdown-view.png) |
 
-### 安装
+## 🚀 快速开始
+
+### 方式一：下载安装包（推荐）
+
+前往 [Releases](https://github.com/frankfika/dailyflow/releases) 下载对应平台的安装包：
+
+| 平台 | 文件 |
+|------|------|
+| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
+| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
+| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+
+### 方式二：从源码运行
 
 ```bash
-# 克隆项目
+# 克隆仓库
 git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
 
 # 安装依赖
 npm install
-```
 
-### 启动方式
+# 启动开发服务器（前端 + 后端）
+npm run dev      # 前端 Vite dev server
+npm run server   # 后端 Express server (端口 3003)
 
-**桌面应用（推荐）**
-
-```bash
+# 或者启动 Tauri 桌面应用
 npm run tauri dev
 ```
 
-Tauri 会自动启动前端 + 后端，并打开原生桌面窗口。
+### 首次使用
 
-**浏览器模式**
+1. 启动应用后，设置你的工作区目录（存放 Markdown 文件的位置）
+2. 应用会自动创建今天的日记文件
+3. 开始添加任务，使用标签分类
+4. 第二天打开时，未完成任务自动迁移到今天
 
-```bash
-npm run dev:all
-```
-
-访问 http://localhost:3000
-
-### 配置工作区
-
-1. 首次打开会显示工作区设置
-2. 选择你的 Markdown 日记根目录（如 `~/Obsidian/daily/`）
-3. 设置 GitHub 同步（可选）
-4. 开始使用！
-
-## 架构
+## 🏗 架构设计
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Frontend (React)                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
-│  │ Today    │  │ Projects │  │ Settings │  │ AI     │ │
-│  │ View     │  │ View     │  │          │  │ Summary│ │
-│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
-└────────────────────────┬────────────────────────────────┘
-                         │ REST API
-┌────────────────────────┴────────────────────────────────┐
-│                    Backend (Express)                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
-│  │ Config   │  │ Parser   │  │ Rollover │  │ Git    │ │
-│  │ Service  │  │ Service  │  │ Service  │  │ Service│ │
-│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────┐
-│                    Local File System                      │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  ~/Obsidian/daily/                               │   │
-│  │  ├── 2026-05-01.md                                │   │
-│  │  ├── 2026-05-02.md                                │   │
-│  │  └── projects/                                    │   │
-│  │      └── example.md                               │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│              Tauri Desktop Shell             │
+├─────────────────────────────────────────────┤
+│                                             │
+│  ┌─────────────┐     ┌──────────────────┐  │
+│  │   React UI  │────▶│  Express Backend  │  │
+│  │  (Vite/TS)  │◀────│   (Port 3003)    │  │
+│  └─────────────┘     └──────────────────┘  │
+│                              │               │
+│                              ▼               │
+│                    ┌──────────────────┐      │
+│                    │  Markdown Files  │      │
+│                    │  (Source of Truth)│      │
+│                    └──────────────────┘      │
+│                              │               │
+│                              ▼               │
+│                    ┌──────────────────┐      │
+│                    │   Git (Optional) │      │
+│                    │   GitHub Sync    │      │
+│                    └──────────────────┘      │
+│                                             │
+└─────────────────────────────────────────────┘
 ```
 
-## 技术栈
+**核心原则：**
+- **Markdown 为源**：所有数据以 Markdown 文件存储，是唯一的数据源
+- **本地优先**：所有操作在本地完成，无需网络
+- **非破坏性**：所有写入操作都有预览和确认机制
+- **Git 友好**：每次操作都可以生成有意义的 commit
+
+## 🛠 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 桌面框架 | Tauri 2 (Rust) |
-| 前端框架 | React 19 + TypeScript |
-| UI 库 | Tailwind CSS + Lucide Icons |
-| 动画 | Motion (Framer Motion) |
-| 后端 | Express.js + TypeScript |
-| Markdown | react-markdown + Prism |
-| 测试 | Vitest + Playwright |
+| 前端 | React 19 + TypeScript + Tailwind CSS 4 |
+| 动画 | Framer Motion |
+| 构建 | Vite 6 |
+| 后端 | Express.js (TypeScript) |
+| 桌面 | Tauri 2 (Rust) |
+| AI | DeepSeek / OpenAI / Anthropic (可选) |
+| 版本控制 | Git + GitHub API |
 
-## 更新日志
+## 📝 数据格式
 
-### v0.2 (2026-05-10)
-- ✨ Tauri 桌面应用支持（`npm run tauri dev` 启动原生窗口）
-- 🐛 修复任务 ID 不稳定导致删除后其他任务消失的 bug
-- 🐛 修复 parser 默认分类 `Tasks` 被错误加入 tag 的 bug
-- 🐛 修复 `work`/`life` context tag 出现在分类列表的 bug
-- 🐛 修复无 category tag 的任务不显示的 bug
-- 🐛 修复添加任务时 deadline 被强制设为今天的 bug
-- 🐛 修复归档日期硬编码问题（改为动态 14 天滚动窗口）
-- 🐛 修复 config.json 损坏时服务崩溃的 bug
+DailyFlow 使用标准 Markdown 格式存储任务：
 
-### v0.1 (2026-05-06)
-- ✨ GitHub 同步功能
-- ✨ AI Provider 多 provider 配置
-- ✨ E2E 测试基础设施
-- ✨ ContextSwitcher 组件
-- 🐛 修复多项 bug 和体验优化
+```markdown
+## Tasks
 
-## License
+- [ ] 完成项目报告 #work #deadline:2026-05-15
+- [x] 回复客户邮件 #work
+- [>] 整理会议纪要 #work (migrated to 2026-05-12)
 
-MIT License
+## Notes
+
+今天的会议讨论了 Q3 计划...
+```
+
+**任务状态：**
+- `- [ ]` 待办
+- `- [x]` 已完成
+- `- [>]` 已迁移
+
+**支持的标签：**
+- `#tag` — 分类标签
+- `#deadline:YYYY-MM-DD` — 截止日期
+- `#priority:high|medium|low` — 优先级
+- `#project:name` — 所属项目
+
+## 📄 License
+
+[Apache License 2.0](./LICENSE)

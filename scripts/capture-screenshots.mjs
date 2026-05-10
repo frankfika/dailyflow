@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /**
  * Screenshot capture script for DailyFlow README
- * Captures real screenshots from localhost:3000
+ * Captures real screenshots from the running application
+ *
+ * Prerequisites:
+ *   npm run dev    (frontend on port 5173)
+ *   npm run server (backend on port 3003)
+ *
+ * Usage:
+ *   node scripts/capture-screenshots.mjs
  */
 
 import { chromium } from 'playwright';
@@ -15,21 +22,10 @@ const rootDir = join(__dirname, '..');
 const assetsDir = join(rootDir, 'docs', 'assets');
 
 const VIEWPORT = { width: 1280, height: 800 };
+const BASE_URL = 'http://localhost:5173';
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function captureScreenshot(page, name, options = {}) {
-  const path = join(assetsDir, `${name}.png`);
-  const { width = VIEWPORT.width, height = VIEWPORT.height, wait = 1500 } = options;
-
-  await page.setViewportSize({ width, height });
-  await sleep(wait);
-  await page.screenshot({ path, type: 'png', fullPage: false });
-
-  console.log(`📸 Screenshot saved: ${path}`);
-  return path;
 }
 
 async function captureScreenshots() {
@@ -40,49 +36,44 @@ async function captureScreenshots() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: VIEWPORT,
-    deviceScaleFactor: 2
+    deviceScaleFactor: 2,
   });
   const page = await context.newPage();
 
-  const BASE_URL = 'http://localhost:3000';
-
   try {
-    console.log('\n📷 Starting screenshot capture for DailyFlow...\n');
-
-    // 1. Main/Home page (Today view)
-    console.log('📷 Capturing Today view...');
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
+    // 1. Main page
+    console.log('📷 Capturing home page...');
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await sleep(2000);
-    await captureScreenshot(page, 'home', { wait: 2000 });
+    await page.screenshot({ path: join(assetsDir, 'home.png'), type: 'png' });
+    console.log('  ✓ home.png');
 
-    // 2. Projects view
-    console.log('📷 Capturing Projects view...');
-    await page.click('text=Projects', { timeout: 5000 }).catch(() => {});
-    await sleep(1500);
-    await captureScreenshot(page, 'projects', { wait: 1500 });
-
-    // 3. Settings page
-    console.log('📷 Capturing Settings page...');
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
+    // 2. Add task panel
+    console.log('📷 Capturing add task...');
+    await page.click('button[title*="Add Task"]');
     await sleep(1000);
+    await page.screenshot({ path: join(assetsDir, 'add-task.png'), type: 'png' });
+    console.log('  ✓ add-task.png');
 
-    const settingsBtn = page.locator('button').filter({ has: page.locator('svg') }).last();
-    await settingsBtn.click().catch(() => {});
+    // 3. Close task input, switch to Projects
+    await page.keyboard.press('Escape');
+    await sleep(500);
+    const projectsNav = page.locator('text=Projects Focus').first();
+    await projectsNav.click();
     await sleep(1500);
-    await captureScreenshot(page, 'settings', { wait: 1500 });
+    await page.screenshot({ path: join(assetsDir, 'projects.png'), type: 'png' });
+    console.log('  ✓ projects.png');
 
-    // 4. Workspace Setup
-    console.log('📷 Capturing Workspace Setup...');
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
-    await sleep(2000);
-    await captureScreenshot(page, 'workspace-setup', { wait: 2000 });
+    // 4. Markdown view
+    console.log('📷 Capturing markdown view...');
+    await page.click('button:has-text("Raw Markdown")');
+    await sleep(1000);
+    await page.screenshot({ path: join(assetsDir, 'markdown-view.png'), type: 'png' });
+    console.log('  ✓ markdown-view.png');
 
-    console.log('\n✨ All screenshots captured successfully!');
-    console.log(`📁 Location: ${assetsDir}`);
-
+    console.log(`\n✨ All screenshots saved to ${assetsDir}`);
   } catch (error) {
     console.error('❌ Error:', error.message);
-    console.log('\n⚠️  Make sure app is running at localhost:3000');
   } finally {
     await browser.close();
   }
