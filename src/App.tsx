@@ -70,6 +70,12 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showTaskInput, setShowTaskInput] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2500);
+  };
   const [brainDumpText, setBrainDumpText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
@@ -648,6 +654,23 @@ export default function App() {
     <div
       className="h-screen w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-background"
     >
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-xl text-sm font-sans font-medium shadow-lg pointer-events-none ${
+              toast.type === 'error' ? 'bg-red-500 text-white' :
+              toast.type === 'info' ? 'bg-surface border border-border text-text-main' :
+              'bg-accent text-white'
+            }`}
+          >
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -678,18 +701,23 @@ export default function App() {
             <div>
               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4 flex items-center justify-between">
                 <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
-                <button 
+                <button
                   onClick={async () => {
                     const today = getTodayStr();
-                    if (!filesMap[today]) {
-                      try {
-                        await filesApi.create(today, '## Tasks\n');
-                        setFilesMap(prev => ({ ...prev, [today]: '## Tasks\n' }));
-                      } catch (e) {
-                        console.error('Failed to create note', e);
-                      }
+                    if (filesMap[today]) {
+                      setCurrentFileDate(today);
+                      showToast(language === 'zh' ? '已是最新一天' : 'Already on latest day', 'info');
+                      return;
                     }
-                    setCurrentFileDate(today);
+                    try {
+                      await filesApi.create(today, '## Tasks\n');
+                      setFilesMap(prev => ({ ...prev, [today]: '## Tasks\n' }));
+                      setCurrentFileDate(today);
+                      showToast(language === 'zh' ? '已创建今日日记' : 'Created today\'s note', 'success');
+                    } catch (e) {
+                      console.error('Failed to create note', e);
+                      showToast(language === 'zh' ? '创建失败' : 'Failed to create note', 'error');
+                    }
                   }}
                   className="p-1 rounded-md bg-text-muted/10 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors flex items-center gap-1"
                   title="New Daily Note"
@@ -1182,7 +1210,7 @@ export default function App() {
                                         tags.push(activeContext);
                                       }
 
-                                      const finalDeadline = newTaskDeadline || undefined;
+                                      const finalDeadline = newTaskDeadline || currentFileDate;
 
                                       const newTask: Task = {
                                         id: `t_${Date.now()}`,
