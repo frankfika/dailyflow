@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
@@ -87,6 +87,10 @@ export default function App() {
   const [summaryPeriod, setSummaryPeriod] = useState<'7days' | '30days' | 'all'>('7days');
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const [showRolloverPreview, setShowRolloverPreview] = useState(false);
+  const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
+  const [isRollingOver, setIsRollingOver] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [language, setLanguage] = useState<'en' | 'zh'>('en');
@@ -207,16 +211,20 @@ export default function App() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      // Auto rollover unfinished tasks from previous dates only when configured
-      if (rolloverTrigger === 'on_app_open') {
-        try {
-          const rolloverResult = await rolloverApi.apply(date);
-          if (rolloverResult.migratedCount > 0) {
-            console.log(`Auto-rollover: migrated ${rolloverResult.migratedCount} tasks`);
-          }
-        } catch (rolloverErr) {
-          console.error('Auto-rollover failed', rolloverErr);
+      // Auto rollover unfinished tasks from previous dates (always on)
+      try {
+        const rolloverResult = await rolloverApi.apply(date);
+        if (rolloverResult.migratedCount > 0) {
+          setToast({
+            message: language === 'zh'
+              ? `已自动迁移 ${rolloverResult.migratedCount} 个未完成任务`
+              : `Auto-migrated ${rolloverResult.migratedCount} unfinished tasks`,
+            type: 'info'
+          });
+          setTimeout(() => setToast(null), 2500);
         }
+      } catch (rolloverErr) {
+        console.error('Auto-rollover failed', rolloverErr);
       }
 
       const data = await filesApi.get(date);
@@ -236,7 +244,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [rolloverTrigger]);
+  }, [language]);
 
   useEffect(() => {
     loadTasksForDate(currentFileDate);
@@ -609,6 +617,49 @@ export default function App() {
     }
   };
 
+  const handleManualRollover = async () => {
+    try {
+      const preview = await rolloverApi.preview(currentFileDate);
+      if (!preview || preview.tasksToMigrate.length === 0) {
+        showToast(language === 'zh' ? '没有需要迁移的任务' : 'No tasks to migrate', 'info');
+        return;
+      }
+      setRolloverPreview({ tasksToMigrate: preview.tasksToMigrate, fromDate: preview.fromDate });
+      setShowRolloverPreview(true);
+    } catch (e) {
+      console.error('Failed to preview rollover', e);
+      showToast(language === 'zh' ? '预览失败' : 'Preview failed', 'error');
+    }
+  };
+
+  const handleConfirmRollover = async () => {
+    setIsRollingOver(true);
+    try {
+      const result = await rolloverApi.apply(currentFileDate);
+      setShowRolloverPreview(false);
+      setRolloverPreview(null);
+      if (result.migratedCount > 0) {
+        showToast(
+          language === 'zh' ? `已迁移 ${result.migratedCount} 个任务` : `Migrated ${result.migratedCount} tasks`,
+          'success'
+        );
+        // Refresh
+        const data = await filesApi.get(currentFileDate);
+        if (data) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        }
+      }
+    } catch (e) {
+      console.error('Rollover failed', e);
+      showToast(language === 'zh' ? '迁移失败' : 'Rollover failed', 'error');
+    } finally {
+      setIsRollingOver(false);
+    }
+  };
+
   // Work context: show work tasks + tasks without work/life (default to work)
   // Life context: only show life tasks
   const contextFilteredTasks = activeContext === 'life'
@@ -671,6 +722,62 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Rollover Preview Modal */}
+      <AnimatePresence>
+        {showRolloverPreview && rolloverPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9998] bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setShowRolloverPreview(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-surface-white rounded-2xl shadow-2xl border border-border w-full max-w-md p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 className="font-serif text-lg font-medium text-text-heading mb-1">
+                {language === 'zh' ? '迁移未完成任务' : 'Migrate Unfinished Tasks'}
+              </h2>
+              <p className="text-sm text-text-muted mb-4">
+                {language === 'zh'
+                  ? `将 ${rolloverPreview.fromDate} 起的 ${rolloverPreview.tasksToMigrate.length} 个未完成任务迁移到今天`
+                  : `Migrate ${rolloverPreview.tasksToMigrate.length} unfinished tasks from ${rolloverPreview.fromDate} to today`}
+              </p>
+              <div className="space-y-2 max-h-48 overflow-y-auto mb-5">
+                {rolloverPreview.tasksToMigrate.map((t, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-text-main">
+                    <span className="mt-0.5 w-3.5 h-3.5 rounded border border-border/80 shrink-0 inline-block" />
+                    <span className="flex-1 truncate">{t.title}</span>
+                    {t.source_date && <span className="text-[10px] text-text-muted shrink-0">{t.source_date}</span>}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowRolloverPreview(false)}
+                  className="flex-1 py-2 rounded-xl border border-border text-sm font-medium text-text-muted hover:bg-surface transition-colors"
+                >
+                  {language === 'zh' ? '取消' : 'Cancel'}
+                </button>
+                <button
+                  onClick={handleConfirmRollover}
+                  disabled={isRollingOver}
+                  className="flex-1 py-2 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isRollingOver && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {language === 'zh' ? '确认迁移' : 'Confirm'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -977,13 +1084,22 @@ export default function App() {
                   className="space-y-10"
                 >
                   <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/50 pb-6">
-                    <h1 className="text-xl font-serif font-medium text-text-heading tracking-tight flex items-baseline gap-2">
-                      <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
-                      <span className="text-text-muted">
-                        {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
-                      </span>
-                    </h1>
-                    
+                    <div className="flex items-center gap-3">
+                      <h1 className="text-xl font-serif font-medium text-text-heading tracking-tight flex items-baseline gap-2">
+                        <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
+                        <span className="text-text-muted">
+                          {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
+                        </span>
+                      </h1>
+                      <button
+                        onClick={handleManualRollover}
+                        title={language === 'zh' ? '手动迁移历史未完成任务' : 'Migrate unfinished tasks from past'}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-accent hover:bg-accent/10 border border-border/50 hover:border-accent/30 transition-all"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        {language === 'zh' ? '迁移' : 'Rollover'}
+                      </button>
+                    </div>
                     {categories.length > 0 && (
                       <div className="flex flex-wrap items-center gap-2">
                         <button
