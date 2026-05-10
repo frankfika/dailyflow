@@ -2387,7 +2387,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, language, categories, current
           </div>
         )}
         
-        {(!isDone && (task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0))) && (
+        {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
           <div className="flex flex-wrap gap-2 mt-4 mt-3">
             {task.source_date && task.source_date !== currentFileDate && (
               <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-accent-highlight text-[#966b4d] text-[10px] font-sans font-bold tracking-widest uppercase border border-[#edcdb6]">
