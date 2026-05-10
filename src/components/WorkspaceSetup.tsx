@@ -18,7 +18,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
 
   useEffect(() => {
     // Try to get Desktop path from backend, fallback to placeholder
-    fetch('http://localhost:3003/api/config/choose-folder')
+    fetch('/api/config/choose-folder')
       .then(() => {
         // Backend supports picker, set a sensible default
         setWorkspacePath('');
@@ -63,7 +63,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setIsPickingFolder(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3003/api/config/choose-folder');
+      const res = await fetch('/api/config/choose-folder');
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to pick folder');
@@ -89,7 +89,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      const response = await fetch(`http://localhost:3003/api/config/validate-path`, {
+      const response = await fetch(`/api/config/validate-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: workspacePath, create: true }),

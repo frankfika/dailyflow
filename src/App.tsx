@@ -113,7 +113,7 @@ export default function App() {
   useEffect(() => {
     const checkFirstRun = async () => {
       try {
-        const response = await fetch('http://localhost:3003/api/config/check-first-run');
+        const response = await fetch('/api/config/check-first-run');
         const data = await response.json();
         setIsFirstRun(data.isFirstRun);
         setShowWorkspaceSetup(data.isFirstRun);
@@ -609,11 +609,12 @@ export default function App() {
     ? tasks.filter(t => t.tags?.includes('life'))
     : tasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
-  const categories = Array.from(new Set(todayTasks.flatMap(t => t.tags || [])));
+  const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !['work', 'life'].includes(tag)))));
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
-  const recentDates = allDates.filter(d => d >= '2026-04-27');
-  const archivedDates = allDates.filter(d => d < '2026-04-27');
+  const recentThreshold = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const recentDates = allDates.filter(d => d >= recentThreshold);
+  const archivedDates = allDates.filter(d => d < recentThreshold);
   
   const archivedMonths: Record<string, string[]> = {};
   archivedDates.forEach(d => {
@@ -1181,12 +1182,7 @@ export default function App() {
                                         tags.push(activeContext);
                                       }
 
-                                      let finalDeadline = newTaskDeadline;
-                                      if (!finalDeadline) {
-                                        const d = new Date();
-                                        const offset = d.getTimezoneOffset() * 60000;
-                                        finalDeadline = new Date(d.getTime() - offset).toISOString().split('T')[0];
-                                      }
+                                      const finalDeadline = newTaskDeadline || undefined;
 
                                       const newTask: Task = {
                                         id: `t_${Date.now()}`,
@@ -1303,7 +1299,70 @@ export default function App() {
                       </div>
                     );
                   })}
-                  
+                  {/* 兜底：显示没有任何 category tag 的任务 */}
+                  {(() => {
+                    const uncategorized = todayTasks.filter(t =>
+                      !categories.some(c => t.tags?.includes(c))
+                    );
+                    if (uncategorized.length === 0) return null;
+                    if (selectedCategory) return null;
+                    const pending = uncategorized.filter(t => t.status !== 'done');
+                    const done = uncategorized.filter(t => t.status === 'done');
+                    const showDone = showDoneByCategory['__uncategorized__'] ?? false;
+                    return (
+                      <div className="space-y-5">
+                        <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
+                          <span>{language === 'zh' ? 'Tasks' : 'Tasks'}</span>
+                          <span className="h-px bg-border flex-1 block w-full"></span>
+                        </h2>
+                        <div className="space-y-4">
+                          <AnimatePresence>
+                            {pending.slice().reverse().map(task => (
+                              <TaskCard
+                                key={task.id}
+                                task={task}
+                                language={language}
+                                categories={categories}
+                                currentFileDate={currentFileDate}
+                                onToggle={() => handleToggleTask(task.id)}
+                                onEdit={(updates) => handleEditTask(task.id, updates)}
+                                onDelete={() => handleDeleteTask(task.id)}
+                              />
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                        {done.length > 0 && (
+                          <div className="mt-2">
+                            <button
+                              onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
+                              className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                            >
+                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
+                              {language === 'zh' ? `已完成 (${done.length})` : `Done (${done.length})`}
+                            </button>
+                            <AnimatePresence>
+                              {showDone && (
+                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-4 mt-4 overflow-hidden">
+                                  {done.slice().reverse().map(task => (
+                                    <TaskCard
+                                      key={task.id}
+                                      task={task}
+                                      language={language}
+                                      categories={categories}
+                                      currentFileDate={currentFileDate}
+                                      onToggle={() => handleToggleTask(task.id)}
+                                      onEdit={(updates) => handleEditTask(task.id, updates)}
+                                      onDelete={() => handleDeleteTask(task.id)}
+                                    />
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 </motion.div>
               ) : activeTab === 'projects' ? (
@@ -1553,7 +1612,7 @@ export default function App() {
                      <button
                        onClick={async () => {
                          try {
-                           const res = await fetch('http://localhost:3003/api/config/choose-folder');
+                           const res = await fetch('/api/config/choose-folder');
                            if (res.ok) {
                              const data = await res.json();
                              if (data.path) {

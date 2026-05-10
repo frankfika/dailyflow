@@ -66,7 +66,7 @@ export function Settings({
     setValidationError('');
 
     try {
-      const response = await fetch('http://localhost:3003/api/config/validate-path', {
+      const response = await fetch('/api/config/validate-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: newWorkspacePath }),
@@ -131,7 +131,7 @@ export function Settings({
     setGithubValidationResult(null);
 
     try {
-      const response = await fetch('http://localhost:3003/api/config/validate-github', {
+      const response = await fetch('/api/config/validate-github', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl: githubRepo }),

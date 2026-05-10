@@ -17,7 +17,8 @@ function hashStr(s: string): string {
 export function parseMarkdown(md: string): Task[] {
   const lines = md.split('\n');
   const tasks: Task[] = [];
-  let currentCategory = 'Tasks';
+  const seenIds = new Set<string>();
+  let currentCategory: string | null = null;
 
   let i = 0;
   while (i < lines.length) {
@@ -73,7 +74,7 @@ export function parseMarkdown(md: string): Task[] {
 
       // 合并分类和标签
       const tags = new Set<string>();
-      if (currentCategory && currentCategory !== 'tasks' && currentCategory !== 'inbox') {
+      if (currentCategory && currentCategory.toLowerCase() !== 'tasks' && currentCategory.toLowerCase() !== 'inbox') {
         tags.add(currentCategory);
       }
       extractedTags.forEach(t => tags.add(t));
@@ -87,8 +88,17 @@ export function parseMarkdown(md: string): Task[] {
       }
       const description = descriptionLines.length > 0 ? descriptionLines.join('\n') : undefined;
 
+        let taskId = explicitId || `t_${hashStr(content)}`;
+        // 同名任务去重：加序号后缀
+        if (seenIds.has(taskId)) {
+          let n = 2;
+          while (seenIds.has(`${taskId}_${n}`)) n++;
+          taskId = `${taskId}_${n}`;
+        }
+        seenIds.add(taskId);
+
       tasks.push({
-        id: explicitId || `t${taskLineIndex}_${hashStr(content)}`,
+        id: taskId,
         title: content,
         description,
         status: isDone ? 'done' : 'todo',

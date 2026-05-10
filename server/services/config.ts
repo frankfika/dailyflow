@@ -26,7 +26,7 @@ export async function loadConfig(): Promise<Config> {
     const content = await fs.readFile(CONFIG_FILE, 'utf-8');
     config = JSON.parse(content);
   } catch (error: any) {
-    if (error.code !== 'ENOENT') {
+    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
       throw error;
     }
   }
