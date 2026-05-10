@@ -32,11 +32,13 @@ export function parseMarkdown(md: string): Task[] {
       continue;
     }
 
-    // 解析任务行：- [ ] 或 - [x]
-    const taskMatch = line.match(/^\s*[-*]\s+\[([xX ]+)\]\s+(.*)$/);
+    // 解析任务行：- [ ] 或 - [x] 或 - [>]（migrated）
+    const taskMatch = line.match(/^\s*[-*]\s+\[([xX >])\]\s+(.*)$/);
     if (taskMatch) {
       const taskLineIndex = i;
-      const isDone = taskMatch[1].toLowerCase() === 'x';
+      const checkboxChar = taskMatch[1].toLowerCase();
+      const isDone = checkboxChar === 'x';
+      const isMigrated = checkboxChar === '>';
       let content = taskMatch[2];
 
       // 提取稳定 ID 标记 (^id-...)
@@ -101,7 +103,7 @@ export function parseMarkdown(md: string): Task[] {
         id: taskId,
         title: content,
         description,
-        status: isDone ? 'done' : 'todo',
+        status: isDone ? 'done' : isMigrated ? 'migrated' : 'todo',
         tags: Array.from(tags),
         project,
         deadline,
@@ -203,14 +205,14 @@ export function generateMarkdown(tasks: Task[], currentDate?: string): string {
 /**
  * 更新 Markdown 文件中的单个任务（仅切换勾选状态）
  */
-export function updateTaskInMarkdown(md: string, taskLine: number, newStatus: 'todo' | 'done'): string {
+export function updateTaskInMarkdown(md: string, taskLine: number, newStatus: 'todo' | 'done' | 'migrated'): string {
   const lines = md.split('\n');
   if (taskLine >= 0 && taskLine < lines.length) {
     const line = lines[taskLine];
-    const taskMatch = line.match(/^\s*[-*]\s+\[([xX ])\]\s+(.*)$/);
+    const taskMatch = line.match(/^\s*[-*]\s+\[([xX> ])\]\s+(.*)$/);
     if (taskMatch) {
-      const checkbox = newStatus === 'done' ? 'x' : ' ';
-      lines[taskLine] = line.replace(/\[([xX ])\]/, `[${checkbox}]`);
+      const checkbox = newStatus === 'done' ? 'x' : newStatus === 'migrated' ? '>' : ' ';
+      lines[taskLine] = line.replace(/\[([xX> ])\]/, `[${checkbox}]`);
     }
   }
   return lines.join('\n');

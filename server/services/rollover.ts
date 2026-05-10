@@ -119,13 +119,20 @@ export async function applyRollover(
       }
     }
 
-    // 在源文件中将已迁移的任务标记为 done
+    // 在源文件中将已迁移的任务标记为 migrated（[>]），并记录迁移目标日期
     let fromContent = fromNote.content;
     // 按行号从大到小排序，确保修改不会影响其他任务的行号
     const sortedTasks = [...tasksToMigrate].sort((a, b) => (b.line ?? 0) - (a.line ?? 0));
     for (const task of sortedTasks) {
       if (task.line !== undefined) {
-        fromContent = updateTaskInMarkdown(fromContent, task.line, 'done');
+        // 先标记为 migrated
+        fromContent = updateTaskInMarkdown(fromContent, task.line, 'migrated');
+        // 再在行末追加迁移目标日期
+        const lines = fromContent.split('\n');
+        if (!lines[task.line].includes('↗ migrated:')) {
+          lines[task.line] = lines[task.line].trimEnd() + ` ↗ migrated:${toDate}`;
+        }
+        fromContent = lines.join('\n');
       }
     }
     await writeDailyNote(fromDate, fromContent, config);

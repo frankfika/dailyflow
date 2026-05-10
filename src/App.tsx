@@ -211,20 +211,22 @@ export default function App() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      // Auto rollover unfinished tasks from previous dates (always on)
-      try {
-        const rolloverResult = await rolloverApi.apply(date);
-        if (rolloverResult.migratedCount > 0) {
-          setToast({
-            message: language === 'zh'
-              ? `已自动迁移 ${rolloverResult.migratedCount} 个未完成任务`
-              : `Auto-migrated ${rolloverResult.migratedCount} unfinished tasks`,
-            type: 'info'
-          });
-          setTimeout(() => setToast(null), 2500);
+      // Auto rollover: only when loading today's date
+      if (date === getTodayStr()) {
+        try {
+          const rolloverResult = await rolloverApi.apply(date);
+          if (rolloverResult.migratedCount > 0) {
+            setToast({
+              message: language === 'zh'
+                ? `已自动迁移 ${rolloverResult.migratedCount} 个未完成任务`
+                : `Auto-migrated ${rolloverResult.migratedCount} unfinished tasks`,
+              type: 'info'
+            });
+            setTimeout(() => setToast(null), 2500);
+          }
+        } catch (rolloverErr) {
+          console.error('Auto-rollover failed', rolloverErr);
         }
-      } catch (rolloverErr) {
-        console.error('Auto-rollover failed', rolloverErr);
       }
 
       const data = await filesApi.get(date);
@@ -1091,6 +1093,7 @@ export default function App() {
                           {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
                         </span>
                       </h1>
+                      {currentFileDate === getTodayStr() && (
                       <button
                         onClick={handleManualRollover}
                         title={language === 'zh' ? '手动迁移历史未完成任务' : 'Migrate unfinished tasks from past'}
@@ -1099,6 +1102,7 @@ export default function App() {
                         <RefreshCw className="w-3 h-3" />
                         {language === 'zh' ? '迁移' : 'Rollover'}
                       </button>
+                      )}
                     </div>
                     {categories.length > 0 && (
                       <div className="flex flex-wrap items-center gap-2">
@@ -1504,6 +1508,42 @@ export default function App() {
                             </AnimatePresence>
                           </div>
                         )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* 已迁移任务区域 */}
+                  {(() => {
+                    const migratedTasks = contextFilteredTasks.filter(t => t.status === 'migrated');
+                    if (migratedTasks.length === 0) return null;
+                    const showMigrated = showDoneByCategory['__migrated__'] ?? false;
+                    return (
+                      <div className="space-y-3 mt-8">
+                        <button
+                          onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__migrated__': !prev['__migrated__'] }))}
+                          className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                        >
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showMigrated ? 'rotate-180' : ''}`} />
+                          <CornerUpRight className="w-3 h-3" />
+                          {language === 'zh' ? `已迁移 (${migratedTasks.length})` : `Migrated (${migratedTasks.length})`}
+                        </button>
+                        <AnimatePresence>
+                          {showMigrated && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-3 overflow-hidden">
+                              {migratedTasks.map(task => (
+                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-background border border-border/30 opacity-50">
+                                  <CornerUpRight className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                                  <span className="text-sm text-text-muted line-through flex-1 truncate">{task.title}</span>
+                                  {task.source_date && (
+                                    <span className="text-[10px] text-text-muted shrink-0">
+                                      {language === 'zh' ? `→ ${task.source_date}` : `→ ${task.source_date}`}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   })()}

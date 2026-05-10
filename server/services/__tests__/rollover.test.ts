@@ -155,9 +155,9 @@ describe('applyRollover', () => {
     const result = await applyRollover('2026-05-05', TEST_CONFIG);
     expect(result.migratedCount).toBe(1);
 
-    // Verify source file has task marked as done
+    // Verify source file has task marked as migrated
     const sourceContent = await readNote('2026-05-04');
-    expect(sourceContent).toContain('- [x] Task to migrate');
+    expect(sourceContent).toContain('- [>] Task to migrate');
   });
 
   it('migrates tasks from multiple previous dates', async () => {
@@ -174,12 +174,12 @@ describe('applyRollover', () => {
     expect(targetContent).toContain('Task from May 3');
     expect(targetContent).toContain('migrated:2026-05-03');
 
-    // Verify source files have tasks marked as done
+    // Verify source files have tasks marked as migrated
     const sourceMay2 = await readNote('2026-05-02');
-    expect(sourceMay2).toContain('- [x] Old task from May 2');
+    expect(sourceMay2).toContain('- [>] Old task from May 2');
 
     const sourceMay3 = await readNote('2026-05-03');
-    expect(sourceMay3).toContain('- [x] Task from May 3');
+    expect(sourceMay3).toContain('- [>] Task from May 3');
   });
 
   it('does not remigrate already done tasks', async () => {
