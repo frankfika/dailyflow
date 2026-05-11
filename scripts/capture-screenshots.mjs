@@ -4,8 +4,7 @@
  * Captures real screenshots from the running application
  *
  * Prerequisites:
- *   npm run dev    (frontend on port 5173)
- *   npm run server (backend on port 3003)
+ *   npm run dev:all  (frontend on port 3000, backend on port 3003)
  *
  * Usage:
  *   node scripts/capture-screenshots.mjs
@@ -22,7 +21,7 @@ const rootDir = join(__dirname, '..');
 const assetsDir = join(rootDir, 'docs', 'assets');
 
 const VIEWPORT = { width: 1280, height: 800 };
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = 'http://localhost:3000';
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));

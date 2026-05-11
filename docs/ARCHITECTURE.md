@@ -15,7 +15,7 @@
                                 │ HTTP / WebSocket optional
 ┌───────────────────────────────▼───────────────────────────┐
 │                       API Server                          │
-│ FastAPI                                                    │
+│ Express.js + TypeScript (tsx)                              │
 │ Task API · Project API · Migration API · Sync API          │
 └───────────────────────────────┬───────────────────────────┘
                                 │
@@ -48,35 +48,31 @@
 
 ```text
 dailyflow/
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   ├── pages/
-│   │   ├── components/
-│   │   ├── features/
-│   │   │   ├── daily/
-│   │   │   ├── projects/
-│   │   │   ├── mindmap/
-│   │   │   └── settings/
-│   │   └── api/
-│   └── package.json
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   │   ├── parser.py
-│   │   │   ├── rollover.py
-│   │   │   ├── writer.py
-│   │   │   ├── indexer.py
-│   │   │   ├── git_adapter.py
-│   │   │   └── mindmap.py
-│   │   ├── models/
-│   │   └── db/
-│   └── pyproject.toml
-├── data/
-├── docs/
-├── docker-compose.yml
-└── README.md
+├── src/                        # 前端代码 (React + TypeScript)
+│   ├── App.tsx                 # 主应用组件
+│   ├── components/             # UI 组件
+│   ├── api/                    # API 客户端
+│   └── types/                  # TypeScript 类型
+├── server/                     # 后端代码 (Express + TypeScript)
+│   ├── index.ts                # 服务器入口 (端口 3003)
+│   ├── routes/                 # API 路由
+│   │   ├── files.ts
+│   │   ├── tasks.ts
+│   │   ├── rollover.ts
+│   │   ├── config.ts
+│   │   └── git.ts
+│   ├── services/               # 业务逻辑
+│   │   ├── parser.ts
+│   │   ├── fileSystem.ts
+│   │   ├── rollover.ts
+│   │   ├── config.ts
+│   │   └── git.ts
+│   └── types/
+├── src-tauri/                  # Tauri 桌面应用 (Rust)
+├── e2e/                        # E2E 测试 (Playwright)
+├── scripts/                    # 工具脚本
+├── docs/                       # 文档
+└── index.html                  # Vite 入口
 ```
 
 ## 4. 数据流
@@ -179,26 +175,22 @@ git:
 
 ## 7. 核心实现伪代码
 
-```python
-class RolloverEngine:
-    def apply(self, target_date: date) -> RolloverResult:
-        source = self.daily_store.find_previous_existing(target_date)
-        target = self.daily_store.ensure_daily(target_date)
-        source_doc = self.parser.parse(source)
+```typescript
+// server/services/rollover.ts
+async function applyRollover(targetDate: string): Promise<RolloverResult> {
+  const sourceDate = findPreviousExisting(targetDate);
+  const sourceDoc = await parseMarkdown(sourceDate);
 
-        candidates = [
-            task for task in source_doc.tasks
-            if task.status == "todo"
-            and not task.has_tag("no-rollover")
-            and task.should_appear_on(target_date)
-            and not task.was_migrated_to(target_date)
-        ]
+  const candidates = sourceDoc.tasks.filter(task =>
+    task.status === 'todo'
+    && !task.hasTag('no-rollover')
+    && !task.wasMigratedTo(targetDate)
+  );
 
-        patch = self.writer.build_rollover_patch(target, source, candidates)
-        self.writer.apply_patch_with_hash_check(patch)
-        self.indexer.reindex_files([source.path, target.path])
-        self.git.maybe_commit(f"dailyflow: rollover {source.date} to {target_date}")
-        return RolloverResult(count=len(candidates), target=target.path)
+  const patch = buildRolloverPatch(targetDate, sourceDate, candidates);
+  await applyPatch(patch);
+  return { count: candidates.length, target: targetDate };
+}
 ```
 
 ## 8. SQLite Schema 草案
@@ -257,30 +249,22 @@ CREATE VIRTUAL TABLE task_search USING fts5(title, body, tags);
 ### 9.1 本地开发
 
 ```bash
-# frontend
-cd frontend
-npm install
-npm run dev
+# 同时启动前后端
+npm run dev:all
 
-# backend
-cd backend
-uv sync
-uv run fastapi dev app/main.py
+# 或分别启动
+npm run dev      # 前端 (Vite, 端口 3000)
+npm run server   # 后端 (Express, 端口 3003)
+
+# 启动 Tauri 桌面应用
+npm run tauri dev
 ```
 
-### 9.2 私有化部署
+### 9.2 构建桌面应用
 
-```yaml
-services:
-  dailyflow:
-    image: dailyflow/app:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-      - ./config:/config
-    environment:
-      - DAILYFLOW_CONFIG=/config/config.yml
+```bash
+npm run tauri build
+# 产物: src-tauri/target/release/bundle/dmg/DailyFlow_*.dmg
 ```
 
 ## 10. 风险与对策

@@ -95,7 +95,7 @@ npm run dev:all
 
 # 或分别启��
 npm run dev      # ��端 (端口 3000)
-npm run server   # 后端 (端口 3002)
+npm run server   # 后端 (端口 3003)
 ```
 
 ### 测试
@@ -105,9 +105,9 @@ npm run server   # 后端 (端口 3002)
 bash test-api.sh
 
 # 手动���试
-curl http://localhost:3002/health
-curl http://localhost:3002/api/config
-curl http://localhost:3002/api/tasks/2026-05-04
+curl http://localhost:3003/health
+curl http://localhost:3003/api/config
+curl http://localhost:3003/api/tasks/2026-05-04
 ```
 
 ### 配置
@@ -156,4 +156,27 @@ curl http://localhost:3002/api/tasks/2026-05-04
 
 ✅ **Phase 1 已完��** - ��有后端��础架构��核心 API 已实��并测���通过。
 
-后端服务��运行��� `http://localhost:3002`，所有 API 端点��常工���，可以开始��端集成。
+后端服务��运行��� `http://localhost:3003`，所有 API 端点��常工���，可以开始��端集成。
+
+---
+
+## ✅ Phase 2: 前端集成 + 扩展功能 - 已完成
+
+### 新增 API 端点
+
+#### 5. Git 同步 API (`/api/git`)
+- ✅ `GET /status` - 获取 git 仓库状态（是否有未提交更改）
+- ✅ `POST /sync` - 提交并推送到 GitHub（自动初始化仓库、设置 remote）
+
+#### 6. 配置管理扩展
+- ✅ GitHub 仓库和 Token 配置
+- ✅ AI Provider 配置（DeepSeek / Anthropic / OpenAI / Custom）
+- ✅ 工作区路径配置
+
+### 新增功能
+- ✅ GitHub 同步（commit + push）
+- ✅ AI 摘要生成（Brain Dump → 结构化任务）
+- ✅ AI API 连接验证
+- ✅ Tauri 桌面应用打包（macOS DMG）
+- ✅ 多语言支持（中/英）
+- ✅ 工作/生活上下文切换

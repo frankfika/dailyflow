@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 src-tauri/target/
+.playwright-mcp/
+*.dmg
