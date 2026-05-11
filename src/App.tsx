@@ -66,6 +66,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [gitHasChanges, setGitHasChanges] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
@@ -74,7 +75,7 @@ export default function App() {
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), type === 'error' ? 5000 : 3500);
   };
   const [brainDumpText, setBrainDumpText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -108,12 +109,15 @@ export default function App() {
   const [showGithubToken, setShowGithubToken] = useState<boolean>(false);
   const [githubVerifyStatus, setGithubVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [githubVerifyMsg, setGithubVerifyMsg] = useState<string>('');
+  const [githubConnected, setGithubConnected] = useState<boolean>(false);
   const [aiProvider, setAiProvider] = useState<'deepseek' | 'anthropic' | 'openai' | 'custom'>('deepseek');
   const [aiApiKey, setAiApiKey] = useState<string>('');
   const [aiModel, setAiModel] = useState<string>('');
   const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
   const [aiFormat, setAiFormat] = useState<'openai' | 'anthropic'>('openai');
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [aiVerifyStatus, setAiVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [aiVerifyMsg, setAiVerifyMsg] = useState<string>('');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
@@ -147,6 +151,25 @@ export default function App() {
         setWorkspaceRoot(config.workspaceRoot || '');
         setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
         setRolloverTrigger(config.rolloverTrigger || 'manual');
+
+        // Verify GitHub connection if repo and token are configured
+        if (config.githubRepo && config.githubToken) {
+          try {
+            const repoPath = config.githubRepo.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+            const [owner, repo] = repoPath.split('/');
+            if (owner && repo) {
+              const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+                headers: {
+                  'Authorization': `Bearer ${config.githubToken}`,
+                  'Accept': 'application/vnd.github.v3+json',
+                },
+              });
+              setGithubConnected(res.ok);
+            }
+          } catch {
+            setGithubConnected(false);
+          }
+        }
       } catch (e) {
         // ignore
       }
@@ -154,6 +177,22 @@ export default function App() {
     checkFirstRun();
     loadConfigData();
   }, []);
+
+  // Poll git status when connected
+  useEffect(() => {
+    if (!githubConnected) return;
+    const checkGitStatus = async () => {
+      try {
+        const status = await gitApi.getStatus();
+        setGitHasChanges(status.hasChanges);
+      } catch {
+        // workspace might not be a git repo yet
+      }
+    };
+    checkGitStatus();
+    const interval = setInterval(checkGitStatus, 10000);
+    return () => clearInterval(interval);
+  }, [githubConnected]);
 
   // Save activeContext when it changes
   useEffect(() => {
@@ -309,7 +348,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, [activeTab, currentFileDate]);
 
-  const hasChanges = markdown !== lastSyncedMD;
+  const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
   const generateAISummary = async () => {
     setIsGeneratingSummary(true);
@@ -551,24 +590,31 @@ export default function App() {
       const result = await gitApi.sync(commitMessage);
 
       if (result.success) {
-        alert(language === 'zh'
-          ? `成功提交并推送到 GitHub!\n提交哈希: ${result.commitHash?.substring(0, 7)}`
-          : `Successfully committed and pushed to GitHub!\nCommit: ${result.commitHash?.substring(0, 7)}`
+        showToast(
+          language === 'zh'
+            ? `✓ 已推送到 GitHub (${result.commitHash?.substring(0, 7)})`
+            : `✓ Pushed to GitHub (${result.commitHash?.substring(0, 7)})`,
+          'success'
         );
       } else {
         const errorMsg = result.stage === 'commit'
           ? (language === 'zh' ? '提交失败' : 'Commit failed')
           : (language === 'zh' ? '推送失败' : 'Push failed');
-        alert(`${errorMsg}: ${result.error}`);
+        showToast(`${errorMsg}: ${result.error}`, 'error');
       }
     } catch (e: any) {
       console.error('Sync failed', e);
-      alert(language === 'zh'
-        ? `同步失败: ${e.message}`
-        : `Sync failed: ${e.message}`
+      showToast(
+        language === 'zh' ? `同步失败: ${e.message}` : `Sync failed: ${e.message}`,
+        'error'
       );
     } finally {
       setIsSyncing(false);
+      // Refresh git status
+      try {
+        const status = await gitApi.getStatus();
+        setGitHasChanges(status.hasChanges);
+      } catch {}
     }
   };
 
@@ -710,15 +756,17 @@ export default function App() {
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-xl text-sm font-sans font-medium shadow-lg pointer-events-none ${
+            initial={{ opacity: 0, y: -30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -30, scale: 0.9 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3.5 rounded-2xl text-sm font-sans font-bold shadow-2xl pointer-events-none flex items-center gap-2.5 ${
               toast.type === 'error' ? 'bg-red-500 text-white' :
-              toast.type === 'info' ? 'bg-surface border border-border text-text-main' :
-              'bg-accent text-white'
+              toast.type === 'info' ? 'bg-surface border border-border text-text-main shadow-lg' :
+              'bg-green-500 text-white'
             }`}
           >
+            {toast.type === 'success' && <Check className="w-5 h-5" />}
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
             {toast.message}
           </motion.div>
         )}
@@ -953,27 +1001,27 @@ export default function App() {
           <div>
             <span className="text-[10px] uppercase font-sans tracking-widest font-bold text-text-muted opacity-60">{language === 'zh' ? '版本控制' : 'Version Control'}</span>
 
-            {!githubRepo ? (
-              /* 未配置 GitHub 仓库时显示引导 */
+            {!githubConnected ? (
+              /* GitHub 未配置或未验证通过时显示引导 */
               <div className="mt-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
                 <p className="text-[10px] text-text-muted leading-relaxed mb-2">
                   {language === 'zh'
-                    ? '配置 GitHub 仓库，自动备份你的笔记。'
-                    : 'Connect a GitHub repo to back up your notes automatically.'}
+                    ? (githubRepo ? '⚠️ GitHub 连接失败，请检查配置。' : '配置 GitHub 仓库，自动备份你的笔记。')
+                    : (githubRepo ? '⚠️ GitHub connection failed. Check your settings.' : 'Connect a GitHub repo to back up your notes automatically.')}
                 </p>
                 <button
-                  onClick={() => setShowSettings(true)}
+                  onClick={() => { setShowSettings(true); setConfigTab('github'); }}
                   className="w-full py-1.5 rounded-lg bg-accent text-white text-[10px] uppercase tracking-widest font-bold hover:bg-accent/90 transition-colors"
                 >
-                  {language === 'zh' ? '→ 前往 Configuration 配置' : '→ Go to Configuration'}
+                  {language === 'zh' ? '→ 前往配置' : '→ Configure GitHub'}
                 </button>
               </div>
             ) : (
-              /* 已配置时显示同步状态 */
+              /* 已验证通过时显示同步状态 */
               <>
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-accent-highlight border border-[#edcdb6]'}`}></div>
+                    <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-green-400'}`}></div>
                     <span className="text-xs font-medium text-text-main pr-1">
                       {hasChanges
                         ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes')
@@ -981,20 +1029,31 @@ export default function App() {
                     </span>
                   </div>
                 </div>
-                <p className="text-[10px] text-text-muted mt-1 truncate opacity-60" title={githubRepo}>
-                  {githubRepo.replace('https://github.com/', '')}
+                <p className="text-[10px] text-text-muted mt-1 truncate opacity-60" title={githubRepo || ''}>
+                  {(githubRepo || '').replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')}
                 </p>
               </>
             )}
           </div>
 
-          {githubRepo && (
+          {githubConnected && (
             <button
               onClick={handleGitSync}
               disabled={isSyncing || !hasChanges}
-              className="w-full bg-surface-white border border-border text-text-main py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+              className={`w-full py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${
+                isSyncing
+                  ? 'bg-accent text-white border border-accent scale-[0.97]'
+                  : 'bg-surface-white border border-border text-text-main hover:border-accent hover:text-accent active:scale-95 disabled:opacity-50'
+              }`}
             >
-              {isSyncing ? (language === 'zh' ? '正在同步...' : 'Syncing...') : (language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub')}
+              {isSyncing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{language === 'zh' ? '正在同步...' : 'Syncing...'}</span>
+                </>
+              ) : (
+                <span>{language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub'}</span>
+              )}
             </button>
           )}
         </div>
@@ -1017,6 +1076,13 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-text-muted hover:text-text-main transition-colors rounded-lg hover:bg-surface"
+              title={language === 'zh' ? '设置' : 'Settings'}
+            >
+              <Settings className="w-4.5 h-4.5" />
+            </button>
             <ContextSwitcher
               activeContext={activeContext}
               onChange={setActiveContext}
@@ -1978,6 +2044,63 @@ export default function App() {
                        </a>
                      )}
                    </p>
+
+                   {/* AI Test Connection */}
+                   <button
+                     disabled={!aiApiKey || aiVerifyStatus === 'loading'}
+                     onClick={async () => {
+                       setAiVerifyStatus('loading');
+                       setAiVerifyMsg('');
+                       try {
+                         let testUrl = '';
+                         let testModel = aiModel || '';
+                         let headers: Record<string, string> = {};
+                         let body: any = {};
+
+                         if (aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic')) {
+                           testUrl = aiProvider === 'custom' && aiBaseUrl ? aiBaseUrl : 'https://api.anthropic.com/v1/messages';
+                           testModel = testModel || 'claude-3-5-sonnet-20241022';
+                           headers = { 'x-api-key': aiApiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' };
+                           body = { model: testModel, max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] };
+                         } else {
+                           if (aiProvider === 'deepseek') { testUrl = 'https://api.deepseek.com/chat/completions'; testModel = testModel || 'deepseek-chat'; }
+                           else if (aiProvider === 'openai') { testUrl = 'https://api.openai.com/v1/chat/completions'; testModel = testModel || 'gpt-4o'; }
+                           else if (aiProvider === 'custom' && aiBaseUrl) { testUrl = aiBaseUrl; }
+                           headers = { 'Authorization': `Bearer ${aiApiKey}`, 'Content-Type': 'application/json' };
+                           body = { model: testModel, max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] };
+                         }
+
+                         if (!testUrl) throw new Error(language === 'zh' ? '请填写 API 端点' : 'API endpoint required');
+
+                         const res = await fetch(testUrl, { method: 'POST', headers, body: JSON.stringify(body) });
+                         if (res.ok) {
+                           setAiVerifyStatus('success');
+                           setAiVerifyMsg(language === 'zh' ? `✓ 连接成功 (${testModel})` : `✓ Connected (${testModel})`);
+                         } else {
+                           const errData = await res.json().catch(() => ({}));
+                           setAiVerifyStatus('error');
+                           setAiVerifyMsg(language === 'zh' ? `✗ 验证失败: ${errData.error?.message || res.status}` : `✗ Failed: ${errData.error?.message || res.status}`);
+                         }
+                       } catch (e: any) {
+                         setAiVerifyStatus('error');
+                         setAiVerifyMsg(language === 'zh' ? `✗ 连接失败: ${e.message}` : `✗ Connection failed: ${e.message}`);
+                       }
+                     }}
+                     className={`mt-3 w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors ${
+                       aiVerifyStatus === 'success' ? 'bg-green-500 text-white' :
+                       aiVerifyStatus === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/30' :
+                       'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
+                     } disabled:opacity-50`}
+                   >
+                     {aiVerifyStatus === 'loading'
+                       ? (language === 'zh' ? '验证中...' : 'Verifying...')
+                       : (language === 'zh' ? '测试连接' : 'Test Connection')}
+                   </button>
+                   {aiVerifyMsg && (
+                     <p className={`text-xs mt-1.5 ${aiVerifyStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                       {aiVerifyMsg}
+                     </p>
+                   )}
                 </div>
                 </div>
               )}
@@ -2023,7 +2146,7 @@ export default function App() {
                        <li>
                          <strong>{language === 'zh' ? '填写配置并测试' : 'Fill Configuration and Test'}</strong>
                          <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
-                           <li>{language === 'zh' ? '在下方填写仓库名称（格式：username/repo-name）' : 'Fill in repository name below (format: username/repo-name)'}</li>
+                           <li>{language === 'zh' ? '在下方粘贴仓库链接（如 https://github.com/username/repo-name）' : 'Paste repository URL below (e.g. https://github.com/username/repo-name)'}</li>
                            <li>{language === 'zh' ? '粘贴刚才复制的 Personal Access Token' : 'Paste the Personal Access Token you just copied'}</li>
                            <li>{language === 'zh' ? '点击 "测试连接" 验证配置是否正确' : 'Click "Test Connection" to verify configuration'}</li>
                          </ul>
@@ -2052,13 +2175,13 @@ export default function App() {
                      {/* Repository */}
                      <div>
                        <label className="text-xs text-text-muted mb-1 block">
-                         {language === 'zh' ? '仓库名称' : 'Repository Name'}
+                         {language === 'zh' ? 'GitHub 仓库链接' : 'GitHub Repository URL'}
                        </label>
                        <input
                          type="text"
                          value={githubRepoInput}
                          onChange={e => setGithubRepoInput(e.target.value)}
-                         placeholder={language === 'zh' ? "username/dailyflow-notes" : "username/dailyflow-notes"}
+                         placeholder="https://github.com/username/repo-name"
                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
                        />
                      </div>
@@ -2099,9 +2222,11 @@ export default function App() {
                          setGithubVerifyMsg('');
 
                          try {
-                           const [owner, repo] = githubRepoInput.split('/');
+                           // Support both "owner/repo" and "https://github.com/owner/repo"
+                           const repoPath = githubRepoInput.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+                           const [owner, repo] = repoPath.split('/');
                            if (!owner || !repo) {
-                             throw new Error(language === 'zh' ? '仓库名称格式错误，应为 username/repo-name' : 'Invalid repository format, should be username/repo-name');
+                             throw new Error(language === 'zh' ? '仓库链接格式错误，应为 https://github.com/username/repo-name' : 'Invalid format, should be https://github.com/username/repo-name');
                            }
 
                            const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
@@ -2190,6 +2315,7 @@ export default function App() {
                        aiFormat,
                      });
                      setGithubRepo(githubRepoInput.trim() || null);
+                    setGithubConnected(githubVerifyStatus === 'success');
 
                      // If workspace path changed, reload everything
                      if (workspaceChanged) {

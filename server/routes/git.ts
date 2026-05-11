@@ -66,6 +66,31 @@ router.post('/sync', async (req, res) => {
       return res.status(400).json({ error: 'Commit message is required' });
     }
 
+    const config = await loadConfig();
+
+    // 0. 确保 git 仓库已初始化并设置了 remote
+    const initResult = await initGitRepo();
+    if (!initResult.success) {
+      return res.json({
+        success: false,
+        error: initResult.error,
+        stage: 'init',
+      });
+    }
+
+    if (config.githubRepo && config.githubToken) {
+      const repoPath = config.githubRepo.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+      const remoteUrl = `https://${config.githubToken}@github.com/${repoPath}.git`;
+      const remoteResult = await setRemoteRepo(remoteUrl);
+      if (!remoteResult.success) {
+        return res.json({
+          success: false,
+          error: remoteResult.error,
+          stage: 'remote',
+        });
+      }
+    }
+
     // 1. 提交更改
     const commitResult = await commitChanges(message);
     if (!commitResult.success) {

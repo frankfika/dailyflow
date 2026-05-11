@@ -150,11 +150,16 @@ export async function pushToRemote(): Promise<GitPushResult> {
   try {
     // 获取当前分支
     const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: workspaceRoot });
-    const branch = branchOutput.trim();
+    let branch = branchOutput.trim();
 
-    // 推送到远程
+    // 如果没有分支名（初始提交前），默认用 main
+    if (!branch) {
+      branch = 'main';
+    }
+
+    // 推送到远程（使用 -u 设置上游追踪）
     const { stdout: pushOutput } = await execAsync(
-      `git push origin ${branch}`,
+      `git push -u origin ${branch}`,
       { cwd: workspaceRoot }
     );
 
