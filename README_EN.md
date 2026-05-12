@@ -40,11 +40,12 @@ DailyFlow is a **local-first** daily task management desktop app. It uses Markdo
 
 ### 1. Automatic Task Rollover
 
-Unfinished tasks automatically migrate to today when you open the app, with source date tracking. Manual preview and confirmation also supported.
+Unfinished tasks automatically migrate to today when you open the app, with source date tracking. Already-migrated tasks are never duplicated.
 
 - **Auto-migrate**: Detects and migrates on app launch
 - **Manual rollover**: Preview tasks before confirming migration
 - **Source tracking**: Each migrated task shows its original date
+- **No duplicates**: Tasks marked as migrated (`[>]`) won't appear in the migration list again
 
 ### 2. Visual + Markdown Dual Mode
 

@@ -23,9 +23,10 @@ export async function previewRollover(
     const fromNote = await readDailyNote(fromDate, config);
     if (!fromNote) continue;
 
-    // 过滤未完成任务（排除 no-rollover 标签）
+    // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签）
     const tasksToMigrate = fromNote.tasks.filter(task => {
       if (task.status === 'done') return false;
+      if (task.status === 'migrated') return false;
       if (task.tags?.some(tag => config.rolloverSkipTags.includes(tag))) return false;
       return true;
     });
@@ -87,9 +88,10 @@ export async function applyRollover(
     const fromNote = await readDailyNote(fromDate, config);
     if (!fromNote) continue;
 
-    // 过滤未完成任务（排除 no-rollover 标签）
+    // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签）
     const tasksToMigrate = fromNote.tasks.filter(task => {
       if (task.status === 'done') return false;
+      if (task.status === 'migrated') return false;
       if (task.tags?.some(tag => config.rolloverSkipTags.includes(tag))) return false;
       return true;
     });
