@@ -944,13 +944,13 @@ export default function App() {
               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
               <ul className="space-y-3 text-sm font-sans">
                 <li 
-                  onClick={() => { setActiveTab('today'); setIsSidebarOpen(false); }}
+                  onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
                   className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                 >
                   <span className="ml-4">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
                 </li>
-                <li 
-                  onClick={() => { setActiveTab('projects'); setIsSidebarOpen(false); }}
+                <li
+                  onClick={() => { setActiveTab('projects'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
                   className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'projects' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                 >
                   <span className="ml-4">{language === 'zh' ? '项目概览' : 'Projects Focus'}</span>
@@ -968,7 +968,7 @@ export default function App() {
                        onClick={() => {
                          setActiveTab('today');
                          setSelectedCategory(selectedCategory === c ? null : c);
-                         setIsSidebarOpen(false);
+                         if (window.innerWidth < 1024) setIsSidebarOpen(false);
                        }}
                        className={`flex items-center gap-3 cursor-pointer transition-colors ${selectedCategory === c ? 'text-accent font-semibold' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                     >
