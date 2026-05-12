@@ -799,8 +799,8 @@ export default function App() {
               </p>
               <div className="space-y-2 max-h-48 overflow-y-auto mb-5">
                 {rolloverPreview.tasksToMigrate.map((t, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-text-main">
-                    <span className="mt-0.5 w-3.5 h-3.5 rounded border border-border/80 shrink-0 inline-block" />
+                  <div key={i} className="flex items-center gap-2.5 text-sm text-text-main py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
                     <span className="flex-1 truncate">{t.title}</span>
                     {t.source_date && <span className="text-[10px] text-text-muted shrink-0">{t.source_date}</span>}
                   </div>
