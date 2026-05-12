@@ -713,7 +713,8 @@ export default function App() {
     ? tasks.filter(t => t.tags?.includes('life'))
     : tasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
-  const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !['work', 'life'].includes(tag)))));
+  const systemTags = ['work', 'life', 'delayed', 'tasks'];
+  const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1475,7 +1476,10 @@ export default function App() {
                   )}
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
-                    const catTasks = todayTasks.filter(t => t.tags?.includes(category));
+                    const catTasks = todayTasks.filter(t => {
+                      const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
+                      return taskCategories[0] === category;
+                    });
 
                     const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
                     const doneCatTasks = catTasks.filter(t => t.status === 'done');
@@ -1547,9 +1551,10 @@ export default function App() {
                   })}
                   {/* 兜底：显示没有任何 category tag 的任务 */}
                   {(() => {
-                    const uncategorized = todayTasks.filter(t =>
-                      !categories.some(c => t.tags?.includes(c))
-                    );
+                    const uncategorized = todayTasks.filter(t => {
+                      const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
+                      return taskCategories.length === 0;
+                    });
                     if (uncategorized.length === 0) return null;
                     if (selectedCategory) return null;
                     const pending = uncategorized.filter(t => t.status !== 'done');
