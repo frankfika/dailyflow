@@ -41,23 +41,27 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
     const stats = await fs.stat(filePath);
     let tasks = parseMarkdown(content);
 
-    // Deduplicate: if multiple tasks have the same title and status, keep only the first
+    // Deduplicate: remove tasks whose raw markdown line is identical
+    const lines = content.split('\n');
     const seen = new Set<string>();
     const duplicateLines: number[] = [];
     const uniqueTasks: typeof tasks = [];
     for (const task of tasks) {
-      const key = `${task.title}|${task.status}`;
-      if (seen.has(key)) {
-        if (task.line !== undefined) duplicateLines.push(task.line);
+      if (task.line === undefined) {
+        uniqueTasks.push(task);
+        continue;
+      }
+      const rawLine = lines[task.line];
+      if (seen.has(rawLine)) {
+        duplicateLines.push(task.line);
       } else {
-        seen.add(key);
+        seen.add(rawLine);
         uniqueTasks.push(task);
       }
     }
 
     // If duplicates found, remove them from the file
     if (duplicateLines.length > 0) {
-      const lines = content.split('\n');
       const linesToRemove = new Set(duplicateLines);
       const cleanedLines = lines.filter((_, idx) => !linesToRemove.has(idx));
       const cleanedContent = cleanedLines.join('\n');
