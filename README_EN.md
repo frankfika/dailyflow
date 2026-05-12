@@ -52,7 +52,7 @@ Switch freely between a polished visual interface and raw Markdown editing. Data
 
 ### 3. AI Brain Dump
 
-Dump scattered thoughts in one go. AI extracts tasks, categorizes them, and sets deadlines. Supports DeepSeek, OpenAI, Anthropic, and custom providers.
+Dump scattered thoughts in one go. AI extracts tasks, categorizes them, and sets deadlines. Supports DeepSeek, OpenAI, Anthropic, and custom providers. Built-in connection test to verify your API key in one click.
 
 ### 4. Work/Life Context Switching
 
@@ -64,7 +64,7 @@ Aggregate all pending tasks across dates, organized by category and project for 
 
 ### 6. Git Sync
 
-One-click commit to GitHub. Automatic backup for all your notes and task data.
+One-click commit to GitHub. Automatic backup for all your notes and task data. Auto-verifies connection on launch and shows real-time change status.
 
 ## 📸 Screenshots
 
@@ -100,8 +100,7 @@ cd dailyflow
 npm install
 
 # Start dev servers (frontend + backend)
-npm run dev      # Vite dev server (frontend)
-npm run server   # Express server on port 3003
+npm run dev:all  # Start both frontend and backend
 
 # Or launch the Tauri desktop app
 npm run tauri dev

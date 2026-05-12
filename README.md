@@ -52,7 +52,7 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ### 3. AI Brain Dump
 
-把零散想法一股脑倒进去，AI 自动提取任务、分类、设置截止日期。支持 DeepSeek、OpenAI、Anthropic 等多种 AI 服务。
+把零散想法一股脑倒进去，AI 自动提取任务、分类、设置截止日期。支持 DeepSeek、OpenAI、Anthropic 等多种 AI 服务，内置连接测试一键验证配置。
 
 ### 4. 工作/生活上下文切换
 
@@ -64,7 +64,7 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ### 6. Git 同步
 
-一键提交到 GitHub，自动备份你的所有笔记和任务数据。
+一键提交到 GitHub，自动备份你的所有笔记和任务数据。启动时自动验证连接状态，实时显示未提交更改。
 
 ## 📸 界面预览
 
@@ -100,8 +100,7 @@ cd dailyflow
 npm install
 
 # 启动开发服务器（前端 + 后端）
-npm run dev      # 前端 Vite dev server
-npm run server   # 后端 Express server (端口 3003)
+npm run dev:all  # 同时启动前端和后端
 
 # 或者启动 Tauri 桌面应用
 npm run tauri dev
