@@ -41,12 +41,12 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
     const stats = await fs.stat(filePath);
     let tasks = parseMarkdown(content);
 
-    // Deduplicate: if multiple tasks have the same title+status+tags, keep only the first
+    // Deduplicate: if multiple tasks have the same title and status, keep only the first
     const seen = new Set<string>();
     const duplicateLines: number[] = [];
     const uniqueTasks: typeof tasks = [];
     for (const task of tasks) {
-      const key = `${task.title}|${task.status}|${(task.tags || []).sort().join(',')}`;
+      const key = `${task.title}|${task.status}`;
       if (seen.has(key)) {
         if (task.line !== undefined) duplicateLines.push(task.line);
       } else {
