@@ -8,4 +8,6 @@ coverage/
 !.env.example
 src-tauri/target/
 .playwright-mcp/
+test-results/
+playwright-report/
 *.dmg

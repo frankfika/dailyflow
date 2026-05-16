@@ -15,7 +15,7 @@
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
 
-[Features](#-features) • [Screenshots](#-screenshots) • [Quick Start](#-quick-start) • [Architecture](#-architecture)
+[Features](#-features) • [Download](#-download) • [Screenshots](#-screenshots) • [Quick Start](#-quick-start) • [Architecture](#-architecture)
 
 [简体中文](./README.md) | __English__
 
@@ -35,6 +35,19 @@ DailyFlow is a **local-first** daily task management desktop app. It uses Markdo
 | Requires internet to function | Offline-first, always available |
 | Complex project management UI | Minimal design, focused on today |
 | Incompatible with Obsidian/other editors | Native Markdown, works everywhere |
+
+## 📦 Download
+
+Grab the installer for your platform from [Releases](https://github.com/frankfika/dailyflow/releases/latest):
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
+| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
+| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+
+> macOS: builds are not notarized. On first launch, **right-click the app → Open** in Finder to bypass Gatekeeper.
 
 ## ✨ Features
 
@@ -81,14 +94,7 @@ One-click commit to GitHub. Automatic backup for all your notes and task data. C
 
 ### Option 1: Download from Releases (Recommended)
 
-Go to [Releases](https://github.com/frankfika/dailyflow/releases) and download for your platform:
-
-| Platform | File |
-|----------|------|
-| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
-| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
-| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
-| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+See the [📦 Download](#-download) section above.
 
 ### Option 2: Run from Source
 

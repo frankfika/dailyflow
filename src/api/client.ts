@@ -23,7 +23,7 @@ export interface DailyNoteData {
 export interface ConfigData {
   workspaceRoot: string;
   dailyPathTemplate: string;
-  rolloverTrigger: string;
+  rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
   githubRepo?: string;
   githubToken?: string;

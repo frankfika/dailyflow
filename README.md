@@ -15,7 +15,7 @@
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
 
-[核心功能](#-核心功能) • [界面预览](#-界面预览) • [快速开始](#-快速开始) • [架构设计](#-架构设计)
+[核心功能](#-核心功能) • [下载](#-下载) • [界面预览](#-界面预览) • [快速开始](#-快速开始) • [架构设计](#-架构设计)
 
 __简体中文__ | [English](./README_EN.md)
 
@@ -35,6 +35,19 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 | 需要网络才能使用 | 离线优先，随时可用 |
 | 复杂的项目管理界面 | 极简设计，专注当日 |
 | 与 Obsidian 等工具不兼容 | 原生 Markdown，无缝衔接 |
+
+## 📦 下载
+
+前往 [Releases](https://github.com/frankfika/dailyflow/releases/latest) 下载对应平台的安装包：
+
+| 平台 | 文件 |
+|------|------|
+| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
+| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
+| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+
+> macOS 用户：当前发行版未做苹果公证，首次打开时请在「访达」里**右键 → 打开**，绕过 Gatekeeper 提示。
 
 ## ✨ 核心功能
 
@@ -81,14 +94,7 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ### 方式一：下载安装包（推荐）
 
-前往 [Releases](https://github.com/frankfika/dailyflow/releases) 下载对应平台的安装包：
-
-| 平台 | 文件 |
-|------|------|
-| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
-| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
-| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
-| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+见上方 [📦 下载](#-下载) 章节。
 
 ### 方式二：从源码运行
 

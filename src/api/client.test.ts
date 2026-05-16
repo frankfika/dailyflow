@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { filesApi, tasksApi, rolloverApi, configApi, projectsApi, gitApi } from './client';
+import { filesApi, tasksApi, rolloverApi, configApi, projectsApi, gitApi, type ConfigData } from './client';
 
 describe('API Client', () => {
   beforeEach(() => {
@@ -89,7 +89,7 @@ describe('API Client', () => {
   describe('configApi', () => {
     it('update calls POST with config body', async () => {
       global.fetch = vi.fn().mockResolvedValue({ ok: true });
-      const config = {
+      const config: ConfigData = {
         workspaceRoot: '/tmp/test',
         dailyPathTemplate: '{date}.md',
         rolloverTrigger: 'manual',
