@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
@@ -48,6 +48,27 @@ const getTagColor = (tag: string) => {
   }
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 };
+
+async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
+  if (!repoUrl || !token) return false;
+  try {
+    const repoPath = repoUrl
+      .replace(/^https?:\/\/github\.com\//, '')
+      .replace(/\.git$/, '')
+      .replace(/\/$/, '');
+    const [owner, repo] = repoPath.split('/');
+    if (!owner || !repo) return false;
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 function getTodayStr(): string {
   const d = new Date();
@@ -100,6 +121,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([]);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectTagFilter, setProjectTagFilter] = useState<string | null>(null);
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
@@ -154,21 +177,8 @@ export default function App() {
 
         // Verify GitHub connection if repo and token are configured
         if (config.githubRepo && config.githubToken) {
-          try {
-            const repoPath = config.githubRepo.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
-            const [owner, repo] = repoPath.split('/');
-            if (owner && repo) {
-              const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-                headers: {
-                  'Authorization': `Bearer ${config.githubToken}`,
-                  'Accept': 'application/vnd.github.v3+json',
-                },
-              });
-              setGithubConnected(res.ok);
-            }
-          } catch {
-            setGithubConnected(false);
-          }
+          const ok = await verifyGithubConnection(config.githubRepo, config.githubToken);
+          setGithubConnected(ok);
         }
       } catch (e) {
         // ignore
@@ -1011,7 +1021,18 @@ export default function App() {
                     : (githubRepo ? '⚠️ GitHub connection failed. Check your settings.' : 'Connect a GitHub repo to back up your notes automatically.')}
                 </p>
                 <button
-                  onClick={() => { setShowSettings(true); setConfigTab('github'); }}
+                  onClick={async () => {
+                    // If we have credentials, try verifying first — don't redirect if it actually works
+                    if (githubRepo && githubToken) {
+                      const ok = await verifyGithubConnection(githubRepo, githubToken);
+                      if (ok) {
+                        setGithubConnected(true);
+                        return;
+                      }
+                    }
+                    setShowSettings(true);
+                    setConfigTab('github');
+                  }}
                   className="w-full py-1.5 rounded-lg bg-accent text-white text-[10px] uppercase tracking-widest font-bold hover:bg-accent/90 transition-colors"
                 >
                   {language === 'zh' ? '→ 前往配置' : '→ Configure GitHub'}
@@ -1666,63 +1687,130 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="space-y-12"
+                  className="space-y-8"
                 >
-                  <div className="mb-8">
+                  <div className="mb-4">
                     <h1 className="text-4xl font-serif font-light text-text-heading tracking-tight italic mb-2">
                        {language === 'zh' ? '项目概览' : 'Projects Focus'}
                     </h1>
                     <p className="text-text-muted font-sans text-sm">
-                       {language === 'zh' ? '按类别查看所有待办任务。' : 'View all pending tasks organized by category.'}
+                       {language === 'zh' ? '按类别查看所有待办任务，支持搜索和筛选。' : 'All pending tasks by category. Search and filter.'}
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                    {(() => {
-                      const filteredPending = activeContext === 'life'
-                        ? allPendingTasks.filter(t => t.tags?.includes('life'))
-                        : allPendingTasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
-                      const projectCats = Array.from(new Set(filteredPending.flatMap(t => t.tags || [])));
+                  {(() => {
+                    const contextFiltered = activeContext === 'life'
+                      ? allPendingTasks.filter(t => t.tags?.includes('life'))
+                      : allPendingTasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
+                    const systemTags = ['work', 'life', 'delayed', 'tasks', 'migrated'];
+                    const allTags = Array.from(new Set(contextFiltered.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
 
-                      if (projectCats.length === 0) {
-                        return (
-                          <div className="col-span-full py-20 text-center bg-surface-white rounded-[32px] border border-border/50 shadow-sm mt-8">
-                            <Briefcase className="w-12 h-12 text-text-muted mx-auto mb-6 opacity-30 stroke-[1.5]" />
-                            <h3 className="font-serif italic text-3xl text-text-muted font-light">{language === 'zh' ? '暂无活跃项目。' : 'No active projects.'}</h3>
-                          </div>
-                        );
+                    let filtered = contextFiltered;
+                    if (projectTagFilter) {
+                      filtered = filtered.filter(t => t.tags?.includes(projectTagFilter));
+                    }
+                    if (projectSearch.trim()) {
+                      const q = projectSearch.trim().toLowerCase();
+                      filtered = filtered.filter(t => t.title.toLowerCase().includes(q));
+                    }
+                    filtered.sort((a, b) => (b.source_date || '').localeCompare(a.source_date || ''));
+
+                    const groupedByTag: Record<string, Task[]> = {};
+                    filtered.forEach(t => {
+                      const taskTags = (t.tags || []).filter(tag => !systemTags.includes(tag));
+                      const primaryTag = projectTagFilter || taskTags[0] || (language === 'zh' ? '未分类' : 'Uncategorized');
+                      if (!groupedByTag[primaryTag]) groupedByTag[primaryTag] = [];
+                      if (!groupedByTag[primaryTag].some(existing => existing.id === t.id)) {
+                        groupedByTag[primaryTag].push(t);
                       }
+                    });
 
-                      return projectCats.map(cat => {
-                        const catTasks = filteredPending.filter(t => t.tags?.includes(cat));
-                        return (
-                          <div key={cat} className="bg-surface-white rounded-[32px] border border-border shadow-sm p-6 overflow-hidden flex flex-col h-[500px]">
-                            <h2 className="flex items-center gap-3 text-[14px] uppercase tracking-widest font-bold text-text-heading mb-6 shrink-0">
-                               <Briefcase className="w-4 h-4 text-accent" />
-                               <span className="truncate">{cat}</span>
-                               <span className="ml-auto text-[10px] text-text-muted bg-surface px-2 py-1 rounded-full">{catTasks.length}</span>
-                            </h2>
-                            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                              {catTasks.slice().reverse().map(task => (
-                                <div key={task.id + task.source_date} className="p-4 rounded-2xl bg-surface border border-border/50 hover:border-accent/40 transition-colors">
-                                  <div className="flex items-start gap-3">
-                                    <div className="w-5 h-5 rounded border border-border/80 flex items-center justify-center shrink-0 mt-0.5 bg-background shadow-inner"></div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-semibold text-text-heading text-sm break-words leading-tight">{task.title}</p>
-                                      <p className="text-[10px] text-text-muted font-sans font-bold tracking-widest uppercase mt-3 flex items-center gap-1.5 opacity-60">
-                                        <Calendar className="w-3 h-3" />
-                                        {task.source_date}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                    return (
+                      <>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                            <input
+                              type="text"
+                              value={projectSearch}
+                              onChange={e => setProjectSearch(e.target.value)}
+                              placeholder={language === 'zh' ? '搜索任务...' : 'Search tasks...'}
+                              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-white border border-border text-sm outline-none focus:border-accent transition-colors"
+                            />
+                            {projectSearch && (
+                              <button onClick={() => setProjectSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
-                        );
-                      });
-                    })()}
-                  </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setProjectTagFilter(null)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${!projectTagFilter ? 'bg-accent text-white border-accent' : 'bg-surface-white text-text-muted border-border hover:border-accent/50'}`}
+                          >
+                            {language === 'zh' ? '全部' : 'All'} ({contextFiltered.length})
+                          </button>
+                          {allTags.sort().map(tag => (
+                            <button
+                              key={tag}
+                              onClick={() => setProjectTagFilter(projectTagFilter === tag ? null : tag)}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${projectTagFilter === tag ? 'bg-accent text-white border-accent' : 'bg-surface-white text-text-muted border-border hover:border-accent/50'}`}
+                            >
+                              {tag} ({contextFiltered.filter(t => t.tags?.includes(tag)).length})
+                            </button>
+                          ))}
+                        </div>
+
+                        {Object.keys(groupedByTag).length === 0 ? (
+                          <div className="py-20 text-center bg-surface-white rounded-[32px] border border-border/50 shadow-sm">
+                            <Search className="w-12 h-12 text-text-muted mx-auto mb-6 opacity-30 stroke-[1.5]" />
+                            <h3 className="font-serif italic text-2xl text-text-muted font-light">
+                              {projectSearch ? (language === 'zh' ? '没有匹配的任务' : 'No matching tasks') : (language === 'zh' ? '暂无待办任务' : 'No pending tasks')}
+                            </h3>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {Object.entries(groupedByTag).map(([cat, catTasks]) => (
+                              <div key={cat} className="bg-surface-white rounded-[32px] border border-border shadow-sm p-6 overflow-hidden flex flex-col h-[500px]">
+                                <h2 className="flex items-center gap-3 text-[14px] uppercase tracking-widest font-bold text-text-heading mb-6 shrink-0">
+                                  <Briefcase className="w-4 h-4 text-accent" />
+                                  <span className="truncate">{cat}</span>
+                                  <span className="ml-auto text-[10px] text-text-muted bg-surface px-2 py-1 rounded-full">{catTasks.length}</span>
+                                </h2>
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                                  {catTasks.map(task => (
+                                    <div key={task.id + task.source_date} className="p-4 rounded-2xl bg-surface border border-border/50 hover:border-accent/40 transition-colors">
+                                      <div className="flex items-start gap-3">
+                                        <div className="w-5 h-5 rounded border border-border/80 flex items-center justify-center shrink-0 mt-0.5 bg-background shadow-inner"></div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-semibold text-text-heading text-sm break-words leading-tight">{task.title}</p>
+                                          <div className="flex items-center gap-3 mt-2">
+                                            <p className="text-[10px] text-text-muted font-sans font-bold tracking-widest uppercase flex items-center gap-1 opacity-60">
+                                              <Calendar className="w-3 h-3" />
+                                              {task.source_date}
+                                            </p>
+                                            {task.tags && task.tags.filter(tag => !systemTags.includes(tag) && tag !== cat).length > 0 && (
+                                              <div className="flex gap-1">
+                                                {task.tags.filter(tag => !systemTags.includes(tag) && tag !== cat).map(tag => (
+                                                  <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold uppercase tracking-wider">{tag}</span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </motion.div>
               ) : (
                 <div className="py-32 text-center bg-surface-white rounded-[48px] border border-border/50 shadow-sm mt-8">
@@ -2320,7 +2408,17 @@ export default function App() {
                        aiFormat,
                      });
                      setGithubRepo(githubRepoInput.trim() || null);
-                    setGithubConnected(githubVerifyStatus === 'success');
+                    // Auto-verify connection on save instead of relying on manual Test Connection click
+                    const trimmedRepo = githubRepoInput.trim();
+                    const trimmedToken = githubToken.trim();
+                    if (trimmedRepo && trimmedToken) {
+                      const ok = githubVerifyStatus === 'success'
+                        ? true
+                        : await verifyGithubConnection(trimmedRepo, trimmedToken);
+                      setGithubConnected(ok);
+                    } else {
+                      setGithubConnected(false);
+                    }
 
                      // If workspace path changed, reload everything
                      if (workspaceChanged) {

@@ -61,11 +61,11 @@ Toggle between Work and Life modes with one click. Tasks filter automatically by
 
 ### 5. Projects Overview
 
-Aggregate all pending tasks across dates, organized by category and project for a bird's-eye view.
+Aggregate all pending tasks across dates, organized by category and project for a bird's-eye view. Keyword search and tag filters help you zero in on any project.
 
 ### 6. Git Sync
 
-One-click commit to GitHub. Automatic backup for all your notes and task data. Auto-verifies connection on launch and shows real-time change status.
+One-click commit to GitHub. Automatic backup for all your notes and task data. Connection auto-verifies on launch, sidebar click, and config save — no need to hit "Test Connection" manually.
 
 ## 📸 Screenshots
 
