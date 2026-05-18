@@ -962,6 +962,7 @@ export default function App() {
                                       language={language}
                                       categories={categories}
                                       currentFileDate={currentFileDate}
+                                      linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
                                       onToggle={() => handleToggleTask(task.id)}
                                       onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
@@ -1028,6 +1029,7 @@ export default function App() {
                                       language={language}
                                       categories={categories}
                                       currentFileDate={currentFileDate}
+                                      linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
                                       onToggle={() => handleToggleTask(task.id)}
                                       onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
