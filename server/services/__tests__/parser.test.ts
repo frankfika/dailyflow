@@ -218,6 +218,14 @@ describe('editTaskFullInMarkdown', () => {
     expect(result).toContain('- [ ] Next task');
   });
 
+  it('can edit a migrated task title', () => {
+    const md = '- [>] Migrated task #work ↗ migrated:2026-05-01 ^id-mig1\n';
+    const result = editTaskFullInMarkdown(md, 0, { title: 'Updated migrated task', tags: ['work'] }, '2026-05-05');
+    expect(result).toContain('- [>] Updated migrated task');
+    expect(result).toContain('↗ migrated:2026-05-01');
+    expect(result).toContain('^id-mig1');
+  });
+
   it('replaces multi-paragraph description', () => {
     const md = '- [ ] Task title\n  Old desc line 1\n\n  Old desc line 2\n- [ ] Next task\n';
     const result = editTaskFullInMarkdown(md, 0, { description: 'New desc line 1\n\nNew desc line 2' });

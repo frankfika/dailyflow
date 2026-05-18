@@ -231,7 +231,7 @@ export function editTaskInMarkdown(
   if (taskLine < 0 || taskLine >= lines.length) return md;
 
   const line = lines[taskLine];
-  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX ])\]\s+(.*)$/);
+  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
   if (!taskMatch) return md;
 
   const indent = taskMatch[1];
@@ -283,7 +283,7 @@ export function editTaskFullInMarkdown(
   if (taskLine < 0 || taskLine >= lines.length) return md;
 
   const line = lines[taskLine];
-  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX ])\]\s+(.*)$/);
+  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
   if (!taskMatch) return md;
 
   const indent = taskMatch[1];

@@ -3,21 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import React, { useState, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/themes/prism.css';
-import { filesApi, tasksApi, rolloverApi, gitApi, configApi } from './api/client';
+import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi } from './api/client';
 import { API_BASE, DEFAULT_MODEL } from './config/api';
-import { getTagColor, getTodayStr } from './utils/tagColors';
+import { getTodayStr } from './utils/tagColors';
 import { TaskCard } from './components/TaskCard';
+import { Sidebar } from './components/Sidebar';
+import { SettingsModal } from './components/SettingsModal';
+import { RolloverPreviewModal } from './components/RolloverPreviewModal';
+import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { Projects } from './components/Projects';
-import { AISummaryModal } from './components/AISummaryModal';
 import { ContextSwitcher } from './components/ContextSwitcher';
+import { Notes } from './components/Notes';
+import { DailyNoteCards } from './components/DailyNoteCards';
+import { NoteEditor } from './components/NoteEditor';
+import type { NoteData } from './api/client';
+import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 
 type Task = {
   id: string;
@@ -60,8 +67,19 @@ export default function App() {
   const [filesMap, setFilesMap] = useState<Record<string, string>>({});
   const [markdown, setMarkdown] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'mindmap'>('today');
-  const [currentView, setCurrentView] = useState<'daily' | 'projects'>('daily');
+  const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
+  const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
+  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'notes'>('today');
+
+  const taskLinkedNotesCount = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const note of dailyNotes) {
+      for (const taskId of note.linkedTaskIds) {
+        map[taskId] = (map[taskId] || 0) + 1;
+      }
+    }
+    return map;
+  }, [dailyNotes]);
   const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -82,11 +100,6 @@ export default function App() {
   const [tagInputValue, setTagInputValue] = useState('');
   const [newTaskDeadline, setNewTaskDeadline] = useState<string>('');
   const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
-
-  const [showAISummary, setShowAISummary] = useState(false);
-  const [summaryPeriod, setSummaryPeriod] = useState<'7days' | '30days' | 'all'>('7days');
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   const [rolloverBanner, setRolloverBanner] = useState<{ count: number; fromDate: string } | null>(null);
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
@@ -262,6 +275,14 @@ export default function App() {
         setTasks([]);
         setLastSyncedMD('');
       }
+
+      // Load notes for this date
+      try {
+        const dateNotes = await notesApi.getByDate(date);
+        setDailyNotes(dateNotes);
+      } catch {
+        setDailyNotes([]);
+      }
     } catch (e) {
       console.error('Failed to load tasks', e);
       setLoadError('Failed to load tasks. Is the backend running?');
@@ -338,163 +359,24 @@ export default function App() {
 
   const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
-  const generateAISummary = async () => {
-    setIsGeneratingSummary(true);
-    setAiSummary(null);
-    try {
-      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic');
-      const allDates = Object.keys(filesMap).sort((a,b) => b.localeCompare(a));
-      let filteredDates = allDates;
-
-      const now = new Date('2026-05-04T00:00:00Z');
-      if (summaryPeriod === '7days') {
-        filteredDates = allDates.filter(d => {
-           const date = new Date(`${d}T00:00:00Z`);
-           const diffTime = Math.abs(now.getTime() - date.getTime());
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-           return diffDays <= 7;
-        });
-      } else if (summaryPeriod === '30days') {
-        filteredDates = allDates.filter(d => {
-           const date = new Date(`${d}T00:00:00Z`);
-           const diffTime = Math.abs(now.getTime() - date.getTime());
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-           return diffDays <= 30;
-        });
-      }
-
-      let contextStr = "Here are my notes and tasks for the selected period:\n\n";
-      filteredDates.forEach(date => {
-         contextStr += `--- Date: ${date} ---\n${filesMap[date]}\n\n`;
-      });
-
-      // Determine API endpoint and model based on provider
-      let apiUrl = '';
-      let model = aiModel;
-
-      if (aiProvider === 'deepseek') {
-        apiUrl = API_BASE.deepseek;
-        model = model || DEFAULT_MODEL.deepseek;
-      } else if (isAnthropicFormat) {
-        apiUrl = API_BASE.anthropic;
-        model = model || 'claude-3-5-sonnet-20241022';
-      } else if (aiProvider === 'openai') {
-        apiUrl = API_BASE.openai;
-        model = model || DEFAULT_MODEL.openai;
-      } else if (aiProvider === 'custom' && aiBaseUrl) {
-        apiUrl = aiBaseUrl;
-        model = model || 'default';
-      }
-
-      if (!apiUrl || !aiApiKey) {
-        throw new Error('AI provider not configured. Please set up AI configuration in Settings.');
-      }
-
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${aiApiKey}`,
-          ...(isAnthropicFormat ? { 'anthropic-version': '2023-06-01' } : {}),
-        },
-        body: JSON.stringify({
-          model,
-          ...(isAnthropicFormat ? {
-            max_tokens: 2048,
-            messages: [
-              { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
-            ],
-          } : {
-            messages: [
-              { role: 'system', content: 'You are a helpful personal assistant. Summarize notes concisely in Markdown.' },
-              { role: 'user', content: `You are my personal assistant. Based on my markdown notes for the selected time period, write a concise but insightful summary of what I achieved, what projects I focused on, and how my time was spent. Use casual, encouraging, and clear language. Format the response nicely in Markdown.\n\n${contextStr}` },
-            ],
-          }),
-        }),
-      });
-
-      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
-      const data = await res.json();
-
-      // Extract response based on provider
-      let summary = '';
-      if (isAnthropicFormat) {
-        summary = data.content?.[0]?.text?.trim() || "No summary generated.";
-      } else {
-        summary = data.choices?.[0]?.message?.content?.trim() || "No summary generated.";
-      }
-
-      setAiSummary(summary);
-    } catch (e: any) {
-      console.error(e);
-      setAiSummary(`Failed to generate AI summary: ${e.message}. Please check your AI configuration in Settings.`);
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
-
   const processBrainDump = async () => {
     if (!brainDumpText.trim()) return;
     setIsProcessingBrainDump(true);
     try {
-      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic');
-      // Determine API endpoint and model based on provider
-      let apiUrl = '';
-      let model = aiModel;
-
-      if (aiProvider === 'deepseek') {
-        apiUrl = API_BASE.deepseek;
-        model = model || DEFAULT_MODEL.deepseek;
-      } else if (isAnthropicFormat) {
-        apiUrl = API_BASE.anthropic;
-        model = model || 'claude-3-5-sonnet-20241022';
-      } else if (aiProvider === 'openai') {
-        apiUrl = API_BASE.openai;
-        model = model || DEFAULT_MODEL.openai;
-      } else if (aiProvider === 'custom' && aiBaseUrl) {
-        apiUrl = aiBaseUrl;
-        model = model || 'default';
-      }
-
-      if (!apiUrl || !aiApiKey) {
+      if (!aiApiKey || !aiProvider) {
         throw new Error('AI provider not configured');
       }
 
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${aiApiKey}`,
-          ...(isAnthropicFormat ? { 'anthropic-version': '2023-06-01' } : {}),
-        },
-        body: JSON.stringify({
-          model,
-          ...(isAnthropicFormat ? {
-            max_tokens: 2048,
-            messages: [
-              { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional).\n\n"${brainDumpText}"` },
-            ],
-          } : {
-            messages: [
-              { role: 'system', content: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.' },
-              { role: 'user', content: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"` },
-            ],
-          }),
-        }),
+      const { summary: content } = await aiApi.summarize({
+        provider: aiProvider,
+        apiKey: aiApiKey,
+        model: aiModel || undefined,
+        baseUrl: aiBaseUrl || undefined,
+        systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
+        userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"`,
+        format: (aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic')) ? 'anthropic' : 'openai',
       });
 
-      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
-      const data = await res.json();
-
-      // Extract response based on provider
-      let content = '';
-      if (isAnthropicFormat) {
-        content = data.content?.[0]?.text?.trim() || '';
-      } else {
-        content = data.choices?.[0]?.message?.content?.trim() || '';
-      }
-
-      // Strip markdown code fences if present
       const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
       const extracted = JSON.parse(jsonStr) as any[];
 
@@ -534,7 +416,7 @@ export default function App() {
       setShowTaskInput(false);
     } catch (e) {
       console.error(e);
-      alert("Failed to process with AI.");
+      showToast(language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.', 'error');
     } finally {
       setIsProcessingBrainDump(false);
     }
@@ -697,9 +579,7 @@ export default function App() {
 
   // Work context: show work tasks + tasks without work/life (default to work)
   // Life context: only show life tasks
-  const contextFilteredTasks = activeContext === 'life'
-    ? tasks.filter(t => t.tags?.includes('life'))
-    : tasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
+  const contextFilteredTasks = filterTasksByContext(tasks, activeContext);
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
@@ -761,318 +641,47 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Rollover Preview Modal */}
-      <AnimatePresence>
-        {showRolloverPreview && rolloverPreview && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9998] bg-black/40 flex items-center justify-center p-4"
-            onClick={() => setShowRolloverPreview(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-surface-white rounded-2xl shadow-2xl border border-border w-full max-w-md p-6"
-              onClick={e => e.stopPropagation()}
-            >
-              <h2 className="font-serif text-lg font-medium text-text-heading mb-1">
-                {language === 'zh' ? '迁移未完成任务' : 'Migrate Unfinished Tasks'}
-              </h2>
-              <p className="text-sm text-text-muted mb-4">
-                {language === 'zh'
-                  ? `将 ${rolloverPreview.fromDate} 起的 ${rolloverPreview.tasksToMigrate.length} 个未完成任务迁移到今天`
-                  : `Migrate ${rolloverPreview.tasksToMigrate.length} unfinished tasks from ${rolloverPreview.fromDate} to today`}
-              </p>
-              <div className="space-y-2 max-h-48 overflow-y-auto mb-5">
-                {rolloverPreview.tasksToMigrate.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2.5 text-sm text-text-main py-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                    <span className="flex-1 truncate">{t.title}</span>
-                    {t.source_date && <span className="text-[10px] text-text-muted shrink-0">{t.source_date}</span>}
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowRolloverPreview(false)}
-                  className="flex-1 py-2 rounded-xl border border-border text-sm font-medium text-text-muted hover:bg-surface transition-colors"
-                >
-                  {language === 'zh' ? '取消' : 'Cancel'}
-                </button>
-                <button
-                  onClick={handleConfirmRollover}
-                  disabled={isRollingOver}
-                  className="flex-1 py-2 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isRollingOver && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {language === 'zh' ? '确认迁移' : 'Confirm'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <RolloverPreviewModal
+        show={showRolloverPreview}
+        preview={rolloverPreview}
+        isRollingOver={isRollingOver}
+        language={language}
+        onClose={() => setShowRolloverPreview(false)}
+        onConfirm={handleConfirmRollover}
+      />
 
-      {/* Sidebar Overlay for Mobile */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 z-20 lg:hidden backdrop-blur-sm"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Sidebar */}
-      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-700 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'} bg-surface`}>
-        <div className="p-8 w-64">
-          <div className="flex flex-col gap-1 mb-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-accent text-white flex items-center justify-center font-serif text-lg font-bold rounded-lg shadow-sm">D</div>
-              <span className="font-sans text-xs uppercase tracking-widest font-bold text-text-heading">DailyFlow</span>
-            </div>
-            <div className="mt-2 pl-11 text-[10px] uppercase tracking-widest font-bold text-text-muted opacity-80">
-              {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date('2026-05-04T00:00:00Z'))}
-            </div>
-          </div>
-          
-          <nav className="space-y-8 pb-6">
-            <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4 flex items-center justify-between">
-                <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
-                <button
-                  onClick={async () => {
-                    const today = getTodayStr();
-                    if (filesMap[today]) {
-                      setCurrentFileDate(today);
-                      showToast(language === 'zh' ? '已是最新一天' : 'Already on latest day', 'info');
-                      return;
-                    }
-                    try {
-                      await filesApi.create(today, '## Tasks\n');
-                      setFilesMap(prev => ({ ...prev, [today]: '## Tasks\n' }));
-                      setCurrentFileDate(today);
-                      showToast(language === 'zh' ? '已创建今日日记' : 'Created today\'s note', 'success');
-                    } catch (e) {
-                      console.error('Failed to create note', e);
-                      showToast(language === 'zh' ? '创建失败' : 'Failed to create note', 'error');
-                    }
-                  }}
-                  className="p-1 rounded-md bg-text-muted/10 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors flex items-center gap-1"
-                  title="New Daily Note"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </h3>
-              <ul className="space-y-3 text-sm font-sans">
-                {recentDates.map(date => {
-                  const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                  return (
-                    <li
-                      key={date}
-                      onClick={() => setCurrentFileDate(date)}
-                      className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                    >
-                      {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
-                      <span className={currentFileDate !== date ? "ml-4" : ""}>
-                        {date}
-                        <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-
-                {Object.keys(archivedMonths).length > 0 && (
-                  <li className="pt-2">
-                    <span className="text-[10px] uppercase tracking-widest text-text-muted font-bold block mb-3">{language === 'zh' ? '归档' : 'Archive'}</span>
-                    <ul className="space-y-2">
-                      {Object.keys(archivedMonths).map(monthName => (
-                        <li key={monthName} className="space-y-2">
-                          <button 
-                            onClick={() => toggleArchiveMonth(monthName)}
-                            className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
-                          >
-                            {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            <span className="ml-[2px]">{monthName}</span>
-                          </button>
-                          {expandedArchiveMonths[monthName] && (
-                            <ul className="space-y-3 pl-4 border-l border-border/50 ml-6 pb-2">
-                              {archivedMonths[monthName].map(date => {
-                                const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                                return (
-                                  <li
-                                    key={date}
-                                    onClick={() => setCurrentFileDate(date)}
-                                    className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                                  >
-                                    {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
-                                    <span className={currentFileDate !== date ? "" : ""}>
-                                      {date}
-                                      <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                )}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
-              <ul className="space-y-3 text-sm font-sans">
-                <li
-                  onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-daily-notes"
-                >
-                  <span className="ml-4">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('projects'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'projects' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-projects"
-                >
-                  <span className="ml-4">{language === 'zh' ? '项目概览' : 'Projects Focus'}</span>
-                </li>
-                <li
-                  onClick={() => { setShowAISummary(true); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className="flex items-center gap-3 cursor-pointer transition-opacity text-text-muted opacity-60 hover:opacity-100"
-                  data-testid="nav-ai-summary"
-                >
-                  <span className="ml-4">{language === 'zh' ? 'AI 洞察' : 'AI Summary'}</span>
-                </li>
-              </ul>
-            </div>
-
-            {categories.length > 0 && (
-              <div>
-                <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-4">{language === 'zh' ? '分类' : 'Categories'}</h3>
-                <ul className="space-y-3 text-sm font-sans">
-                  {categories.map(c => (
-                    <li
-                       key={c}
-                       onClick={() => {
-                         setActiveTab('today');
-                         setSelectedCategory(selectedCategory === c ? null : c);
-                         if (window.innerWidth < 1024) setIsSidebarOpen(false);
-                       }}
-                       className={`flex items-center gap-3 cursor-pointer transition-colors ${selectedCategory === c ? 'text-accent font-semibold' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                    >
-                      <div className={`ml-4 w-3 h-3 rounded-sm flex-shrink-0 border flex items-center justify-center transition-colors ${selectedCategory === c ? 'bg-accent border-accent text-white' : 'border-border'}`}>
-                         {selectedCategory === c && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
-                      </div>
-                      <span>{c}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </nav>
-          <li 
-            className="pt-2 mt-auto lg:hidden"
-          >
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="flex w-full items-center gap-3 p-3 mt-4 rounded-xl cursor-pointer hover:bg-accent/10 transition-colors text-text-muted justify-center border border-border"
-            >
-              <X className="w-4 h-4" />
-              <span className="text-[10px] uppercase tracking-widest font-bold">
-                {language === 'zh' ? '关闭' : 'Close'}
-              </span>
-            </button>
-          </li>
-        </div>
-
-        <div className="mt-auto p-8 border-t border-border flex flex-col gap-4">
-          <div>
-            <span className="text-[10px] uppercase font-sans tracking-widest font-bold text-text-muted opacity-60">{language === 'zh' ? '版本控制' : 'Version Control'}</span>
-
-            {!githubConnected ? (
-              /* GitHub 未配置或未验证通过时显示引导 */
-              <div className="mt-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
-                <p className="text-[10px] text-text-muted leading-relaxed mb-2">
-                  {language === 'zh'
-                    ? (githubRepo ? '⚠️ GitHub 连接失败，请检查配置。' : '配置 GitHub 仓库，自动备份你的笔记。')
-                    : (githubRepo ? '⚠️ GitHub connection failed. Check your settings.' : 'Connect a GitHub repo to back up your notes automatically.')}
-                </p>
-                <button
-                  onClick={async () => {
-                    // If we have credentials, try verifying first — don't redirect if it actually works
-                    if (githubRepo && githubToken) {
-                      const ok = await verifyGithubConnection(githubRepo, githubToken);
-                      if (ok) {
-                        setGithubConnected(true);
-                        return;
-                      }
-                    }
-                    setShowSettings(true);
-                    setConfigTab('github');
-                  }}
-                  className="w-full py-1.5 rounded-lg bg-accent text-white text-[10px] uppercase tracking-widest font-bold hover:bg-accent/90 transition-colors"
-                >
-                  {language === 'zh' ? '→ 前往配置' : '→ Configure GitHub'}
-                </button>
-              </div>
-            ) : (
-              /* 已验证通过时显示同步状态 */
-              <>
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-orange-400 animate-pulse' : 'bg-green-400'}`}></div>
-                    <span className="text-xs font-medium text-text-main pr-1">
-                      {hasChanges
-                        ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes')
-                        : (language === 'zh' ? '已是最新' : 'Up to date')}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-text-muted mt-1 truncate opacity-60" title={githubRepo || ''}>
-                  {(githubRepo || '').replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')}
-                </p>
-              </>
-            )}
-          </div>
-
-          {githubConnected && (
-            <button
-              onClick={handleGitSync}
-              disabled={isSyncing || !hasChanges}
-              className={`w-full py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${
-                isSyncing
-                  ? 'bg-accent text-white border border-accent scale-[0.97]'
-                  : 'bg-surface-white border border-border text-text-main hover:border-accent hover:text-accent active:scale-95 disabled:opacity-50'
-              }`}
-            >
-              {isSyncing ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>{language === 'zh' ? '正在同步...' : 'Syncing...'}</span>
-                </>
-              ) : (
-                <span>{language === 'zh' ? '提交到 GitHub' : 'Commit to GitHub'}</span>
-              )}
-            </button>
-          )}
-        </div>
-      </aside>
+      <Sidebar
+        language={language}
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        currentFileDate={currentFileDate}
+        setCurrentFileDate={setCurrentFileDate}
+        filesMap={filesMap}
+        setFilesMap={setFilesMap}
+        recentDates={recentDates}
+        archivedMonths={archivedMonths}
+        expandedArchiveMonths={expandedArchiveMonths}
+        toggleArchiveMonth={toggleArchiveMonth}
+        categories={categories}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        githubConnected={githubConnected}
+        githubRepo={githubRepo}
+        githubToken={githubToken}
+        hasChanges={hasChanges}
+        isSyncing={isSyncing}
+        handleGitSync={handleGitSync}
+        showToast={showToast}
+        setShowSettings={setShowSettings}
+        setConfigTab={setConfigTab}
+        verifyGithubConnection={verifyGithubConnection}
+        setGithubConnected={setGithubConnected}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
-        {currentView === 'projects' ? (
-          <Projects language={language} activeContext={activeContext} />
-        ) : (
           <>
         <header className={`h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border backdrop-blur-md z-10 shrink-0 transition-colors duration-700 bg-background/80`}>
           <div className="flex items-center gap-3 md:gap-4 text-xs font-sans tracking-widest font-bold uppercase overflow-hidden whitespace-nowrap">
@@ -1085,6 +694,14 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
+            <button
+              onClick={() => setShowQuickNoteEditor(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase font-bold tracking-widest text-text-muted hover:text-text-main bg-surface border border-border rounded-full hover:bg-surface-white transition-colors"
+              title={language === 'zh' ? '新建独立笔记（保存到 Notes/）' : 'Create a standalone note (saved to Notes/)'}
+            >
+              <FileText className="w-3 h-3" />
+              <span>{language === 'zh' ? '+ 新建笔记' : '+ New Note'}</span>
+            </button>
             <button
               onClick={() => setShowSettings(true)}
               className="p-2 text-text-muted hover:text-text-main transition-colors rounded-lg hover:bg-surface"
@@ -1254,235 +871,34 @@ export default function App() {
                   )}
 
                   {/* Task Input Panel */}
-                  {showTaskInput && (
-                    <>
-                      <div
-                        className="fixed inset-0 bg-black/10 z-40 sm:hidden"
-                        onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 20 }}
-                        className="fixed inset-x-0 bottom-0 z-50 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
-                          <button
-                            onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
-                            className="text-text-muted hover:text-text-heading p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                        {showBrainDump && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="bg-surface border border-accent/20 rounded-[24px] p-6 shadow-sm overflow-hidden"
-                          >
-                             <div className="flex justify-between items-center mb-4">
-                               <div className="flex items-center gap-2">
-                                 <Sparkles className="w-4 h-4 text-accent" />
-                                 <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
-                               </div>
-                               <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
-                             </div>
-                             <textarea
-                               autoFocus
-                               className="w-full bg-background border border-border/50 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
-                               placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
-                               value={brainDumpText}
-                               onChange={e => setBrainDumpText(e.target.value)}
-                             />
-                             <div className="mt-4 flex justify-end">
-                               <button
-                                 onClick={processBrainDump}
-                                 disabled={isProcessingBrainDump || !brainDumpText.trim()}
-                                 className="bg-accent text-white px-6 py-2 rounded-full font-sans text-[10px] font-bold uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                               >
-                                 {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                 <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
-                               </button>
-                             </div>
-                          </motion.div>
-                        )}
-
-                        <div className="relative rounded-2xl bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
-                          <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
-                            <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
-                              <Plus className="w-5 h-5" />
-                            </div>
-                            <textarea
-                              autoFocus
-                              placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
-                              className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
-                              value={newTaskTitle}
-                              rows={1}
-                              onChange={e => {
-                                setNewTaskTitle(e.target.value);
-                                e.target.style.height = 'inherit';
-                                e.target.style.height = `${e.target.scrollHeight}px`;
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter' && !e.shiftKey && newTaskTitle.trim()) {
-                                  e.preventDefault();
-                                  document.getElementById('add-task-btn')?.click();
-                                }
-                              }}
-                            />
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
-                              {/* Quick Tag Selection */}
-                              <div className="flex-1 flex flex-col gap-2">
-                                {/* Selected Tags */}
-                                {newTaskTagsList.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {newTaskTagsList.map(tag => (
-                                      <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
-                                        {tag}
-                                        <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setNewTaskTagsList(prev => prev.filter(t => t !== tag))} />
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Available Tags as Buttons */}
-                                <div className="flex flex-wrap gap-1.5">
-                                  {categories.filter(c => !newTaskTagsList.includes(c)).map(cat => (
-                                    <button
-                                      key={cat}
-                                      type="button"
-                                      onClick={() => {
-                                        if (!newTaskTagsList.includes(cat)) {
-                                          setNewTaskTagsList([...newTaskTagsList, cat]);
-                                        }
-                                      }}
-                                      className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-60 hover:opacity-100 hover:scale-105 active:scale-95`}
-                                    >
-                                      + {cat}
-                                    </button>
-                                  ))}
-
-                                  {/* Custom Tag Input */}
-                                  <div className="flex items-center gap-1 bg-surface rounded-lg border border-border/80 focus-within:border-accent px-2 py-1 transition-colors">
-                                    <input
-                                      type="text"
-                                      className="bg-transparent text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted/60 w-20"
-                                      placeholder={language === 'zh' ? '自定义...' : 'Custom...'}
-                                      value={tagInputValue}
-                                      onChange={e => setTagInputValue(e.target.value)}
-                                      onKeyDown={e => {
-                                        if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
-                                          e.preventDefault();
-                                          const newTag = tagInputValue.trim().toLowerCase();
-                                          if (!newTaskTagsList.includes(newTag)) {
-                                            setNewTaskTagsList([...newTaskTagsList, newTag]);
-                                          }
-                                          setTagInputValue('');
-                                        } else if (e.key === 'Enter' && !tagInputValue.trim() && newTaskTitle.trim()) {
-                                          e.preventDefault();
-                                          document.getElementById('add-task-btn')?.click();
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-                                {/* Deadline Button */}
-                                <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
-                                  <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
-                                  <input
-                                    type="date"
-                                    className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-blue-600' : 'text-text-muted'}`}
-                                    value={newTaskDeadline}
-                                    onChange={e => setNewTaskDeadline(e.target.value)}
-                                    onClick={(e) => {
-                                      try { (e.target as HTMLInputElement).showPicker(); } catch(err){}
-                                    }}
-                                  />
-                                </label>
-
-                                {/* AI Button */}
-                                <button
-                                  onClick={() => setShowBrainDump(!showBrainDump)}
-                                  className="bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100 flex items-center justify-center rounded-xl transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
-                                  title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
-                                >
-                                  <Sparkles className="w-4 h-4" />
-                                </button>
-
-                                {/* Submit button */}
-                                <button
-                                  id="add-task-btn"
-                                  disabled={!newTaskTitle.trim()}
-                                  onClick={() => {
-                                    if (newTaskTitle.trim()) {
-                                      const titleLines = newTaskTitle.trim().split('\n');
-                                      const title = titleLines[0].trim();
-                                      const description = titleLines.slice(1).join('\n').trim() || undefined;
-
-                                      const tags = [...newTaskTagsList];
-                                      if (tagInputValue.trim()) {
-                                        const newTag = tagInputValue.trim().toLowerCase();
-                                        if (!tags.includes(newTag)) tags.push(newTag);
-                                      }
-                                      if (!tags.some(t => ['work', 'life'].includes(t))) {
-                                        tags.push(activeContext);
-                                      }
-
-                                      const finalDeadline = newTaskDeadline || currentFileDate;
-
-                                      const newTask: Task = {
-                                        id: `t_${Date.now()}`,
-                                        title,
-                                        description,
-                                        status: 'todo',
-                                        tags,
-                                        deadline: finalDeadline,
-                                        source_date: currentFileDate
-                                      };
-                                      // Optimistic UI update
-                                      setTasks(prev => [...prev, newTask]);
-                                      // Create via API
-                                      tasksApi.create(currentFileDate, newTask).then(() => {
-                                        // Refresh markdown AND tasks with server-side stable IDs
-                                        return filesApi.get(currentFileDate);
-                                      }).then(data => {
-                                        if (data) {
-                                          setMarkdown(data.content);
-                                          setTasks(data.tasks as Task[]);
-                                          setLastSyncedMD(data.content);
-                                          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
-                                        }
-                                        showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
-                                      }).catch((e) => {
-                                        console.error(e);
-                                        showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
-                                      });
-                                      setNewTaskTitle('');
-                                      setNewTaskTagsList([]);
-                                      setTagInputValue('');
-                                      setNewTaskDeadline('');
-                                      setShowTaskInput(false);
-                                    }
-                                  }}
-                                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-xl text-[12px] uppercase font-sans tracking-widest font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
-                                    newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
-                                  } flex-1 sm:flex-none`}
-                                >
-                                  <span>{language === 'zh' ? '添加任务' : 'Add Task'}</span>
-                                  <CornerUpRight className={`w-4 h-4 ${newTaskTitle.trim() ? 'opacity-80' : 'opacity-0'} hidden sm:block transition-opacity`} />
-                                </button>
-                              </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
+                  <TaskInputPanel
+                    showTaskInput={showTaskInput}
+                    setShowTaskInput={setShowTaskInput}
+                    showBrainDump={showBrainDump}
+                    setShowBrainDump={setShowBrainDump}
+                    language={language}
+                    newTaskTitle={newTaskTitle}
+                    setNewTaskTitle={setNewTaskTitle}
+                    newTaskTagsList={newTaskTagsList}
+                    setNewTaskTagsList={setNewTaskTagsList}
+                    tagInputValue={tagInputValue}
+                    setTagInputValue={setTagInputValue}
+                    newTaskDeadline={newTaskDeadline}
+                    setNewTaskDeadline={setNewTaskDeadline}
+                    brainDumpText={brainDumpText}
+                    setBrainDumpText={setBrainDumpText}
+                    isProcessingBrainDump={isProcessingBrainDump}
+                    processBrainDump={processBrainDump}
+                    currentFileDate={currentFileDate}
+                    activeContext={activeContext}
+                    categories={categories}
+                    systemTags={systemTags}
+                    setTasks={setTasks}
+                    setMarkdown={setMarkdown}
+                    setLastSyncedMD={setLastSyncedMD}
+                    setFilesMap={setFilesMap}
+                    showToast={showToast}
+                  />
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
                     const catTasks = todayTasks.filter(t => {
@@ -1512,6 +928,7 @@ export default function App() {
                                 language={language}
                                 categories={categories}
                                 currentFileDate={currentFileDate}
+                                linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
                                 onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
@@ -1584,6 +1001,7 @@ export default function App() {
                                 language={language}
                                 categories={categories}
                                 currentFileDate={currentFileDate}
+                                linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
                                 onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
@@ -1668,6 +1086,14 @@ export default function App() {
                     );
                   })()}
 
+                  {/* Daily Notes */}
+                  <DailyNoteCards
+                    notes={filterNotesByContext(dailyNotes, activeContext)}
+                    language={language}
+                    activeContext={activeContext}
+                    onViewAll={() => setActiveTab('notes')}
+                  />
+
                 </motion.div>
               ) : activeTab === 'projects' ? (
                 <motion.div
@@ -1687,9 +1113,7 @@ export default function App() {
                   </div>
 
                   {(() => {
-                    const contextFiltered = activeContext === 'life'
-                      ? allPendingTasks.filter(t => t.tags?.includes('life'))
-                      : allPendingTasks.filter(t => t.tags?.includes('work') || !t.tags?.some(tag => ['work', 'life'].includes(tag)));
+                    const contextFiltered = filterTasksByContext(allPendingTasks, activeContext);
                     const systemTags = ['work', 'life', 'delayed', 'tasks', 'migrated'];
                     const allTags = Array.from(new Set(contextFiltered.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
 
@@ -1800,6 +1224,15 @@ export default function App() {
                     );
                   })()}
                 </motion.div>
+              ) : activeTab === 'notes' ? (
+                <Notes
+                  activeContext={activeContext}
+                  language={language}
+                  aiProvider={aiProvider}
+                  aiApiKey={aiApiKey}
+                  aiModel={aiModel}
+                  aiBaseUrl={aiBaseUrl}
+                />
               ) : (
                 <div className="py-32 text-center bg-surface-white rounded-[48px] border border-border/50 shadow-sm mt-8">
                   <h2 className="editorial-hero text-5xl text-text-muted italic mb-6 leading-tight">{language === 'zh' ? '正在建设中' : 'Under Construction'}</h2>
@@ -1836,631 +1269,80 @@ export default function App() {
           </div>
         </div>
         </>
-        )}
        </main>
 
-       {showAISummary && (
-         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-           <motion.div 
-             initial={{ opacity: 0, scale: 0.95 }}
-             animate={{ opacity: 1, scale: 1 }}
-             className="bg-surface-white border border-border shadow-xl rounded-[32px] p-8 max-w-2xl w-full relative flex flex-col max-h-[85vh]"
-           >
-             <button onClick={() => setShowAISummary(false)} className="absolute top-8 right-8 text-text-muted hover:text-text-heading transition-colors">
-               <X className="w-5 h-5" />
-             </button>
-             <h2 className="font-serif text-3xl text-text-heading italic mb-6 flex items-center gap-3">
-                <Sparkles className="w-7 h-7 text-accent" />
-                {language === 'zh' ? 'AI 洞察' : 'AI Summary'}
-             </h2>
-             
-             <div className="flex gap-2 mb-6">
-                <button 
-                  onClick={() => setSummaryPeriod('7days')}
-                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === '7days' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
-                >
-                  {language === 'zh' ? '最近 7 天' : 'Last 7 Days'}
-                </button>
-                <button 
-                  onClick={() => setSummaryPeriod('30days')}
-                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === '30days' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
-                >
-                  {language === 'zh' ? '最近 30 天' : 'Last 30 Days'}
-                </button>
-                <button 
-                  onClick={() => setSummaryPeriod('all')}
-                  className={`px-4 py-2 font-sans font-bold text-xs uppercase tracking-widest rounded-full transition-colors ${summaryPeriod === 'all' ? 'bg-accent text-white shadow-sm' : 'bg-surface text-text-muted hover:text-text-heading border border-border'}`}
-                >
-                  {language === 'zh' ? '全部时间' : 'All Time'}
-                </button>
-             </div>
+      <SettingsModal
+        showSettings={showSettings}
+        setShowSettings={setShowSettings}
+        language={language}
+        configTab={configTab}
+        setConfigTab={setConfigTab}
+        workspaceRoot={workspaceRoot}
+        setWorkspaceRoot={setWorkspaceRoot}
+        setLanguage={setLanguage}
+        aiProvider={aiProvider}
+        setAiProvider={setAiProvider}
+        aiApiKey={aiApiKey}
+        setAiApiKey={setAiApiKey}
+        aiModel={aiModel}
+        setAiModel={setAiModel}
+        aiBaseUrl={aiBaseUrl}
+        setAiBaseUrl={setAiBaseUrl}
+        aiFormat={aiFormat}
+        setAiFormat={setAiFormat}
+        showApiKey={showApiKey}
+        setShowApiKey={setShowApiKey}
+        aiVerifyStatus={aiVerifyStatus}
+        setAiVerifyStatus={setAiVerifyStatus}
+        aiVerifyMsg={aiVerifyMsg}
+        setAiVerifyMsg={setAiVerifyMsg}
+        syncInterval={syncInterval}
+        setSyncInterval={setSyncInterval}
+        githubRepoInput={githubRepoInput}
+        setGithubRepoInput={setGithubRepoInput}
+        githubToken={githubToken}
+        setGithubToken={setGithubToken}
+        showGithubToken={showGithubToken}
+        setShowGithubToken={setShowGithubToken}
+        githubVerifyStatus={githubVerifyStatus}
+        setGithubVerifyStatus={setGithubVerifyStatus}
+        githubVerifyMsg={githubVerifyMsg}
+        setGithubVerifyMsg={setGithubVerifyMsg}
+        setGithubRepo={setGithubRepo}
+        setGithubConnected={setGithubConnected}
+        setFilesMap={setFilesMap}
+        setTasks={setTasks}
+        setMarkdown={setMarkdown}
+        setLastSyncedMD={setLastSyncedMD}
+        currentFileDate={currentFileDate}
+        verifyGithubConnection={verifyGithubConnection}
+        filesApi={filesApi}
+      />
 
-             <div className="flex-1 overflow-y-auto min-h-[300px] border border-border/50 rounded-2xl p-6 bg-surface mb-6 relative">
-               {isGeneratingSummary ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-accent">
-                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                    <span className="font-sans font-bold text-xs uppercase tracking-widest animate-pulse">{language === 'zh' ? '正在分析洞察...' : 'Analyzing insights...'}</span>
-                  </div>
-               ) : aiSummary ? (
-                  <div className="markdown-body font-sans text-sm text-text-main prose prose-slate max-w-none">
-                    <ReactMarkdown>{aiSummary}</ReactMarkdown>
-                  </div>
-               ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-text-muted opacity-60">
-                    <Sparkles className="w-8 h-8 mb-4 stroke-[1.5]" />
-                    <span className="font-sans font-medium text-sm text-center max-w-sm">
-                       {language === 'zh' ? '选择一个时间段并生成总结，以发现您的工作模式并可视化您的进展。' : 'Select a time period and generate a summary to uncover patterns in your work and visualize your progress.'}
-                    </span>
-                  </div>
-               )}
-             </div>
 
-             <div className="flex justify-end pt-2">
-                <button 
-                  onClick={generateAISummary}
-                  disabled={isGeneratingSummary}
-                  className="bg-text-heading text-white px-6 py-3 rounded-full font-sans font-bold text-[11px] uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 transition-transform active:scale-95"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{language === 'zh' ? '生成洞察' : 'Generate Insights'}</span>
-                </button>
-             </div>
-           </motion.div>
-         </div>
-       )}
-
-       {showSettings && (
-         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           <motion.div
-             initial={{ opacity: 0, scale: 0.95 }}
-             animate={{ opacity: 1, scale: 1 }}
-             className="bg-surface-white border border-border shadow-xl rounded-[24px] w-full max-w-2xl relative flex flex-col max-h-[90vh]"
-           >
-             {/* Header with Close Button */}
-             <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
-               <h2 className="font-serif text-2xl text-text-heading italic">
-                 {language === 'zh' ? '全局设置' : 'Configuration'}
-               </h2>
-               <button
-                 onClick={() => setShowSettings(false)}
-                 className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-lg hover:bg-surface"
-               >
-                 <X className="w-5 h-5" />
-               </button>
-             </div>
-
-             {/* Tabs */}
-             <div className="flex border-b border-border px-6">
-               <button
-                 onClick={() => setConfigTab('general')}
-                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
-                   configTab === 'general'
-                     ? 'border-accent text-accent'
-                     : 'border-transparent text-text-muted hover:text-text-heading'
-                 }`}
-               >
-                 {language === 'zh' ? '通用' : 'General'}
-               </button>
-               <button
-                 onClick={() => setConfigTab('ai')}
-                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
-                   configTab === 'ai'
-                     ? 'border-accent text-accent'
-                     : 'border-transparent text-text-muted hover:text-text-heading'
-                 }`}
-               >
-                 AI
-               </button>
-               <button
-                 onClick={() => setConfigTab('github')}
-                 className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
-                   configTab === 'github'
-                     ? 'border-accent text-accent'
-                     : 'border-transparent text-text-muted hover:text-text-heading'
-                 }`}
-               >
-                 GitHub
-               </button>
-             </div>
-
-             {/* Scrollable Content */}
-             <div className="overflow-y-auto p-6 space-y-5">
-               {configTab === 'general' && (
-                 <div className="space-y-5">
-                {/* Workspace Path */}
-                <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                     {language === 'zh' ? '工作区路径' : 'Workspace Path'}
-                   </h3>
-                   <div className="flex gap-2">
-                     <input
-                       type="text"
-                       value={workspaceRoot}
-                       onChange={e => setWorkspaceRoot(e.target.value)}
-                       placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                       className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
-                     />
-                     <button
-                       onClick={async () => {
-                         try {
-                           const res = await fetch('/api/config/choose-folder');
-                           if (res.ok) {
-                             const data = await res.json();
-                             if (data.path) {
-                               setWorkspaceRoot(data.path);
-                             }
-                           } else {
-                             const error = await res.json();
-                             alert(error.error || 'Failed to open folder picker');
-                           }
-                         } catch (e: any) {
-                           alert('Failed to open folder picker: ' + e.message);
-                         }
-                       }}
-                       className="px-3 py-2 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors whitespace-nowrap"
-                     >
-                       {language === 'zh' ? '浏览' : 'Browse'}
-                     </button>
-                   </div>
-                   <p className="text-xs text-text-muted mt-1">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
-                </div>
-
-                <hr className="border-border" />
-
-                {/* Language */}
-                <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                     {language === 'zh' ? '界面语言' : 'Language'}
-                   </h3>
-                   <div className="flex bg-surface p-1 rounded-lg shadow-inner border border-border/50 gap-1">
-                     <button
-                       onClick={() => setLanguage('en')}
-                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
-                     >
-                       English
-                     </button>
-                     <button
-                       onClick={() => setLanguage('zh')}
-                       className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'zh' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
-                     >
-                       中文
-                     </button>
-                   </div>
-                </div>
-                </div>
-              )}
-
-              {configTab === 'ai' && (
-                <div className="space-y-5">
-                  {/* AI Configuration */}
-                <div>
-                   <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                     {language === 'zh' ? 'AI 模型配置' : 'AI Model Configuration'}
-                   </h3>
-
-                   {/* Provider Selection */}
-                   <select
-                     value={aiProvider}
-                     onChange={e => {
-                       const provider = e.target.value as 'deepseek' | 'anthropic' | 'openai' | 'custom';
-                       setAiProvider(provider);
-                       // Set default models
-                       if (provider === 'deepseek') setAiModel(DEFAULT_MODEL.deepseek);
-                       else if (provider === 'anthropic') setAiModel('claude-3-5-sonnet-20241022');
-                       else if (provider === 'openai') setAiModel(DEFAULT_MODEL.openai);
-                     }}
-                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
-                   >
-                     <option value="deepseek">DeepSeek</option>
-                     <option value="anthropic">Anthropic (Claude)</option>
-                     <option value="openai">OpenAI (GPT)</option>
-                     <option value="custom">{language === 'zh' ? '自定义' : 'Custom'}</option>
-                   </select>
-
-                   {/* API Key */}
-                   <div className="relative mb-2">
-                     <input
-                       type={showApiKey ? "text" : "password"}
-                       value={aiApiKey}
-                       onChange={e => setAiApiKey(e.target.value)}
-                       placeholder={language === 'zh' ? 'API Key' : 'API Key'}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
-                     />
-                     <button
-                       type="button"
-                       onClick={() => setShowApiKey(!showApiKey)}
-                       className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
-                     >
-                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                     </button>
-                   </div>
-
-                   {/* Model Name */}
-                   <input
-                     type="text"
-                     value={aiModel}
-                     onChange={e => setAiModel(e.target.value)}
-                     placeholder={language === 'zh' ? '模型名称 (可选)' : 'Model name (optional)'}
-                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
-                   />
-
-                   {/* Custom Base URL */}
-                   {aiProvider === 'custom' && (
-                     <input
-                       type="text"
-                       value={aiBaseUrl}
-                       onChange={e => setAiBaseUrl(e.target.value)}
-                       placeholder={language === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
-                     />
-                   )}
-
-                   {/* Format Selection for Custom */}
-                   {aiProvider === 'custom' && (
-                     <select
-                       value={aiFormat}
-                       onChange={e => setAiFormat(e.target.value as 'openai' | 'anthropic')}
-                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
-                     >
-                       <option value="openai">OpenAI Format</option>
-                       <option value="anthropic">Anthropic Format</option>
-                     </select>
-                   )}
-
-                   <p className="text-xs text-text-muted mt-1">
-                     {language === 'zh' ? '用于 AI 总结和 Brain Dump 功能。' : 'Used for AI Summary and Brain Dump features. '}
-                     {aiProvider === 'deepseek' && (
-                       <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                         {language === 'zh' ? '获取 DeepSeek API Key' : 'Get DeepSeek API Key'}
-                       </a>
-                     )}
-                     {aiProvider === 'anthropic' && (
-                       <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                         {language === 'zh' ? '获取 Anthropic API Key' : 'Get Anthropic API Key'}
-                       </a>
-                     )}
-                     {aiProvider === 'openai' && (
-                       <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                         {language === 'zh' ? '获取 OpenAI API Key' : 'Get OpenAI API Key'}
-                       </a>
-                     )}
-                   </p>
-
-                   {/* AI Test Connection */}
-                   <button
-                     disabled={!aiApiKey || aiVerifyStatus === 'loading'}
-                     onClick={async () => {
-                       setAiVerifyStatus('loading');
-                       setAiVerifyMsg('');
-                       try {
-                         let testUrl = '';
-                         let testModel = aiModel || '';
-                         let headers: Record<string, string> = {};
-                         let body: any = {};
-
-                         if (aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic')) {
-                           testUrl = aiProvider === 'custom' && aiBaseUrl ? aiBaseUrl : API_BASE.anthropic;
-                           testModel = testModel || 'claude-3-5-sonnet-20241022';
-                           headers = { 'x-api-key': aiApiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' };
-                           body = { model: testModel, max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] };
-                         } else {
-                           if (aiProvider === 'deepseek') { testUrl = API_BASE.deepseek; testModel = testModel || DEFAULT_MODEL.deepseek; }
-                           else if (aiProvider === 'openai') { testUrl = API_BASE.openai; testModel = testModel || DEFAULT_MODEL.openai; }
-                           else if (aiProvider === 'custom' && aiBaseUrl) { testUrl = aiBaseUrl; }
-                           headers = { 'Authorization': `Bearer ${aiApiKey}`, 'Content-Type': 'application/json' };
-                           body = { model: testModel, max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] };
-                         }
-
-                         if (!testUrl) throw new Error(language === 'zh' ? '请填写 API 端点' : 'API endpoint required');
-
-                         const res = await fetch(testUrl, { method: 'POST', headers, body: JSON.stringify(body) });
-                         if (res.ok) {
-                           setAiVerifyStatus('success');
-                           setAiVerifyMsg(language === 'zh' ? `✓ 连接成功 (${testModel})` : `✓ Connected (${testModel})`);
-                         } else {
-                           const errData = await res.json().catch(() => ({}));
-                           setAiVerifyStatus('error');
-                           setAiVerifyMsg(language === 'zh' ? `✗ 验证失败: ${errData.error?.message || res.status}` : `✗ Failed: ${errData.error?.message || res.status}`);
-                         }
-                       } catch (e: any) {
-                         setAiVerifyStatus('error');
-                         setAiVerifyMsg(language === 'zh' ? `✗ 连接失败: ${e.message}` : `✗ Connection failed: ${e.message}`);
-                       }
-                     }}
-                     className={`mt-3 w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors ${
-                       aiVerifyStatus === 'success' ? 'bg-green-500 text-white' :
-                       aiVerifyStatus === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/30' :
-                       'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
-                     } disabled:opacity-50`}
-                   >
-                     {aiVerifyStatus === 'loading'
-                       ? (language === 'zh' ? '验证中...' : 'Verifying...')
-                       : (language === 'zh' ? '测试连接' : 'Test Connection')}
-                   </button>
-                   {aiVerifyMsg && (
-                     <p className={`text-xs mt-1.5 ${aiVerifyStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                       {aiVerifyMsg}
-                     </p>
-                   )}
-                </div>
-                </div>
-              )}
-
-              {configTab === 'github' && (
-                <div className="space-y-5">
-                  <hr className="border-border" />
-
-                  {/* GitHub Sync */}
-                <div>
-                   <div className="flex items-center justify-between mb-2">
-                     <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted">
-                       {language === 'zh' ? 'GitHub 同步' : 'GitHub Sync'}
-                     </h3>
-                     <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">Beta</span>
-                   </div>
-
-                   {/* Detailed Tutorial */}
-                   <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 mb-3">
-                     <p className="text-xs text-text-main font-medium mb-2">
-                       {language === 'zh' ? '📖 详细配置步骤：' : '📖 Detailed Setup Guide:'}
-                     </p>
-                     <ol className="text-xs text-text-muted space-y-2 list-decimal list-inside">
-                       <li>
-                         <strong>{language === 'zh' ? '创建 GitHub 仓库' : 'Create GitHub Repository'}</strong>
-                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
-                           <li>{language === 'zh' ? '访问 github.com，点击右上角 "+" → "New repository"' : 'Go to github.com, click "+" → "New repository"'}</li>
-                           <li>{language === 'zh' ? '输入仓库名称（如 dailyflow-notes）' : 'Enter repository name (e.g., dailyflow-notes)'}</li>
-                           <li>{language === 'zh' ? '选择 "Private"（私有仓库）' : 'Select "Private" repository'}</li>
-                           <li>{language === 'zh' ? '点击 "Create repository"' : 'Click "Create repository"'}</li>
-                         </ul>
-                       </li>
-                       <li>
-                         <strong>{language === 'zh' ? '生成 Personal Access Token' : 'Generate Personal Access Token'}</strong>
-                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
-                           <li>{language === 'zh' ? '访问 github.com/settings/tokens' : 'Go to github.com/settings/tokens'}</li>
-                           <li>{language === 'zh' ? '点击 "Generate new token" → "Generate new token (classic)"' : 'Click "Generate new token" → "Generate new token (classic)"'}</li>
-                           <li>{language === 'zh' ? '输入 Note（如 "DailyFlow Sync"）' : 'Enter Note (e.g., "DailyFlow Sync")'}</li>
-                           <li>{language === 'zh' ? '勾选 "repo" 权限（完整仓库访问）' : 'Check "repo" scope (full repository access)'}</li>
-                           <li>{language === 'zh' ? '点击 "Generate token"，复制生成的 token' : 'Click "Generate token", copy the generated token'}</li>
-                         </ul>
-                       </li>
-                       <li>
-                         <strong>{language === 'zh' ? '填写配置并测试' : 'Fill Configuration and Test'}</strong>
-                         <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
-                           <li>{language === 'zh' ? '在下方粘贴仓库链接（如 https://github.com/username/repo-name）' : 'Paste repository URL below (e.g. https://github.com/username/repo-name)'}</li>
-                           <li>{language === 'zh' ? '粘贴刚才复制的 Personal Access Token' : 'Paste the Personal Access Token you just copied'}</li>
-                           <li>{language === 'zh' ? '点击 "测试连接" 验证配置是否正确' : 'Click "Test Connection" to verify configuration'}</li>
-                         </ul>
-                       </li>
-                     </ol>
-                   </div>
-
-                   <div className="space-y-3">
-                     {/* Sync Interval */}
-                     <div>
-                       <label className="text-xs text-text-muted mb-1 block">
-                         {language === 'zh' ? '同步频率' : 'Sync Frequency'}
-                       </label>
-                       <select
-                         value={syncInterval}
-                         onChange={e => setSyncInterval(Number(e.target.value))}
-                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-                       >
-                         <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
-                         <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
-                         <option value={5}>{language === 'zh' ? '每 5 分钟' : 'Every 5 minutes'}</option>
-                         <option value={10}>{language === 'zh' ? '每 10 分钟' : 'Every 10 minutes'}</option>
-                       </select>
-                     </div>
-
-                     {/* Repository */}
-                     <div>
-                       <label className="text-xs text-text-muted mb-1 block">
-                         {language === 'zh' ? 'GitHub 仓库链接' : 'GitHub Repository URL'}
-                       </label>
-                       <input
-                         type="text"
-                         value={githubRepoInput}
-                         onChange={e => setGithubRepoInput(e.target.value)}
-                         placeholder="https://github.com/username/repo-name"
-                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
-                       />
-                     </div>
-
-                     {/* Token */}
-                     <div>
-                       <label className="text-xs text-text-muted mb-1 block">
-                         Personal Access Token
-                       </label>
-                       <div className="relative">
-                         <input
-                           type={showGithubToken ? "text" : "password"}
-                           value={githubToken}
-                           onChange={e => setGithubToken(e.target.value)}
-                           placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                           className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
-                         />
-                         <button
-                           type="button"
-                           onClick={() => setShowGithubToken(!showGithubToken)}
-                           className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
-                         >
-                           {showGithubToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                         </button>
-                       </div>
-                     </div>
-
-                     {/* Test Connection Button */}
-                     <button
-                       onClick={async () => {
-                         if (!githubRepoInput || !githubToken) {
-                           setGithubVerifyStatus('error');
-                           setGithubVerifyMsg(language === 'zh' ? '请填写仓库名称和 Token' : 'Please fill in repository name and token');
-                           return;
-                         }
-
-                         setGithubVerifyStatus('loading');
-                         setGithubVerifyMsg('');
-
-                         try {
-                           // Support both "owner/repo" and "https://github.com/owner/repo"
-                           const repoPath = githubRepoInput.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
-                           const [owner, repo] = repoPath.split('/');
-                           if (!owner || !repo) {
-                             throw new Error(language === 'zh' ? '仓库链接格式错误，应为 https://github.com/username/repo-name' : 'Invalid format, should be https://github.com/username/repo-name');
-                           }
-
-                           const res = await fetch(`${API_BASE.github}/repos/${owner}/${repo}`, {
-                             headers: {
-                               'Authorization': `Bearer ${githubToken}`,
-                               'Accept': 'application/vnd.github.v3+json',
-                             },
-                           });
-
-                           if (res.ok) {
-                             const data = await res.json();
-                             setGithubVerifyStatus('success');
-                             setGithubVerifyMsg(language === 'zh'
-                               ? `✓ 连接成功！仓库：${data.full_name}${data.private ? ' (私有)' : ' (公开)'}`
-                               : `✓ Connection successful! Repository: ${data.full_name}${data.private ? ' (private)' : ' (public)'}`
-                             );
-                           } else if (res.status === 404) {
-                             setGithubVerifyStatus('error');
-                             setGithubVerifyMsg(language === 'zh' ? '✗ 仓库不存在或无权访问' : '✗ Repository not found or no access');
-                           } else if (res.status === 401) {
-                             setGithubVerifyStatus('error');
-                             setGithubVerifyMsg(language === 'zh' ? '✗ Token 无效或已过期' : '✗ Invalid or expired token');
-                           } else {
-                             setGithubVerifyStatus('error');
-                             setGithubVerifyMsg(language === 'zh' ? `✗ 验证失败：${res.status}` : `✗ Verification failed: ${res.status}`);
-                           }
-                         } catch (e: any) {
-                           setGithubVerifyStatus('error');
-                           setGithubVerifyMsg(language === 'zh' ? `✗ 错误：${e.message}` : `✗ Error: ${e.message}`);
-                         }
-                       }}
-                       disabled={githubVerifyStatus === 'loading'}
-                       className="w-full py-2 bg-surface border border-border rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-surface-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                     >
-                       {githubVerifyStatus === 'loading' ? (
-                         <>
-                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                           <span>{language === 'zh' ? '验证中...' : 'Verifying...'}</span>
-                         </>
-                       ) : (
-                         <span>{language === 'zh' ? '测试连接' : 'Test Connection'}</span>
-                       )}
-                     </button>
-
-                     {/* Verification Result */}
-                     {githubVerifyMsg && (
-                       <div className={`text-xs p-2 rounded-lg ${
-                         githubVerifyStatus === 'success'
-                           ? 'bg-green-50 text-green-700 border border-green-200'
-                           : 'bg-red-50 text-red-700 border border-red-200'
-                       }`}>
-                         {githubVerifyMsg}
-                       </div>
-                     )}
-                   </div>
-                </div>
-                </div>
-              )}
-             </div>
-
-             {/* Footer with Save Button */}
-             <div className="border-t border-border p-4 flex justify-end gap-3">
-               <button
-                 onClick={() => setShowSettings(false)}
-                 className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors"
-               >
-                 {language === 'zh' ? '取消' : 'Cancel'}
-               </button>
-               <button
-                 onClick={async () => {
-                   const oldWorkspaceRoot = workspaceRoot;
-                   setShowSettings(false);
-                   try {
-                     const config = await configApi.get();
-                     const workspaceChanged = oldWorkspaceRoot !== config.workspaceRoot;
-
-                     await configApi.update({
-                       ...config,
-                       workspaceRoot: workspaceRoot.trim(),
-                       githubRepo: githubRepoInput.trim() || undefined,
-                       githubToken: githubToken.trim() || undefined,
-                       aiProvider,
-                       aiApiKey: aiApiKey.trim(),
-                       aiModel: aiModel.trim(),
-                       aiBaseUrl: aiBaseUrl.trim(),
-                       aiFormat,
-                     });
-                     setGithubRepo(githubRepoInput.trim() || null);
-                    // Auto-verify connection on save instead of relying on manual Test Connection click
-                    const trimmedRepo = githubRepoInput.trim();
-                    const trimmedToken = githubToken.trim();
-                    if (trimmedRepo && trimmedToken) {
-                      const ok = githubVerifyStatus === 'success'
-                        ? true
-                        : await verifyGithubConnection(trimmedRepo, trimmedToken);
-                      setGithubConnected(ok);
-                    } else {
-                      setGithubConnected(false);
-                    }
-
-                     // If workspace path changed, reload everything
-                     if (workspaceChanged) {
-                       // Clear current state
-                       setFilesMap({});
-                       setTasks([]);
-                       setMarkdown('');
-
-                       // Reload file list from new workspace
-                       try {
-                         const files = await filesApi.list();
-                         const newFilesMap: Record<string, string> = {};
-                         for (const file of files) {
-                           const data = await filesApi.get(file);
-                           if (data) {
-                             newFilesMap[file] = data.content;
-                           }
-                         }
-                         setFilesMap(newFilesMap);
-
-                         // Switch to today's date
-                         const today = getTodayStr();
-                         setCurrentFileDate(today);
-
-                         // Load today's file if it exists
-                         if (newFilesMap[today]) {
-                           const data = await filesApi.get(today);
-                           if (data) {
-                             setMarkdown(data.content);
-                             setTasks(data.tasks as Task[]);
-                             setLastSyncedMD(data.content);
-                           }
-                         }
-                       } catch (e) {
-                         console.error('Failed to reload workspace:', e);
-                         alert(language === 'zh'
-                           ? '重新加载工作区失败，请检查路径是否正确'
-                           : 'Failed to reload workspace. Please check if the path is correct.');
-                       }
-                     }
-                   } catch (e) {
-                     console.error('Failed to save config:', e);
-                     alert(language === 'zh'
-                       ? '保存配置失败'
-                       : 'Failed to save configuration');
-                   }
-                 }}
-                 className="bg-accent text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm hover:bg-accent/90 transition-colors"
-               >
-                 {language === 'zh' ? '保存' : 'Save'}
-               </button>
-             </div>
-           </motion.div>
-         </div>
+       {/* Quick Note Editor */}
+       {showQuickNoteEditor && (
+         <NoteEditor
+           language={language}
+           activeContext={activeContext}
+           availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
+           onSave={async (data) => {
+             try {
+               await notesApi.create(data);
+               setShowQuickNoteEditor(false);
+               // Refresh daily notes if the note is for today
+               if (data.date === currentFileDate) {
+                 const dateNotes = await notesApi.getByDate(currentFileDate);
+                 setDailyNotes(dateNotes);
+               }
+               showToast(language === 'zh' ? '笔记已保存' : 'Note saved', 'success');
+             } catch (err) {
+               console.error('Failed to save note:', err);
+               showToast(language === 'zh' ? '保存失败' : 'Failed to save note', 'error');
+             }
+           }}
+           onClose={() => setShowQuickNoteEditor(false)}
+         />
        )}
      </div>
   );

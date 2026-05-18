@@ -76,7 +76,22 @@ Toggle between Work and Life modes with one click. Tasks filter automatically by
 
 Aggregate all pending tasks across dates, organized by category and project for a bird's-eye view. Keyword search and tag filters help you zero in on any project.
 
-### 6. Git Sync
+### 6. Notes System
+
+A dedicated notes feature with three types:
+- **Regular Notes**: Capture ideas, thoughts, and memos anytime
+- **Meeting Notes**: Participants, time range, audio recording, transcription
+- **AI Summaries**: Pick a scope and prompt, AI generates a structured summary saved as a note
+
+Notes features:
+- **@Mentions**: Write `@name` in notes for automatic parsing and person-based filtering
+- **Multi-dimensional filtering**: By type, @person, project, tag, and date range
+- **Task linking**: Notes can link to tasks and projects, bidirectional navigation
+- **Timeline integration**: Today's notes appear inline in the Daily View
+- **Work/Life context**: Follows context switching automatically
+- **AI calls go through backend proxy**: API keys never leak to the browser, no CORS headaches (v0.3.0+)
+
+### 7. Git Sync
 
 One-click commit to GitHub. Automatic backup for all your notes and task data. Connection auto-verifies on launch, sidebar click, and config save — no need to hit "Test Connection" manually.
 
@@ -175,10 +190,33 @@ DailyFlow uses standard Markdown to store tasks:
 - [ ] Finish project report #work #deadline:2026-05-15
 - [x] Reply to client email #work
 - [>] Organize meeting notes #work (migrated to 2026-05-12)
+```
 
-## Notes
+**Notes format (Markdown + YAML frontmatter):**
 
-Today's meeting discussed Q3 plans...
+```markdown
+---
+type: meeting_note
+date: 2026-05-17
+time: "14:00"
+end_time: "15:00"
+context: work
+tags: [investment, strategy]
+mentions: [alice, bob]
+participants: [Alice Chen, Bob Wang]
+---
+
+# Investment Discussion Meeting
+
+## Key Points
+
+1. Board meeting postponed to early June
+2. Need to supplement profit forecast materials
+
+## Action Items
+
+- [ ] Complete profit forecast @alice
+- [ ] Send supplementary materials to @bob
 ```
 
 **Task Status:**

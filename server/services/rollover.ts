@@ -40,7 +40,7 @@ export async function previewRollover(
         return {
           ...task,
           id: `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          source_date: fromDate,
+          source_date: task.source_date || fromDate,
           tags
         };
       })];
@@ -107,7 +107,7 @@ export async function applyRollover(
       return {
         ...task,
         id: `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        source_date: fromDate,
+        source_date: task.source_date || fromDate,
         tags
       };
     });

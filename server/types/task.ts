@@ -52,3 +52,37 @@ export interface Project {
   deadline?: string;
   filePath?: string; // 项目文件的路径
 }
+
+export type NoteType = 'note' | 'meeting_note' | 'summary';
+
+export interface Note {
+  id: string;
+  title: string;
+  body: string;
+  type: NoteType;
+  date: string;
+  time?: string;
+  endTime?: string;
+  context: 'work' | 'life';
+  tags: string[];
+  mentions: string[];
+  linkedTaskIds: string[];
+  linkedProjectIds: string[];
+  participants?: string[];
+  recordingPath?: string;
+  transcriptPath?: string;
+  scope?: string;
+  prompt?: string;
+  model?: string;
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  prompt: string;
+  scope: string;
+  createdAt: string;
+}

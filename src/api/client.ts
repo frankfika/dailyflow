@@ -294,3 +294,177 @@ export const gitApi = {
     return res.json();
   },
 };
+
+export interface NoteData {
+  id: string;
+  title: string;
+  body: string;
+  type: 'note' | 'meeting_note' | 'summary';
+  date: string;
+  time?: string;
+  endTime?: string;
+  context: 'work' | 'life';
+  tags: string[];
+  mentions: string[];
+  linkedTaskIds: string[];
+  linkedProjectIds: string[];
+  participants?: string[];
+  recordingPath?: string;
+  transcriptPath?: string;
+  scope?: string;
+  prompt?: string;
+  model?: string;
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+}
+
+export interface PromptTemplateData {
+  id: string;
+  name: string;
+  prompt: string;
+  scope: string;
+  createdAt: string;
+}
+
+/**
+ * 笔记操作 API
+ */
+export const notesApi = {
+  async getAll(filters?: {
+    type?: string;
+    context?: string;
+    startDate?: string;
+    endDate?: string;
+    mention?: string;
+    tag?: string;
+    project?: string;
+  }): Promise<NoteData[]> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/notes${query}`);
+    if (!res.ok) throw new Error('Failed to fetch notes');
+    return res.json();
+  },
+
+  async getByDate(date: string): Promise<NoteData[]> {
+    const res = await fetch(`${API_BASE}/notes/date/${date}`);
+    if (!res.ok) throw new Error('Failed to fetch notes for date');
+    return res.json();
+  },
+
+  async getById(id: string): Promise<NoteData> {
+    const res = await fetch(`${API_BASE}/notes/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch note');
+    return res.json();
+  },
+
+  async create(note: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>): Promise<NoteData> {
+    const res = await fetch(`${API_BASE}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note),
+    });
+    if (!res.ok) throw new Error('Failed to create note');
+    return res.json();
+  },
+
+  async update(id: string, updates: Partial<Omit<NoteData, 'id' | 'createdAt' | 'filePath'>>): Promise<NoteData> {
+    const res = await fetch(`${API_BASE}/notes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Failed to update note');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/notes/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete note');
+  },
+
+  async getMentions(): Promise<string[]> {
+    const res = await fetch(`${API_BASE}/notes/mentions`);
+    if (!res.ok) throw new Error('Failed to fetch mentions');
+    return res.json();
+  },
+};
+
+/**
+ * 提示词模板 API
+ */
+export const promptsApi = {
+  async getAll(): Promise<PromptTemplateData[]> {
+    const res = await fetch(`${API_BASE}/prompts`);
+    if (!res.ok) throw new Error('Failed to fetch prompts');
+    return res.json();
+  },
+
+  async create(data: Omit<PromptTemplateData, 'id' | 'createdAt'>): Promise<PromptTemplateData> {
+    const res = await fetch(`${API_BASE}/prompts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create prompt');
+    return res.json();
+  },
+
+  async update(id: string, updates: Partial<Omit<PromptTemplateData, 'id' | 'createdAt'>>): Promise<PromptTemplateData> {
+    const res = await fetch(`${API_BASE}/prompts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Failed to update prompt');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/prompts/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete prompt');
+  },
+};
+
+export interface AISummarizeRequest {
+  provider: 'deepseek' | 'anthropic' | 'openai' | 'custom';
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+  systemPrompt?: string;
+  userPrompt: string;
+  maxTokens?: number;
+  format?: 'openai' | 'anthropic';
+}
+
+export interface AISummarizeResponse {
+  summary: string;
+  model: string;
+  provider: string;
+}
+
+/**
+ * AI 代理 API（避免前端直接调用 LLM 暴露 key + CORS 问题）
+ */
+export const aiApi = {
+  async summarize(req: AISummarizeRequest): Promise<AISummarizeResponse> {
+    const res = await fetch(`${API_BASE}/ai/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `AI request failed (${res.status})`);
+    }
+    return res.json();
+  },
+};

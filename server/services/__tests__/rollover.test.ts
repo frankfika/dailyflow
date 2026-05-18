@@ -95,6 +95,17 @@ describe('previewRollover', () => {
     expect(result!.tasksToMigrate.some(t => t.title === 'Task from May 2')).toBe(true);
     expect(result!.tasksToMigrate.some(t => t.title === 'Task from May 3')).toBe(true);
   });
+
+  it('preserves the original source_date across multi-hop rollovers', async () => {
+    await writeNote('2026-05-04', '- [ ] Long-running task ↗ migrated:2026-05-01\n');
+    const result = await previewRollover('2026-05-05', TEST_CONFIG);
+    expect(result).not.toBeNull();
+    const task = result!.tasksToMigrate.find(t => t.title === 'Long-running task');
+    expect(task).toBeDefined();
+    expect(task!.source_date).toBe('2026-05-01');
+    expect(result!.targetContent).toContain('migrated:2026-05-01');
+    expect(result!.targetContent).not.toContain('migrated:2026-05-04');
+  });
 });
 
 describe('applyRollover', () => {
@@ -217,5 +228,19 @@ describe('applyRollover', () => {
     const targetContent = await readNote('2026-05-05');
     expect(targetContent).not.toContain('#delayed');
     expect(targetContent).toContain('#deadline:2026-05-10');
+  });
+
+  it('preserves original source_date across multi-day rollover chains', async () => {
+    // Task originally from May 1, sat unfinished on May 2 (already migrated once).
+    // Rolling over to May 3 must keep source_date = May 1, NOT overwrite to May 2.
+    await writeNote('2026-05-02', '- [ ] Long-running task ↗ migrated:2026-05-01\n');
+
+    const result = await applyRollover('2026-05-03', TEST_CONFIG);
+    expect(result.migratedCount).toBe(1);
+
+    const targetContent = await readNote('2026-05-03');
+    expect(targetContent).toContain('Long-running task');
+    expect(targetContent).toContain('migrated:2026-05-01');
+    expect(targetContent).not.toContain('migrated:2026-05-02');
   });
 });

@@ -36,3 +36,37 @@ export type Project = {
   deadline?: string;
   filePath?: string;
 };
+
+export type NoteType = 'note' | 'meeting_note' | 'summary';
+
+export type Note = {
+  id: string;
+  title: string;
+  body: string;
+  type: NoteType;
+  date: string;
+  time?: string;
+  endTime?: string;
+  context: 'work' | 'life';
+  tags: string[];
+  mentions: string[];
+  linkedTaskIds: string[];
+  linkedProjectIds: string[];
+  participants?: string[];
+  recordingPath?: string;
+  transcriptPath?: string;
+  scope?: string;
+  prompt?: string;
+  model?: string;
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+};
+
+export type PromptTemplate = {
+  id: string;
+  name: string;
+  prompt: string;
+  scope: string;
+  createdAt: string;
+};

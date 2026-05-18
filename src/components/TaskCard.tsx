@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Briefcase, Calendar, Check, CornerUpRight, Edit2, Trash2, X } from 'lucide-react';
+import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, Trash2, X } from 'lucide-react';
 import type { Task } from '../types/task';
 import { getTagColor } from '../utils/tagColors';
 
@@ -9,6 +9,7 @@ interface TaskCardProps {
   language: 'en' | 'zh';
   categories: string[];
   currentFileDate: string;
+  linkedNotesCount?: number;
   onToggle: () => void;
   onEdit: (updates: {
     title?: string;
@@ -26,6 +27,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   language,
   categories,
   currentFileDate,
+  linkedNotesCount = 0,
   onToggle,
   onEdit,
   onDelete,
@@ -227,14 +229,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
-          <div className="flex flex-wrap gap-2 mt-4 mt-3">
+          <div className="flex flex-wrap gap-2 mt-3">
             {task.source_date && task.source_date !== currentFileDate && (
               <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-accent-highlight text-[#966b4d] text-[10px] font-sans font-bold tracking-widest uppercase border border-[#edcdb6]">
                 <CornerUpRight className="w-3 h-3" />
                 <span>{language === 'zh' ? `结转自 ${task.source_date}` : `from ${task.source_date}`}</span>
               </span>
             )}
-            {task.tags && task.tags.filter((t: string) => t !== 'tasks').map((tag: string) => (
+            {task.tags && task.tags.filter((t: string) => !['tasks', 'work', 'life'].includes(t)).map((tag: string) => (
               <span key={tag} className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-sans font-bold tracking-widest uppercase border ${getTagColor(tag)}`}>
                 <span>#{tag}</span>
               </span>
@@ -254,6 +256,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.priority === 'high' && (
               <span className="inline-flex items-center justify-center space-x-1 px-2.5 py-1 rounded-md bg-accent text-white text-[10px] font-sans font-bold tracking-widest uppercase shadow-sm shadow-accent/20">
                 <span>Priority</span>
+              </span>
+            )}
+            {linkedNotesCount > 0 && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-surface text-text-muted text-[10px] font-sans font-bold tracking-widest uppercase border border-border/50">
+                <FileText className="w-3 h-3" />
+                <span>{linkedNotesCount}</span>
               </span>
             )}
           </div>
