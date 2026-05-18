@@ -91,11 +91,20 @@ Notes features:
 - **Work/Life context**: Follows context switching automatically
 - **AI calls go through backend proxy**: API keys never leak to the browser, no CORS headaches (v0.3.0+)
 
-### 7. Git Sync
+### 7. Tags View
+
+A new tag-based dimension to view all notes and tasks:
+- **Tag aggregation**: Automatically collects tags from all notes and tasks
+- **Statistics**: Shows note count and task count for each tag
+- **Card display**: Click tag cards to expand and view detailed content
+- **Real-time search**: Search and filter tags by name
+- **Context-aware**: Follows Work/Life context switching
+
+### 8. Git Sync
 
 One-click commit to GitHub. Automatic backup for all your notes and task data. Connection auto-verifies on launch, sidebar click, and config save — no need to hit "Test Connection" manually.
 
-### 8. In-App Update Checker
+### 9. In-App Update Checker
 
 Automatically detects the latest version from GitHub Releases, no need to manually visit the repository:
 - **Auto-check on startup**: Checks for updates 3 seconds after app launch

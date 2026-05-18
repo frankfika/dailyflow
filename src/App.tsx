@@ -23,6 +23,7 @@ import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
+import { Tags } from './components/Tags';
 import type { NoteData } from './api/client';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 import { checkForUpdates, type UpdateInfo } from './api/updater';
@@ -70,7 +71,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'notes'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'notes' | 'tags'>('today');
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1293,6 +1294,11 @@ export default function App() {
                   aiApiKey={aiApiKey}
                   aiModel={aiModel}
                   aiBaseUrl={aiBaseUrl}
+                />
+              ) : activeTab === 'tags' ? (
+                <Tags
+                  activeContext={activeContext}
+                  language={language}
                 />
               ) : (
                 <div className="py-32 text-center bg-surface-white rounded-[48px] border border-border/50 shadow-sm mt-8">
