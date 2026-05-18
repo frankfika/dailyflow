@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, FileText, LayoutDashboard, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markdown';
@@ -25,6 +25,7 @@ import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
 import type { NoteData } from './api/client';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
+import { checkForUpdates, type UpdateInfo } from './api/updater';
 
 type Task = {
   id: string;
@@ -136,6 +137,8 @@ export default function App() {
   const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const markdownRef = React.useRef(markdown);
 
   // Check first run on mount
@@ -177,6 +180,24 @@ export default function App() {
     };
     checkFirstRun();
     loadConfigData();
+  }, []);
+
+  // Auto-check for updates on app start
+  useEffect(() => {
+    const autoCheckUpdate = async () => {
+      try {
+        const info = await checkForUpdates();
+        if (info.hasUpdate) {
+          setUpdateInfo(info);
+          setShowUpdateBanner(true);
+        }
+      } catch (error) {
+        console.error('Failed to auto-check for updates:', error);
+      }
+    };
+    // Check after 3 seconds to avoid blocking initial load
+    const timer = setTimeout(autoCheckUpdate, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Poll git status when connected
@@ -637,6 +658,44 @@ export default function App() {
             {toast.type === 'success' && <Check className="w-5 h-5" />}
             {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
             {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Update Banner */}
+      <AnimatePresence>
+        {showUpdateBanner && updateInfo?.hasUpdate && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[9998] max-w-md w-full mx-4"
+          >
+            <div className="bg-blue-500 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
+              <Download className="w-5 h-5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm">
+                  {language === 'zh' ? '发现新版本' : 'New version available'}
+                </p>
+                <p className="text-xs opacity-90">
+                  v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
+                </p>
+              </div>
+              <a
+                href={updateInfo.downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-50 transition-colors shrink-0"
+              >
+                {language === 'zh' ? '下载' : 'Download'}
+              </a>
+              <button
+                onClick={() => setShowUpdateBanner(false)}
+                className="p-1 hover:bg-blue-600 rounded transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

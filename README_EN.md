@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.2.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.3.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -94,6 +94,14 @@ Notes features:
 ### 7. Git Sync
 
 One-click commit to GitHub. Automatic backup for all your notes and task data. Connection auto-verifies on launch, sidebar click, and config save — no need to hit "Test Connection" manually.
+
+### 8. In-App Update Checker
+
+Automatically detects the latest version from GitHub Releases, no need to manually visit the repository:
+- **Auto-check on startup**: Checks for updates 3 seconds after app launch
+- **Top banner notification**: Shows update prompt when a new version is available, one-click to download
+- **Manual check**: "Check for Updates" button in Settings for on-demand version checks
+- **Smart platform detection**: Automatically recommends the installer for your current OS
 
 ## 📸 Screenshots
 

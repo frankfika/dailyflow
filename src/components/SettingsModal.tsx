@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
 import { configApi, aiApi } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
+import { checkForUpdates, type UpdateInfo } from '../api/updater';
 
 interface SettingsModalProps {
   showSettings: boolean;
@@ -102,6 +104,21 @@ export function SettingsModal({
   verifyGithubConnection,
   filesApi,
 }: SettingsModalProps) {
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const info = await checkForUpdates();
+      setUpdateInfo(info);
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
   if (!showSettings) return null;
 
   return (
@@ -220,6 +237,82 @@ export function SettingsModal({
                   >
                     中文
                   </button>
+                </div>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* App Update */}
+              <div>
+                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                  {language === 'zh' ? '应用更新' : 'App Update'}
+                </h3>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleCheckUpdate}
+                    disabled={isCheckingUpdate}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCheckingUpdate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'zh' ? '检查中...' : 'Checking...'}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        {language === 'zh' ? '检查更新' : 'Check for Updates'}
+                      </>
+                    )}
+                  </button>
+
+                  {updateInfo && (
+                    <div className={`p-4 rounded-lg border ${
+                      updateInfo.hasUpdate
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-green-50 border-green-200'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        {updateInfo.hasUpdate ? (
+                          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 space-y-2">
+                          <p className={`text-sm font-semibold ${
+                            updateInfo.hasUpdate ? 'text-blue-700' : 'text-green-700'
+                          }`}>
+                            {updateInfo.hasUpdate
+                              ? (language === 'zh' ? '发现新版本！' : 'New version available!')
+                              : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
+                          </p>
+                          <div className="text-xs space-y-1">
+                            <p className={updateInfo.hasUpdate ? 'text-blue-600' : 'text-green-600'}>
+                              {language === 'zh' ? '当前版本: ' : 'Current: '}
+                              <span className="font-mono font-semibold">{updateInfo.currentVersion}</span>
+                            </p>
+                            {updateInfo.hasUpdate && (
+                              <p className="text-blue-600">
+                                {language === 'zh' ? '最新版本: ' : 'Latest: '}
+                                <span className="font-mono font-semibold">{updateInfo.latestVersion}</span>
+                              </p>
+                            )}
+                          </div>
+                          {updateInfo.hasUpdate && updateInfo.downloadUrl && (
+                            <a
+                              href={updateInfo.downloadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors mt-2"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              {language === 'zh' ? '下载更新' : 'Download Update'}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

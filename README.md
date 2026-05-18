@@ -10,7 +10,7 @@
 
 ### Markdown 驱动，自动迁移未完成任务，让你专注于当下
 
-![Version](https://img.shields.io/badge/Version-0.2.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.3.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -93,7 +93,15 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ### 7. Git 同步
 
-一键提交到 GitHub，自动备份你的所有笔记和任务数据。启动时自动验证连接状态，侧栏点击和保存配置时也会自动重测，无需手动点击「测试连接」。
+一键提交到 GitHub，自动备份你的所有笔记和任务数据。启动时自动验证连接状态，侧栏点击和保存配置时也会自动重测,无需手动点击「测试连接」。
+
+### 8. 应用内更新检测
+
+自动检测 GitHub Releases 的最新版本，无需手动访问仓库查找更新：
+- **启动时自动检查**：应用启动后 3 秒自动检测新版本
+- **顶部横幅提示**：发现新版本时显示更新提示，一键跳转下载
+- **手动检查**：设置页面提供"检查更新"按钮，随时查看版本状态
+- **智能平台识别**：根据当前系统自动推荐对应平台的安装包
 
 ## 📸 界面预览
 
