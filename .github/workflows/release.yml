@@ -97,6 +97,6 @@ jobs:
             > macOS users: this build is not notarized. On first launch, right-click the app and choose **Open** to bypass Gatekeeper.
 
             See commits for full changelog.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.platform.args }}
