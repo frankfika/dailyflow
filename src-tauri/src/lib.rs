@@ -6,6 +6,7 @@ mod markdown;
 mod models;
 mod projects;
 mod rollover;
+mod server;
 mod state;
 
 use state::AppState;
@@ -44,9 +45,15 @@ pub fn run() {
             commands::init_git_repo,
             commands::set_git_remote,
         ])
-        .setup(|_app| {
+        .setup(|app| {
             // Ensure config directory exists
             let _ = config::ensure_config_dir();
+
+            // Start Express server
+            if let Err(e) = server::setup_server(app) {
+                eprintln!("Failed to start server: {}", e);
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
