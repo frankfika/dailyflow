@@ -47,7 +47,13 @@ Grab the installer for your platform from [Releases](https://github.com/frankfik
 | Windows | `DailyFlow_x.x.x_x64-setup.exe` |
 | Linux | `DailyFlow_x.x.x_amd64.AppImage` |
 
-> macOS: builds are not notarized. On first launch, **right-click the app → Open** in Finder to bypass Gatekeeper.
+> **macOS Users**:
+> 
+> If you see "DailyFlow is damaged" error, run:
+> ```bash
+> sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
+> ```
+> See [macOS Fix Guide](docs/MACOS_DAMAGED_FIX.md) for details.
 
 ## ✨ Features
 

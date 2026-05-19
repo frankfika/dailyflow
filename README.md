@@ -47,7 +47,13 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 | Windows | `DailyFlow_x.x.x_x64-setup.exe` |
 | Linux | `DailyFlow_x.x.x_amd64.AppImage` |
 
-> macOS 用户：当前发行版未做苹果公证，首次打开时请在「访达」里**右键 → 打开**，绕过 Gatekeeper 提示。
+> **macOS 用户注意**：
+> 
+> 如果遇到 "DailyFlow is damaged" 错误，请执行：
+> ```bash
+> sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
+> ```
+> 详见 [macOS 错误修复指南](docs/MACOS_DAMAGED_FIX.md)
 
 ## ✨ 核心功能
 
