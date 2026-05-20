@@ -18,7 +18,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
 import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
-import { Projects } from './components/Projects';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
 import { DailyNoteCards } from './components/DailyNoteCards';
@@ -26,7 +25,6 @@ import { NoteEditor } from './components/NoteEditor';
 import { Tags } from './components/Tags';
 import type { NoteData } from './api/client';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
-import { checkForUpdates, type UpdateInfo } from './api/updater';
 
 type Task = {
   id: string;
@@ -71,7 +69,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'projects' | 'notes' | 'tags'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'tags'>('today');
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -113,9 +111,6 @@ export default function App() {
   const [syncInterval, setSyncInterval] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [allPendingTasks, setAllPendingTasks] = useState<Task[]>([]);
-  const [projectSearch, setProjectSearch] = useState('');
-  const [projectTagFilter, setProjectTagFilter] = useState<string | null>(null);
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
@@ -138,8 +133,7 @@ export default function App() {
   const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const markdownRef = React.useRef(markdown);
 
   // Check first run on mount
@@ -183,20 +177,17 @@ export default function App() {
     loadConfigData();
   }, []);
 
-  // Auto-check for updates on app start
+  // Auto-check for updates on app start (silently, only for Settings badge)
   useEffect(() => {
     const autoCheckUpdate = async () => {
       try {
+        const { checkForUpdates } = await import('./api/updater');
         const info = await checkForUpdates();
-        if (info.hasUpdate) {
-          setUpdateInfo(info);
-          setShowUpdateBanner(true);
-        }
+        setUpdateAvailable(info.hasUpdate);
       } catch (error) {
         console.error('Failed to auto-check for updates:', error);
       }
     };
-    // Check after 3 seconds to avoid blocking initial load
     const timer = setTimeout(autoCheckUpdate, 3000);
     return () => clearTimeout(timer);
   }, []);
@@ -350,34 +341,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // Load all pending tasks for projects view when switching to projects tab
-  useEffect(() => {
-    if (activeTab !== 'projects') return;
-    let cancelled = false;
-    const loadAllPending = async () => {
-      try {
-        const files = await filesApi.list();
-        if (cancelled) return;
-        const results = await Promise.all(files.map(f => filesApi.get(f)));
-        if (cancelled) return;
-        const pending: Task[] = [];
-        results.forEach((data) => {
-          if (!data) return;
-          (data.tasks as Task[]).forEach((t) => {
-            if (t.status === 'todo') {
-              pending.push({ ...t, source_date: t.source_date || data.date });
-            }
-          });
-        });
-        if (!cancelled) setAllPendingTasks(pending);
-      } catch (e) {
-        if (!cancelled) console.error('Failed to load pending tasks', e);
-      }
-    };
-    loadAllPending();
-    return () => { cancelled = true; };
-  }, [activeTab, currentFileDate]);
 
   const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
@@ -663,43 +626,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Update Banner */}
-      <AnimatePresence>
-        {showUpdateBanner && updateInfo?.hasUpdate && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-[9998] max-w-md w-full mx-4"
-          >
-            <div className="bg-blue-500 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
-              <Download className="w-5 h-5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm">
-                  {language === 'zh' ? '发现新版本' : 'New version available'}
-                </p>
-                <p className="text-xs opacity-90">
-                  v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
-                </p>
-              </div>
-              <a
-                href={updateInfo.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-50 transition-colors shrink-0"
-              >
-                {language === 'zh' ? '下载' : 'Download'}
-              </a>
-              <button
-                onClick={() => setShowUpdateBanner(false)}
-                className="p-1 hover:bg-blue-600 rounded transition-colors shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <RolloverPreviewModal
         show={showRolloverPreview}
@@ -764,11 +690,14 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-text-muted hover:text-text-main transition-colors rounded-lg hover:bg-surface"
+              className="relative p-2 text-text-muted hover:text-text-main transition-colors rounded-lg hover:bg-surface"
               title={language === 'zh' ? '设置' : 'Settings'}
               data-testid="settings-button"
             >
               <Settings className="w-4.5 h-4.5" />
+              {updateAvailable && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              )}
             </button>
             <ContextSwitcher
               activeContext={activeContext}
@@ -1156,135 +1085,6 @@ export default function App() {
                     onViewAll={() => setActiveTab('notes')}
                   />
 
-                </motion.div>
-              ) : activeTab === 'projects' ? (
-                <motion.div
-                  key="visual-projects"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="space-y-8"
-                >
-                  <div className="mb-4">
-                    <h1 className="text-4xl font-serif font-light text-text-heading tracking-tight italic mb-2">
-                       {language === 'zh' ? '项目概览' : 'Projects Focus'}
-                    </h1>
-                    <p className="text-text-muted font-sans text-sm">
-                       {language === 'zh' ? '按类别查看所有待办任务，支持搜索和筛选。' : 'All pending tasks by category. Search and filter.'}
-                    </p>
-                  </div>
-
-                  {(() => {
-                    const contextFiltered = filterTasksByContext(allPendingTasks, activeContext);
-                    const systemTags = ['work', 'life', 'delayed', 'tasks', 'migrated'];
-                    const allTags = Array.from(new Set(contextFiltered.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
-
-                    let filtered = contextFiltered;
-                    if (projectTagFilter) {
-                      filtered = filtered.filter(t => t.tags?.includes(projectTagFilter));
-                    }
-                    if (projectSearch.trim()) {
-                      const q = projectSearch.trim().toLowerCase();
-                      filtered = filtered.filter(t => t.title.toLowerCase().includes(q));
-                    }
-                    filtered.sort((a, b) => (b.source_date || '').localeCompare(a.source_date || ''));
-
-                    const groupedByTag: Record<string, Task[]> = {};
-                    filtered.forEach(t => {
-                      const taskTags = (t.tags || []).filter(tag => !systemTags.includes(tag));
-                      const primaryTag = projectTagFilter || taskTags[0] || (language === 'zh' ? '未分类' : 'Uncategorized');
-                      if (!groupedByTag[primaryTag]) groupedByTag[primaryTag] = [];
-                      if (!groupedByTag[primaryTag].some(existing => existing.id === t.id)) {
-                        groupedByTag[primaryTag].push(t);
-                      }
-                    });
-
-                    return (
-                      <>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                            <input
-                              type="text"
-                              value={projectSearch}
-                              onChange={e => setProjectSearch(e.target.value)}
-                              placeholder={language === 'zh' ? '搜索任务...' : 'Search tasks...'}
-                              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-white border border-border text-sm outline-none focus:border-accent transition-colors"
-                            />
-                            {projectSearch && (
-                              <button onClick={() => setProjectSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => setProjectTagFilter(null)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${!projectTagFilter ? 'bg-accent text-white border-accent' : 'bg-surface-white text-text-muted border-border hover:border-accent/50'}`}
-                          >
-                            {language === 'zh' ? '全部' : 'All'} ({contextFiltered.length})
-                          </button>
-                          {allTags.sort().map(tag => (
-                            <button
-                              key={tag}
-                              onClick={() => setProjectTagFilter(projectTagFilter === tag ? null : tag)}
-                              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${projectTagFilter === tag ? 'bg-accent text-white border-accent' : 'bg-surface-white text-text-muted border-border hover:border-accent/50'}`}
-                            >
-                              {tag} ({contextFiltered.filter(t => t.tags?.includes(tag)).length})
-                            </button>
-                          ))}
-                        </div>
-
-                        {Object.keys(groupedByTag).length === 0 ? (
-                          <div className="py-20 text-center bg-surface-white rounded-[32px] border border-border/50 shadow-sm">
-                            <Search className="w-12 h-12 text-text-muted mx-auto mb-6 opacity-30 stroke-[1.5]" />
-                            <h3 className="font-serif italic text-2xl text-text-muted font-light">
-                              {projectSearch ? (language === 'zh' ? '没有匹配的任务' : 'No matching tasks') : (language === 'zh' ? '暂无待办任务' : 'No pending tasks')}
-                            </h3>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                            {Object.entries(groupedByTag).map(([cat, catTasks]) => (
-                              <div key={cat} className="bg-surface-white rounded-[32px] border border-border shadow-sm p-6 overflow-hidden flex flex-col h-[500px]">
-                                <h2 className="flex items-center gap-3 text-[14px] uppercase tracking-widest font-bold text-text-heading mb-6 shrink-0">
-                                  <Briefcase className="w-4 h-4 text-accent" />
-                                  <span className="truncate">{cat}</span>
-                                  <span className="ml-auto text-[10px] text-text-muted bg-surface px-2 py-1 rounded-full">{catTasks.length}</span>
-                                </h2>
-                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                                  {catTasks.map(task => (
-                                    <div key={task.id + task.source_date} className="p-4 rounded-2xl bg-surface border border-border/50 hover:border-accent/40 transition-colors">
-                                      <div className="flex items-start gap-3">
-                                        <div className="w-5 h-5 rounded border border-border/80 flex items-center justify-center shrink-0 mt-0.5 bg-background shadow-inner"></div>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-semibold text-text-heading text-sm break-words leading-tight">{task.title}</p>
-                                          <div className="flex items-center gap-3 mt-2">
-                                            <p className="text-[10px] text-text-muted font-sans font-bold tracking-widest uppercase flex items-center gap-1 opacity-60">
-                                              <Calendar className="w-3 h-3" />
-                                              {task.source_date}
-                                            </p>
-                                            {task.tags && task.tags.filter(tag => !systemTags.includes(tag) && tag !== cat).length > 0 && (
-                                              <div className="flex gap-1">
-                                                {task.tags.filter(tag => !systemTags.includes(tag) && tag !== cat).map(tag => (
-                                                  <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold uppercase tracking-wider">{tag}</span>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
                 </motion.div>
               ) : activeTab === 'notes' ? (
                 <Notes

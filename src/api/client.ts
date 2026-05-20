@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 const API_BASE = import.meta.env.DEV ? '/api' : 'http://localhost:3003/api';
 
 // Inline types that match the server API responses

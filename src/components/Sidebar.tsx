@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'projects' | 'notes' | 'tags';
-  setActiveTab: (tab: 'today' | 'projects' | 'notes' | 'tags') => void;
+  activeTab: 'today' | 'notes' | 'tags';
+  setActiveTab: (tab: 'today' | 'notes' | 'tags') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -190,13 +190,6 @@ export function Sidebar({
                   data-testid="nav-daily-notes"
                 >
                   <span className="ml-4">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('projects'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'projects' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-projects"
-                >
-                  <span className="ml-4">{language === 'zh' ? '项目概览' : 'Projects Focus'}</span>
                 </li>
                 <li
                   onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
