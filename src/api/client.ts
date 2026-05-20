@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.DEV ? '/api' : 'http://localhost:3003/api';
 
 // Inline types that match the server API responses
 export interface TaskInput {
