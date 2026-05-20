@@ -11,11 +11,19 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let server_path = resource_path.join("dist-server").join("index.cjs");
-
-    if !server_path.exists() {
-        return Err(format!("Server not found at: {:?}", server_path));
-    }
+    // Tauri v2 places resources under a subdirectory (e.g. _up_ on macOS).
+    // Try the direct path first, then the _up_ fallback.
+    let server_path = if resource_path.join("dist-server").join("index.cjs").exists() {
+        resource_path.join("dist-server").join("index.cjs")
+    } else if resource_path.join("_up_").join("dist-server").join("index.cjs").exists() {
+        resource_path.join("_up_").join("dist-server").join("index.cjs")
+    } else {
+        return Err(format!(
+            "Server not found. Searched:\n  {:?}\n  {:?}",
+            resource_path.join("dist-server").join("index.cjs"),
+            resource_path.join("_up_").join("dist-server").join("index.cjs")
+        ));
+    };
 
     // On macOS .app bundles don't inherit the user's PATH, so we try common node locations
     let node_candidates: Vec<&str> = if cfg!(target_os = "macos") {

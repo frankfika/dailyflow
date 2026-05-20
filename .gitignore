@@ -11,3 +11,4 @@ src-tauri/target/
 test-results/
 playwright-report/
 *.dmg
+dist-server/
