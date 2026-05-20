@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "DailyFlow",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "identifier": "com.dailyflow.app",
   "build": {
     "frontendDist": "../dist",
