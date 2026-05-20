@@ -11,7 +11,7 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let server_path = resource_path.join("dist-server").join("index.js");
+    let server_path = resource_path.join("dist-server").join("index.cjs");
 
     if !server_path.exists() {
         return Err(format!("Server not found at: {:?}", server_path));

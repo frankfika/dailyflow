@@ -12,8 +12,9 @@ export interface UpdateInfo {
   publishedAt?: string;
 }
 
-const GITHUB_REPO = 'frankfika/dailyflow'; // 替换为你的 GitHub 仓库
-const CURRENT_VERSION = '0.4.1'; // 从 package.json 读取
+const GITHUB_REPO = 'frankfika/dailyflow';
+declare const __APP_VERSION__: string;
+const CURRENT_VERSION = __APP_VERSION__;
 
 /**
  * 检查是否有新版本
