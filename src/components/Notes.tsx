@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, FileText, Mic, Sparkles, X, ChevronDown, Loader2, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -27,6 +27,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
   const [mentionFilter, setMentionFilter] = useState<string | null>(null);
   const [allMentions, setAllMentions] = useState<string[]>([]);
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [availableProjects, setAvailableProjects] = useState<{ id: string; name: string }[]>([]);
   const [availableTasks, setAvailableTasks] = useState<{ id: string; title: string }[]>([]);
 
@@ -213,13 +214,27 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
     }
   };
 
-  const filteredNotes = searchQuery
-    ? notes.filter(n =>
-        n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.mentions.some(m => m.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : notes;
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    notes.forEach(n => n.tags.forEach(t => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [notes]);
+
+  const filteredNotes = useMemo(() => {
+    let result = notes;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(n =>
+        n.title.toLowerCase().includes(q) ||
+        n.body.toLowerCase().includes(q) ||
+        n.mentions.some(m => m.toLowerCase().includes(q))
+      );
+    }
+    if (tagFilter) {
+      result = result.filter(n => n.tags.includes(tagFilter));
+    }
+    return result;
+  }, [notes, searchQuery, tagFilter]);
 
   // Group by date
   const grouped = filteredNotes.reduce<Record<string, NoteData[]>>((acc, note) => {
@@ -345,7 +360,35 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
               <X className="w-2.5 h-2.5" />
             </button>
           )}
+          {tagFilter && (
+            <button
+              onClick={() => setTagFilter(null)}
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-[10px] font-bold hover:bg-accent/20 transition-colors"
+            >
+              #{tagFilter}
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )}
         </div>
+
+        {/* Tag filter */}
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold tracking-widest border transition-all ${
+                  tagFilter === tag
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-surface text-text-muted border-border hover:border-accent/50'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* AI Summary Generator */}
@@ -476,7 +519,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
         >
           <FileText className="w-12 h-12 text-border mx-auto mb-4" />
           <p className="text-text-muted text-sm">
-            {searchQuery || mentionFilter
+            {searchQuery || mentionFilter || tagFilter
               ? (language === 'zh' ? '没有匹配的笔记' : 'No matching notes')
               : (language === 'zh' ? '还没有笔记，创建第一条吧' : 'No notes yet. Create your first one.')}
           </p>
