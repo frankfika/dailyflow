@@ -66,9 +66,9 @@ Unfinished tasks automatically migrate to today when you open the app, with sour
 - **Source tracking**: Each migrated task shows its original date
 - **No duplicates**: Tasks marked as migrated (`[>]`) won't appear in the migration list again
 
-### 2. Visual + Markdown Dual Mode
+### 2. Visual Task Management
 
-Switch freely between a polished visual interface and raw Markdown editing. Data is always stored as Markdown — open it with any editor.
+Beautiful card-based interface with tasks organized by tags. Data is always stored as Markdown — open it with any editor.
 
 ### 3. AI Brain Dump
 
@@ -97,18 +97,16 @@ Notes features:
 - **Work/Life context**: Follows context switching automatically
 - **AI calls go through backend proxy**: API keys never leak to the browser, no CORS headaches (v0.3.0+)
 
-### 7. Tags View
+### 7. Tag Filtering
 
-A new tag-based dimension to view all notes and tasks:
-- **Tag aggregation**: Automatically collects tags from all notes and tasks
-- **Statistics**: Shows note count and task count for each tag
-- **Card display**: Click tag cards to expand and view detailed content
-- **Real-time search**: Search and filter tags by name
+Filter content by tags directly within Daily Notes and Notes pages:
+- **Daily Notes**: Tag pills at the top for quick task filtering
+- **Notes page**: Tag pills filter notes, supporting multi-dimensional combined filtering
 - **Context-aware**: Follows Work/Life context switching
 
 ### 8. Git Sync
 
-One-click commit to GitHub. Automatic backup for all your notes and task data. Connection auto-verifies on launch, sidebar click, and config save — no need to hit "Test Connection" manually.
+One-click commit to GitHub. Automatic backup for all your notes and task data. The top status bar shows sync status and last sync time in real time. Connection auto-verifies on launch and config save — no need to hit "Test Connection" manually.
 
 ### 9. In-App Update Checker
 
@@ -124,9 +122,9 @@ Automatically detects the latest version from GitHub Releases, no need to manual
 |---------------|----------|
 | ![Main](./docs/assets/home.png) | ![Add Task](./docs/assets/add-task.png) |
 
-| Projects Overview | Markdown Editor |
-|------------------|-----------------|
-| ![Projects](./docs/assets/projects.png) | ![Markdown](./docs/assets/markdown-view.png) |
+| Projects Overview | Notes List |
+|------------------|------------|
+| ![Projects](./docs/assets/projects.png) | ![Notes](./docs/assets/notes.png) |
 
 ## 🚀 Quick Start
 
