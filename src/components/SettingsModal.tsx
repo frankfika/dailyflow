@@ -9,6 +9,8 @@ import { configApi, aiApi } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
 import { checkForUpdates, type UpdateInfo } from '../api/updater';
 
+declare const __APP_VERSION__: string;
+
 interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
@@ -248,6 +250,12 @@ export function SettingsModal({
                   {language === 'zh' ? '应用更新' : 'App Update'}
                 </h3>
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-text-muted">
+                    <span>
+                      {language === 'zh' ? '当前版本' : 'Current Version'}
+                    </span>
+                    <span className="font-mono font-semibold text-text-heading">{__APP_VERSION__}</span>
+                  </div>
                   <button
                     onClick={handleCheckUpdate}
                     disabled={isCheckingUpdate}
