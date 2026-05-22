@@ -15,8 +15,8 @@ interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'ai' | 'github';
-  setConfigTab: (tab: 'general' | 'ai' | 'github') => void;
+  configTab: 'general' | 'ai' | 'github' | 'about';
+  setConfigTab: (tab: 'general' | 'ai' | 'github' | 'about') => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
@@ -108,17 +108,42 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('df_last_update_check');
+    } catch {
+      return null;
+    }
+  });
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
     try {
       const info = await checkForUpdates();
       setUpdateInfo(info);
+      const now = new Date().toISOString();
+      setLastCheckTime(now);
+      try {
+        localStorage.setItem('df_last_update_check', now);
+      } catch {
+        // ignore
+      }
     } catch (error) {
       console.error('Failed to check for updates:', error);
     } finally {
       setIsCheckingUpdate(false);
     }
+  };
+
+  const formatCheckTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   if (!showSettings) return null;
@@ -174,6 +199,16 @@ export function SettingsModal({
             }`}
           >
             GitHub
+          </button>
+          <button
+            onClick={() => setConfigTab('about')}
+            className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+              configTab === 'about'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            {language === 'zh' ? '关于' : 'About'}
           </button>
         </div>
 
@@ -242,87 +277,6 @@ export function SettingsModal({
                 </div>
               </div>
 
-              <hr className="border-border" />
-
-              {/* App Update */}
-              <div>
-                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
-                  {language === 'zh' ? '应用更新' : 'App Update'}
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs text-text-muted">
-                    <span>
-                      {language === 'zh' ? '当前版本' : 'Current Version'}
-                    </span>
-                    <span className="font-mono font-semibold text-text-heading">{__APP_VERSION__}</span>
-                  </div>
-                  <button
-                    onClick={handleCheckUpdate}
-                    disabled={isCheckingUpdate}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCheckingUpdate ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {language === 'zh' ? '检查中...' : 'Checking...'}
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        {language === 'zh' ? '检查更新' : 'Check for Updates'}
-                      </>
-                    )}
-                  </button>
-
-                  {updateInfo && (
-                    <div className={`p-4 rounded-lg border ${
-                      updateInfo.hasUpdate
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-green-50 border-green-200'
-                    }`}>
-                      <div className="flex items-start gap-3">
-                        {updateInfo.hasUpdate ? (
-                          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                        ) : (
-                          <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                        )}
-                        <div className="flex-1 space-y-2">
-                          <p className={`text-sm font-semibold ${
-                            updateInfo.hasUpdate ? 'text-blue-700' : 'text-green-700'
-                          }`}>
-                            {updateInfo.hasUpdate
-                              ? (language === 'zh' ? '发现新版本！' : 'New version available!')
-                              : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
-                          </p>
-                          <div className="text-xs space-y-1">
-                            <p className={updateInfo.hasUpdate ? 'text-blue-600' : 'text-green-600'}>
-                              {language === 'zh' ? '当前版本: ' : 'Current: '}
-                              <span className="font-mono font-semibold">{updateInfo.currentVersion}</span>
-                            </p>
-                            {updateInfo.hasUpdate && (
-                              <p className="text-blue-600">
-                                {language === 'zh' ? '最新版本: ' : 'Latest: '}
-                                <span className="font-mono font-semibold">{updateInfo.latestVersion}</span>
-                              </p>
-                            )}
-                          </div>
-                          {updateInfo.hasUpdate && updateInfo.downloadUrl && (
-                            <a
-                              href={updateInfo.downloadUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors mt-2"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              {language === 'zh' ? '下载更新' : 'Download Update'}
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
 
@@ -640,6 +594,109 @@ export function SettingsModal({
                         : 'bg-red-50 text-red-700 border border-red-200'
                     }`}>
                       {githubVerifyMsg}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {configTab === 'about' && (
+            <div className="space-y-5">
+              {/* App Info */}
+              <div className="text-center py-4">
+                <div className="w-12 h-12 bg-accent text-white flex items-center justify-center font-serif text-xl font-bold rounded-lg shadow-sm mx-auto mb-3">D</div>
+                <h3 className="font-serif text-xl text-text-heading italic">DailyFlow</h3>
+                <p className="text-xs text-text-muted mt-1">
+                  {language === 'zh' ? '简洁高效的日常任务管理工具' : 'A minimal daily task manager'}
+                </p>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* App Update */}
+              <div>
+                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                  {language === 'zh' ? '应用更新' : 'App Update'}
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-text-muted">
+                    <span>
+                      {language === 'zh' ? '当前版本' : 'Current Version'}
+                    </span>
+                    <span className="font-mono font-semibold text-text-heading">{__APP_VERSION__}</span>
+                  </div>
+                  {lastCheckTime && (
+                    <div className="flex items-center justify-between text-xs text-text-muted">
+                      <span>
+                        {language === 'zh' ? '上次检查' : 'Last Checked'}
+                      </span>
+                      <span className="font-mono text-text-heading">{formatCheckTime(lastCheckTime)}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleCheckUpdate}
+                    disabled={isCheckingUpdate}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCheckingUpdate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'zh' ? '检查中...' : 'Checking...'}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        {language === 'zh' ? '检查更新' : 'Check for Updates'}
+                      </>
+                    )}
+                  </button>
+
+                  {updateInfo && (
+                    <div className={`p-4 rounded-lg border ${
+                      updateInfo.hasUpdate
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-green-50 border-green-200'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        {updateInfo.hasUpdate ? (
+                          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 space-y-2">
+                          <p className={`text-sm font-semibold ${
+                            updateInfo.hasUpdate ? 'text-blue-700' : 'text-green-700'
+                          }`}>
+                            {updateInfo.hasUpdate
+                              ? (language === 'zh' ? '发现新版本！' : 'New version available!')
+                              : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
+                          </p>
+                          <div className="text-xs space-y-1">
+                            <p className={updateInfo.hasUpdate ? 'text-blue-600' : 'text-green-600'}>
+                              {language === 'zh' ? '当前版本: ' : 'Current: '}
+                              <span className="font-mono font-semibold">{updateInfo.currentVersion}</span>
+                            </p>
+                            {updateInfo.hasUpdate && (
+                              <p className="text-blue-600">
+                                {language === 'zh' ? '最新版本: ' : 'Latest: '}
+                                <span className="font-mono font-semibold">{updateInfo.latestVersion}</span>
+                              </p>
+                            )}
+                          </div>
+                          {updateInfo.hasUpdate && updateInfo.downloadUrl && (
+                            <a
+                              href={updateInfo.downloadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors mt-2"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              {language === 'zh' ? '下载更新' : 'Download Update'}
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

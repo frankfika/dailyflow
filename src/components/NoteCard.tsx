@@ -185,7 +185,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </div>
       )}
 
-      <div className="absolute top-5 right-5 group-hover:opacity-0 transition-opacity text-[10px] text-text-muted font-mono">
+      <div className="absolute top-5 right-5 group-hover:opacity-0 transition-opacity text-[10px] text-text-muted font-mono pointer-events-none">
         {note.date}
       </div>
     </motion.div>

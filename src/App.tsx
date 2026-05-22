@@ -139,7 +139,7 @@ export default function App() {
   const [aiVerifyStatus, setAiVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [aiVerifyMsg, setAiVerifyMsg] = useState<string>('');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github'>('general');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -671,7 +671,7 @@ export default function App() {
             <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
               <Menu className="w-5 h-5"/>
             </button>
-            <span className="text-text-muted opacity-60 hidden sm:inline shrink-0">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
+            <span className="text-text-muted opacity-60 hidden sm:inline shrink-0">{language === 'zh' ? '每日任务' : 'Daily Tasks'}</span>
             <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
             <span className="text-accent truncate">{currentFileDate}.md</span>
           </div>
@@ -1073,7 +1073,7 @@ export default function App() {
                     );
                   })()}
 
-                  {/* Daily Notes */}
+                  {/* Daily Tasks */}
                   <DailyNoteCards
                     notes={filterNotesByContext(dailyNotes, activeContext)}
                     language={language}
@@ -1149,27 +1149,29 @@ export default function App() {
 
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
-         <NoteEditor
-           language={language}
-           activeContext={activeContext}
-           availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
-           onSave={async (data) => {
-             try {
-               await notesApi.create(data);
-               setShowQuickNoteEditor(false);
-               // Refresh daily notes if the note is for today
-               if (data.date === currentFileDate) {
-                 const dateNotes = await notesApi.getByDate(currentFileDate);
-                 setDailyNotes(dateNotes);
+         <div className="fixed inset-0 z-50 bg-background">
+           <NoteEditor
+             language={language}
+             activeContext={activeContext}
+             availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
+             onSave={async (data) => {
+               try {
+                 await notesApi.create(data);
+                 setShowQuickNoteEditor(false);
+                 // Refresh daily notes if the note is for today
+                 if (data.date === currentFileDate) {
+                   const dateNotes = await notesApi.getByDate(currentFileDate);
+                   setDailyNotes(dateNotes);
+                 }
+                 showToast(language === 'zh' ? '笔记已保存' : 'Note saved', 'success');
+               } catch (err) {
+                 console.error('Failed to save note:', err);
+                 showToast(language === 'zh' ? '保存失败' : 'Failed to save note', 'error');
                }
-               showToast(language === 'zh' ? '笔记已保存' : 'Note saved', 'success');
-             } catch (err) {
-               console.error('Failed to save note:', err);
-               showToast(language === 'zh' ? '保存失败' : 'Failed to save note', 'error');
-             }
-           }}
-           onClose={() => setShowQuickNoteEditor(false)}
-         />
+             }}
+             onClose={() => setShowQuickNoteEditor(false)}
+           />
+         </div>
        )}
      </div>
   );

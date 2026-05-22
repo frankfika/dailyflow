@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, FileText, Mic, Sparkles, X, ChevronDown, Loader2, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { notesApi, tasksApi, projectsApi, promptsApi, aiApi, type NoteData, type PromptTemplateData } from '../api/client';
+import { notesApi, tasksApi, promptsApi, aiApi, type NoteData, type PromptTemplateData } from '../api/client';
 import { NoteCard } from './NoteCard';
 import { NoteEditor } from './NoteEditor';
 
@@ -20,7 +20,7 @@ type TypeFilter = 'all' | 'note' | 'meeting_note' | 'summary';
 export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvider, aiApiKey, aiModel, aiBaseUrl }) => {
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [editingNote, setEditingNote] = useState<NoteData | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -28,7 +28,6 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
   const [allMentions, setAllMentions] = useState<string[]>([]);
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [availableProjects, setAvailableProjects] = useState<{ id: string; name: string }[]>([]);
   const [availableTasks, setAvailableTasks] = useState<{ id: string; title: string }[]>([]);
 
   // AI Summary generator state
@@ -77,23 +76,17 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
   }, []);
 
   useEffect(() => {
-    projectsApi.getAll()
-      .then(data => setAvailableProjects(data.filter(p => p.status === 'active').map(p => ({ id: p.id, name: p.name }))))
-      .catch(err => console.error('Failed to load projects:', err));
-  }, []);
-
-  useEffect(() => {
-    if (showEditor && editingNote) {
+    if (viewMode === 'edit' && editingNote) {
       tasksApi.getByDate(editingNote.date)
         .then(data => setAvailableTasks(data.map((t: any) => ({ id: t.id, title: t.title }))))
         .catch(err => console.error('Failed to load tasks:', err));
-    } else if (showEditor) {
+    } else if (viewMode === 'edit') {
       const today = new Date().toISOString().slice(0, 10);
       tasksApi.getByDate(today)
         .then(data => setAvailableTasks(data.map((t: any) => ({ id: t.id, title: t.title }))))
         .catch(err => console.error('Failed to load tasks:', err));
     }
-  }, [showEditor, editingNote]);
+  }, [viewMode, editingNote]);
 
   const handleSave = async (data: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>) => {
     try {
@@ -102,7 +95,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
       } else {
         await notesApi.create(data);
       }
-      setShowEditor(false);
+      setViewMode('list');
       setEditingNote(null);
       loadNotes();
       loadMentions();
@@ -114,6 +107,8 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
   const handleDelete = async (id: string) => {
     try {
       await notesApi.delete(id);
+      setViewMode('list');
+      setEditingNote(null);
       loadNotes();
     } catch (err) {
       console.error('Failed to delete note:', err);
@@ -257,19 +252,33 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="font-serif text-3xl text-text-heading italic">
-          {language === 'zh' ? '笔记' : 'Notes'}
-        </h1>
-        <button
-          onClick={() => { setEditingNote(null); setShowEditor(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          {language === 'zh' ? '新建' : 'New'}
-        </button>
-      </div>
+      {viewMode === 'edit' ? (
+        <div className="flex flex-col">
+          <NoteEditor
+            note={editingNote}
+            language={language}
+            activeContext={activeContext}
+            availableTasks={availableTasks}
+            onSave={handleSave}
+            onClose={() => { setViewMode('list'); setEditingNote(null); }}
+            onDelete={editingNote ? () => handleDelete(editingNote.id) : undefined}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h1 className="font-serif text-3xl text-text-heading italic">
+              {language === 'zh' ? '笔记' : 'Notes'}
+            </h1>
+            <button
+              onClick={() => { setEditingNote(null); setViewMode('edit'); }}
+              className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {language === 'zh' ? '新建' : 'New'}
+            </button>
+          </div>
 
       {/* Filter bar */}
       <div className="space-y-3">
@@ -546,7 +555,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
                           note={note}
                           language={language}
                           activeContext={activeContext}
-                          onEdit={() => { setEditingNote(note); setShowEditor(true); }}
+                          onEdit={() => { setEditingNote(note); setViewMode('edit'); }}
                           onDelete={() => handleDelete(note.id)}
                           onMentionClick={(m) => setMentionFilter(m)}
                         />
@@ -559,21 +568,8 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
           </AnimatePresence>
         </div>
       )}
-
-      {/* Editor modal */}
-      <AnimatePresence>
-        {showEditor && (
-          <NoteEditor
-            note={editingNote}
-            language={language}
-            activeContext={activeContext}
-            availableTasks={availableTasks}
-            availableProjects={availableProjects}
-            onSave={handleSave}
-            onClose={() => { setShowEditor(false); setEditingNote(null); }}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
+    </>
+  )}
+</motion.div>
   );
 };

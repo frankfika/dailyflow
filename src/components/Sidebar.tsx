@@ -65,27 +65,6 @@ export function Sidebar({
           </div>
 
           <nav className="space-y-6 flex-1 overflow-y-auto">
-            {/* Workspace */}
-            <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
-              <ul className="space-y-2 text-sm font-sans">
-                <li
-                  onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-daily-notes"
-                >
-                  <span className="ml-4">{language === 'zh' ? '每日笔记' : 'Daily Notes'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'notes' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-notes"
-                >
-                  <span className="ml-4">{language === 'zh' ? '笔记' : 'Notes'}</span>
-                </li>
-              </ul>
-            </div>
-
             {/* Timeline */}
             <div>
               <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3 flex items-center justify-between">
@@ -109,7 +88,7 @@ export function Sidebar({
                     }
                   }}
                   className="p-1 rounded-md bg-text-muted/10 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors flex items-center gap-1"
-                  title="New Daily Note"
+                  title="New Daily Task"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -120,7 +99,7 @@ export function Sidebar({
                   return (
                     <li
                       key={date}
-                      onClick={() => setCurrentFileDate(date)}
+                      onClick={() => { setActiveTab('today'); setCurrentFileDate(date); }}
                       className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                     >
                       {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
@@ -152,7 +131,7 @@ export function Sidebar({
                                 return (
                                   <li
                                     key={date}
-                                    onClick={() => setCurrentFileDate(date)}
+                                    onClick={() => { setActiveTab('today'); setCurrentFileDate(date); }}
                                     className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                                   >
                                     {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
@@ -170,6 +149,27 @@ export function Sidebar({
                     </ul>
                   </li>
                 )}
+              </ul>
+            </div>
+
+            {/* Workspace */}
+            <div>
+              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
+              <ul className="space-y-2 text-sm font-sans">
+                <li
+                  onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                  data-testid="nav-daily-notes"
+                >
+                  <span className="ml-4">{language === 'zh' ? '每日任务' : 'Daily Tasks'}</span>
+                </li>
+                <li
+                  onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'notes' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                  data-testid="nav-notes"
+                >
+                  <span className="ml-4">{language === 'zh' ? '笔记' : 'Notes'}</span>
+                </li>
               </ul>
             </div>
           </nav>
