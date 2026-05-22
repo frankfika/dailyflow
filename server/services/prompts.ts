@@ -28,6 +28,30 @@ const DEFAULT_PROMPTS: Omit<PromptTemplate, 'createdAt'>[] = [
     prompt: '提取所有已做的决策及其原因，标注待确认的事项。',
     scope: 'custom',
   },
+  {
+    id: 'format-polish',
+    name: '润色优化',
+    prompt: '请对以下笔记进行润色和优化。修正语法错误，提升表达清晰度，保持原意不变。返回完整的 Markdown 格式笔记，保留原标题作为一级标题。',
+    scope: 'format',
+  },
+  {
+    id: 'format-structure',
+    name: '结构化整理',
+    prompt: '请将以下笔记整理成清晰的结构化 Markdown 格式。使用合适的标题层级、列表和段落组织内容，使其更易读。返回完整的 Markdown 格式笔记，保留原标题作为一级标题。',
+    scope: 'format',
+  },
+  {
+    id: 'format-todo',
+    name: '提取待办',
+    prompt: '请从以下笔记中提取所有待办事项、行动项和承诺，整理成清晰的 Markdown 任务列表格式。保留原始笔记中的上下文信息。返回完整的 Markdown 格式笔记，保留原标题作为一级标题。',
+    scope: 'format',
+  },
+  {
+    id: 'format-meeting',
+    name: '整理会议纪要',
+    prompt: '请将以下会议记录整理为标准会议纪要格式，包括：会议信息、参会人员、会议要点、待办事项（标注负责人和截止日期）、下次会议安排。返回完整的 Markdown 格式笔记，保留原标题作为一级标题。',
+    scope: 'format',
+  },
 ];
 
 async function getPromptsDir(): Promise<string> {
@@ -89,9 +113,11 @@ function generatePromptFile(template: PromptTemplate): string {
 
 async function seedDefaults(promptsDir: string): Promise<void> {
   const files = await fs.readdir(promptsDir);
-  if (files.length > 0) return;
+  const existingIds = new Set(files.filter(f => f.endsWith('.md')).map(f => path.basename(f, '.md')));
 
   for (const prompt of DEFAULT_PROMPTS) {
+    if (existingIds.has(prompt.id)) continue;
+
     const template: PromptTemplate = {
       ...prompt,
       createdAt: new Date().toISOString(),

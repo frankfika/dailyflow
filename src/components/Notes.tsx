@@ -259,6 +259,10 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             language={language}
             activeContext={activeContext}
             availableTasks={availableTasks}
+            aiProvider={aiProvider}
+            aiApiKey={aiApiKey}
+            aiModel={aiModel}
+            aiBaseUrl={aiBaseUrl}
             onSave={handleSave}
             onClose={() => { setViewMode('list'); setEditingNote(null); }}
             onDelete={editingNote ? () => handleDelete(editingNote.id) : undefined}
