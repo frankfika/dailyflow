@@ -32,7 +32,7 @@ export const DailyNoteCards: React.FC<DailyNoteCardsProps> = ({
       className="space-y-4"
     >
       <div className="flex items-center justify-between">
-        <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center gap-2">
+        <h2 className="font-sans text-xs  text-text-muted font-bold flex items-center gap-2">
           <FileText className="w-3 h-3" />
           {language === 'zh' ? '笔记' : 'Notes'}
           <span className="text-accent">({notes.length})</span>
@@ -40,7 +40,7 @@ export const DailyNoteCards: React.FC<DailyNoteCardsProps> = ({
         {hasMore && onViewAll && (
           <button
             onClick={onViewAll}
-            className="text-[10px] text-accent font-bold uppercase tracking-widest hover:underline"
+            className="text-xs text-accent font-bold  hover:underline"
           >
             {language === 'zh' ? '查看全部 →' : 'View all →'}
           </button>

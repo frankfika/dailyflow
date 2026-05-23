@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import type { NoteData, PromptTemplateData } from '../api/client';
 import { promptsApi, aiApi } from '../api/client';
 import { getTagColor } from '../utils/tagColors';
+import { TagInput } from './TagInput';
 
 interface AvailableTask {
   id: string;
@@ -20,6 +21,7 @@ interface NoteEditorProps {
   language: 'en' | 'zh';
   activeContext: 'work' | 'life';
   availableTasks?: AvailableTask[];
+  availableTags?: string[];
   aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   aiApiKey?: string;
   aiModel?: string;
@@ -40,6 +42,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   language,
   activeContext,
   availableTasks = [],
+  availableTags = [],
   aiProvider,
   aiApiKey,
   aiModel,
@@ -171,7 +174,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 text-text-muted hover:text-text-heading transition-colors text-xs font-bold uppercase tracking-widest"
+            className="flex items-center gap-1.5 text-text-muted hover:text-text-heading transition-colors text-xs font-bold "
           >
             <ArrowLeft className="w-4 h-4" />
             {language === 'zh' ? '返回' : 'Back'}
@@ -181,7 +184,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {onDelete && note && (
             <button
               onClick={onDelete}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold  text-stone-500 hover:bg-stone-50 rounded-md transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               {language === 'zh' ? '删除' : 'Delete'}
@@ -198,7 +201,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 setFormatError('');
               }}
               disabled={isFormatting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-accent hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold  text-accent hover:bg-accent/10 rounded-md transition-colors disabled:opacity-50"
             >
               {isFormatting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -215,9 +218,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.96 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-xl shadow-lg p-3 z-30 min-w-[220px]"
+                  className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-md shadow-sm p-3 z-30 min-w-[220px]"
                 >
-                  <p className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-2">
+                  <p className="text-xs  text-text-muted font-bold mb-2">
                     {language === 'zh' ? '选择整理方式' : 'Choose format style'}
                   </p>
                   {formatPrompts.length === 0 ? (
@@ -230,7 +233,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <button
                           key={p.id}
                           onClick={() => handleFormat(p.id)}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
+                          className="px-2.5 py-1 rounded-md text-xs font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
                         >
                           {p.name}
                         </button>
@@ -244,7 +247,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           <button
             onClick={() => setPreviewMode(!previewMode)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-text-muted hover:text-text-heading hover:bg-surface rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold  text-text-muted hover:text-text-heading hover:bg-surface rounded-md transition-colors"
           >
             {previewMode ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             {previewMode
@@ -254,7 +257,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <button
             onClick={handleSave}
             disabled={!title.trim()}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Check className="w-3.5 h-3.5" />
             {language === 'zh' ? '保存' : 'Save'}
@@ -269,7 +272,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-6 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600 shrink-0"
+            className="px-6 py-2 bg-stone-50 border-b border-stone-200 text-xs text-stone-600 shrink-0"
           >
             {formatError}
           </motion.div>
@@ -285,7 +288,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder={language === 'zh' ? '标题...' : 'Title...'}
-            className="w-full bg-transparent outline-none font-serif text-3xl text-text-heading placeholder:text-text-muted/40"
+            className="w-full bg-transparent outline-none font-sans text-3xl text-text-heading placeholder:text-text-muted/40"
           />
 
           {/* Metadata summary row (always visible, compact) */}
@@ -299,7 +302,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   <button
                     key={opt.value}
                     onClick={() => setType(opt.value)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold  border transition-all ${
                       active
                         ? 'bg-accent text-white border-accent'
                         : 'bg-surface text-text-muted border-border hover:border-accent/50'
@@ -313,35 +316,35 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </div>
 
             {/* Date */}
-            <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-[10px]">
+            <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-xs">
               <Calendar className="w-3 h-3" />
               <input
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="bg-transparent outline-none text-[10px] font-mono"
+                className="bg-transparent outline-none text-xs font-mono"
               />
             </label>
 
             {/* Time */}
-            <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-[10px]">
+            <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-xs">
               <Clock className="w-3 h-3" />
               <input
                 type="time"
                 value={time}
                 onChange={e => setTime(e.target.value)}
-                className="bg-transparent outline-none text-[10px] font-mono"
+                className="bg-transparent outline-none text-xs font-mono"
               />
             </label>
 
             {type === 'meeting_note' && (
-              <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-[10px]">
+              <label className="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-surface text-text-muted text-xs">
                 <span className="text-[9px]">→</span>
                 <input
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
-                  className="bg-transparent outline-none text-[10px] font-mono"
+                  className="bg-transparent outline-none text-xs font-mono"
                 />
               </label>
             )}
@@ -353,7 +356,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {tags.map(tag => (
                   <span
                     key={tag}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${getTagColor(tag)}`}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${getTagColor(tag)}`}
                   >
                     #{tag}
                   </span>
@@ -364,7 +367,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {/* Expand meta button */}
             <button
               onClick={() => setShowMeta(!showMeta)}
-              className="text-[10px] text-accent font-bold uppercase tracking-widest hover:underline"
+              className="text-xs text-accent font-bold  hover:underline"
             >
               {showMeta
                 ? (language === 'zh' ? '收起 ▲' : 'Less ▲')
@@ -381,45 +384,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             >
               {/* Tags editor */}
               <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-text-muted flex items-center gap-1">
+                <label className="text-xs font-bold text-text-muted flex items-center gap-1 mb-1">
                   <Tag className="w-3 h-3" />
                   {language === 'zh' ? '标签' : 'Tags'}
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map(tag => (
-                    <span key={tag} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase border ${getTagColor(tag)}`}>
-                      #{tag}
-                      <X className="w-2.5 h-2.5 cursor-pointer hover:text-red-500" onClick={() => setTags(tags.filter(t => t !== tag))} />
-                    </span>
-                  ))}
-                  <input
-                    value={tagInput}
-                    onChange={e => setTagInput(e.target.value)}
-                    onKeyDown={e => {
-                      if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInput.trim()) {
-                        e.preventDefault();
-                        addTag(tagInput);
-                        setTagInput('');
-                      }
-                    }}
-                    placeholder={language === 'zh' ? '+ 标签' : '+ Tag'}
-                    className="bg-surface border border-border rounded-lg px-2 py-1 text-[10px] outline-none focus:border-accent w-20 transition-colors"
-                  />
-                </div>
+                <TagInput
+                  tags={tags}
+                  onChange={setTags}
+                  availableTags={availableTags}
+                  language={language}
+                />
               </div>
 
               {/* Participants (meeting only) */}
               {type === 'meeting_note' && (
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-text-muted flex items-center gap-1">
+                  <label className="text-xs  font-bold text-text-muted flex items-center gap-1">
                     <Users className="w-3 h-3" />
                     {language === 'zh' ? '参会人' : 'Participants'}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {participants.map(p => (
-                      <span key={p} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
+                      <span key={p} className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold">
                         @{p}
-                        <X className="w-2.5 h-2.5 cursor-pointer hover:text-red-500" onClick={() => setParticipants(participants.filter(x => x !== p))} />
+                        <X className="w-2.5 h-2.5 cursor-pointer hover:text-stone-500" onClick={() => setParticipants(participants.filter(x => x !== p))} />
                       </span>
                     ))}
                     <input
@@ -433,7 +421,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         }
                       }}
                       placeholder={language === 'zh' ? '+ 添加参会人' : '+ Add participant'}
-                      className="bg-surface border border-border rounded-full px-2.5 py-1 text-[10px] outline-none focus:border-accent w-28 transition-colors"
+                      className="bg-surface border border-border rounded px-2.5 py-1 text-xs outline-none focus:border-accent w-28 transition-colors"
                     />
                   </div>
                 </div>
@@ -442,7 +430,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               {/* Linked Tasks */}
               {availableTasks.length > 0 && (
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-text-muted flex items-center gap-1">
+                  <label className="text-xs  font-bold text-text-muted flex items-center gap-1">
                     <Link2 className="w-3 h-3" />
                     {language === 'zh' ? '关联任务' : 'Linked Tasks'}
                   </label>
@@ -457,7 +445,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                               : [...prev, task.id]
                           );
                         }}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold border transition-all ${
                           linkedTaskIds.includes(task.id)
                             ? 'bg-accent/10 text-accent border-accent/30'
                             : 'bg-surface text-text-muted border-border hover:border-accent/30'

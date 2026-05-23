@@ -259,6 +259,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             language={language}
             activeContext={activeContext}
             availableTasks={availableTasks}
+            availableTags={allTags}
             aiProvider={aiProvider}
             aiApiKey={aiApiKey}
             aiModel={aiModel}
@@ -272,12 +273,12 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
         <>
           {/* Header */}
           <div className="flex items-center justify-between">
-            <h1 className="font-serif text-3xl text-text-heading italic">
+            <h1 className="font-sans text-3xl text-text-heading italic">
               {language === 'zh' ? '笔记' : 'Notes'}
             </h1>
             <button
               onClick={() => { setEditingNote(null); setViewMode('edit'); }}
-              className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               {language === 'zh' ? '新建' : 'New'}
@@ -293,7 +294,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={language === 'zh' ? '搜索笔记、@人名、标签...' : 'Search notes, @mentions, tags...'}
-            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-main outline-none focus:border-accent transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-border rounded-md text-sm text-text-main outline-none focus:border-accent transition-colors"
           />
         </div>
 
@@ -305,7 +306,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
               <button
                 key={f.value}
                 onClick={() => setTypeFilter(f.value)}
-                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-widest border transition-all ${
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-md text-xs font-bold  border transition-all ${
                   typeFilter === f.value
                     ? 'bg-accent text-white border-accent'
                     : 'bg-surface text-text-muted border-border hover:border-accent/50'
@@ -323,7 +324,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             <div className="relative">
               <button
                 onClick={() => setShowMentionDropdown(!showMentionDropdown)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-widest border transition-all ${
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold  border transition-all ${
                   mentionFilter
                     ? 'bg-accent/10 text-accent border-accent/30'
                     : 'bg-surface text-text-muted border-border hover:border-accent/50'
@@ -337,7 +338,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="absolute top-full left-0 mt-1 bg-surface-white border border-border rounded-xl shadow-lg py-1 z-20 min-w-[140px]"
+                  className="absolute top-full left-0 mt-1 bg-surface-white border border-border rounded-md shadow-sm py-1 z-20 min-w-[140px]"
                 >
                   {mentionFilter && (
                     <button
@@ -367,7 +368,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
           {mentionFilter && (
             <button
               onClick={() => setMentionFilter(null)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-[10px] font-bold hover:bg-accent/20 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded bg-accent/10 text-accent text-xs font-bold hover:bg-accent/20 transition-colors"
             >
               @{mentionFilter}
               <X className="w-2.5 h-2.5" />
@@ -376,7 +377,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
           {tagFilter && (
             <button
               onClick={() => setTagFilter(null)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-[10px] font-bold hover:bg-accent/20 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded bg-accent/10 text-accent text-xs font-bold hover:bg-accent/20 transition-colors"
             >
               #{tagFilter}
               <X className="w-2.5 h-2.5" />
@@ -391,7 +392,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
               <button
                 key={tag}
                 onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-                className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold tracking-widest border transition-all ${
+                className={`px-2.5 py-1 rounded text-xs font-bold  border transition-all ${
                   tagFilter === tag
                     ? 'bg-accent text-white border-accent'
                     : 'bg-surface text-text-muted border-border hover:border-accent/50'
@@ -405,19 +406,19 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
       </div>
 
       {/* AI Summary Generator */}
-      <div className="bg-surface-white border border-border rounded-2xl p-4 space-y-3">
+      <div className="bg-surface-white border border-border rounded-md p-4 space-y-3">
         <div className="flex items-center justify-between">
           <button
             onClick={() => setShowSummaryPanel(!showSummaryPanel)}
             className="flex items-center gap-2 text-text-heading hover:text-accent transition-colors"
           >
             <Sparkles className="w-4 h-4" />
-            <span className="font-serif text-sm italic">
+            <span className="font-sans text-sm italic">
               {language === 'zh' ? 'AI 总结生成器' : 'AI Summary Generator'}
             </span>
           </button>
           {!showSummaryPanel && (
-            <span className="text-[10px] text-text-muted">
+            <span className="text-xs text-text-muted">
               {language === 'zh' ? '基于当前筛选的笔记生成结构化总结' : 'Generate structured summary from filtered notes'}
             </span>
           )}
@@ -435,7 +436,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
                 <button
                   key={period}
                   onClick={() => setSummaryPeriod(period)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-widest border transition-all ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold  border transition-all ${
                     summaryPeriod === period
                       ? 'bg-accent text-white border-accent'
                       : 'bg-surface text-text-muted border-border hover:border-accent/50'
@@ -451,14 +452,14 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             {/* Prompt selector */}
             {prompts.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-text-muted uppercase tracking-widest font-bold">
+                <span className="text-xs text-text-muted  font-bold">
                   {language === 'zh' ? '提示词:' : 'Prompt:'}
                 </span>
                 {prompts.map(p => (
                   <button
                     key={p.id}
                     onClick={() => setSelectedPromptId(p.id)}
-                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all ${
+                    className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
                       selectedPromptId === p.id
                         ? 'bg-accent/10 text-accent border-accent/30'
                         : 'bg-surface text-text-muted border-border hover:border-accent/30'
@@ -476,7 +477,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
                 <button
                   onClick={generateSummary}
                   disabled={isGeneratingSummary}
-                  className="flex items-center gap-2 px-4 py-2 bg-text-heading text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-text-heading/90 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-text-heading text-white rounded-md text-xs font-bold  hover:bg-text-heading/90 transition-colors disabled:opacity-50"
                 >
                   {isGeneratingSummary ? (
                     <>
@@ -493,7 +494,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
                 {generatedSummary && (
                   <button
                     onClick={saveSummaryAsNote}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white rounded-xl text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     {language === 'zh' ? '保存为笔记' : 'Save as Note'}
@@ -502,13 +503,13 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
               </div>
 
               {summaryError && (
-                <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-md px-3 py-2">
                   {summaryError}
                 </p>
               )}
 
               {generatedSummary && (
-                <div className="bg-surface border border-border rounded-xl p-4 max-h-[300px] overflow-y-auto">
+                <div className="bg-surface border border-border rounded-md p-4 max-h-[300px] overflow-y-auto">
                   <div className="prose prose-slate prose-sm max-w-none">
                     <ReactMarkdown>{generatedSummary}</ReactMarkdown>
                   </div>
@@ -542,7 +543,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
           <AnimatePresence>
             {Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0])).map(([date, dateNotes]) => (
               <div key={date} className="space-y-3">
-                <h3 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold pl-1">
+                <h3 className="font-sans text-xs  text-text-muted font-bold pl-1">
                   {date}
                 </h3>
                 <div className="space-y-3">

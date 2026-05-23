@@ -129,7 +129,7 @@ export function Tags({ activeContext, language }: TagsProps) {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded animate-spin mx-auto" />
           <p className="text-sm text-text-muted font-sans">
             {language === 'zh' ? '加载中...' : 'Loading...'}
           </p>
@@ -142,7 +142,7 @@ export function Tags({ activeContext, language }: TagsProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-4xl font-serif font-light text-text-heading tracking-tight italic mb-2">
+        <h1 className="text-4xl font-sans font-light text-text-heading tracking-tight italic mb-2">
           {language === 'zh' ? '标签视图' : 'Tags View'}
         </h1>
         <p className="text-text-muted font-sans text-sm">
@@ -160,7 +160,7 @@ export function Tags({ activeContext, language }: TagsProps) {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder={language === 'zh' ? '搜索标签...' : 'Search tags...'}
-          className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-surface-white border border-border text-sm outline-none focus:border-accent transition-colors"
+          className="w-full pl-10 pr-10 py-2.5 rounded-md bg-surface-white border border-border text-sm outline-none focus:border-accent transition-colors"
         />
         {searchQuery && (
           <button
@@ -174,9 +174,9 @@ export function Tags({ activeContext, language }: TagsProps) {
 
       {/* Tags Grid */}
       {filteredTags.length === 0 ? (
-        <div className="py-20 text-center bg-surface-white rounded-[32px] border border-border/50 shadow-sm">
+        <div className="py-20 text-center bg-surface-white rounded-md border border-border/50 shadow-sm">
           <Tag className="w-12 h-12 text-text-muted mx-auto mb-6 opacity-30 stroke-[1.5]" />
-          <h3 className="font-serif italic text-2xl text-text-muted font-light">
+          <h3 className="font-sans italic text-2xl text-text-muted font-light">
             {searchQuery
               ? (language === 'zh' ? '没有匹配的标签' : 'No matching tags')
               : (language === 'zh' ? '暂无标签' : 'No tags yet')}
@@ -192,13 +192,13 @@ export function Tags({ activeContext, language }: TagsProps) {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-surface-white rounded-[24px] border border-border shadow-sm p-6 hover:shadow-md transition-shadow cursor-pointer"
+                className="bg-surface-white rounded-md border border-border shadow-sm p-6 hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedTag(selectedTag === tagData.tag ? null : tagData.tag)}
               >
                 {/* Tag Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded bg-accent/10 flex items-center justify-center">
                       <Tag className="w-5 h-5 text-accent" />
                     </div>
                     <div>
@@ -215,13 +215,13 @@ export function Tags({ activeContext, language }: TagsProps) {
                 {/* Stats */}
                 <div className="flex gap-4 mb-4">
                   <div className="flex items-center gap-2 text-sm">
-                    <FileText className="w-4 h-4 text-blue-500" />
+                    <FileText className="w-4 h-4 text-stone-500" />
                     <span className="text-text-muted">
                       {tagData.notesCount} {language === 'zh' ? '笔记' : 'notes'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <CheckSquare className="w-4 h-4 text-green-500" />
+                    <CheckSquare className="w-4 h-4 text-stone-500" />
                     <span className="text-text-muted">
                       {tagData.tasksCount} {language === 'zh' ? '任务' : 'tasks'}
                     </span>
@@ -241,14 +241,14 @@ export function Tags({ activeContext, language }: TagsProps) {
                         {/* Notes */}
                         {tagData.notes.length > 0 && (
                           <div>
-                            <h4 className="text-xs uppercase tracking-widest font-bold text-text-muted mb-2">
+                            <h4 className="text-xs  font-bold text-text-muted mb-2">
                               {language === 'zh' ? '笔记' : 'Notes'}
                             </h4>
                             <div className="space-y-2">
                               {tagData.notes.map(note => (
                                 <div
                                   key={note.id}
-                                  className="p-3 rounded-lg bg-surface border border-border/50 hover:border-accent/40 transition-colors"
+                                  className="p-3 rounded-md bg-surface border border-border/50 hover:border-accent/40 transition-colors"
                                 >
                                   <p className="text-sm font-semibold text-text-heading truncate">
                                     {note.title}
@@ -266,14 +266,14 @@ export function Tags({ activeContext, language }: TagsProps) {
                         {/* Tasks */}
                         {tagData.tasks.length > 0 && (
                           <div>
-                            <h4 className="text-xs uppercase tracking-widest font-bold text-text-muted mb-2">
+                            <h4 className="text-xs  font-bold text-text-muted mb-2">
                               {language === 'zh' ? '任务' : 'Tasks'}
                             </h4>
                             <div className="space-y-2">
                               {tagData.tasks.map(task => (
                                 <div
                                   key={task.id}
-                                  className="p-3 rounded-lg bg-surface border border-border/50 hover:border-accent/40 transition-colors"
+                                  className="p-3 rounded-md bg-surface border border-border/50 hover:border-accent/40 transition-colors"
                                 >
                                   <div className="flex items-start gap-2">
                                     <div className={`w-4 h-4 rounded border mt-0.5 shrink-0 ${

@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.4.8-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.4.9-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -115,6 +115,8 @@ Automatically detects the latest version from GitHub Releases, no need to manual
 - **Top banner notification**: Shows update prompt when a new version is available, one-click to download
 - **Manual check**: "Check for Updates" button in Settings for on-demand version checks
 - **Smart platform detection**: Automatically recommends the installer for your current OS
+- **Download button opens system browser**: Powered by `tauri-plugin-shell`, clicks now reliably open your default browser to the release page (v0.4.9+)
+- **Surfaces failure reasons**: Network errors or GitHub API rate-limits now show a clear "Update check failed" message instead of silently reporting "up to date" (v0.4.9+)
 
 ## 📸 Screenshots
 

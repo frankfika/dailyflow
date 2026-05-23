@@ -60,14 +60,14 @@ export function Sidebar({
         <div className="p-6 w-64 flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-7 h-7 bg-accent text-white flex items-center justify-center font-serif text-sm font-bold rounded-md shadow-sm">D</div>
-            <span className="font-sans text-[11px] uppercase tracking-widest font-bold text-text-heading">DailyFlow</span>
+            <div className="w-7 h-7 bg-accent text-white flex items-center justify-center font-sans text-sm font-bold rounded-md shadow-sm">D</div>
+            <span className="font-sans text-base font-semibold text-text-heading">DailyFlow</span>
           </div>
 
           <nav className="space-y-6 flex-1 overflow-y-auto">
             {/* Timeline */}
             <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3 flex items-center justify-between">
+              <h3 className="text-xs  text-text-muted font-bold mb-3 flex items-center justify-between">
                 <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
                 <button
                   onClick={async () => {
@@ -102,59 +102,61 @@ export function Sidebar({
                       onClick={() => { setActiveTab('today'); setCurrentFileDate(date); }}
                       className={`flex items-center gap-3 font-semibold cursor-pointer transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                     >
-                      {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
+                      {currentFileDate === date && <div className="w-1.5 h-1.5 rounded bg-accent"></div>}
                       <span className={currentFileDate !== date ? "ml-4" : ""}>
                         {date}
-                        <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
+                        <span className="ml-1.5 text-xs opacity-50 font-normal">{weekday}</span>
                       </span>
                     </li>
                   );
                 })}
 
-                {Object.keys(archivedMonths).length > 0 && (
-                  <li className="pt-2">
-                    <span className="text-[10px] uppercase tracking-widest text-text-muted font-bold block mb-2">{language === 'zh' ? '归档' : 'Archive'}</span>
-                    <ul className="space-y-1.5">
-                      {Object.keys(archivedMonths).map(monthName => (
-                        <li key={monthName} className="space-y-1.5">
-                          <button
-                            onClick={() => toggleArchiveMonth(monthName)}
-                            className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
-                          >
-                            {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            <span className="ml-[2px]">{monthName}</span>
-                          </button>
-                          {expandedArchiveMonths[monthName] && (
-                            <ul className="space-y-1.5 pl-4 border-l border-border/50 ml-6 pb-1">
-                              {archivedMonths[monthName].map(date => {
-                                const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                                return (
-                                  <li
-                                    key={date}
-                                    onClick={() => { setActiveTab('today'); setCurrentFileDate(date); }}
-                                    className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                                  >
-                                    {currentFileDate === date && <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>}
-                                    <span>
-                                      {date}
-                                      <span className="ml-1.5 text-[10px] opacity-50 font-normal">{weekday}</span>
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                )}
               </ul>
             </div>
 
+            {/* Archive (Nested under Timeline originally, now its own section but visually connected) */}
+            {Object.keys(archivedMonths).length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-xs text-text-muted font-bold mb-3">{language === 'zh' ? '归档' : 'Archive'}</h3>
+                <ul className="space-y-1.5 font-sans">
+                  {Object.keys(archivedMonths).map(monthName => (
+                    <li key={monthName} className="space-y-1.5">
+                      <button
+                        onClick={() => toggleArchiveMonth(monthName)}
+                        className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
+                      >
+                        {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <span className="ml-[2px]">{monthName}</span>
+                      </button>
+                      {expandedArchiveMonths[monthName] && (
+                        <ul className="space-y-1.5 pl-4 border-l border-border/50 ml-6 pb-1">
+                          {archivedMonths[monthName].map(date => {
+                            const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+                            return (
+                              <li
+                                key={date}
+                                onClick={() => { setActiveTab('today'); setCurrentFileDate(date); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                                className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                              >
+                                {currentFileDate === date && <div className="w-1.5 h-1.5 rounded bg-accent"></div>}
+                                <span>
+                                  {date}
+                                  <span className="ml-1.5 text-xs opacity-50 font-normal">{weekday}</span>
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Workspace */}
             <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
+              <h3 className="text-xs  text-text-muted font-bold mb-3">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
               <ul className="space-y-2 text-sm font-sans">
                 <li
                   onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
@@ -178,10 +180,10 @@ export function Sidebar({
           <li className="pt-4 mt-auto lg:hidden">
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="flex w-full items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-accent/10 transition-colors text-text-muted justify-center border border-border"
+              className="flex w-full items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-accent/10 transition-colors text-text-muted justify-center border border-border"
             >
               <X className="w-4 h-4" />
-              <span className="text-[10px] uppercase tracking-widest font-bold">
+              <span className="text-xs  font-bold">
                 {language === 'zh' ? '关闭' : 'Close'}
               </span>
             </button>

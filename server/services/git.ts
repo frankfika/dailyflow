@@ -12,6 +12,7 @@ export interface GitStatus {
   staged: string[];
   unstaged: string[];
   untracked: string[];
+  lastCommitTime?: string;
 }
 
 export interface GitCommitResult {
@@ -80,6 +81,17 @@ export async function getGitStatus(): Promise<GitStatus> {
       // 如果没有远程分支，忽略错误
     }
 
+    // 获取最后一次提交时间
+    let lastCommitTime = undefined;
+    try {
+      const { stdout: timeOutput } = await execAsync('git log -1 --format=%cI', { cwd: workspaceRoot });
+      if (timeOutput.trim()) {
+        lastCommitTime = timeOutput.trim();
+      }
+    } catch {
+      // ignore
+    }
+
     const hasChanges = staged.length > 0 || unstaged.length > 0 || untracked.length > 0;
 
     return {
@@ -90,6 +102,7 @@ export async function getGitStatus(): Promise<GitStatus> {
       staged,
       unstaged,
       untracked,
+      lastCommitTime,
     };
   } catch (error: any) {
     // 不是 Git 仓库或其他错误

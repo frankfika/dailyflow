@@ -5,6 +5,7 @@
 import { motion } from 'motion/react';
 import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2 } from 'lucide-react';
 import { getTagColor } from '../utils/tagColors';
+import { TagInput } from './TagInput';
 import { tasksApi, filesApi } from '../api/client';
 
 type Task = {
@@ -88,7 +89,7 @@ export function TaskInputPanel({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed inset-x-0 bottom-0 z-50 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
+        className="fixed inset-x-0 bottom-0 z-50 p-4 bg-background  border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
       >
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
@@ -103,18 +104,18 @@ export function TaskInputPanel({
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="bg-surface border border-accent/20 rounded-[24px] p-6 shadow-sm overflow-hidden"
+            className="bg-surface border border-accent/20 rounded-md p-6 shadow-sm overflow-hidden"
           >
              <div className="flex justify-between items-center mb-4">
                <div className="flex items-center gap-2">
                  <Sparkles className="w-4 h-4 text-accent" />
-                 <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
+                 <span className="font-sans text-xs font-bold  text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
                </div>
                <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
              </div>
              <textarea
                autoFocus
-               className="w-full bg-background border border-border/50 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
+               className="w-full bg-background border border-border/50 rounded-md p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
                placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
                value={brainDumpText}
                onChange={e => setBrainDumpText(e.target.value)}
@@ -123,7 +124,7 @@ export function TaskInputPanel({
                <button
                  onClick={processBrainDump}
                  disabled={isProcessingBrainDump || !brainDumpText.trim()}
-                 className="bg-accent text-white px-6 py-2 rounded-full font-sans text-[10px] font-bold uppercase tracking-widest shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                 className="bg-accent text-white px-6 py-2 rounded font-sans text-xs font-bold  shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                  <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
@@ -132,8 +133,8 @@ export function TaskInputPanel({
           </motion.div>
         )}
 
-        <div className="relative rounded-2xl bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
-          <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
+        <div className="relative rounded-md bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
+          <div className="flex flex-1 items-start bg-surface/50 rounded-md p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
             <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
               <Plus className="w-5 h-5" />
             </div>
@@ -159,81 +160,45 @@ export function TaskInputPanel({
 
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
               {/* Quick Tag Selection */}
-              <div className="flex-1 flex flex-col gap-2">
-                {/* Selected Tags */}
-                {newTaskTagsList.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {newTaskTagsList.map(tag => (
-                      <span key={tag} className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold flex items-center gap-1 group border ${getTagColor(tag)} cursor-default`}>
-                        {tag}
-                        <X className="w-3 h-3 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setNewTaskTagsList(prev => prev.filter(t => t !== tag))} />
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Available Tags as Buttons */}
-                <div className="flex flex-wrap gap-1.5">
-                  {categories.filter(c => !newTaskTagsList.includes(c)).map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => {
-                        if (!newTaskTagsList.includes(cat)) {
-                          setNewTaskTagsList([...newTaskTagsList, cat]);
-                        }
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all border ${getTagColor(cat)} opacity-60 hover:opacity-100 hover:scale-105 active:scale-95`}
-                    >
-                      + {cat}
-                    </button>
-                  ))}
-
-                  {/* Custom Tag Input */}
-                  <div className="flex items-center gap-1 bg-surface rounded-lg border border-border/80 focus-within:border-accent px-2 py-1 transition-colors">
-                    <input
-                      type="text"
-                      className="bg-transparent text-[10px] uppercase tracking-widest font-bold outline-none text-text-heading placeholder:text-text-muted/60 w-20"
-                      placeholder={language === 'zh' ? '自定义...' : 'Custom...'}
-                      value={tagInputValue}
-                      onChange={e => setTagInputValue(e.target.value)}
-                      onKeyDown={e => {
-                        if ((e.key === 'Enter' || e.key === ' ' || e.key === ',') && tagInputValue.trim()) {
-                          e.preventDefault();
-                          const newTag = tagInputValue.trim().toLowerCase();
-                          if (!newTaskTagsList.includes(newTag)) {
-                            setNewTaskTagsList([...newTaskTagsList, newTag]);
-                          }
-                          setTagInputValue('');
-                        } else if (e.key === 'Enter' && !tagInputValue.trim() && newTaskTitle.trim()) {
-                          e.preventDefault();
-                          document.getElementById('add-task-btn')?.click();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
+              <div className="flex-1 flex flex-col gap-2 min-w-[200px]">
+                <TagInput
+                  tags={newTaskTagsList}
+                  onChange={setNewTaskTagsList}
+                  availableTags={categories}
+                  language={language}
+                />
               </div>
 
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                 {/* Deadline Button */}
-                <label className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-xl border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
+                <label className={`relative flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-md border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-stone-50 text-stone-600 border-stone-200 pr-8' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
                   <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
                   <input
                     type="date"
-                    className={`bg-transparent outline-none border-none text-[10px] sm:text-[11px] uppercase tracking-widest font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-blue-600' : 'text-text-muted'}`}
+                    className={`bg-transparent outline-none border-none text-xs sm:text-[11px]  font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-stone-600' : 'text-text-muted'}`}
                     value={newTaskDeadline}
                     onChange={e => setNewTaskDeadline(e.target.value)}
                     onClick={(e) => {
                       try { (e.target as HTMLInputElement).showPicker(); } catch(err){}
                     }}
                   />
+                  {newTaskDeadline && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setNewTaskDeadline('');
+                      }}
+                      className="absolute right-2 text-stone-400 hover:text-stone-600 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </label>
 
                 {/* AI Button */}
                 <button
                   onClick={() => setShowBrainDump(!showBrainDump)}
-                  className="bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100 flex items-center justify-center rounded-xl transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
+                  className="bg-surface hover:bg-border/50 text-accent border border-transparent flex items-center justify-center rounded-md transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
                   title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
                 >
                   <Sparkles className="w-4 h-4" />
@@ -294,7 +259,7 @@ export function TaskInputPanel({
                       setShowTaskInput(false);
                     }
                   }}
-                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-xl text-[12px] uppercase font-sans tracking-widest font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
+                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-md text-[12px] font-sans  font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
                     newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
                   } flex-1 sm:flex-none`}
                 >

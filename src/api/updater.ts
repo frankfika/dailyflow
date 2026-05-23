@@ -10,28 +10,47 @@ export interface UpdateInfo {
   downloadUrl?: string;
   releaseNotes?: string;
   publishedAt?: string;
+  error?: string;
 }
 
 const GITHUB_REPO = 'frankfika/dailyflow';
 declare const __APP_VERSION__: string;
 const CURRENT_VERSION = __APP_VERSION__;
 
+// GitHub token for API requests (avoids rate limiting)
+// Set via environment variable or build config
+const GITHUB_TOKEN = typeof import.meta.env.VITE_GITHUB_TOKEN !== 'undefined'
+  ? import.meta.env.VITE_GITHUB_TOKEN
+  : '';
+
 /**
  * 检查是否有新版本
  */
 export async function checkForUpdates(): Promise<UpdateInfo> {
   try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+    };
+    if (GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+    }
+
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      }
+      { headers }
     );
 
+    if (response.status === 404) {
+      // The repository might not have any releases yet
+      return {
+        currentVersion: CURRENT_VERSION,
+        latestVersion: CURRENT_VERSION,
+        hasUpdate: false,
+      };
+    }
+
     if (!response.ok) {
-      throw new Error('Failed to fetch latest release');
+      throw new Error(`Failed to fetch latest release: ${response.status} ${response.statusText}`);
     }
 
     const release = await response.json();
@@ -58,10 +77,12 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
     };
   } catch (error) {
     console.error('Failed to check for updates:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       currentVersion: CURRENT_VERSION,
       latestVersion: CURRENT_VERSION,
       hasUpdate: false,
+      error: message,
     };
   }
 }

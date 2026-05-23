@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi } from './api/client';
 import { API_BASE, DEFAULT_MODEL } from './config/api';
 import { getTodayStr } from './utils/tagColors';
@@ -93,6 +93,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [gitHasChanges, setGitHasChanges] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [gitLastCommitTime, setGitLastCommitTime] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
@@ -208,13 +209,26 @@ export default function App() {
       try {
         const status = await gitApi.getStatus();
         setGitHasChanges(status.hasChanges);
+        if (status.lastCommitTime) {
+          setGitLastCommitTime(status.lastCommitTime);
+        }
       } catch {
         // workspace might not be a git repo yet
       }
     };
     checkGitStatus();
+    
+    // Also periodically update the formatted time string without making network requests
+    const timeUpdateInterval = setInterval(() => {
+      // Force a re-render so formatTimeAgo updates
+      setGitLastCommitTime(prev => prev ? new Date(prev).toISOString() : null);
+    }, 60000); // every minute
+
     const interval = setInterval(checkGitStatus, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(timeUpdateInterval);
+    };
   }, [githubConnected]);
 
   // Save activeContext when it changes
@@ -623,10 +637,10 @@ export default function App() {
             initial={{ opacity: 0, y: -30, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -30, scale: 0.9 }}
-            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3.5 rounded-2xl text-sm font-sans font-bold shadow-2xl pointer-events-none flex items-center gap-2.5 ${
-              toast.type === 'error' ? 'bg-red-500 text-white' :
-              toast.type === 'info' ? 'bg-surface border border-border text-text-main shadow-lg' :
-              'bg-green-500 text-white'
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3.5 rounded-md text-sm font-sans font-bold shadow-sm pointer-events-none flex items-center gap-2.5 ${
+              toast.type === 'error' ? 'bg-stone-50 text-stone-600 border border-stone-200 shadow-sm' :
+              toast.type === 'info' ? 'bg-surface border border-border text-text-main shadow-sm' :
+              'bg-stone-50 text-stone-600 border border-stone-200 shadow-sm'
             }`}
           >
             {toast.type === 'success' && <Check className="w-5 h-5" />}
@@ -666,14 +680,32 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
           <>
-        <header className={`h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border backdrop-blur-md z-10 shrink-0 transition-colors duration-700 bg-background/80`}>
-          <div className="flex items-center gap-3 md:gap-4 text-xs font-sans tracking-widest font-bold uppercase overflow-hidden whitespace-nowrap">
+        <header className={`h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border  z-10 shrink-0 transition-colors duration-700 bg-background`}>
+          <div className="flex items-center gap-3 md:gap-4 text-xs font-sans  font-bold overflow-hidden whitespace-nowrap">
             <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
               <Menu className="w-5 h-5"/>
             </button>
-            <span className="text-text-muted opacity-60 hidden sm:inline shrink-0">{language === 'zh' ? '每日任务' : 'Daily Tasks'}</span>
-            <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
-            <span className="text-accent truncate">{currentFileDate}.md</span>
+            <button 
+              onClick={() => {
+                setActiveTab('today');
+                setCurrentFileDate(getTodayStr());
+              }}
+              className="text-text-muted opacity-60 hover:opacity-100 hover:text-text-main transition-all hidden sm:inline shrink-0 cursor-pointer"
+              title={language === 'zh' ? '返回今日任务' : 'Return to today'}
+            >
+              {language === 'zh' ? '每日任务' : 'Daily Tasks'}
+            </button>
+            {activeTab === 'today' ? (
+              <>
+                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
+                <span className="text-accent truncate">{currentFileDate}.md</span>
+              </>
+            ) : (
+              <>
+                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
+                <span className="text-accent truncate">{language === 'zh' ? '笔记' : 'Notes'}</span>
+              </>
+            )}
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
@@ -681,38 +713,38 @@ export default function App() {
               <button
                 onClick={handleGitSync}
                 disabled={isSyncing || !hasChanges}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase font-bold tracking-widest bg-surface border border-border rounded-full hover:bg-surface-white transition-colors disabled:opacity-50"
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-bold  bg-surface border border-border rounded hover:bg-surface-white transition-colors disabled:opacity-50"
                 title={language === 'zh' ? '同步到 GitHub' : 'Sync to GitHub'}
               >
                 {isSyncing ? (
                   <Loader2 className="w-3 h-3 animate-spin text-accent" />
                 ) : hasChanges ? (
-                  <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                  <div className="w-2 h-2 rounded bg-orange-400 animate-pulse" />
                 ) : (
-                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  <div className="w-2 h-2 rounded bg-green-400" />
                 )}
                 <span className="text-text-muted">
                   {isSyncing
                     ? (language === 'zh' ? '同步中' : 'Syncing')
                     : hasChanges
                     ? (language === 'zh' ? '待同步' : 'Unsynced')
-                    : lastSyncTime
+                    : (lastSyncTime || gitLastCommitTime)
                     ? (language === 'zh'
-                        ? `已同步 ${formatTimeAgo(lastSyncTime, language)}`
-                        : `Synced ${formatTimeAgo(lastSyncTime, language)}`)
+                        ? `已同步 ${formatTimeAgo(lastSyncTime || gitLastCommitTime!, language)}`
+                        : `Synced ${formatTimeAgo(lastSyncTime || gitLastCommitTime!, language)}`)
                     : (language === 'zh' ? '已同步' : 'Synced')}
                 </span>
               </button>
             )}
             <button
               onClick={() => setShowSettings(true)}
-              className="relative p-2 text-text-muted hover:text-text-main transition-colors rounded-lg hover:bg-surface"
+              className="relative p-2 text-text-muted hover:text-text-main transition-colors rounded-md hover:bg-surface"
               title={language === 'zh' ? '设置' : 'Settings'}
               data-testid="settings-button"
             >
               <Settings className="w-4.5 h-4.5" />
               {updateAvailable && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-stone-500 rounded" />
               )}
             </button>
             <ContextSwitcher
@@ -735,11 +767,11 @@ export default function App() {
             {/* Error state */}
             {!isLoading && loadError && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <AlertCircle className="w-10 h-10 text-red-400" />
-                <p className="font-sans text-sm text-red-500">{loadError}</p>
+                <AlertCircle className="w-10 h-10 text-stone-500" />
+                <p className="font-sans text-sm text-stone-500">{loadError}</p>
                 <button
                   onClick={() => loadTasksForDate(currentFileDate)}
-                  className="mt-2 px-4 py-2 bg-accent text-white rounded-full text-xs font-bold uppercase tracking-widest"
+                  className="mt-2 px-4 py-2 bg-accent text-white rounded text-xs font-bold "
                 >
                   {language === 'zh' ? '重试' : 'Retry'}
                 </button>
@@ -749,7 +781,7 @@ export default function App() {
             {!isLoading && !loadError && tasks.length === 0 && activeTab === 'today' && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
                 <Calendar className="w-12 h-12 text-text-muted opacity-30" />
-                <p className="font-serif italic text-xl text-text-muted">{language === 'zh' ? '今天还没有任务' : 'No tasks for today'}</p>
+                <p className="font-sans italic text-xl text-text-muted">{language === 'zh' ? '今天还没有任务' : 'No tasks for today'}</p>
                 <p className="font-sans text-sm text-text-muted opacity-60">{language === 'zh' ? '使用下方的输入框添加您的第一个任务' : 'Add your first task using the input below'}</p>
               </div>
             )}
@@ -764,7 +796,37 @@ export default function App() {
                 >
                   <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/50 pb-6">
                     <div className="flex items-center gap-3">
-                      <h1 className="text-xl font-serif font-medium text-text-heading tracking-tight flex items-baseline gap-2">
+                      <div className="flex items-center gap-1 mr-2">
+                        <button
+                          onClick={() => {
+                            const d = new Date(`${currentFileDate}T00:00:00Z`);
+                            d.setUTCDate(d.getUTCDate() - 1);
+                            setCurrentFileDate(d.toISOString().split('T')[0]);
+                          }}
+                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface rounded-md transition-colors"
+                          title={language === 'zh' ? '前一天' : 'Previous Day'}
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const d = new Date(`${currentFileDate}T00:00:00Z`);
+                            d.setUTCDate(d.getUTCDate() + 1);
+                            const nextDate = d.toISOString().split('T')[0];
+                            if (nextDate <= getTodayStr()) {
+                              setCurrentFileDate(nextDate);
+                            } else {
+                              showToast(language === 'zh' ? '已经是最新一天' : 'Already on latest day', 'info');
+                            }
+                          }}
+                          disabled={currentFileDate >= getTodayStr()}
+                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={language === 'zh' ? '后一天' : 'Next Day'}
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <h1 className="text-xl font-sans font-medium text-text-heading tracking-tight flex items-baseline gap-2">
                         <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
                         <span className="text-text-muted">
                           {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
@@ -774,7 +836,7 @@ export default function App() {
                       <button
                         onClick={handleManualRollover}
                         title={language === 'zh' ? '手动迁移历史未完成任务' : 'Migrate unfinished tasks from past'}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-accent hover:bg-accent/10 border border-border/50 hover:border-accent/30 transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs  font-bold text-text-muted hover:text-accent hover:bg-accent/10 border border-border/50 hover:border-accent/30 transition-all"
                       >
                         <RefreshCw className="w-3 h-3" />
                         {language === 'zh' ? '迁移' : 'Rollover'}
@@ -785,7 +847,7 @@ export default function App() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setSelectedCategory(null)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-bold transition-all ${
+                          className={`px-3 py-1.5 rounded text-xs  font-bold transition-all ${
                             selectedCategory === null 
                               ? 'bg-text-heading text-white shadow-sm' 
                               : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
@@ -797,7 +859,7 @@ export default function App() {
                           <button
                             key={c}
                             onClick={() => setSelectedCategory(selectedCategory === c ? null : c)}
-                            className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-bold transition-all ${
+                            className={`px-3 py-1.5 rounded text-xs  font-bold transition-all ${
                               selectedCategory === c
                                 ? 'bg-accent text-white shadow-sm'
                                 : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
@@ -815,7 +877,7 @@ export default function App() {
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-sm"
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-md bg-stone-50 border border-stone-200 text-stone-700 text-sm"
                     >
                       <div className="flex items-center gap-2">
                         <CornerUpRight className="w-4 h-4 shrink-0" />
@@ -828,11 +890,11 @@ export default function App() {
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => { setRolloverBanner(null); handleManualRollover(); }}
-                          className="text-[10px] uppercase tracking-widest font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                          className="text-xs  font-bold text-stone-600 hover:text-stone-800 hover:underline"
                         >
                           {language === 'zh' ? '查看详情' : 'Details'}
                         </button>
-                        <button onClick={() => setRolloverBanner(null)} className="text-blue-400 hover:text-blue-700">
+                        <button onClick={() => setRolloverBanner(null)} className="text-stone-400 hover:text-stone-700">
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -848,7 +910,7 @@ export default function App() {
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
                       onClick={() => setShowTaskInput(true)}
-                      className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-accent text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow"
+                      className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded bg-accent text-white shadow-sm hover:shadow-sm flex items-center justify-center transition-shadow"
                       title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
                     >
                       <Plus className="w-6 h-6" />
@@ -899,7 +961,7 @@ export default function App() {
 
                     return (
                       <div key={category} className="space-y-5">
-                        <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
+                        <h2 className="font-sans text-xs  text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
                           <span>{category}</span>
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
@@ -926,7 +988,7 @@ export default function App() {
                           <div className="mt-2">
                             <button
                               onClick={() => setShowDoneByCategory(prev => ({ ...prev, [category]: !prev[category] }))}
-                              className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                              className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
                             >
                               <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
                               {language === 'zh' ? `已完成 (${doneCatTasks.length})` : `Done (${doneCatTasks.length})`}
@@ -974,7 +1036,7 @@ export default function App() {
                     const showDone = showDoneByCategory['__uncategorized__'] ?? false;
                     return (
                       <div className="space-y-5">
-                        <h2 className="font-sans text-[10px] uppercase tracking-widest text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
+                        <h2 className="font-sans text-xs  text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
                           <span>{language === 'zh' ? '收集箱' : 'Inbox'}</span>
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
@@ -999,7 +1061,7 @@ export default function App() {
                           <div className="mt-2">
                             <button
                               onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
-                              className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                              className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
                             >
                               <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
                               {language === 'zh' ? `已完成 (${done.length})` : `Done (${done.length})`}
@@ -1038,7 +1100,7 @@ export default function App() {
                       <div className="space-y-3 mt-8">
                         <button
                           onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__migrated__': !prev['__migrated__'] }))}
-                          className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-text-muted hover:text-text-main transition-colors"
+                          className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
                         >
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showMigrated ? 'rotate-180' : ''}`} />
                           <CornerUpRight className="w-3 h-3" />
@@ -1053,13 +1115,13 @@ export default function App() {
                           {showMigrated && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-3 overflow-hidden">
                               {migratedTasks.map(task => (
-                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-background border border-border/30 opacity-50">
+                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-md bg-background border border-border/30 opacity-50">
                                   <CornerUpRight className="w-3.5 h-3.5 text-text-muted shrink-0" />
                                   <span className="text-sm text-text-muted line-through flex-1 truncate">{task.title}</span>
                                   {task.source_date && (
                                     <button
                                       onClick={() => setCurrentFileDate(task.source_date!)}
-                                      className="text-[10px] text-accent hover:underline shrink-0"
+                                      className="text-xs text-accent hover:underline shrink-0"
                                     >
                                       {language === 'zh' ? `查看 ${task.source_date}` : `View ${task.source_date}`}
                                     </button>
@@ -1154,6 +1216,7 @@ export default function App() {
              language={language}
              activeContext={activeContext}
              availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
+             availableTags={[]}
              onSave={async (data) => {
                try {
                  await notesApi.create(data);

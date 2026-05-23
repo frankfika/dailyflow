@@ -144,11 +144,11 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-background rounded-2xl border border-border w-full max-w-lg p-8 shadow-2xl"
+        className="bg-background rounded-md border border-border w-full max-w-lg p-8 shadow-sm"
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-md bg-accent/10 mb-4">
             <Folder className="w-8 h-8 text-accent" />
           </div>
           <h1 className="text-2xl font-bold mb-2">{t.title}</h1>
@@ -165,7 +165,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
             <button
               onClick={handlePickFolder}
               disabled={isPickingFolder}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-all text-sm font-medium text-text-heading disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-dashed border-border hover:border-accent hover:bg-accent/5 transition-all text-sm font-medium text-text-heading disabled:opacity-50"
             >
               {isPickingFolder ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -186,12 +186,12 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
                 value={workspacePath}
                 onChange={e => setWorkspacePath(e.target.value)}
                 placeholder={t.noFolderPicked}
-                className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-accent transition-colors font-mono text-text-muted"
+                className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:border-accent transition-colors font-mono text-text-muted"
               />
               <button
                 onClick={handleValidate}
                 disabled={isValidating}
-                className="px-2 py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest"
+                className="px-2 py-1.5 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold "
               >
                 {isValidating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                 {language === 'zh' ? '验证' : 'Check'}
@@ -203,7 +203,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           {/* DeepSeek API Key */}
           <div>
             <label className="block text-sm font-medium mb-1.5">{t.apiKeyLabel}</label>
-            <div className="flex items-center gap-2 bg-background border border-border rounded-xl px-4 py-2.5 focus-within:border-accent transition-colors">
+            <div className="flex items-center gap-2 bg-background border border-border rounded-md px-4 py-2.5 focus-within:border-accent transition-colors">
               <Key className="w-4 h-4 text-text-muted shrink-0" />
               <input
                 type="password"
@@ -217,7 +217,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           </div>
 
           {/* Tips */}
-          <div className="bg-accent/5 rounded-xl p-4 space-y-1.5">
+          <div className="bg-accent/5 rounded-md p-4 space-y-1.5">
             <p className="text-sm font-medium">{t.exampleTitle}</p>
             <ul className="text-xs text-text-muted space-y-1">
               <li>• {t.tip1}</li>
@@ -226,7 +226,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600">
+            <div className="flex items-center gap-2 text-sm text-stone-600">
               <AlertCircle className="w-4 h-4" />
               {error}
             </div>
@@ -236,7 +236,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           <button
             onClick={handleContinue}
             disabled={isSaving || !workspacePath.trim() || !apiKey.trim()}
-            className="w-full py-3 rounded-xl bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-md bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving ? (
               <>

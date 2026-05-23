@@ -1,88 +1,122 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Import eye-friendly sans-serif fonts: Inter for English, Noto Sans SC for Chinese */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap');
 
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Helvetica Neue", Arial, sans-serif;
-  --font-serif: Georgia, serif;
+  /* Eye-friendly clean sans-serif for main reading, easier on the eyes than serif on screens */
+  --font-sans: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Keep a nice serif for headings or special quotes if needed */
+  --font-serif: "Georgia", "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-background: #F8FAFC;
-  --color-surface: #F1F5F9;
-  --color-surface-white: #FFFFFF;
-  --color-border: #E2E8F0;
+  /* E-ink Light Mode (Classic Paperwhite - Softer contrast) */
+  --color-background: #F2F2F2; /* Slightly darker gray to reduce glare */
+  --color-surface: #FAFAFA; /* Off-white, avoiding pure #FFFFFF */
+  --color-surface-white: #FAFAFA;
+  --color-border: #DCDCDC;
   
-  --color-text-main: #334155;
-  --color-text-heading: #0F172A;
-  --color-text-muted: #64748B;
+  --color-text-main: #3D3D3D; /* Softer dark gray, avoiding #000 or very dark #333 for less eye strain */
+  --color-text-heading: #222222;
+  --color-text-muted: #737373;
   
-  --color-accent: #3B82F6;
-  --color-accent-light: #EFF6FF;
-  --color-accent-warm: #60A5FA;
-  --color-accent-highlight: #DBEAFE;
+  --color-accent: #404040; /* Soft ink */
+  --color-accent-light: #EBEBEB;
+  --color-accent-warm: #555555;
+  --color-accent-highlight: #EAEAEA;
 }
 
 :root[data-context="life"] {
-  --color-background: #F9F7F2;
-  --color-surface: #EAE7DF;
-  --color-surface-white: #FFFFFF;
-  --color-border: #DED9CE;
+  /* Kindle Sepia Mode (Ultra Eye-care) */
+  --color-background: #F4ECE1; /* Deeper, warmer sepia */
+  --color-surface: #FDF6EC; /* Soft warm paper */
+  --color-surface-white: #FDF6EC;
+  --color-border: #E8DAC6;
   
-  --color-text-main: #4A4439;
-  --color-text-heading: #3F4238;
-  --color-text-muted: #8B8679;
+  --color-text-main: #5C4A3D; /* Warm brown, very low strain */
+  --color-text-heading: #3A2E25;
+  --color-text-muted: #968677;
   
-  --color-accent: #6B705C;
-  --color-accent-light: #F0EDE6;
-  --color-accent-warm: #CB997E;
-  --color-accent-highlight: #FFE8D6;
+  --color-accent: #5C4A3D;
+  --color-accent-light: #F0E6D8;
+  --color-accent-warm: #7A6555;
+  --color-accent-highlight: #F5ECDZ;
 }
 
 body {
   background-color: var(--color-background);
   color: var(--color-text-main);
   font-family: var(--font-sans);
-  transition: background-color 0.7s ease, color 0.7s ease;
+  transition: background-color 0.8s ease, color 0.8s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Slightly more visible paper texture for glare reduction */
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  
+  /* Increase base line-height and letter spacing globally for better readability */
+  line-height: 1.6;
+  letter-spacing: 0.015em;
 }
 
-/* Editorial Typography */
-.editorial-hero {
-  font-family: var(--font-serif);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+/* Typography Overrides */
+h1, h2, h3, h4, h5, h6, .editorial-hero {
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  line-height: 1.3; /* Tighter line height for headings */
 }
 
-/* Floating Elements */
-.floating-card {
-  background: var(--color-surface-white);
+/* Flat Panels (No Glassmorphism on E-ink) */
+.glass-panel {
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  box-shadow: 0 20px 50px rgba(107, 112, 92, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Paper Cards (Stacked paper effect) */
+.floating-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px; /* Slightly rounded corners are softer on the eyes */
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.02); /* Extremely subtle offset */
+  transition: all 0.2s ease;
 }
 .floating-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 50px rgba(107, 112, 92, 0.08);
+  transform: none; /* Kindle doesn't float */
+  background: var(--color-surface-white);
+  border-color: var(--color-text-muted);
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.04);
 }
 
 /* Command Pill */
 .command-pill {
   background: var(--color-accent);
-  color: var(--color-surface-white);
-  border-radius: 9999px;
-  box-shadow: 0 10px 30px rgba(107, 112, 92, 0.2);
+  color: var(--color-surface);
+  border-radius: 6px;
+  font-weight: 500;
+  box-shadow: none;
+  border: 1px solid var(--color-accent);
+  transition: all 0.2s ease;
+}
+.command-pill:hover {
+  transform: none;
+  background: var(--color-text-main);
 }
 
 /* Custom Scrollbar */
 @utility scrollbar-hide {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
   }
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 6px; /* Slightly wider for easier grabbing */
   height: 6px;
 }
 ::-webkit-scrollbar-track {
@@ -90,7 +124,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);

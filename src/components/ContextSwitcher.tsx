@@ -17,11 +17,11 @@ export function ContextSwitcher({ activeContext, onChange, language }: ContextSw
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex bg-surface rounded-full p-1 border border-border"
+      className="flex bg-surface rounded p-1 border border-border"
     >
       <button
         onClick={() => onChange('work')}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-sans uppercase tracking-widest font-bold transition-all ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-sans  font-bold transition-all ${
           activeContext === 'work'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-main'
@@ -32,7 +32,7 @@ export function ContextSwitcher({ activeContext, onChange, language }: ContextSw
       </button>
       <button
         onClick={() => onChange('life')}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-sans uppercase tracking-widest font-bold transition-all ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-sans  font-bold transition-all ${
           activeContext === 'life'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-main'

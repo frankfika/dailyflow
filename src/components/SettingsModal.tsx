@@ -5,6 +5,7 @@
 import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-shell';
 import { configApi, aiApi } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
 import { checkForUpdates, type UpdateInfo } from '../api/updater';
@@ -149,20 +150,20 @@ export function SettingsModal({
   if (!showSettings) return null;
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-background backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-surface-white border border-border shadow-xl rounded-[24px] w-full max-w-2xl relative flex flex-col max-h-[90vh]"
+        className="bg-surface-white border border-border shadow-sm rounded-md w-full max-w-2xl relative flex flex-col max-h-[90vh]"
       >
         {/* Header with Close Button */}
         <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
-          <h2 className="font-serif text-2xl text-text-heading italic">
+          <h2 className="font-sans text-2xl text-text-heading italic">
             {language === 'zh' ? '全局设置' : 'Configuration'}
           </h2>
           <button
             onClick={() => setShowSettings(false)}
-            className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-lg hover:bg-surface"
+            className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-md hover:bg-surface"
           >
             <X className="w-5 h-5" />
           </button>
@@ -172,7 +173,7 @@ export function SettingsModal({
         <div className="flex border-b border-border px-6">
           <button
             onClick={() => setConfigTab('general')}
-            className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'general'
                 ? 'border-accent text-accent'
                 : 'border-transparent text-text-muted hover:text-text-heading'
@@ -182,7 +183,7 @@ export function SettingsModal({
           </button>
           <button
             onClick={() => setConfigTab('ai')}
-            className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'ai'
                 ? 'border-accent text-accent'
                 : 'border-transparent text-text-muted hover:text-text-heading'
@@ -192,7 +193,7 @@ export function SettingsModal({
           </button>
           <button
             onClick={() => setConfigTab('github')}
-            className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'github'
                 ? 'border-accent text-accent'
                 : 'border-transparent text-text-muted hover:text-text-heading'
@@ -202,7 +203,7 @@ export function SettingsModal({
           </button>
           <button
             onClick={() => setConfigTab('about')}
-            className={`py-3 px-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-colors ${
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'about'
                 ? 'border-accent text-accent'
                 : 'border-transparent text-text-muted hover:text-text-heading'
@@ -218,7 +219,7 @@ export function SettingsModal({
             <div className="space-y-5">
               {/* Workspace Path */}
               <div>
-                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
                   {language === 'zh' ? '工作区路径' : 'Workspace Path'}
                 </h3>
                 <div className="flex gap-2">
@@ -227,7 +228,7 @@ export function SettingsModal({
                     value={workspaceRoot}
                     onChange={e => setWorkspaceRoot(e.target.value)}
                     placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                    className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                    className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
                   />
                   <button
                     onClick={async () => {
@@ -246,7 +247,7 @@ export function SettingsModal({
                         alert('Failed to open folder picker: ' + e.message);
                       }
                     }}
-                    className="px-3 py-2 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors whitespace-nowrap"
+                    className="px-3 py-2 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors whitespace-nowrap"
                   >
                     {language === 'zh' ? '浏览' : 'Browse'}
                   </button>
@@ -258,10 +259,10 @@ export function SettingsModal({
 
               {/* Language */}
               <div>
-                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
                   {language === 'zh' ? '界面语言' : 'Language'}
                 </h3>
-                <div className="flex bg-surface p-1 rounded-lg shadow-inner border border-border/50 gap-1">
+                <div className="flex bg-surface p-1 rounded-md shadow-inner border border-border/50 gap-1">
                   <button
                     onClick={() => setLanguage('en')}
                     className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${language === 'en' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
@@ -284,7 +285,7 @@ export function SettingsModal({
             <div className="space-y-5">
               {/* AI Configuration */}
               <div>
-                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
                   {language === 'zh' ? 'AI 模型配置' : 'AI Model Configuration'}
                 </h3>
 
@@ -299,7 +300,7 @@ export function SettingsModal({
                     else if (provider === 'anthropic') setAiModel('claude-3-5-sonnet-20241022');
                     else if (provider === 'openai') setAiModel(DEFAULT_MODEL.openai);
                   }}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
                 >
                   <option value="deepseek">DeepSeek</option>
                   <option value="anthropic">Anthropic (Claude)</option>
@@ -314,7 +315,7 @@ export function SettingsModal({
                     value={aiApiKey}
                     onChange={e => setAiApiKey(e.target.value)}
                     placeholder={language === 'zh' ? 'API Key' : 'API Key'}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
                   />
                   <button
                     type="button"
@@ -331,7 +332,7 @@ export function SettingsModal({
                   value={aiModel}
                   onChange={e => setAiModel(e.target.value)}
                   placeholder={language === 'zh' ? '模型名称 (可选)' : 'Model name (optional)'}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
                 />
 
                 {/* Custom Base URL */}
@@ -341,7 +342,7 @@ export function SettingsModal({
                     value={aiBaseUrl}
                     onChange={e => setAiBaseUrl(e.target.value)}
                     placeholder={language === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
                   />
                 )}
 
@@ -350,7 +351,7 @@ export function SettingsModal({
                   <select
                     value={aiFormat}
                     onChange={e => setAiFormat(e.target.value as 'openai' | 'anthropic')}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
                   >
                     <option value="openai">OpenAI Format</option>
                     <option value="anthropic">Anthropic Format</option>
@@ -401,9 +402,9 @@ export function SettingsModal({
                       setAiVerifyMsg(language === 'zh' ? `✗ 验证失败: ${e.message}` : `✗ Failed: ${e.message}`);
                     }
                   }}
-                  className={`mt-3 w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors ${
-                    aiVerifyStatus === 'success' ? 'bg-green-500 text-white' :
-                    aiVerifyStatus === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/30' :
+                  className={`mt-3 w-full py-2 rounded-md text-xs font-bold  transition-colors ${
+                    aiVerifyStatus === 'success' ? 'bg-stone-500 text-white' :
+                    aiVerifyStatus === 'error' ? 'bg-stone-100 text-stone-500 border border-stone-300' :
                     'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
                   } disabled:opacity-50`}
                 >
@@ -412,7 +413,7 @@ export function SettingsModal({
                     : (language === 'zh' ? '测试连接' : 'Test Connection')}
                 </button>
                 {aiVerifyMsg && (
-                  <p className={`text-xs mt-1.5 ${aiVerifyStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                  <p className={`text-xs mt-1.5 ${aiVerifyStatus === 'success' ? 'text-stone-600' : 'text-stone-500'}`}>
                     {aiVerifyMsg}
                   </p>
                 )}
@@ -427,14 +428,14 @@ export function SettingsModal({
               {/* GitHub Sync */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted">
+                  <h3 className="font-sans text-xs font-bold  text-text-muted">
                     {language === 'zh' ? 'GitHub 同步' : 'GitHub Sync'}
                   </h3>
-                  <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">Beta</span>
+                  <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded font-bold">Beta</span>
                 </div>
 
                 {/* Detailed Tutorial */}
-                <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 mb-3">
+                <div className="bg-accent/5 border border-accent/20 rounded-md p-3 mb-3">
                   <p className="text-xs text-text-main font-medium mb-2">
                     {language === 'zh' ? '📖 详细配置步骤：' : '📖 Detailed Setup Guide:'}
                   </p>
@@ -478,7 +479,7 @@ export function SettingsModal({
                     <select
                       value={syncInterval}
                       onChange={e => setSyncInterval(Number(e.target.value))}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
                     >
                       <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
                       <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
@@ -497,7 +498,7 @@ export function SettingsModal({
                       value={githubRepoInput}
                       onChange={e => setGithubRepoInput(e.target.value)}
                       placeholder="https://github.com/username/repo-name"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
                     />
                   </div>
 
@@ -512,7 +513,7 @@ export function SettingsModal({
                         value={githubToken}
                         onChange={e => setGithubToken(e.target.value)}
                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
+                        className="w-full bg-background border border-border rounded-md px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
                       />
                       <button
                         type="button"
@@ -574,7 +575,7 @@ export function SettingsModal({
                       }
                     }}
                     disabled={githubVerifyStatus === 'loading'}
-                    className="w-full py-2 bg-surface border border-border rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-surface-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-2 bg-surface border border-border rounded-md text-xs font-bold  hover:bg-surface-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {githubVerifyStatus === 'loading' ? (
                       <>
@@ -588,10 +589,10 @@ export function SettingsModal({
 
                   {/* Verification Result */}
                   {githubVerifyMsg && (
-                    <div className={`text-xs p-2 rounded-lg ${
+                    <div className={`text-xs p-2 rounded-md ${
                       githubVerifyStatus === 'success'
-                        ? 'bg-green-50 text-green-700 border border-green-200'
-                        : 'bg-red-50 text-red-700 border border-red-200'
+                        ? 'bg-stone-50 text-stone-700 border border-stone-200'
+                        : 'bg-stone-50 text-stone-700 border border-stone-200'
                     }`}>
                       {githubVerifyMsg}
                     </div>
@@ -605,8 +606,8 @@ export function SettingsModal({
             <div className="space-y-5">
               {/* App Info */}
               <div className="text-center py-4">
-                <div className="w-12 h-12 bg-accent text-white flex items-center justify-center font-serif text-xl font-bold rounded-lg shadow-sm mx-auto mb-3">D</div>
-                <h3 className="font-serif text-xl text-text-heading italic">DailyFlow</h3>
+                <div className="w-12 h-12 bg-accent text-white flex items-center justify-center font-sans text-xl font-bold rounded-md shadow-sm mx-auto mb-3">D</div>
+                <h3 className="font-sans text-xl text-text-heading italic">DailyFlow</h3>
                 <p className="text-xs text-text-muted mt-1">
                   {language === 'zh' ? '简洁高效的日常任务管理工具' : 'A minimal daily task manager'}
                 </p>
@@ -616,7 +617,7 @@ export function SettingsModal({
 
               {/* App Update */}
               <div>
-                <h3 className="font-sans text-[10px] uppercase font-bold tracking-widest text-text-muted mb-2">
+                <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
                   {language === 'zh' ? '应用更新' : 'App Update'}
                 </h3>
                 <div className="space-y-3">
@@ -637,7 +638,7 @@ export function SettingsModal({
                   <button
                     onClick={handleCheckUpdate}
                     disabled={isCheckingUpdate}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCheckingUpdate ? (
                       <>
@@ -653,47 +654,62 @@ export function SettingsModal({
                   </button>
 
                   {updateInfo && (
-                    <div className={`p-4 rounded-lg border ${
-                      updateInfo.hasUpdate
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-green-50 border-green-200'
+                    <div className={`p-4 rounded-md border ${
+                      updateInfo.error
+                        ? 'bg-stone-50 border-stone-200'
+                        : updateInfo.hasUpdate
+                          ? 'bg-stone-50 border-stone-200'
+                          : 'bg-stone-50 border-stone-200'
                     }`}>
                       <div className="flex items-start gap-3">
-                        {updateInfo.hasUpdate ? (
-                          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        {updateInfo.error ? (
+                          <AlertCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
+                        ) : updateInfo.hasUpdate ? (
+                          <AlertCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
                         ) : (
-                          <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                          <CheckCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
                         )}
                         <div className="flex-1 space-y-2">
                           <p className={`text-sm font-semibold ${
-                            updateInfo.hasUpdate ? 'text-blue-700' : 'text-green-700'
+                            updateInfo.error ? 'text-stone-700' :
+                            updateInfo.hasUpdate ? 'text-stone-700' : 'text-stone-700'
                           }`}>
-                            {updateInfo.hasUpdate
-                              ? (language === 'zh' ? '发现新版本！' : 'New version available!')
-                              : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
+                            {updateInfo.error
+                              ? (language === 'zh' ? '检查更新失败' : 'Update check failed')
+                              : updateInfo.hasUpdate
+                                ? (language === 'zh' ? '发现新版本！' : 'New version available!')
+                                : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
                           </p>
-                          <div className="text-xs space-y-1">
-                            <p className={updateInfo.hasUpdate ? 'text-blue-600' : 'text-green-600'}>
-                              {language === 'zh' ? '当前版本: ' : 'Current: '}
-                              <span className="font-mono font-semibold">{updateInfo.currentVersion}</span>
+                          {updateInfo.error ? (
+                            <p className="text-xs text-stone-600">
+                              {updateInfo.error}
                             </p>
-                            {updateInfo.hasUpdate && (
-                              <p className="text-blue-600">
-                                {language === 'zh' ? '最新版本: ' : 'Latest: '}
-                                <span className="font-mono font-semibold">{updateInfo.latestVersion}</span>
+                          ) : (
+                            <div className="text-xs space-y-1">
+                              <p className={updateInfo.hasUpdate ? 'text-stone-600' : 'text-stone-600'}>
+                                {language === 'zh' ? '当前版本: ' : 'Current: '}
+                                <span className="font-mono font-semibold">{updateInfo.currentVersion}</span>
                               </p>
-                            )}
-                          </div>
+                              {updateInfo.hasUpdate && (
+                                <p className="text-stone-600">
+                                  {language === 'zh' ? '最新版本: ' : 'Latest: '}
+                                  <span className="font-mono font-semibold">{updateInfo.latestVersion}</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                           {updateInfo.hasUpdate && updateInfo.downloadUrl && (
-                            <a
-                              href={updateInfo.downloadUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors mt-2"
+                            <button
+                              onClick={() => {
+                                if (updateInfo.downloadUrl) {
+                                  open(updateInfo.downloadUrl);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold  hover:bg-blue-700 transition-colors mt-2"
                             >
                               <Download className="w-3.5 h-3.5" />
                               {language === 'zh' ? '下载更新' : 'Download Update'}
-                            </a>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -709,7 +725,7 @@ export function SettingsModal({
         <div className="border-t border-border p-4 flex justify-end gap-3">
           <button
             onClick={() => setShowSettings(false)}
-            className="px-5 py-2 font-sans font-bold text-xs uppercase tracking-widest text-text-muted hover:text-text-heading transition-colors"
+            className="px-5 py-2 font-sans font-bold text-xs  text-text-muted hover:text-text-heading transition-colors"
           >
             {language === 'zh' ? '取消' : 'Cancel'}
           </button>
@@ -784,7 +800,7 @@ export function SettingsModal({
                   : 'Failed to save configuration');
               }
             }}
-            className="bg-accent text-white px-6 py-2 rounded-full font-sans font-bold text-xs uppercase tracking-widest shadow-sm hover:bg-accent/90 transition-colors"
+            className="bg-accent text-white px-6 py-2 rounded font-sans font-bold text-xs  shadow-sm hover:bg-accent/90 transition-colors"
           >
             {language === 'zh' ? '保存' : 'Save'}
           </button>

@@ -249,6 +249,7 @@ export interface GitStatus {
   staged: string[];
   unstaged: string[];
   untracked: string[];
+  lastCommitTime?: string;
 }
 
 export interface GitSyncResult {

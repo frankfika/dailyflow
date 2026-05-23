@@ -16,15 +16,15 @@ interface NoteCardProps {
 }
 
 const typeConfigWork = {
-  note: { icon: FileText, label: 'Note', labelZh: '笔记', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-  meeting_note: { icon: Mic, label: 'Meeting', labelZh: '会议', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-  summary: { icon: Sparkles, label: 'Summary', labelZh: '总结', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+  note: { icon: FileText, label: 'Note', labelZh: '笔记', color: 'bg-stone-50 text-stone-600 border-stone-200' },
+  meeting_note: { icon: Mic, label: 'Meeting', labelZh: '会议', color: 'bg-surface text-text-main border-transparent' },
+  summary: { icon: Sparkles, label: 'Summary', labelZh: '总结', color: 'bg-surface text-text-main border-transparent' },
 };
 
 const typeConfigLife = {
   note: { icon: FileText, label: 'Note', labelZh: '笔记', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  meeting_note: { icon: Mic, label: 'Meeting', labelZh: '会议', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-  summary: { icon: Sparkles, label: 'Summary', labelZh: '总结', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  meeting_note: { icon: Mic, label: 'Meeting', labelZh: '会议', color: 'bg-surface text-text-main border-transparent' },
+  summary: { icon: Sparkles, label: 'Summary', labelZh: '总结', color: 'bg-surface text-text-main border-transparent' },
 };
 
 function renderBodyWithMentions(body: string, onMentionClick?: (m: string) => void) {
@@ -77,15 +77,15 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={onClick}
-        className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-white border border-border/60 hover:border-accent/30 cursor-pointer transition-all hover:shadow-sm"
+        className="group flex items-center gap-3 px-4 py-3 rounded-md bg-surface-white border border-border/60 hover:border-accent/30 cursor-pointer transition-all hover:shadow-sm"
       >
         <TypeIcon className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-        <span className="font-serif text-sm text-text-heading truncate flex-1">{note.title}</span>
+        <span className="font-sans text-sm text-text-heading truncate flex-1">{note.title}</span>
         {note.time && (
-          <span className="text-[10px] text-text-muted font-mono">{note.time}</span>
+          <span className="text-xs text-text-muted font-mono">{note.time}</span>
         )}
         {note.mentions.length > 0 && (
-          <span className="text-[10px] text-accent font-bold">
+          <span className="text-xs text-accent font-bold">
             @{note.mentions[0]}{note.mentions.length > 1 && ` +${note.mentions.length - 1}`}
           </span>
         )}
@@ -101,16 +101,16 @@ export const NoteCard: React.FC<NoteCardProps> = ({
       exit={{ opacity: 0, y: -4 }}
       whileHover={{ scale: 1.005 }}
       onClick={onClick}
-      className="group relative floating-card rounded-[24px] p-5 cursor-pointer"
+      className="group relative floating-card rounded-md p-5 cursor-pointer"
     >
       <div className="flex items-start gap-4">
-        <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center border ${config.color}`}>
+        <div className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center border ${config.color}`}>
           <TypeIcon className="w-4 h-4" />
         </div>
 
         <div className="flex-1 min-w-0 pr-16">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-serif text-lg text-text-heading truncate">{note.title}</h3>
+            <h3 className="font-sans text-lg text-text-heading truncate">{note.title}</h3>
           </div>
 
           {note.type === 'meeting_note' && note.participants && note.participants.length > 0 && (
@@ -128,13 +128,13 @@ export const NoteCard: React.FC<NoteCardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {note.time && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface text-[10px] text-text-muted font-mono border border-border/50">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface text-xs text-text-muted font-mono border border-border/50">
                 <Clock className="w-2.5 h-2.5" />
                 {note.time}{note.endTime && `–${note.endTime}`}
               </span>
             )}
 
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest border ${config.color}`}>
+            <span className={`px-2 py-0.5 rounded-md text-xs font-bold  border ${config.color}`}>
               {language === 'zh' ? config.labelZh : config.label}
             </span>
 
@@ -142,20 +142,20 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               <button
                 key={mention}
                 onClick={(e) => { e.stopPropagation(); onMentionClick?.(mention); }}
-                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                className="px-2 py-0.5 rounded text-xs font-bold bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
               >
                 @{mention}
               </button>
             ))}
 
             {note.tags.filter(t => !['work', 'life'].includes(t)).map(tag => (
-              <span key={tag} className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest border ${getTagColor(tag)}`}>
+              <span key={tag} className={`px-2 py-0.5 rounded-md text-xs font-bold  border ${getTagColor(tag)}`}>
                 #{tag}
               </span>
             ))}
 
             {note.linkedTaskIds.length > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface text-[10px] text-text-muted border border-border/50">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface text-xs text-text-muted border border-border/50">
                 <Link className="w-2.5 h-2.5" />
                 {note.linkedTaskIds.length} {language === 'zh' ? '任务' : 'tasks'}
               </span>
@@ -169,7 +169,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           {onEdit && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-lg"
+              className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md"
             >
               <Edit2 className="w-3.5 h-3.5" />
             </button>
@@ -177,7 +177,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-1.5 text-text-muted hover:text-red-500 transition-colors rounded-lg"
+              className="p-1.5 text-text-muted hover:text-stone-500 transition-colors rounded-md"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -185,7 +185,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
         </div>
       )}
 
-      <div className="absolute top-5 right-5 group-hover:opacity-0 transition-opacity text-[10px] text-text-muted font-mono pointer-events-none">
+      <div className="absolute top-5 right-5 group-hover:opacity-0 transition-opacity text-xs text-text-muted font-mono pointer-events-none">
         {note.date}
       </div>
     </motion.div>

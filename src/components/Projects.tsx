@@ -90,7 +90,7 @@ export function Projects({ language, activeContext = 'work' }: ProjectsProps) {
         <h1 className="text-2xl font-bold">{t.title}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent/90 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 transition-colors"
         >
           <Plus className="w-4 h-4" />
           {t.createBtn}
@@ -148,8 +148,8 @@ interface ProjectCardProps {
 
 function ProjectCard({ project, language, onEdit, onDelete }: ProjectCardProps) {
   const statusColors = {
-    active: 'bg-blue-500/10 text-blue-600',
-    completed: 'bg-green-500/10 text-green-600',
+    active: 'bg-stone-100 text-stone-700',
+    completed: 'bg-stone-500/10 text-stone-600',
     archived: 'bg-gray-500/10 text-gray-600',
   };
 
@@ -163,7 +163,7 @@ function ProjectCard({ project, language, onEdit, onDelete }: ProjectCardProps) 
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-background border border-border rounded-xl p-4 hover:border-accent/50 transition-colors"
+      className="bg-background border border-border rounded-md p-4 hover:border-accent/50 transition-colors"
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
@@ -171,13 +171,13 @@ function ProjectCard({ project, language, onEdit, onDelete }: ProjectCardProps) 
         <div className="flex items-center gap-2">
           <button
             onClick={() => onEdit(project)}
-            className="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition-colors"
+            className="p-1.5 rounded-md hover:bg-accent/10 text-accent transition-colors"
           >
             <Edit2 className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDelete(project.id)}
-            className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-600 transition-colors"
+            className="p-1.5 rounded-md hover:bg-stone-100 text-stone-600 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -186,7 +186,7 @@ function ProjectCard({ project, language, onEdit, onDelete }: ProjectCardProps) 
 
       {/* Status */}
       <div className="mb-3">
-        <span className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium ${statusColors[project.status]}`}>
+        <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${statusColors[project.status]}`}>
           {statusLabels[project.status]}
         </span>
       </div>
@@ -292,7 +292,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-background rounded-2xl border border-border w-full max-w-lg p-6"
+        className="bg-background rounded-md border border-border w-full max-w-lg p-6"
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold mb-6">{t.title}</h2>
@@ -306,7 +306,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder={t.namePlaceholder}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+              className="w-full bg-background border border-border rounded-md px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
             />
           </div>
 
@@ -318,7 +318,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               onChange={e => setDescription(e.target.value)}
               placeholder={t.descPlaceholder}
               rows={3}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors resize-none"
+              className="w-full bg-background border border-border rounded-md px-4 py-3 text-sm outline-none focus:border-accent transition-colors resize-none"
             />
           </div>
 
@@ -328,7 +328,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
             <select
               value={status}
               onChange={e => setStatus(e.target.value as 'active' | 'completed' | 'archived')}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+              className="w-full bg-background border border-border rounded-md px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
             >
               <option value="active">{t.active}</option>
               <option value="completed">{t.completed}</option>
@@ -343,9 +343,9 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               <button
                 type="button"
                 onClick={() => setContext('work')}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                className={`flex-1 py-2 rounded-md text-xs font-bold  transition-all border ${
                   context === 'work'
-                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                    ? 'bg-stone-500 text-white border-stone-500 shadow-sm'
                     : 'bg-surface text-text-muted border-border hover:text-text-main'
                 }`}
               >
@@ -354,9 +354,9 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               <button
                 type="button"
                 onClick={() => setContext('life')}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                className={`flex-1 py-2 rounded-md text-xs font-bold  transition-all border ${
                   context === 'life'
-                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                    ? 'bg-stone-500 text-white border-stone-500 shadow-sm'
                     : 'bg-surface text-text-muted border-border hover:text-text-main'
                 }`}
               >
@@ -365,7 +365,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               <button
                 type="button"
                 onClick={() => setContext(null)}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                className={`flex-1 py-2 rounded-md text-xs font-bold  transition-all border ${
                   context === null
                     ? 'bg-text-heading text-white border-text-heading shadow-sm'
                     : 'bg-surface text-text-muted border-border hover:text-text-main'
@@ -383,7 +383,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               type="date"
               value={deadline}
               onChange={e => setDeadline(e.target.value)}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+              className="w-full bg-background border border-border rounded-md px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
             />
           </div>
 
@@ -395,7 +395,7 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
               value={tags}
               onChange={e => setTags(e.target.value)}
               placeholder={t.tagsPlaceholder}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
+              className="w-full bg-background border border-border rounded-md px-4 py-3 text-sm outline-none focus:border-accent transition-colors"
             />
           </div>
         </div>
@@ -405,13 +405,13 @@ function ProjectModal({ project, language, onClose, onSave }: ProjectModalProps)
           <button
             onClick={handleSave}
             disabled={isSaving || !name.trim()}
-            className="flex-1 py-3 rounded-xl bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+            className="flex-1 py-3 rounded-md bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
             {isSaving ? (language === 'zh' ? '保存中...' : 'Saving...') : t.saveBtn}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors"
+            className="flex-1 py-3 rounded-md bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors"
           >
             {t.cancelBtn}
           </button>
