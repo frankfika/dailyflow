@@ -80,6 +80,7 @@ export default function App() {
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai'>('today');
+  const [activeAiConfigId, setActiveAiConfigId] = useState<string>('default');
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1158,7 +1159,11 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="h-full"
                 >
-                  <PromptLibrary language={language} />
+                  <PromptLibrary
+                    language={language}
+                    activeAiConfigId={activeAiConfigId}
+                    onAiConfigChange={(id) => setActiveAiConfigId(id)}
+                  />
                 </motion.div>
               ) : (
                 <Notes

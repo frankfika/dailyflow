@@ -32,22 +32,22 @@
 }
 
 :root[data-context="life"] {
-  /* Kindle Sepia Mode (Darker - Less eye strain) */
-  --color-background: #E8DCC8; /* Darker sepia, reduced brightness */
-  --color-surface: #EDE4D4; /* Slightly darker warm paper */
-  --color-surface-white: #EDE4D4;
-  --color-border: #D8CAB4;
+  /* Kindle Sepia Mode (Soft warm - Easy on eyes) */
+  --color-background: #F0E6D8; /* Softer sepia */
+  --color-surface: #F5EDE0; /* Soft warm paper */
+  --color-surface-white: #F5EDE0;
+  --color-border: #DDD0BE;
 
-  --color-text-main: #4A3A2D; /* Darker warm brown */
-  --color-text-heading: #3A2E25;
-  --color-text-muted: #7A6A5A;
+  --color-text-main: #5A4A3D; /* Medium warm brown */
+  --color-text-heading: #4A3A2D;
+  --color-text-muted: #8A7A6A;
 
-  --color-accent: #4A3A2D;
-  --color-accent-light: #E0D4C0;
-  --color-accent-warm: #6A5A4A;
-  --color-accent-highlight: #E5D9C4;
+  --color-accent: #5A4A3D;
+  --color-accent-light: #EDE0D0;
+  --color-accent-warm: #7A6A5A;
+  --color-accent-highlight: #F0E5D8;
 
-  /* Brightness multiplier for life theme (0.8-1.0) */
+  /* Brightness multiplier for life theme */
   --life-brightness: 1;
 }
 

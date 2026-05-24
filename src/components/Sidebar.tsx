@@ -172,12 +172,19 @@ export function Sidebar({
                 >
                   <span className="ml-4">{language === 'zh' ? '笔记' : 'Notes'}</span>
                 </li>
+              </ul>
+            </div>
+
+            {/* AI Features - top level */}
+            <div>
+              <h3 className="text-xs text-text-muted font-bold mb-3">{language === 'zh' ? 'AI 功能' : 'AI Features'}</h3>
+              <ul className="space-y-2 text-sm font-sans">
                 <li
                   onClick={() => { setActiveTab('ai'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
                   className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                   data-testid="nav-ai"
                 >
-                  <span className="ml-4">{language === 'zh' ? 'AI 功能' : 'AI Features'}</span>
+                  <span className="ml-4">{language === 'zh' ? '提示词库' : 'Prompt Library'}</span>
                 </li>
               </ul>
             </div>
