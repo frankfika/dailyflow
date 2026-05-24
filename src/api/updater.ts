@@ -41,10 +41,14 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
         headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-        { headers }
+        { headers, signal: controller.signal }
       );
+      clearTimeout(timeoutId);
 
       if (response.status === 404) {
         return {
@@ -88,8 +92,8 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
       const message = error instanceof Error ? error.message : 'Unknown error';
       const isLastAttempt = attempt === maxRetries;
 
-      // Don't retry on auth errors
-      if (message.includes('403') || message.includes('401') || message.includes('GitHub API error')) {
+      // Don't retry on auth errors or abort
+      if (message.includes('403') || message.includes('401') || message.includes('GitHub API error') || message.includes('aborted')) {
         console.error('Failed to check for updates (auth error, no retry):', message);
         return {
           currentVersion: CURRENT_VERSION,
