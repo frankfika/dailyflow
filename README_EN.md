@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.5.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.5.3-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -115,8 +115,29 @@ Automatically detects the latest version from GitHub Releases, no need to manual
 - **Top banner notification**: Shows update prompt when a new version is available, one-click to download
 - **Manual check**: "Check for Updates" button in Settings for on-demand version checks
 - **Smart platform detection**: Automatically recommends the installer for your current OS
-- **Download button opens system browser**: Powered by `tauri-plugin-shell`, clicks now reliably open your default browser to the release page (v0.4.9+)
-- **Surfaces failure reasons**: Network errors or GitHub API rate-limits now show a clear "Update check failed" message instead of silently reporting "up to date" (v0.4.9+)
+- **Download button opens system browser**: Powered by `tauri-plugin-shell`, clicks now reliably open your default browser
+- **Surfaces failure reasons**: Network errors or GitHub API rate-limits now show a clear "Update check failed" message instead of silently reporting "up to date"
+
+### 10. AI Features Center
+
+New standalone AI Features section in the sidebar with three modules:
+
+#### Prompt Library
+- Manage and edit AI formatting prompt templates
+- Supports multiple scopes (format, date-range, project, person, custom)
+- **Prompt Testing**: Enter test content, run prompt, see AI output in real-time
+- Add/edit/delete prompts with full control
+
+#### Model Library (Coming Soon)
+Expandable capability for multi-model AI configuration.
+
+#### AI Agent (Coming Soon)
+Expandable capability for AI Agent workflows.
+
+**Multi-Config Support**:
+- Create multiple AI configs (different API Keys, different models)
+- Only one config active at a time — click to switch
+- Configs stored locally, secure and private
 
 ## 📸 Screenshots
 

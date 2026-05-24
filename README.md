@@ -10,7 +10,7 @@
 
 ### Markdown 驱动，自动迁移未完成任务，让你专注于当下
 
-![Version](https://img.shields.io/badge/Version-0.5.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.5.3-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -115,8 +115,29 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 - **顶部横幅提示**：发现新版本时显示更新提示，一键跳转下载
 - **手动检查**：设置页面提供"检查更新"按钮，随时查看版本状态
 - **智能平台识别**：根据当前系统自动推荐对应平台的安装包
-- **下载按钮调用系统浏览器**：基于 `tauri-plugin-shell` 打开系统默认浏览器，点击即跳转下载（v0.4.9+）
-- **失败时显示错误原因**：网络错误或 GitHub API 限流时，明确提示"检查更新失败"而不是误报"已是最新版本"（v0.4.9+）
+- **下载按钮调用系统浏览器**：基于 `tauri-plugin-shell` 打开系统默认浏览器，点击即跳转下载
+- **失败时显示错误原因**：网络错误或 GitHub API 限流时，明确提示"检查更新失败"而不是误报"已是最新版本"
+
+### 10. AI 功能中心
+
+侧边栏新增独立的 AI 功能区域，包含三个模块：
+
+#### 提示词库
+- 管理和编辑 AI 格式化提示词模板
+- 支持多种 scope（格式、日期范围、项目、人员、自定义）
+- **提示词测试**：输入测试文本，运行提示词，实时查看 AI 输出效果
+- 添加/编辑/删除提示词，完全可控
+
+#### 模型库（即将推出）
+预留扩展能力，支持多种 AI 模型配置管理。
+
+#### AI Agent（即将推出）
+预留扩展能力，支持 AI Agent 工作流。
+
+**多配置支持**：
+- 可创建多个 AI 配置（不同 API Key、不同模型）
+- 同一时间只使用一个配置，点击切换
+- 配置存储在本地，安全私密
 
 ## 📸 界面预览
 

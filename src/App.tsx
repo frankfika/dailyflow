@@ -79,7 +79,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-prompts' | 'ai-models' | 'ai-agent'>('today');
   const [activeAiConfigId, setActiveAiConfigId] = useState<string>('default');
 
   const taskLinkedNotesCount = useMemo(() => {
@@ -702,7 +702,7 @@ export default function App() {
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
                 <span className="text-accent truncate">{currentFileDate}.md</span>
               </>
-            ) : activeTab === 'ai' ? (
+            ) : activeTab === 'ai-prompts' || activeTab === 'ai-models' || activeTab === 'ai-agent' ? (
               <>
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
                 <span className="text-accent truncate">AI</span>
@@ -1151,9 +1151,9 @@ export default function App() {
                   />
 
                 </motion.div>
-              ) : activeTab === 'ai' ? (
+              ) : activeTab === 'ai-prompts' ? (
                 <motion.div
-                  key="ai-features"
+                  key="ai-prompts"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
@@ -1164,6 +1164,26 @@ export default function App() {
                     activeAiConfigId={activeAiConfigId}
                     onAiConfigChange={(id) => setActiveAiConfigId(id)}
                   />
+                </motion.div>
+              ) : activeTab === 'ai-models' || activeTab === 'ai-agent' ? (
+                <motion.div
+                  key="ai-placeholder"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full flex flex-col items-center justify-center text-text-muted"
+                >
+                  <div className="text-center">
+                    <div className="text-4xl mb-4 opacity-30">🔜</div>
+                    <h2 className="text-lg font-semibold mb-2">
+                      {activeTab === 'ai-models'
+                        ? (language === 'zh' ? '模型库' : 'Model Library')
+                        : (language === 'zh' ? 'AI Agent' : 'AI Agent')}
+                    </h2>
+                    <p className="text-sm opacity-60">
+                      {language === 'zh' ? '即将推出...' : 'Coming soon...'}
+                    </p>
+                  </div>
                 </motion.div>
               ) : (
                 <Notes
