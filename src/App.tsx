@@ -16,6 +16,7 @@ import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
+import { PromptLibrary } from './components/PromptLibrary';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
 import type { NoteData } from './api/client';
@@ -78,7 +79,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai'>('today');
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -700,6 +701,11 @@ export default function App() {
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
                 <span className="text-accent truncate">{currentFileDate}.md</span>
               </>
+            ) : activeTab === 'ai' ? (
+              <>
+                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
+                <span className="text-accent truncate">AI</span>
+              </>
             ) : (
               <>
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
@@ -1143,6 +1149,16 @@ export default function App() {
                     onViewAll={() => setActiveTab('notes')}
                   />
 
+                </motion.div>
+              ) : activeTab === 'ai' ? (
+                <motion.div
+                  key="ai-features"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full"
+                >
+                  <PromptLibrary language={language} />
                 </motion.div>
               ) : (
                 <Notes

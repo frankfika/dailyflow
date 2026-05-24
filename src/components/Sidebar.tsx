@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes';
-  setActiveTab: (tab: 'today' | 'notes') => void;
+  activeTab: 'today' | 'notes' | 'ai';
+  setActiveTab: (tab: 'today' | 'notes' | 'ai') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -171,6 +171,13 @@ export function Sidebar({
                   data-testid="nav-notes"
                 >
                   <span className="ml-4">{language === 'zh' ? '笔记' : 'Notes'}</span>
+                </li>
+                <li
+                  onClick={() => { setActiveTab('ai'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                  data-testid="nav-ai"
+                >
+                  <span className="ml-4">{language === 'zh' ? 'AI 功能' : 'AI Features'}</span>
                 </li>
               </ul>
             </div>

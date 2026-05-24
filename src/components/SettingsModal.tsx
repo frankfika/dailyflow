@@ -117,6 +117,13 @@ export function SettingsModal({
     }
   });
 
+  // Display settings state
+  const [textScale, setTextScale] = useState(5); // 0-10, default 5 = 100%
+  const [fontWeight, setFontWeight] = useState(0); // 0=400, 1=500, 2=600
+  const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
+
+  const fontWeightLabel = fontWeight === 0 ? 'Normal' : fontWeight === 1 ? 'Medium' : 'Bold';
+
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
     try {
@@ -275,6 +282,95 @@ export function SettingsModal({
                   >
                     中文
                   </button>
+                </div>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* Display Settings */}
+              <div>
+                <h3 className="font-sans text-xs font-bold text-text-muted mb-3">
+                  {language === 'zh' ? '显示设置' : 'Display Settings'}
+                </h3>
+
+                {/* Font Size */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-text-muted">
+                      {language === 'zh' ? '字体大小' : 'Font Size'}
+                    </label>
+                    <span className="text-xs font-mono text-accent">{Math.round(80 + textScale * 40)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={textScale}
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setTextScale(val);
+                      document.documentElement.style.setProperty('--text-scale', (0.8 + val * 0.04).toString());
+                    }}
+                    className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
+                  />
+                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                    <span>A</span>
+                    <span>A</span>
+                  </div>
+                </div>
+
+                {/* Font Weight */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-text-muted">
+                      {language === 'zh' ? '字重' : 'Font Weight'}
+                    </label>
+                    <span className="text-xs font-mono text-accent capitalize">{fontWeightLabel}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    value={fontWeight}
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setFontWeight(val);
+                      const weights = [400, 500, 600];
+                      document.documentElement.style.setProperty('--font-weight-base', weights[val].toString());
+                    }}
+                    className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
+                  />
+                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                    <span>{language === 'zh' ? '细' : 'Light'}</span>
+                    <span>{language === 'zh' ? '粗' : 'Bold'}</span>
+                  </div>
+                </div>
+
+                {/* Life Context Brightness (only affects life theme) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-text-muted">
+                      {language === 'zh' ? 'Life 亮度' : 'Life Brightness'}
+                    </label>
+                    <span className="text-xs font-mono text-accent">{80 + lifeBrightness * 20}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={lifeBrightness}
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setLifeBrightness(val);
+                      const brightness = 0.8 + val * 0.02;
+                      document.documentElement.style.setProperty('--life-brightness', brightness.toString());
+                    }}
+                    className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
+                  />
+                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                    <span>{language === 'zh' ? '暗' : 'Dark'}</span>
+                    <span>{language === 'zh' ? '亮' : 'Bright'}</span>
+                  </div>
                 </div>
               </div>
 

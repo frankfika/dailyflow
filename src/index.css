@@ -10,17 +10,21 @@
   /* Keep a nice serif for headings or special quotes if needed */
   --font-serif: "Georgia", "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
+
+  /* Adjustable typography */
+  --text-scale: 1;
+  --font-weight-base: 400;
+
   /* E-ink Light Mode (Classic Paperwhite - Softer contrast) */
   --color-background: #F2F2F2; /* Slightly darker gray to reduce glare */
   --color-surface: #FAFAFA; /* Off-white, avoiding pure #FFFFFF */
   --color-surface-white: #FAFAFA;
   --color-border: #DCDCDC;
-  
+
   --color-text-main: #3D3D3D; /* Softer dark gray, avoiding #000 or very dark #333 for less eye strain */
   --color-text-heading: #222222;
   --color-text-muted: #737373;
-  
+
   --color-accent: #404040; /* Soft ink */
   --color-accent-light: #EBEBEB;
   --color-accent-warm: #555555;
@@ -28,32 +32,36 @@
 }
 
 :root[data-context="life"] {
-  /* Kindle Sepia Mode (Ultra Eye-care) */
-  --color-background: #F4ECE1; /* Deeper, warmer sepia */
-  --color-surface: #FDF6EC; /* Soft warm paper */
-  --color-surface-white: #FDF6EC;
-  --color-border: #E8DAC6;
-  
-  --color-text-main: #5C4A3D; /* Warm brown, very low strain */
+  /* Kindle Sepia Mode (Darker - Less eye strain) */
+  --color-background: #E8DCC8; /* Darker sepia, reduced brightness */
+  --color-surface: #EDE4D4; /* Slightly darker warm paper */
+  --color-surface-white: #EDE4D4;
+  --color-border: #D8CAB4;
+
+  --color-text-main: #4A3A2D; /* Darker warm brown */
   --color-text-heading: #3A2E25;
-  --color-text-muted: #968677;
-  
-  --color-accent: #5C4A3D;
-  --color-accent-light: #F0E6D8;
-  --color-accent-warm: #7A6555;
-  --color-accent-highlight: #F5ECDZ;
+  --color-text-muted: #7A6A5A;
+
+  --color-accent: #4A3A2D;
+  --color-accent-light: #E0D4C0;
+  --color-accent-warm: #6A5A4A;
+  --color-accent-highlight: #E5D9C4;
+
+  /* Brightness multiplier for life theme (0.8-1.0) */
+  --life-brightness: 1;
 }
 
 body {
   background-color: var(--color-background);
   color: var(--color-text-main);
   font-family: var(--font-sans);
+  font-size: calc(14px * var(--text-scale, 1));
   transition: background-color 0.8s ease, color 0.8s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Slightly more visible paper texture for glare reduction */
   background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  
+
   /* Increase base line-height and letter spacing globally for better readability */
   line-height: 1.6;
   letter-spacing: 0.015em;
