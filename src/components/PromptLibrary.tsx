@@ -41,13 +41,35 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
 
-  // Form state for prompts
+  // Form state for prompts - use Map to store per-prompt state
   const [isCreatingPrompt, setIsCreatingPrompt] = useState(false);
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formPrompt, setFormPrompt] = useState('');
-  const [formScope, setFormScope] = useState('format');
+  const [promptForms, setPromptForms] = useState<Map<string, { name: string; prompt: string; scope: string }>>(new Map());
   const [saving, setSaving] = useState(false);
+
+  // Get form state for a specific prompt
+  const getPromptForm = (promptId: string) => {
+    return promptForms.get(promptId) || { name: '', prompt: '', scope: 'format' };
+  };
+
+  // Update form state for a specific prompt
+  const updatePromptForm = (promptId: string, updates: Partial<{ name: string; prompt: string; scope: string }>) => {
+    setPromptForms(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(promptId) || { name: '', prompt: '', scope: 'format' };
+      newMap.set(promptId, { ...current, ...updates });
+      return newMap;
+    });
+  };
+
+  // Clear form state for a specific prompt
+  const clearPromptForm = (promptId: string) => {
+    setPromptForms(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(promptId);
+      return newMap;
+    });
+  };
 
   // Test prompt state
   const [testingPromptId, setTestingPromptId] = useState<string | null>(null);
@@ -107,10 +129,11 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
 
   // Prompt handlers
   const handleCreatePrompt = async () => {
-    if (!formName.trim() || !formPrompt.trim()) return;
+    const createForm = getPromptForm('__create__');
+    if (!createForm.name.trim() || !createForm.prompt.trim()) return;
     setSaving(true);
     try {
-      await promptsApi.create({ name: formName.trim(), prompt: formPrompt.trim(), scope: formScope });
+      await promptsApi.create({ name: createForm.name.trim(), prompt: createForm.prompt.trim(), scope: createForm.scope });
       await loadPrompts();
       resetPromptForm();
     } catch (err) {
@@ -121,13 +144,14 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
   };
 
   const handleUpdatePrompt = async (id: string) => {
-    if (!formName.trim() || !formPrompt.trim()) return;
+    const form = getPromptForm(id);
+    if (!form.name.trim() || !form.prompt.trim()) return;
     setSaving(true);
     try {
-      await promptsApi.update(id, { name: formName.trim(), prompt: formPrompt.trim(), scope: formScope });
+      await promptsApi.update(id, { name: form.name.trim(), prompt: form.prompt.trim(), scope: form.scope });
       await loadPrompts();
       setEditingPromptId(null);
-      resetPromptForm();
+      clearPromptForm(id);
     } catch (err) {
       console.error('Failed to update prompt:', err);
     } finally {
@@ -146,19 +170,27 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
   };
 
   const startEditPrompt = (prompt: PromptTemplateData) => {
+    // Initialize form with prompt data
+    setPromptForms(prev => {
+      const newMap = new Map(prev);
+      newMap.set(prompt.id, {
+        name: prompt.name,
+        prompt: prompt.prompt,
+        scope: prompt.scope,
+      });
+      return newMap;
+    });
     setEditingPromptId(prompt.id);
-    setFormName(prompt.name);
-    setFormPrompt(prompt.prompt);
-    setFormScope(prompt.scope);
     setIsCreatingPrompt(false);
   };
 
   const resetPromptForm = () => {
-    setFormName('');
-    setFormPrompt('');
-    setFormScope('format');
+    clearPromptForm('__create__');
     setIsCreatingPrompt(false);
-    setEditingPromptId(null);
+    if (editingPromptId) {
+      clearPromptForm(editingPromptId);
+      setEditingPromptId(null);
+    }
   };
 
   // AI Config handlers
@@ -407,15 +439,15 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                value={formName}
-                onChange={e => setFormName(e.target.value)}
+                value={getPromptForm('__create__').name}
+                onChange={e => updatePromptForm('__create__', { name: e.target.value })}
                 placeholder={language === 'zh' ? '提示词名称' : 'Prompt name'}
                 className="flex-1 px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
                 autoFocus
               />
               <select
-                value={formScope}
-                onChange={e => setFormScope(e.target.value)}
+                value={getPromptForm('__create__').scope}
+                onChange={e => updatePromptForm('__create__', { scope: e.target.value })}
                 className="px-2 py-1.5 text-xs border border-border rounded bg-surface"
               >
                 {SCOPE_OPTIONS.map(opt => (
@@ -424,8 +456,8 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
               </select>
             </div>
             <textarea
-              value={formPrompt}
-              onChange={e => setFormPrompt(e.target.value)}
+              value={getPromptForm('__create__').prompt}
+              onChange={e => updatePromptForm('__create__', { prompt: e.target.value })}
               placeholder={language === 'zh' ? '提示词内容...' : 'Prompt content...'}
               rows={3}
               className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
@@ -440,7 +472,7 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
               </button>
               <button
                 onClick={handleCreatePrompt}
-                disabled={saving || !formName.trim() || !formPrompt.trim()}
+                disabled={saving || !getPromptForm('__create__').name.trim() || !getPromptForm('__create__').prompt.trim()}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -499,14 +531,14 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          value={formName}
-                          onChange={e => setFormName(e.target.value)}
+                          value={getPromptForm(prompt.id).name}
+                          onChange={e => updatePromptForm(prompt.id, { name: e.target.value })}
                           placeholder={language === 'zh' ? '名称' : 'Name'}
                           className="flex-1 px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
                         />
                         <select
-                          value={formScope}
-                          onChange={e => setFormScope(e.target.value)}
+                          value={getPromptForm(prompt.id).scope}
+                          onChange={e => updatePromptForm(prompt.id, { scope: e.target.value })}
                           className="px-2 py-1.5 text-xs border border-border rounded bg-surface"
                         >
                           {SCOPE_OPTIONS.map(opt => (
@@ -515,8 +547,8 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
                         </select>
                       </div>
                       <textarea
-                        value={formPrompt}
-                        onChange={e => setFormPrompt(e.target.value)}
+                        value={getPromptForm(prompt.id).prompt}
+                        onChange={e => updatePromptForm(prompt.id, { prompt: e.target.value })}
                         rows={4}
                         className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
                       />

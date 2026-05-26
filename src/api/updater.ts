@@ -68,10 +68,10 @@ export async function downloadAndInstallUpdate(
   await update.downloadAndInstall((event) => {
     switch (event.event) {
       case 'Started':
-        onProgress?.(0, event.data.contentLength || 0);
+        onProgress?.(0, event.data.contentLength ?? 0);
         break;
       case 'Progress':
-        onProgress?.(event.data.chunkLength, event.data.contentLength || 0);
+        onProgress?.(event.data.chunkLength, 0);
         break;
       case 'Finished':
         break;
