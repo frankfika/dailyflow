@@ -194,11 +194,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
             {task.source_date && task.source_date !== currentFileDate && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-accent text-[11px] font-medium bg-accent-highlight border border-accent/10">
-                <CornerUpRight className="w-3 h-3" />
-                <span>{language === 'zh' ? `结转自 ${task.source_date}` : `from ${task.source_date}`}</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-accent text-xs font-semibold bg-accent/10 border border-accent/20 shadow-sm">
+                <CornerUpRight className="w-3.5 h-3.5" />
+                <span>{language === 'zh' ? `从 ${task.source_date} 迁移` : `Migrated from ${task.source_date}`}</span>
               </span>
             )}
             {task.tags && task.tags.filter((t: string) => !['tasks', 'work', 'life'].includes(t)).map((tag: string) => (
