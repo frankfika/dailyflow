@@ -81,6 +81,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: 'DailyFlow ${{ github.event.inputs.tag || github.ref_name }}'
@@ -99,4 +100,5 @@ jobs:
             See commits for full changelog.
           releaseDraft: false
           prerelease: false
+          updaterJsonPreferNsis: true
           args: ${{ matrix.platform.args }}

@@ -38,6 +38,13 @@
     ],
     "resources": [
       "../dist-server/*"
-    ]
+    ],
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwMUYyNDJEOTI3MzVBQzYKUldUR1duT1NMU1FmZ0hYK0Z5Y0lXOWF2bVZ6TUlkeE90VHhZcjUxZmswbUd2SzNDZ0tCNkFqRWwK",
+      "endpoints": [
+        "https://github.com/frankfika/dailyflow/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

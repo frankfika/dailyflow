@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
 import { configApi, aiApi } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
-import { checkForUpdates, type UpdateInfo } from '../api/updater';
+import { checkForUpdates, downloadAndInstallUpdate, type UpdateInfo } from '../api/updater';
 
 declare const __APP_VERSION__: string;
 
@@ -109,6 +109,8 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [installProgress, setInstallProgress] = useState({ downloaded: 0, total: 0 });
   const [lastCheckTime, setLastCheckTime] = useState<string | null>(() => {
     try {
       return localStorage.getItem('df_last_update_check');
@@ -152,6 +154,23 @@ export function SettingsModal({
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleInstallUpdate = async () => {
+    setIsInstalling(true);
+    try {
+      await downloadAndInstallUpdate((downloaded, total) => {
+        setInstallProgress({ downloaded, total });
+      });
+    } catch (error) {
+      console.error('Failed to install update:', error);
+      alert(language === 'zh'
+        ? `安装更新失败: ${error instanceof Error ? error.message : 'Unknown error'}`
+        : `Failed to install update: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      setIsInstalling(false);
+    }
   };
 
   if (!showSettings) return null;
@@ -794,17 +813,25 @@ export function SettingsModal({
                               )}
                             </div>
                           )}
-                          {updateInfo.hasUpdate && updateInfo.downloadUrl && (
+                          {updateInfo.hasUpdate && (
                             <button
-                              onClick={() => {
-                                if (updateInfo.downloadUrl) {
-                                  open(updateInfo.downloadUrl);
-                                }
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold  hover:bg-blue-700 transition-colors mt-2"
+                              onClick={handleInstallUpdate}
+                              disabled={isInstalling}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold hover:bg-blue-700 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              {language === 'zh' ? '下载更新' : 'Download Update'}
+                              {isInstalling ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  {installProgress.total > 0
+                                    ? `${Math.round((installProgress.downloaded / installProgress.total) * 100)}%`
+                                    : (language === 'zh' ? '安装中...' : 'Installing...')}
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  {language === 'zh' ? '安装更新' : 'Install Update'}
+                                </>
+                              )}
                             </button>
                           )}
                         </div>

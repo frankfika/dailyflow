@@ -20,10 +20,11 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
+    "@tauri-apps/plugin-shell": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@vitejs/plugin-react": "^5.0.4",
     "cors": "^2.8.6",
     "express": "^4.21.2",
-    "@tauri-apps/plugin-shell": "^2.2.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "prismjs": "^1.30.0",
