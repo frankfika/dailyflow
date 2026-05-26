@@ -49,28 +49,35 @@ async function captureScreenshots() {
     // 1. Main/Home page - Daily view with tasks
     console.log('\n📷 Capturing main daily view...');
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 });
+    // Wait for content to load (either task list or empty state)
+    await page.waitForSelector('text=Daily Tasks', { timeout: 10000 });
     await sleep(2000);
     await captureScreenshot(page, 'home', { wait: 2000 });
 
-    // 2. Projects view
-    console.log('📷 Capturing projects view...');
-    await page.click('text=Projects', { timeout: 5000 }).catch(() => {});
-    await sleep(1500);
-    await captureScreenshot(page, 'projects', { wait: 1500 });
-
-    // 3. Notes view
+    // 2. Notes view - click Notes in sidebar
     console.log('📷 Capturing notes view...');
-    await page.click('text=Notes', { timeout: 5000 }).catch(() => {});
+    const notesLink = await page.$('text=Notes');
+    if (notesLink) await notesLink.click();
     await sleep(1500);
     await captureScreenshot(page, 'notes', { wait: 1500 });
 
-    // 4. Settings modal - About tab
+    // 3. Prompt Library - click in sidebar
+    console.log('📷 Capturing prompt library...');
+    const promptLib = await page.$('text=Prompt Library');
+    if (promptLib) await promptLib.click();
+    await sleep(1500);
+    await captureScreenshot(page, 'ai-prompts', { wait: 1500 });
+
+    // 4. Settings modal - click settings icon
     console.log('📷 Capturing settings/about...');
-    await page.click('[aria-label="Settings"]', { timeout: 5000 }).catch(() => {});
+    const settingsBtn = await page.$('[data-testid="settings-button"]');
+    if (settingsBtn) await settingsBtn.click();
     await sleep(1000);
-    await captureScreenshot(page, 'settings', { wait: 1500 });
-    await page.keyboard.press('Escape');
+    // Switch to About tab
+    const aboutTab = await page.$('text=About');
+    if (aboutTab) await aboutTab.click();
     await sleep(500);
+    await captureScreenshot(page, 'settings', { wait: 1500 });
 
     console.log('\n✨ All screenshots captured!');
     console.log(`📁 Location: ${assetsDir}`);
