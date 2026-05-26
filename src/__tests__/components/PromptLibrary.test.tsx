@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React from 'react';
 import { PromptLibrary } from '../../components/PromptLibrary';
 import * as client from '../../api/client';
 
@@ -23,6 +24,16 @@ vi.mock('../../api/client', () => ({
 // Mock Tauri shell
 vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
+}));
+
+// Disable framer-motion animations in tests
+vi.mock('motion/react', () => ({
+  motion: {
+    div: ({ children, initial, animate, exit, transition, ...props }: any) =>
+      React.createElement('div', props, children),
+  },
+  AnimatePresence: ({ children }: any) =>
+    React.createElement(React.Fragment, null, children),
 }));
 
 const mockPrompts = [
@@ -97,9 +108,18 @@ describe('PromptLibrary', () => {
     );
     expect(editTextarea).toBeInTheDocument();
 
-    // Try to click edit on second prompt
+    // Try to click edit on second prompt (first prompt is in edit mode, so only 2 edit buttons remain)
     const newEditButtons = screen.getAllByTitle('Edit');
-    fireEvent.click(newEditButtons[1]);
+    fireEvent.click(newEditButtons[0]);
+
+    // Second prompt should now be in edit mode
+    await waitFor(() => {
+      const textareasAfter = screen.getAllByRole('textbox', { name: '' });
+      const secondPromptTextarea = textareasAfter.find(ta =>
+        (ta as HTMLTextAreaElement).value === 'Summarize the week'
+      );
+      expect(secondPromptTextarea).toBeInTheDocument();
+    });
 
     // First prompt should no longer be in edit mode
     const textareasAfter = screen.getAllByRole('textbox', { name: '' });
@@ -107,12 +127,6 @@ describe('PromptLibrary', () => {
       (ta as HTMLTextAreaElement).value === 'Format the following notes in markdown'
     );
     expect(firstPromptTextarea).toBeUndefined();
-
-    // Second prompt should now be in edit mode
-    const secondPromptTextarea = textareasAfter.find(ta =>
-      (ta as HTMLTextAreaElement).value === 'Summarize the week'
-    );
-    expect(secondPromptTextarea).toBeInTheDocument();
   });
 
   it('should properly reset form when canceling edit', async () => {
@@ -150,7 +164,7 @@ describe('PromptLibrary', () => {
       { id: 'config-1', name: 'Config 1', provider: 'deepseek', apiKey: 'key1', model: 'model1' },
       { id: 'config-2', name: 'Config 2', provider: 'openai', apiKey: 'key2', model: 'model2' },
     ];
-    localStorage.setItem('df_ai_configs', JSON.stringify(configs));
+    (localStorage.getItem as any).mockReturnValue(JSON.stringify(configs));
 
     render(<PromptLibrary language="en" />);
 
@@ -164,8 +178,8 @@ describe('PromptLibrary', () => {
 
     // Wait for configs to appear
     await waitFor(() => {
-      expect(screen.getByText('Config 1')).toBeInTheDocument();
-      expect(screen.getByText('Config 2')).toBeInTheDocument();
+      expect(screen.getAllByText('Config 1').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Config 2').length).toBeGreaterThanOrEqual(1);
     });
 
     // Find edit buttons for configs (they use Pencil icon)

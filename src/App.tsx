@@ -57,18 +57,23 @@ async function verifyGithubConnection(repoUrl: string, token: string): Promise<b
   }
 }
 
-function formatTimeAgo(isoString: string, lang: 'en' | 'zh'): string {
+function formatSyncTime(isoString: string, lang: 'en' | 'zh', nowMs: number = Date.now()): string {
   const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = nowMs - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
 
-  if (diffMin < 1) return lang === 'zh' ? '刚刚' : 'just now';
-  if (diffMin < 60) return lang === 'zh' ? `${diffMin}分钟前` : `${diffMin}m ago`;
-  if (diffHour < 24) return lang === 'zh' ? `${diffHour}小时前` : `${diffHour}h ago`;
-  return lang === 'zh' ? `${diffDay}天前` : `${diffDay}d ago`;
+  if (diffMin < 1) return lang === 'zh' ? '刚刚同步' : 'Synced just now';
+  if (diffMin <= 10) return lang === 'zh' ? `已同步 ${diffMin}分钟前` : `Synced ${diffMin}m ago`;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = date.getFullYear();
+  const m = pad(date.getMonth() + 1);
+  const d = pad(date.getDate());
+  const h = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return lang === 'zh'
+    ? `上次同步在 ${y}-${m}-${d} ${h}:${min}`
+    : `Last synced at ${y}-${m}-${d} ${h}:${min}`;
 }
 
 export default function App() {
@@ -94,7 +99,14 @@ export default function App() {
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [gitHasChanges, setGitHasChanges] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [nowTime, setNowTime] = useState(Date.now());
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('df_last_sync_time');
+    } catch {
+      return null;
+    }
+  });
   const [gitLastCommitTime, setGitLastCommitTime] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -222,8 +234,7 @@ export default function App() {
     
     // Also periodically update the formatted time string without making network requests
     const timeUpdateInterval = setInterval(() => {
-      // Force a re-render so formatTimeAgo updates
-      setGitLastCommitTime(prev => prev ? new Date(prev).toISOString() : null);
+      setNowTime(Date.now());
     }, 60000); // every minute
 
     const interval = setInterval(checkGitStatus, 10000);
@@ -470,7 +481,13 @@ export default function App() {
       const result = await gitApi.sync(commitMessage);
 
       if (result.success) {
-        setLastSyncTime(new Date().toISOString());
+        const syncTime = new Date().toISOString();
+        setLastSyncTime(syncTime);
+        try {
+          localStorage.setItem('df_last_sync_time', syncTime);
+        } catch {
+          // ignore
+        }
         showToast(
           language === 'zh'
             ? `✓ 已推送到 GitHub (${result.commitHash?.substring(0, 7)})`
@@ -736,9 +753,7 @@ export default function App() {
                     : hasChanges
                     ? (language === 'zh' ? '待同步' : 'Unsynced')
                     : (lastSyncTime || gitLastCommitTime)
-                    ? (language === 'zh'
-                        ? `已同步 ${formatTimeAgo(lastSyncTime || gitLastCommitTime!, language)}`
-                        : `Synced ${formatTimeAgo(lastSyncTime || gitLastCommitTime!, language)}`)
+                    ? formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime)
                     : (language === 'zh' ? '已同步' : 'Synced')}
                 </span>
               </button>

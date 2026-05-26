@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
 import { configApi, aiApi } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
-import { checkForUpdates, downloadAndInstallUpdate, type UpdateInfo } from '../api/updater';
+import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 
 declare const __APP_VERSION__: string;
 
@@ -110,6 +110,7 @@ export function SettingsModal({
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [installProgress, setInstallProgress] = useState({ downloaded: 0, total: 0 });
   const [lastCheckTime, setLastCheckTime] = useState<string | null>(() => {
     try {
@@ -128,6 +129,8 @@ export function SettingsModal({
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
+    setUpdateDownloaded(false);
+    setInstallProgress({ downloaded: 0, total: 0 });
     try {
       const info = await checkForUpdates();
       setUpdateInfo(info);
@@ -156,20 +159,68 @@ export function SettingsModal({
     });
   };
 
-  const handleInstallUpdate = async () => {
+  const localizeUpdateError = (error: string, lang: 'en' | 'zh'): string => {
+    const map: Record<string, { zh: string; en: string }> = {
+      'Not running in Tauri app (development mode)': {
+        zh: '当前不在 Tauri 应用内运行（开发模式）',
+        en: 'Not running in Tauri app (development mode)',
+      },
+      'Updater not configured': {
+        zh: '更新器未配置，请检查 tauri.conf.json',
+        en: 'Updater not configured',
+      },
+      'Network error': {
+        zh: '网络错误，请检查网络连接',
+        en: 'Network error',
+      },
+      'Update endpoint not found': {
+        zh: '更新端点未找到，请检查发布地址',
+        en: 'Update endpoint not found',
+      },
+      'Signature verification failed': {
+        zh: '签名验证失败',
+        en: 'Signature verification failed',
+      },
+      'Request timed out': {
+        zh: '请求超时',
+        en: 'Request timed out',
+      },
+      'Not running in Tauri app': {
+        zh: '当前不在 Tauri 应用内运行',
+        en: 'Not running in Tauri app',
+      },
+    };
+    return map[error]?.[lang] || error;
+  };
+
+  const handleDownloadUpdate = async () => {
     setIsInstalling(true);
+    setInstallProgress({ downloaded: 0, total: 0 });
     try {
-      await downloadAndInstallUpdate((downloaded, total) => {
+      await downloadUpdate((downloaded, total) => {
         setInstallProgress({ downloaded, total });
       });
+      setUpdateDownloaded(true);
     } catch (error) {
-      console.error('Failed to install update:', error);
+      console.error('Failed to download update:', error);
       alert(language === 'zh'
-        ? `安装更新失败: ${error instanceof Error ? error.message : 'Unknown error'}`
-        : `Failed to install update: ${error instanceof Error ? error.message : 'Unknown error'}`
+        ? `下载更新失败: ${error instanceof Error ? error.message : 'Unknown error'}`
+        : `Failed to download update: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     } finally {
       setIsInstalling(false);
+    }
+  };
+
+  const handleRelaunch = async () => {
+    try {
+      await relaunchApp();
+    } catch (error) {
+      console.error('Failed to relaunch:', error);
+      alert(language === 'zh'
+        ? `重启失败: ${error instanceof Error ? error.message : 'Unknown error'}`
+        : `Failed to relaunch: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   };
 
@@ -797,7 +848,7 @@ export function SettingsModal({
                           </p>
                           {updateInfo.error ? (
                             <p className="text-xs text-stone-600">
-                              {updateInfo.error}
+                              {localizeUpdateError(updateInfo.error, language)}
                             </p>
                           ) : (
                             <div className="text-xs space-y-1">
@@ -814,25 +865,43 @@ export function SettingsModal({
                             </div>
                           )}
                           {updateInfo.hasUpdate && (
-                            <button
-                              onClick={handleInstallUpdate}
-                              disabled={isInstalling}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold hover:bg-blue-700 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isInstalling ? (
-                                <>
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  {installProgress.total > 0
-                                    ? `${Math.round((installProgress.downloaded / installProgress.total) * 100)}%`
-                                    : (language === 'zh' ? '安装中...' : 'Installing...')}
-                                </>
+                            <div className="mt-2 space-y-2">
+                              {!updateDownloaded ? (
+                                <button
+                                  onClick={handleDownloadUpdate}
+                                  disabled={isInstalling}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isInstalling ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      {installProgress.total > 0
+                                        ? `${Math.round((installProgress.downloaded / installProgress.total) * 100)}%`
+                                        : (language === 'zh' ? '下载中...' : 'Downloading...')}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download className="w-3.5 h-3.5" />
+                                      {language === 'zh' ? '下载更新' : 'Download Update'}
+                                    </>
+                                  )}
+                                </button>
                               ) : (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  {language === 'zh' ? '安装更新' : 'Install Update'}
-                                </>
+                                <div className="space-y-2">
+                                  <p className="text-xs text-green-600 font-semibold">
+                                    {language === 'zh'
+                                      ? '更新已下载，重启后生效'
+                                      : 'Update downloaded. Restart to apply.'}
+                                  </p>
+                                  <button
+                                    onClick={handleRelaunch}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white rounded-md text-xs font-bold hover:bg-accent/90 transition-colors"
+                                  >
+                                    {language === 'zh' ? '重启应用' : 'Restart App'}
+                                  </button>
+                                </div>
                               )}
-                            </button>
+                            </div>
                           )}
                         </div>
                       </div>
