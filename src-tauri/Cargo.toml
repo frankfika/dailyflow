@@ -1,6 +1,6 @@
 [package]
 name = "dailyflow"
-version = "0.5.3"
+version = "0.5.4"
 description = "DailyFlow - Daily notes and task management"
 authors = ["DailyFlow"]
 license = ""
