@@ -43,7 +43,6 @@ Grab the installer for your platform from [Releases](https://github.com/frankfik
 | Platform | File |
 |----------|------|
 | macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
-| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
 | Windows | `DailyFlow_x.x.x_x64-setup.exe` |
 | Linux | `DailyFlow_x.x.x_amd64.AppImage` |
 

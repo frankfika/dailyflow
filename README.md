@@ -43,7 +43,6 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 | 平台 | 文件 |
 |------|------|
 | macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
-| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` |
 | Windows | `DailyFlow_x.x.x_x64-setup.exe` |
 | Linux | `DailyFlow_x.x.x_amd64.AppImage` |
 
