@@ -157,7 +157,7 @@ router.post('/validate-github', async (req, res) => {
     }
 
     // 验证 URL 格式
-    const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+\/?$/;
+    const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+(\.git)?\/?$/;
     if (!githubUrlPattern.test(repoUrl)) {
       return res.json({ valid: false, error: 'Invalid GitHub repository URL format' });
     }
@@ -168,7 +168,7 @@ router.post('/validate-github', async (req, res) => {
       const response = await fetch(apiUrl);
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as { full_name: string; private: boolean };
         res.json({
           valid: true,
           repoName: data.full_name,

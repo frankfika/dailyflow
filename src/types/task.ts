@@ -2,6 +2,7 @@ export type Task = {
   id: string;
   title: string;
   description?: string;
+  comment?: string;
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;

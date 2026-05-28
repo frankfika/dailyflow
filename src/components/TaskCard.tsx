@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, Trash2, X } from 'lucide-react';
+import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, MessageSquare, Trash2, X } from 'lucide-react';
 import type { Task } from '../types/task';
 import { getTagColor } from '../utils/tagColors';
 import { TagInput } from './TagInput';
@@ -15,6 +15,7 @@ interface TaskCardProps {
   onEdit: (updates: {
     title?: string;
     description?: string;
+    comment?: string;
     tags?: string[];
     deadline?: string;
     priority?: 'high' | 'medium' | 'low';
@@ -35,6 +36,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
+  const [showComment, setShowComment] = useState(false);
+  const [commentText, setCommentText] = useState(task.comment || '');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editContent, setEditContent] = useState(
     task.title + (task.description ? '\n' + task.description : ''),
@@ -49,6 +52,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       setEditTags(task.tags || []);
       setEditDeadline(task.deadline || '');
     }
+    setCommentText(task.comment || '');
   }, [task, isEditing]);
 
   const submitEdit = () => {
@@ -231,9 +235,62 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
           </div>
         )}
+
+        {/* Comment section */}
+        {(task.comment || showComment) && (
+          <div className="mt-2.5">
+            {showComment ? (
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  autoFocus
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') {
+                      setShowComment(false);
+                      setCommentText(task.comment || '');
+                    }
+                  }}
+                  placeholder={language === 'zh' ? '添加备注...' : 'Add a note...'}
+                  className="w-full bg-surface border border-border/50 rounded-md px-3 py-2 text-xs outline-none focus:border-accent resize-none min-h-[48px] text-text-muted"
+                  rows={2}
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    onClick={() => { setShowComment(false); setCommentText(task.comment || ''); }}
+                    className="px-2 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
+                  >
+                    {language === 'zh' ? '取消' : 'Cancel'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      onEdit({ comment: commentText.trim() || undefined });
+                      setShowComment(false);
+                    }}
+                    className="px-2.5 py-1 bg-accent text-white rounded text-[11px] font-medium hover:bg-accent/90 transition-colors"
+                  >
+                    {language === 'zh' ? '保存' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : task.comment ? (
+              <div
+                onClick={() => setShowComment(true)}
+                className="text-xs text-text-muted/70 italic bg-surface/50 rounded px-2.5 py-1.5 cursor-pointer hover:bg-surface transition-colors border-l-2 border-border/50"
+              >
+                {task.comment}
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <div className="absolute top-4 right-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+        {!isEditing && (
+          <button onClick={() => setShowComment(true)} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface" title={language === 'zh' ? '备注' : 'Comment'}>
+            <MessageSquare className="w-4 h-4" />
+          </button>
+        )}
         {!isDone && !isEditing && (
           <button onClick={() => setIsEditing(true)} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface">
             <Edit2 className="w-4 h-4" />

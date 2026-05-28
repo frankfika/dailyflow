@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi } from './api/client';
+import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi, recurringApi } from './api/client';
 import { API_BASE, DEFAULT_MODEL } from './config/api';
 import { getTodayStr } from './utils/tagColors';
 import { TaskCard } from './components/TaskCard';
@@ -26,6 +26,7 @@ type Task = {
   id: string;
   title: string;
   description?: string;
+  comment?: string;
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;
@@ -47,7 +48,7 @@ async function verifyGithubConnection(repoUrl: string, token: string): Promise<b
     if (!owner || !repo) return false;
     const res = await fetch(`${API_BASE.github}/repos/${owner}/${repo}`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `token ${token}`,
         'Accept': 'application/vnd.github.v3+json',
       },
     });
@@ -130,6 +131,7 @@ export default function App() {
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
 
+  const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [language, setLanguage] = useState<'en' | 'zh'>('en');
   const [syncInterval, setSyncInterval] = useState<number>(0);
@@ -154,10 +156,13 @@ export default function App() {
   const [aiVerifyStatus, setAiVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [aiVerifyMsg, setAiVerifyMsg] = useState<string>('');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github' | 'about'>('general');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github' | 'ipfs' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
+  const [ipfsApiKey, setIpfsApiKey] = useState<string>('');
+  const [ipfsGateway, setIpfsGateway] = useState<string>('');
   const markdownRef = React.useRef(markdown);
 
   // Check first run on mount
@@ -187,6 +192,9 @@ export default function App() {
         setWorkspaceRoot(config.workspaceRoot || '');
         setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
         setRolloverTrigger(config.rolloverTrigger || 'manual');
+        setIpfsEnabled(Boolean(config.ipfsEnabled));
+        setIpfsApiKey(config.ipfsApiKey || '');
+        setIpfsGateway(config.ipfsGateway || '');
 
         // Verify GitHub connection if repo and token are configured
         if (config.githubRepo && config.githubToken) {
@@ -303,6 +311,11 @@ export default function App() {
     try {
       // Auto rollover: only when loading today's date
       if (date === getTodayStr()) {
+        try {
+          await recurringApi.instantiate(date);
+        } catch (e) {
+          console.error('Recurring instantiation failed', e);
+        }
         try {
           const rolloverResult = await rolloverApi.apply(date);
           if (rolloverResult.migratedCount > 0) {
@@ -521,6 +534,7 @@ export default function App() {
     updates: {
       title?: string;
       description?: string;
+      comment?: string;
       tags?: string[];
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';
@@ -611,6 +625,11 @@ export default function App() {
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
+  if (lastAddedCategory && categories.includes(lastAddedCategory)) {
+    const idx = categories.indexOf(lastAddedCategory);
+    categories.splice(idx, 1);
+    categories.unshift(lastAddedCategory);
+  }
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -816,7 +835,7 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="space-y-10"
                 >
-                  <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/50 pb-6">
+                  <div className="mb-8 border-b border-border/50 pb-6 space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1 mr-2">
                         <button
@@ -870,8 +889,8 @@ export default function App() {
                         <button
                           onClick={() => setSelectedCategory(null)}
                           className={`px-3 py-1.5 rounded text-xs  font-bold transition-all ${
-                            selectedCategory === null 
-                              ? 'bg-text-heading text-white shadow-sm' 
+                            selectedCategory === null
+                              ? 'bg-text-heading text-white shadow-sm'
                               : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
                           }`}
                         >
@@ -967,6 +986,7 @@ export default function App() {
                     setLastSyncedMD={setLastSyncedMD}
                     setFilesMap={setFilesMap}
                     showToast={showToast}
+                    setLastAddedCategory={setLastAddedCategory}
                   />
                   {categories.map(category => {
                     if (selectedCategory && selectedCategory !== category) return null;
@@ -1262,6 +1282,13 @@ export default function App() {
         currentFileDate={currentFileDate}
         verifyGithubConnection={verifyGithubConnection}
         filesApi={filesApi}
+        ipfsEnabled={ipfsEnabled}
+        setIpfsEnabled={setIpfsEnabled}
+        ipfsApiKey={ipfsApiKey}
+        setIpfsApiKey={setIpfsApiKey}
+        ipfsGateway={ipfsGateway}
+        setIpfsGateway={setIpfsGateway}
+        showToast={showToast}
       />
 
 

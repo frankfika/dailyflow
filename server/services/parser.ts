@@ -81,14 +81,21 @@ export function parseMarkdown(md: string): Task[] {
       }
       extractedTags.forEach(t => tags.add(t));
 
-      // 解析描述（支持空行分隔的多段落）
+      // 解析描述和评论（支持空行分隔的多段落）
       let descriptionLines = [];
+      let commentLines = [];
       let descIdx = i + 1;
       const descEnd = findDescriptionEnd(lines, descIdx);
       for (let d = descIdx; d < descEnd; d++) {
-        descriptionLines.push(lines[d].trim());
+        const trimmed = lines[d].trim();
+        if (trimmed.startsWith('> ')) {
+          commentLines.push(trimmed.slice(2));
+        } else {
+          descriptionLines.push(trimmed);
+        }
       }
       const description = descriptionLines.length > 0 ? descriptionLines.join('\n') : undefined;
+      const comment = commentLines.length > 0 ? commentLines.join('\n') : undefined;
 
         let taskId = explicitId || `t_${hashStr(content)}`;
         // 同名任务去重：加序号后缀
@@ -103,6 +110,7 @@ export function parseMarkdown(md: string): Task[] {
         id: taskId,
         title: content,
         description,
+        comment,
         status: isDone ? 'done' : isMigrated ? 'migrated' : 'todo',
         tags: Array.from(tags),
         project,
@@ -186,6 +194,11 @@ function taskToLine(task: Task, currentDate?: string): string {
   if (task.description) {
     const descLines = task.description.split('\n').map(d => `  ${d}`);
     line += '\n' + descLines.join('\n');
+  }
+
+  if (task.comment) {
+    const commentLines = task.comment.split('\n').map(c => `  > ${c}`);
+    line += '\n' + commentLines.join('\n');
   }
 
   return line;
@@ -272,6 +285,7 @@ export function editTaskFullInMarkdown(
   updates: {
     title?: string;
     description?: string;
+    comment?: string;
     tags?: string[];
     deadline?: string;
     priority?: 'high' | 'medium' | 'low';
@@ -338,21 +352,38 @@ export function editTaskFullInMarkdown(
 
   lines[taskLine] = newLine;
 
-  // 处理描述
+  // 处理描述和评论
   const descEnd = findDescriptionEnd(lines, taskLine + 1);
 
   const before = lines.slice(0, taskLine + 1);
   const after = lines.slice(descEnd);
 
-  if (updates.description === undefined) {
-    // 保留原有描述
+  if (updates.description === undefined && updates.comment === undefined) {
+    // 保留原有描述和评论
     return [...before, ...lines.slice(taskLine + 1, descEnd), ...after].join('\n');
   }
 
-  const descLines = updates.description
-    ? updates.description.split('\n').map(d => `  ${d}`)
-    : [];
-  return [...before, ...descLines, ...after].join('\n');
+  // Rebuild the indented block: separate existing desc/comment lines
+  const existingBlock = lines.slice(taskLine + 1, descEnd);
+  const existingDescLines: string[] = [];
+  const existingCommentLines: string[] = [];
+  for (const bl of existingBlock) {
+    if (bl.trim().startsWith('> ')) {
+      existingCommentLines.push(bl);
+    } else {
+      existingDescLines.push(bl);
+    }
+  }
+
+  const descLines = updates.description !== undefined
+    ? (updates.description ? updates.description.split('\n').map(d => `  ${d}`) : [])
+    : existingDescLines;
+
+  const commentLines = updates.comment !== undefined
+    ? (updates.comment ? updates.comment.split('\n').map(c => `  > ${c}`) : [])
+    : existingCommentLines;
+
+  return [...before, ...descLines, ...commentLines, ...after].join('\n');
 }
 
 /**

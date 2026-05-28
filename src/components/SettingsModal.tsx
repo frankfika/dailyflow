@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, aiApi } from '../api/client';
+import { configApi, aiApi, ipfsApi, type IpfsBackupRecord } from '../api/client';
 import { API_BASE, DEFAULT_MODEL } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 
@@ -16,8 +16,8 @@ interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'ai' | 'github' | 'about';
-  setConfigTab: (tab: 'general' | 'ai' | 'github' | 'about') => void;
+  configTab: 'general' | 'ai' | 'github' | 'ipfs' | 'about';
+  setConfigTab: (tab: 'general' | 'ai' | 'github' | 'ipfs' | 'about') => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
@@ -58,6 +58,13 @@ interface SettingsModalProps {
   currentFileDate: string;
   verifyGithubConnection: (repoUrl: string, token: string) => Promise<boolean>;
   filesApi: { list: () => Promise<string[]>; get: (date: string) => Promise<{ content: string; tasks: any[]; date: string } | null>; };
+  ipfsEnabled: boolean;
+  setIpfsEnabled: (v: boolean) => void;
+  ipfsApiKey: string;
+  setIpfsApiKey: (v: string) => void;
+  ipfsGateway: string;
+  setIpfsGateway: (v: string) => void;
+  showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 export function SettingsModal({
@@ -106,6 +113,13 @@ export function SettingsModal({
   currentFileDate,
   verifyGithubConnection,
   filesApi,
+  ipfsEnabled,
+  setIpfsEnabled,
+  ipfsApiKey,
+  setIpfsApiKey,
+  ipfsGateway,
+  setIpfsGateway,
+  showToast,
 }: SettingsModalProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
@@ -124,6 +138,104 @@ export function SettingsModal({
   const [textScale, setTextScale] = useState(5); // 0-10, default 5 = 100%
   const [fontWeight, setFontWeight] = useState(0); // 0=400, 1=500, 2=600
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
+
+  // IPFS local state
+  const [showIpfsKey, setShowIpfsKey] = useState(false);
+  const [ipfsTestStatus, setIpfsTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [ipfsTestMsg, setIpfsTestMsg] = useState('');
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [ipfsBackups, setIpfsBackups] = useState<IpfsBackupRecord[]>([]);
+
+  useEffect(() => {
+    if (!showSettings || configTab !== 'ipfs') return;
+    ipfsApi.list()
+      .then(({ records }) => setIpfsBackups(records))
+      .catch(() => setIpfsBackups([]));
+  }, [showSettings, configTab]);
+
+  const handleTestIpfs = async () => {
+    if (!ipfsApiKey.trim()) {
+      setIpfsTestStatus('error');
+      setIpfsTestMsg(language === 'zh' ? '请先填写 Pinata JWT' : 'Please enter your Pinata JWT first');
+      return;
+    }
+    setIpfsTestStatus('loading');
+    setIpfsTestMsg('');
+    try {
+      const result = await ipfsApi.test(ipfsApiKey.trim());
+      if (result.ok) {
+        setIpfsTestStatus('success');
+        setIpfsTestMsg(language === 'zh' ? `✓ 连接成功 (${result.message})` : `✓ Connected (${result.message})`);
+      } else {
+        setIpfsTestStatus('error');
+        setIpfsTestMsg(language === 'zh' ? `✗ ${result.message}` : `✗ ${result.message}`);
+      }
+    } catch (e: any) {
+      setIpfsTestStatus('error');
+      setIpfsTestMsg(language === 'zh' ? `✗ 验证失败: ${e.message}` : `✗ Failed: ${e.message}`);
+    }
+  };
+
+  const handleRunIpfsBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      // Persist current IPFS settings before triggering the backup
+      const config = await configApi.get();
+      await configApi.update({
+        ...config,
+        ipfsEnabled: true,
+        ipfsProvider: 'pinata',
+        ipfsApiKey: ipfsApiKey.trim(),
+        ipfsGateway: ipfsGateway.trim() || undefined,
+      });
+      setIpfsEnabled(true);
+
+      const result = await ipfsApi.backup();
+      if (result.success && result.cid) {
+        showToast(
+          language === 'zh'
+            ? `✓ 已上传到 IPFS (${result.fileCount} 个文件)`
+            : `✓ Uploaded to IPFS (${result.fileCount} files)`,
+          'success'
+        );
+        const { records } = await ipfsApi.list();
+        setIpfsBackups(records);
+      } else {
+        showToast(
+          language === 'zh'
+            ? `备份失败: ${result.error || 'Unknown error'}`
+            : `Backup failed: ${result.error || 'Unknown error'}`,
+          'error'
+        );
+      }
+    } catch (e: any) {
+      showToast(
+        language === 'zh' ? `备份失败: ${e.message}` : `Backup failed: ${e.message}`,
+        'error'
+      );
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleCopyCid = async (cid: string) => {
+    try {
+      await navigator.clipboard.writeText(cid);
+      showToast(language === 'zh' ? 'CID 已复制' : 'CID copied', 'success');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOpenGateway = async (record: IpfsBackupRecord) => {
+    const gateway = (record.gateway || ipfsGateway || 'https://gateway.pinata.cloud').replace(/\/$/, '');
+    const url = `${gateway}/ipfs/${record.cid}`;
+    try {
+      await open(url);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
 
   const fontWeightLabel = fontWeight === 0 ? 'Normal' : fontWeight === 1 ? 'Medium' : 'Bold';
 
@@ -188,6 +300,18 @@ export function SettingsModal({
       'Not running in Tauri app': {
         zh: '当前不在 Tauri 应用内运行',
         en: 'Not running in Tauri app',
+      },
+      'Updater permission missing — please reinstall the latest version': {
+        zh: '缺少更新权限，请重新安装最新版本',
+        en: 'Updater permission missing — please reinstall the latest version',
+      },
+      'Release is unsigned — please download manually from GitHub': {
+        zh: '该版本未签名，请前往 GitHub 手动下载',
+        en: 'Release is unsigned — please download manually from GitHub',
+      },
+      'Update manifest not published yet': {
+        zh: '更新清单尚未发布',
+        en: 'Update manifest not published yet',
       },
     };
     return map[error]?.[lang] || error;
@@ -277,6 +401,16 @@ export function SettingsModal({
             }`}
           >
             GitHub
+          </button>
+          <button
+            onClick={() => setConfigTab('ipfs')}
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
+              configTab === 'ipfs'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            IPFS
           </button>
           <button
             onClick={() => setConfigTab('about')}
@@ -713,7 +847,7 @@ export function SettingsModal({
 
                         const res = await fetch(`${API_BASE.github}/repos/${owner}/${repo}`, {
                           headers: {
-                            'Authorization': `Bearer ${githubToken}`,
+                            'Authorization': `token ${githubToken}`,
                             'Accept': 'application/vnd.github.v3+json',
                           },
                         });
@@ -761,6 +895,196 @@ export function SettingsModal({
                         : 'bg-stone-50 text-stone-700 border border-stone-200'
                     }`}>
                       {githubVerifyMsg}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {configTab === 'ipfs' && (
+            <div className="space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-sans text-xs font-bold text-text-muted">
+                    {language === 'zh' ? '去中心化备份 (IPFS)' : 'Decentralized Backup (IPFS)'}
+                  </h3>
+                  <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded font-bold">Beta</span>
+                </div>
+
+                <div className="bg-accent/5 border border-accent/20 rounded-md p-3 mb-3">
+                  <p className="text-xs text-text-main font-medium mb-2">
+                    {language === 'zh' ? '📖 配置步骤：' : '📖 Setup Guide:'}
+                  </p>
+                  <ol className="text-xs text-text-muted space-y-2 list-decimal list-inside">
+                    <li>
+                      <strong>{language === 'zh' ? '注册 Pinata' : 'Sign up for Pinata'}</strong>
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                        <li>{language === 'zh' ? '访问 pinata.cloud 注册免费账号（包含 1 GB 存储）' : 'Go to pinata.cloud and create a free account (1 GB free)'}</li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong>{language === 'zh' ? '生成 JWT API Key' : 'Generate a JWT API Key'}</strong>
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                        <li>{language === 'zh' ? '前往 API Keys 页面，点击 "New Key"' : 'Visit the API Keys page and click "New Key"'}</li>
+                        <li>{language === 'zh' ? '勾选 pinFileToIPFS 权限，复制生成的 JWT' : 'Enable pinFileToIPFS permission, copy the generated JWT'}</li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong>{language === 'zh' ? '粘贴 Token 并测试' : 'Paste the token and test'}</strong>
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                        <li>{language === 'zh' ? '点击下方"测试连接"，验证 token 有效' : 'Click "Test Connection" to verify the token works'}</li>
+                        <li>{language === 'zh' ? '保存设置后，可使用"立即备份"上传' : 'After saving, use "Backup Now" to upload your workspace'}</li>
+                      </ul>
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="flex items-center justify-between mb-3 px-3 py-2 bg-surface border border-border rounded-md">
+                  <div>
+                    <p className="text-xs font-bold text-text-heading">
+                      {language === 'zh' ? '启用 IPFS 备份' : 'Enable IPFS Backup'}
+                    </p>
+                    <p className="text-[11px] text-text-muted mt-0.5">
+                      {language === 'zh' ? '将工作区快照上传到 Pinata 永久存储' : 'Upload a workspace snapshot to Pinata for persistent storage'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIpfsEnabled(!ipfsEnabled)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                      ipfsEnabled ? 'bg-accent' : 'bg-stone-300'
+                    }`}
+                    aria-checked={ipfsEnabled}
+                    role="switch"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                        ipfsEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-text-muted mb-1 block">
+                      {language === 'zh' ? 'Pinata JWT' : 'Pinata JWT'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showIpfsKey ? 'text' : 'password'}
+                        value={ipfsApiKey}
+                        onChange={e => setIpfsApiKey(e.target.value)}
+                        placeholder="eyJhbGciOi..."
+                        className="w-full bg-background border border-border rounded-md px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowIpfsKey(!showIpfsKey)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
+                      >
+                        {showIpfsKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-text-muted mb-1 block">
+                      {language === 'zh' ? 'IPFS 网关 (可选)' : 'IPFS Gateway (optional)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={ipfsGateway}
+                      onChange={e => setIpfsGateway(e.target.value)}
+                      placeholder="https://gateway.pinata.cloud"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
+                    />
+                    <p className="text-[11px] text-text-muted mt-1">
+                      {language === 'zh' ? '留空则使用 Pinata 默认网关' : 'Leave empty to use the Pinata default gateway'}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleTestIpfs}
+                      disabled={ipfsTestStatus === 'loading'}
+                      className="flex-1 py-2 bg-surface border border-border rounded-md text-xs font-bold hover:bg-surface-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {ipfsTestStatus === 'loading' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>{language === 'zh' ? '验证中...' : 'Verifying...'}</span>
+                        </>
+                      ) : (
+                        <span>{language === 'zh' ? '测试连接' : 'Test Connection'}</span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={handleRunIpfsBackup}
+                      disabled={!ipfsApiKey.trim() || isBackingUp}
+                      className="flex-1 py-2 bg-accent text-white rounded-md text-xs font-bold hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isBackingUp ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>{language === 'zh' ? '上传中...' : 'Uploading...'}</span>
+                        </>
+                      ) : (
+                        <span>{language === 'zh' ? '立即备份' : 'Backup Now'}</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {ipfsTestMsg && (
+                    <div className="text-xs p-2 rounded-md bg-stone-50 text-stone-700 border border-stone-200">
+                      {ipfsTestMsg}
+                    </div>
+                  )}
+
+                  {ipfsBackups.length > 0 && (
+                    <div className="mt-2">
+                      <h4 className="text-xs font-bold text-text-muted mb-2">
+                        {language === 'zh' ? '最近备份' : 'Recent Backups'}
+                      </h4>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {ipfsBackups.slice(0, 10).map(record => (
+                          <div
+                            key={record.cid}
+                            className="flex items-center justify-between gap-2 px-3 py-2 bg-surface border border-border rounded-md"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-mono text-text-heading truncate" title={record.cid}>
+                                {record.cid}
+                              </p>
+                              <p className="text-[10px] text-text-muted">
+                                {new Date(record.createdAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+                                {' · '}
+                                {record.fileCount} {language === 'zh' ? '个文件' : 'files'}
+                                {' · '}
+                                {(record.size / 1024).toFixed(1)} KB
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => handleCopyCid(record.cid)}
+                                className="p-1.5 text-text-muted hover:text-text-heading hover:bg-background rounded-md transition-colors"
+                                title={language === 'zh' ? '复制 CID' : 'Copy CID'}
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenGateway(record)}
+                                className="p-1.5 text-text-muted hover:text-accent hover:bg-background rounded-md transition-colors"
+                                title={language === 'zh' ? '在网关打开' : 'Open in gateway'}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -847,9 +1171,22 @@ export function SettingsModal({
                                 : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
                           </p>
                           {updateInfo.error ? (
-                            <p className="text-xs text-stone-600">
-                              {localizeUpdateError(updateInfo.error, language)}
-                            </p>
+                            <div className="space-y-2">
+                              <p className="text-xs text-stone-600">
+                                {localizeUpdateError(updateInfo.error, language)}
+                              </p>
+                              {updateInfo.fallbackUrl && (
+                                <a
+                                  href={updateInfo.fallbackUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  {language === 'zh' ? '前往 GitHub 下载' : 'Download from GitHub'}
+                                </a>
+                              )}
+                            </div>
                           ) : (
                             <div className="text-xs space-y-1">
                               <p className={updateInfo.hasUpdate ? 'text-stone-600' : 'text-stone-600'}>
@@ -939,6 +1276,10 @@ export function SettingsModal({
                   aiModel: aiModel.trim(),
                   aiBaseUrl: aiBaseUrl.trim(),
                   aiFormat,
+                  ipfsEnabled,
+                  ipfsProvider: 'pinata',
+                  ipfsApiKey: ipfsApiKey.trim() || undefined,
+                  ipfsGateway: ipfsGateway.trim() || undefined,
                 });
                 setGithubRepo(githubRepoInput.trim() || null);
                 // Auto-verify connection on save instead of relying on manual Test Connection click

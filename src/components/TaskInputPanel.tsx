@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2 } from 'lucide-react';
-import { getTagColor } from '../utils/tagColors';
+import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2, Repeat } from 'lucide-react';
+import { useState } from 'react';
 import { TagInput } from './TagInput';
-import { tasksApi, filesApi } from '../api/client';
+import { tasksApi, filesApi, recurringApi, type RecurrenceRule } from '../api/client';
 
 type Task = {
   id: string;
@@ -47,6 +47,7 @@ interface TaskInputPanelProps {
   setLastSyncedMD: (v: string) => void;
   setFilesMap: (v: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+  setLastAddedCategory?: (v: string | null) => void;
 }
 
 export function TaskInputPanel({
@@ -76,7 +77,12 @@ export function TaskInputPanel({
   setLastSyncedMD,
   setFilesMap,
   showToast,
+  setLastAddedCategory,
 }: TaskInputPanelProps) {
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
+  const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
+  const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+
   if (!showTaskInput) return null;
 
   return (
@@ -195,6 +201,77 @@ export function TaskInputPanel({
                   )}
                 </label>
 
+                {/* Repeat Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowRecurrenceMenu(!showRecurrenceMenu)}
+                    className={`flex items-center justify-center rounded-md transition-colors h-[42px] w-[42px] shrink-0 shadow-sm border ${recurrence ? 'bg-accent/10 text-accent border-accent/30' : 'bg-surface hover:bg-border/50 text-text-muted border-transparent'}`}
+                    title={language === 'zh' ? '重复任务' : 'Repeat'}
+                  >
+                    <Repeat className="w-4 h-4" />
+                  </button>
+                  {showRecurrenceMenu && (
+                    <div className="absolute bottom-full mb-2 right-0 bg-surface-white border border-border rounded-md shadow-md p-3 z-50 w-56 space-y-2">
+                      <p className="text-xs font-bold text-text-muted mb-2">{language === 'zh' ? '重复频率' : 'Repeat'}</p>
+                      <button
+                        onClick={() => { setRecurrence({ type: 'daily' }); setShowRecurrenceMenu(false); }}
+                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'daily' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                      >
+                        {language === 'zh' ? '每天' : 'Daily'}
+                      </button>
+                      <button
+                        onClick={() => { setRecurrence({ type: 'weekly', weekdays }); setShowRecurrenceMenu(false); }}
+                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'weekly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                      >
+                        {language === 'zh' ? '每周' : 'Weekly'}
+                      </button>
+                      {recurrence?.type === 'weekly' && (
+                        <div className="flex gap-1 px-3">
+                          {[
+                            { d: 0, l: language === 'zh' ? '日' : 'S' },
+                            { d: 1, l: language === 'zh' ? '一' : 'M' },
+                            { d: 2, l: language === 'zh' ? '二' : 'T' },
+                            { d: 3, l: language === 'zh' ? '三' : 'W' },
+                            { d: 4, l: language === 'zh' ? '四' : 'T' },
+                            { d: 5, l: language === 'zh' ? '五' : 'F' },
+                            { d: 6, l: language === 'zh' ? '六' : 'S' },
+                          ].map(({ d, l }) => (
+                            <button
+                              key={d}
+                              onClick={() => {
+                                const next = weekdays.includes(d) ? weekdays.filter(w => w !== d) : [...weekdays, d];
+                                setWeekdays(next);
+                                setRecurrence({ type: 'weekly', weekdays: next });
+                              }}
+                              className={`w-6 h-6 rounded text-[10px] font-bold ${weekdays.includes(d) ? 'bg-accent text-white' : 'bg-surface text-text-muted'}`}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          const today = new Date();
+                          setRecurrence({ type: 'monthly', dayOfMonth: today.getDate() });
+                          setShowRecurrenceMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'monthly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                      >
+                        {language === 'zh' ? '每月' : 'Monthly'}
+                      </button>
+                      {recurrence && (
+                        <button
+                          onClick={() => { setRecurrence(null); setShowRecurrenceMenu(false); }}
+                          className="w-full text-left px-3 py-1.5 rounded text-xs text-stone-500 hover:bg-stone-50 transition-colors"
+                        >
+                          {language === 'zh' ? '取消重复' : 'No repeat'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* AI Button */}
                 <button
                   onClick={() => setShowBrainDump(!showBrainDump)}
@@ -222,6 +299,9 @@ export function TaskInputPanel({
                       if (!tags.some(t => ['work', 'life'].includes(t))) {
                         tags.push(activeContext);
                       }
+                      if (recurrence && !tags.includes('recurring')) {
+                        tags.push('recurring');
+                      }
 
                       const finalDeadline = newTaskDeadline || currentFileDate;
 
@@ -236,6 +316,11 @@ export function TaskInputPanel({
                       };
                       // Optimistic UI update
                       setTasks(prev => [...prev, newTask]);
+                      // Track which category was just added
+                      const newCategory = tags.filter(t => !['work', 'life', 'tasks'].includes(t))[0];
+                      if (newCategory && setLastAddedCategory) {
+                        setLastAddedCategory(newCategory);
+                      }
                       // Create via API
                       tasksApi.create(currentFileDate, newTask).then(() => {
                         // Refresh markdown AND tasks with server-side stable IDs
@@ -252,10 +337,20 @@ export function TaskInputPanel({
                         console.error(e);
                         showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
                       });
+                      // If recurrence is set, also create a recurring task definition
+                      if (recurrence) {
+                        recurringApi.create({
+                          title,
+                          description,
+                          tags,
+                          recurrence,
+                        }).catch(e => console.error('Failed to create recurring task', e));
+                      }
                       setNewTaskTitle('');
                       setNewTaskTagsList([]);
                       setTagInputValue('');
                       setNewTaskDeadline('');
+                      setRecurrence(null);
                       setShowTaskInput(false);
                     }
                   }}

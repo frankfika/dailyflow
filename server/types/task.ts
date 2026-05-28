@@ -2,6 +2,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
+  comment?: string;
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;
@@ -32,6 +33,20 @@ export interface Config {
   aiModel?: string;
   aiBaseUrl?: string; // For custom providers
   aiFormat?: 'openai' | 'anthropic'; // Protocol format for custom providers
+  // IPFS / Decentralized backup
+  ipfsEnabled?: boolean;
+  ipfsProvider?: 'pinata';
+  ipfsApiKey?: string; // Pinata JWT token
+  ipfsGateway?: string; // e.g. https://gateway.pinata.cloud or https://ipfs.io
+}
+
+export interface IpfsBackupRecord {
+  cid: string;
+  pinName: string;
+  size: number;
+  fileCount: number;
+  createdAt: string;
+  gateway?: string;
 }
 
 export interface RolloverPreview {

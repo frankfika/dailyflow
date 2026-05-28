@@ -14,41 +14,47 @@ export interface UpdateInfo {
   releaseNotes?: string;
   publishedAt?: string;
   error?: string;
+  errorCode?: 'dev_mode' | 'not_configured' | 'network' | 'not_found' | 'signature' | 'timeout' | 'acl' | 'unsigned' | 'unknown';
+  fallbackUrl?: string;
 }
 
 declare const __APP_VERSION__: string;
 const CURRENT_VERSION = __APP_VERSION__;
+const RELEASES_PAGE = 'https://github.com/frankfika/dailyflow/releases/latest';
 
 function isTauriEnv(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
-function classifyUpdaterError(error: unknown): string {
+function classifyUpdaterError(error: unknown): { message: string; code: NonNullable<UpdateInfo['errorCode']> } {
   const msg = error instanceof Error ? error.message : String(error);
   const lower = msg.toLowerCase();
 
   if (!isTauriEnv()) {
-    return 'Not running in Tauri app (development mode)';
+    return { message: 'Not running in Tauri app (development mode)', code: 'dev_mode' };
+  }
+  if (lower.includes('not allowed by acl') || lower.includes('acl')) {
+    return { message: 'Updater permission missing — please reinstall the latest version', code: 'acl' };
   }
   if (lower.includes('not configured') || lower.includes('no updater') || lower.includes('updater is not')) {
-    return 'Updater not configured';
-  }
-  if (lower.includes('network') || lower.includes('fetch') || lower.includes('connection') || lower.includes('econnrefused') || lower.includes('offline') || lower.includes('failed to fetch')) {
-    return 'Network error';
+    return { message: 'Updater not configured', code: 'not_configured' };
   }
   if (lower.includes('404') || lower.includes('not found')) {
-    return 'Update endpoint not found';
+    return { message: 'Update manifest not published yet', code: 'not_found' };
+  }
+  if (lower.includes('network') || lower.includes('fetch') || lower.includes('connection') || lower.includes('econnrefused') || lower.includes('offline') || lower.includes('failed to fetch')) {
+    return { message: 'Network error', code: 'network' };
   }
   if (lower.includes('signature') || lower.includes('sign')) {
-    return 'Signature verification failed';
+    return { message: 'Release is unsigned — please download manually from GitHub', code: 'unsigned' };
   }
   if (lower.includes('timeout')) {
-    return 'Request timed out';
+    return { message: 'Request timed out', code: 'timeout' };
   }
   if (lower.includes('tauri') || lower.includes('__tauri__') || lower.includes('ipc')) {
-    return 'Not running in Tauri app';
+    return { message: 'Not running in Tauri app', code: 'dev_mode' };
   }
-  return msg || 'Unknown error';
+  return { message: msg || 'Unknown error', code: 'unknown' };
 }
 
 /**
@@ -61,6 +67,7 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
       latestVersion: CURRENT_VERSION,
       hasUpdate: false,
       error: 'Not running in Tauri app (development mode)',
+      errorCode: 'dev_mode',
     };
   }
 
@@ -83,13 +90,15 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
       publishedAt: update.date,
     };
   } catch (error) {
-    const message = classifyUpdaterError(error);
+    const { message, code } = classifyUpdaterError(error);
     console.error('Failed to check for updates:', message, error);
     return {
       currentVersion: CURRENT_VERSION,
       latestVersion: CURRENT_VERSION,
       hasUpdate: false,
       error: message,
+      errorCode: code,
+      fallbackUrl: RELEASES_PAGE,
     };
   }
 }

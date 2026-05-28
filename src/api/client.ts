@@ -35,6 +35,10 @@ export interface ConfigData {
   aiModel?: string;
   aiBaseUrl?: string;
   aiFormat?: 'openai' | 'anthropic';
+  ipfsEnabled?: boolean;
+  ipfsProvider?: 'pinata';
+  ipfsApiKey?: string;
+  ipfsGateway?: string;
 }
 
 export interface RolloverPreviewData {
@@ -116,6 +120,7 @@ export const tasksApi = {
     updates: {
       title?: string;
       description?: string;
+      comment?: string;
       tags?: string[];
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';
@@ -436,6 +441,60 @@ export const promptsApi = {
   },
 };
 
+export type RecurrenceRule =
+  | { type: 'daily' }
+  | { type: 'weekly'; weekdays: number[] }
+  | { type: 'monthly'; dayOfMonth: number };
+
+export interface RecurringTaskData {
+  id: string;
+  title: string;
+  description?: string;
+  tags?: string[];
+  priority?: 'high' | 'medium' | 'low';
+  project?: string;
+  recurrence: RecurrenceRule;
+  createdAt: string;
+}
+
+/**
+ * 循环任务 API
+ */
+export const recurringApi = {
+  async getAll(): Promise<RecurringTaskData[]> {
+    const res = await fetch(`${API_BASE}/recurring`);
+    if (!res.ok) throw new Error('Failed to fetch recurring tasks');
+    return res.json();
+  },
+
+  async create(data: Omit<RecurringTaskData, 'id' | 'createdAt'>): Promise<RecurringTaskData> {
+    const res = await fetch(`${API_BASE}/recurring`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create recurring task');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/recurring/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete recurring task');
+  },
+
+  async instantiate(date: string): Promise<{ created: number }> {
+    const res = await fetch(`${API_BASE}/recurring/instantiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    });
+    if (!res.ok) throw new Error('Failed to instantiate recurring tasks');
+    return res.json();
+  },
+};
+
 export interface AISummarizeRequest {
   provider: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   apiKey: string;
@@ -467,6 +526,52 @@ export const aiApi = {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || data.detail || `AI request failed (${res.status})`);
     }
+    return res.json();
+  },
+};
+
+export interface IpfsBackupRecord {
+  cid: string;
+  pinName: string;
+  size: number;
+  fileCount: number;
+  createdAt: string;
+  gateway?: string;
+}
+
+export interface IpfsBackupResult {
+  success: boolean;
+  cid?: string;
+  pinName?: string;
+  size?: number;
+  fileCount?: number;
+  gateway?: string;
+  error?: string;
+}
+
+export interface IpfsTestResult {
+  ok: boolean;
+  message: string;
+}
+
+export const ipfsApi = {
+  async test(apiKey: string): Promise<IpfsTestResult> {
+    const res = await fetch(`${API_BASE}/ipfs/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    return res.json();
+  },
+
+  async backup(): Promise<IpfsBackupResult> {
+    const res = await fetch(`${API_BASE}/ipfs/backup`, { method: 'POST' });
+    return res.json();
+  },
+
+  async list(): Promise<{ records: IpfsBackupRecord[] }> {
+    const res = await fetch(`${API_BASE}/ipfs/backups`);
+    if (!res.ok) throw new Error('Failed to list IPFS backups');
     return res.json();
   },
 };

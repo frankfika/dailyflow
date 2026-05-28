@@ -9,6 +9,8 @@ import gitRouter from './routes/git.js';
 import notesRouter from './routes/notes.js';
 import promptsRouter from './routes/prompts.js';
 import aiRouter from './routes/ai.js';
+import recurringRouter from './routes/recurring.js';
+import ipfsRouter from './routes/ipfs.js';
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -27,6 +29,8 @@ app.use('/api/git', gitRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/prompts', promptsRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/recurring', recurringRouter);
+app.use('/api/ipfs', ipfsRouter);
 
 // 健康检查
 app.get('/health', (req, res) => {

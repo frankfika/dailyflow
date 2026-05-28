@@ -69,10 +69,11 @@ router.patch('/:taskId', async (req, res) => {
 router.put('/:taskId', async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { date, title, description, tags, deadline, priority, project } = req.body as {
+    const { date, title, description, comment, tags, deadline, priority, project } = req.body as {
       date: string;
       title?: string;
       description?: string;
+      comment?: string;
       tags?: string[];
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';
@@ -91,10 +92,11 @@ router.put('/:taskId', async (req, res) => {
     }
 
     // 如果提供了完整的更新数据（tags, deadline等），使用完整编辑
-    if (tags !== undefined || deadline !== undefined || priority !== undefined || project !== undefined) {
+    if (tags !== undefined || deadline !== undefined || priority !== undefined || project !== undefined || comment !== undefined) {
       const newContent = editTaskFullInMarkdown(note.content, task.line, {
         title,
         description,
+        comment,
         tags,
         deadline,
         priority,
