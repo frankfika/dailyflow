@@ -96,4 +96,5 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
+          updaterJsonKeepUniversal: true
           args: ${{ matrix.platform.args }}
