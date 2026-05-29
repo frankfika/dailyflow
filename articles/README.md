@@ -6,8 +6,9 @@
 
 | 文件 | 平台 | 风格 |
 |------|------|------|
-| `xiaohongshu-cn-en.md` | 小红书 | 口语化、emoji、生活化 |
-| `twitter-thread-cn-en.md` | Twitter/X | 简洁、thread 格式 |
+| `xiaohongshu-cn-en.md` | 小红书 (帖1) | 口语化、emoji、生活化 |
+| `xiaohongshu-2-cn-en.md` | 小红书 (帖2) | 口语化、emoji、生活化 |
+| `twitter-thread-cn-en.md` | Twitter/X | 简洁、单条thread |
 | `weibo-jike-cn-en.md` | 微博/即刻 | 中长文、口语化 |
 | `linkedin-cn-en.md` | LinkedIn | 专业、简洁 |
 | `zhihu-cn-en.md` | 知乎 | 结构化、详细 |
