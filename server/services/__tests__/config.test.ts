@@ -67,6 +67,9 @@ describe('loadConfig', () => {
       rolloverSkipTags: ['no-rollover', 'hold'],
       githubRepo: 'https://github.com/user/repo',
       aiApiKey: 'sk-secret',
+      ipfsEnabled: true,
+      ipfsApiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test',
+      ipfsGateway: 'https://gateway.pinata.cloud',
     };
     await saveConfig(full);
     const loaded = await loadConfig();

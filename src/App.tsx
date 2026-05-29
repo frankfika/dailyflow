@@ -156,7 +156,7 @@ export default function App() {
   const [aiVerifyStatus, setAiVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [aiVerifyMsg, setAiVerifyMsg] = useState<string>('');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'github' | 'ipfs' | 'about'>('general');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'sync' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const [updateAvailable, setUpdateAvailable] = useState(false);

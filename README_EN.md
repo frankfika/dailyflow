@@ -107,7 +107,16 @@ Filter content by tags directly within Daily Notes and Notes pages:
 
 One-click commit to GitHub. Automatic backup for all your notes and task data. The top status bar shows sync status and last sync time in real time. Connection auto-verifies on launch and config save — no need to hit "Test Connection" manually.
 
-### 9. In-App Update Checker
+### 9. IPFS Decentralized Backup
+
+Upload a complete workspace snapshot to IPFS (via Pinata) with one click, getting permanent, decentralized data backup. Each backup generates a unique CID accessible from any IPFS gateway.
+
+- **One-click backup**: Click "Backup Now" in Settings to automatically package and upload all Markdown files
+- **Connection test**: Built-in Pinata JWT validation to verify your configuration in one click
+- **Backup history**: View the last 50 backup records, with copy CID and open-in-gateway support
+- **Custom gateway**: Configure a private IPFS gateway, defaults to Pinata Gateway
+
+### 10. In-App Update Checker
 
 Automatically detects the latest version from GitHub Releases, no need to manually visit the repository:
 - **Auto-check on startup**: Checks for updates 3 seconds after app launch
@@ -117,7 +126,7 @@ Automatically detects the latest version from GitHub Releases, no need to manual
 - **Download button opens system browser**: Powered by `tauri-plugin-shell`, clicks now reliably open your default browser
 - **Surfaces failure reasons**: Network errors or GitHub API rate-limits now show a clear "Update check failed" message instead of silently reporting "up to date"
 
-### 10. AI Features Center
+### 11. AI Features Center
 
 New standalone AI Features section in the sidebar with three modules:
 
@@ -198,9 +207,16 @@ npm run tauri dev
 │                              │               │
 │                              ▼               │
 │                    ┌──────────────────┐      │
-│                    │   Git (Optional) │      │
-│                    │   GitHub Sync    │      │
+│                    │  Markdown Files  │      │
+│                    │  (Source of Truth)│      │
 │                    └──────────────────┘      │
+│                              │               │
+│              ┌───────────────┴───────────────┐│
+│              ▼                               ▼│
+│    ┌──────────────────┐        ┌──────────────────┐ │
+│    │   Git (Optional) │        │ IPFS (Optional)  │ │
+│    │   GitHub Sync    │        │  Pinata Backup   │ │
+│    └──────────────────┘        └──────────────────┘ │
 │                                             │
 └─────────────────────────────────────────────┘
 ```
@@ -222,6 +238,7 @@ npm run tauri dev
 | Desktop | Tauri 2 (Rust) |
 | AI | DeepSeek / OpenAI / Anthropic (optional) |
 | Version Control | Git + GitHub API |
+| Decentralized Backup | IPFS + Pinata (optional) |
 
 ## 📝 Data Format
 

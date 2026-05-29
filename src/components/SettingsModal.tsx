@@ -16,8 +16,8 @@ interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'ai' | 'github' | 'ipfs' | 'about';
-  setConfigTab: (tab: 'general' | 'ai' | 'github' | 'ipfs' | 'about') => void;
+  configTab: 'general' | 'ai' | 'sync' | 'about';
+  setConfigTab: (tab: 'general' | 'ai' | 'sync' | 'about') => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
@@ -139,6 +139,9 @@ export function SettingsModal({
   const [fontWeight, setFontWeight] = useState(0); // 0=400, 1=500, 2=600
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
 
+  // Sync sub-tab state
+  const [syncSubTab, setSyncSubTab] = useState<'github' | 'ipfs'>('github');
+
   // IPFS local state
   const [showIpfsKey, setShowIpfsKey] = useState(false);
   const [ipfsTestStatus, setIpfsTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -147,7 +150,7 @@ export function SettingsModal({
   const [ipfsBackups, setIpfsBackups] = useState<IpfsBackupRecord[]>([]);
 
   useEffect(() => {
-    if (!showSettings || configTab !== 'ipfs') return;
+    if (!showSettings || configTab !== 'sync') return;
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
@@ -393,24 +396,14 @@ export function SettingsModal({
             AI
           </button>
           <button
-            onClick={() => setConfigTab('github')}
+            onClick={() => setConfigTab('sync')}
             className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
-              configTab === 'github'
+              configTab === 'sync'
                 ? 'border-accent text-accent'
                 : 'border-transparent text-text-muted hover:text-text-heading'
             }`}
           >
-            GitHub
-          </button>
-          <button
-            onClick={() => setConfigTab('ipfs')}
-            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
-              configTab === 'ipfs'
-                ? 'border-accent text-accent'
-                : 'border-transparent text-text-muted hover:text-text-heading'
-            }`}
-          >
-            IPFS
+            {language === 'zh' ? '同步' : 'Sync'}
           </button>
           <button
             onClick={() => setConfigTab('about')}
@@ -721,8 +714,26 @@ export function SettingsModal({
             </div>
           )}
 
-          {configTab === 'github' && (
+          {configTab === 'sync' && (
             <div className="space-y-5">
+              {/* Sync Sub-Tab Switcher */}
+              <div className="flex bg-surface p-1 rounded-md shadow-inner border border-border/50 gap-1">
+                <button
+                  onClick={() => setSyncSubTab('github')}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'github' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                >
+                  GitHub
+                </button>
+                <button
+                  onClick={() => setSyncSubTab('ipfs')}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'ipfs' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                >
+                  IPFS
+                </button>
+              </div>
+
+              {syncSubTab === 'github' && (
+              <div className="space-y-5">
               <hr className="border-border" />
 
               {/* GitHub Sync */}
@@ -902,7 +913,7 @@ export function SettingsModal({
             </div>
           )}
 
-          {configTab === 'ipfs' && (
+          {syncSubTab === 'ipfs' && (
             <div className="space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -1089,6 +1100,8 @@ export function SettingsModal({
                   )}
                 </div>
               </div>
+            </div>
+          )}
             </div>
           )}
 
