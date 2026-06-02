@@ -75,6 +75,7 @@ jobs:
 
       - name: Build Tauri app and upload to release
         uses: tauri-apps/tauri-action@v0
+        id: tauri-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -97,3 +98,16 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.platform.args }}
+
+      - name: Upload signature files
+        if: always()
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          # Find and upload all .sig files
+          find src-tauri/target -name "*.sig" -type f | while read sigfile; do
+            echo "Found signature file: $sigfile"
+            gh release upload "$TAG" "$sigfile" --clobber || echo "Failed to upload $sigfile"
+          done
