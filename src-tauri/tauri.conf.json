@@ -43,7 +43,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwMUYyNDJEOTI3MzVBQzYKUldUR1duT1NMU1FmZ0hYK0Z5Y0lXOWF2bVZ6TUlkeE90VHhZcjUxZmswbUd2SzNDZ0tCNkFqRWwK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBRTQ2ODdGMjY3OTJDMDMKUldRRExIa21mMmprU25oVUs3MkFZN3FiNGN6bU1kanFtNTNkTzZMMTVaWFZLb2JEV0xoekVja2cK",
       "endpoints": [
         "https://github.com/frankfika/dailyflow/releases/latest/download/latest.json"
       ]
