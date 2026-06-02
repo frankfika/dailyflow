@@ -95,5 +95,5 @@ jobs:
             See commits for full changelog.
           releaseDraft: false
           prerelease: false
-          updater: true
+          includeUpdaterJson: true
           args: ${{ matrix.platform.args }}
