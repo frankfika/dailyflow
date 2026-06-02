@@ -156,6 +156,15 @@ export function SettingsModal({
       .catch(() => setIpfsBackups([]));
   }, [showSettings, configTab]);
 
+  useEffect(() => {
+    if (!showSettings) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSettings(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showSettings]);
+
   const handleTestIpfs = async () => {
     if (!ipfsApiKey.trim()) {
       setIpfsTestStatus('error');

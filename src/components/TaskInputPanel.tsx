@@ -4,7 +4,7 @@
  */
 import { motion } from 'motion/react';
 import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2, Repeat } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TagInput } from './TagInput';
 import { tasksApi, filesApi, recurringApi, type RecurrenceRule } from '../api/client';
 
@@ -82,6 +82,18 @@ export function TaskInputPanel({
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+
+  useEffect(() => {
+    if (!showTaskInput) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowTaskInput(false);
+        setShowBrainDump(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showTaskInput]);
 
   if (!showTaskInput) return null;
 

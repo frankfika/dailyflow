@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes' | 'ai-prompts' | 'ai-models' | 'ai-agent';
-  setActiveTab: (tab: 'today' | 'notes' | 'ai-prompts' | 'ai-models' | 'ai-agent') => void;
+  activeTab: 'today' | 'notes' | 'ai-chat';
+  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -180,22 +180,10 @@ export function Sidebar({
               <h3 className="text-xs text-text-muted font-bold mb-3">{language === 'zh' ? 'AI 功能' : 'AI Features'}</h3>
               <ul className="space-y-2 text-sm font-sans">
                 <li
-                  onClick={() => { setActiveTab('ai-prompts'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai-prompts' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                  onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai-chat' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
                 >
-                  <span className="ml-4">{language === 'zh' ? '提示词库' : 'Prompt Library'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('ai-models'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai-models' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                >
-                  <span className="ml-4">{language === 'zh' ? '模型库' : 'Model Library'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('ai-agent'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai-agent' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                >
-                  <span className="ml-4">{language === 'zh' ? 'AI Agent' : 'AI Agent'}</span>
+                  <span className="ml-4">{language === 'zh' ? 'AI Chat' : 'AI Chat'}</span>
                 </li>
               </ul>
             </div>

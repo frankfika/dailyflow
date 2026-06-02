@@ -112,6 +112,19 @@ function generatePromptFile(template: PromptTemplate): string {
 }
 
 async function seedDefaults(promptsDir: string): Promise<void> {
+  // Check if this is the first time seeding (no .prompts-initialized marker)
+  const markerPath = path.join(promptsDir, '.prompts-initialized');
+  let isFirstTime = false;
+
+  try {
+    await fs.access(markerPath);
+  } catch {
+    isFirstTime = true;
+  }
+
+  // Only seed defaults on first initialization
+  if (!isFirstTime) return;
+
   const files = await fs.readdir(promptsDir);
   const existingIds = new Set(files.filter(f => f.endsWith('.md')).map(f => path.basename(f, '.md')));
 
@@ -125,6 +138,9 @@ async function seedDefaults(promptsDir: string): Promise<void> {
     const content = generatePromptFile(template);
     await fs.writeFile(path.join(promptsDir, `${template.id}.md`), content, 'utf-8');
   }
+
+  // Create marker file to indicate initialization is complete
+  await fs.writeFile(markerPath, new Date().toISOString(), 'utf-8');
 }
 
 export async function getAllPrompts(): Promise<PromptTemplate[]> {

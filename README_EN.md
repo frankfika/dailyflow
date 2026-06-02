@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.5.7-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.6.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -116,15 +116,31 @@ Upload a complete workspace snapshot to IPFS (via Pinata) with one click, gettin
 - **Backup history**: View the last 50 backup records, with copy CID and open-in-gateway support
 - **Custom gateway**: Configure a private IPFS gateway, defaults to Pinata Gateway
 
-### 10. In-App Update Checker
+### 10. In-App Auto Update
 
-Automatically detects the latest version from GitHub Releases, no need to manually visit the repository:
+**v0.6.1+ with proactive notification!** No manual download needed, works like Codex/VS Code:
+
 - **Auto-check on startup**: Checks for updates 3 seconds after app launch
-- **Top banner notification**: Shows update prompt when a new version is available, one-click to download
+- **Proactive popup notification**: Automatically shows update dialog with version info and release notes
+- **One-click download & install**: Click "Update Now" to automatically download and install with real-time progress
+- **Auto-restart**: Automatically restarts the app after download completes
+- **Skip version**: Option to skip a specific version and stop reminders
+- **Remind later**: Temporarily close the notification, will remind on next launch
 - **Manual check**: "Check for Updates" button in Settings for on-demand version checks
-- **Smart platform detection**: Automatically recommends the installer for your current OS
-- **Download button opens system browser**: Powered by `tauri-plugin-shell`, clicks now reliably open your default browser
-- **Surfaces failure reasons**: Network errors or GitHub API rate-limits now show a clear "Update check failed" message instead of silently reporting "up to date"
+- **Blue badge indicator**: Settings button shows a prominent blue exclamation badge
+- **Code signature verification**: All update packages are signature-verified for security
+
+**Update Flow**:
+1. App starts → Auto-checks for updates (background, silent)
+2. New version found → Update notification modal pops up
+3. Click "Update Now" → Download progress bar shown
+4. Download completes → App automatically restarts to apply update
+
+**Traditional vs New Way**:
+- ❌ Old: Visit GitHub Releases → Find platform package → Download → Install → Restart
+- ✅ New: Click "Update Now" → Wait a few seconds → Done
+
+> See [In-App Update Guide](docs/UPDATE_CHECKER.md) and [v0.6.1 Release Notes](docs/RELEASE_v0.6.1.md)
 
 ### 11. AI Features Center
 
@@ -136,11 +152,22 @@ New standalone AI Features section in the sidebar with three modules:
 - **Prompt Testing**: Enter test content, run prompt, see AI output in real-time
 - Add/edit/delete prompts with full control
 
-#### Model Library (Coming Soon)
-Expandable capability for multi-model AI configuration.
+#### Model Library ✨ NEW
+Browse and manage AI model configurations, switch models with one click:
+- **Preset Model Library**: Built-in mainstream models including DeepSeek V3/R1, Claude Opus/Sonnet/Haiku, GPT-4o/o1, Gemini 2.0, Qwen Max, etc.
+- **Model Comparison**: View context window, pricing, feature tags (vision, reasoning, function-calling, etc.)
+- **Model Testing**: Enter test content, verify model response in real-time
+- **Custom Models**: Add privately deployed or other OpenAI API-compatible models
+- **One-Click Switch**: Click "Use" button to switch to that model configuration
 
-#### AI Agent (Coming Soon)
-Expandable capability for AI Agent workflows.
+#### AI Workflow ✨ NEW
+Preset and custom AI automation workflows:
+- **Daily Report Generator**: Auto-read today's tasks, AI generates structured daily report
+- **Weekly Summary**: Aggregate this week's tasks, generate professional weekly report
+- **Smart Tagging**: Analyze note content, AI recommends relevant tags
+- **Task Breakdown**: Input large task, AI auto-breaks down into actionable subtasks
+- **Input Preview**: Preview content to be processed before running
+- **One-Click Save**: AI-generated content can be saved directly to notes
 
 **Multi-Config Support**:
 - Create multiple AI configs (different API Keys, different models)

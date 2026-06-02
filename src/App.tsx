@@ -16,10 +16,12 @@ import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
-import { PromptLibrary } from './components/PromptLibrary';
+import { AIChat } from './components/AIChat';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
+import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
+import type { UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 
 type Task = {
@@ -85,8 +87,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-prompts' | 'ai-models' | 'ai-agent'>('today');
-  const [activeAiConfigId, setActiveAiConfigId] = useState<string>('default');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -160,6 +161,8 @@ export default function App() {
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [ipfsApiKey, setIpfsApiKey] = useState<string>('');
   const [ipfsGateway, setIpfsGateway] = useState<string>('');
@@ -216,6 +219,15 @@ export default function App() {
         const { checkForUpdates } = await import('./api/updater');
         const info = await checkForUpdates();
         setUpdateAvailable(info.hasUpdate);
+        if (info.hasUpdate) {
+          setUpdateInfo(info);
+          // Check if this version was skipped
+          const skippedVersion = localStorage.getItem('dailyflow_skipped_version');
+          if (skippedVersion !== info.latestVersion) {
+            // Show modal only if not skipped
+            setShowUpdateModal(true);
+          }
+        }
       } catch (error) {
         console.error('Failed to auto-check for updates:', error);
       }
@@ -659,6 +671,30 @@ export default function App() {
     window.location.reload();
   };
 
+  // Handle update actions
+  const handleUpdate = async (onProgress: (downloaded: number, total: number) => void) => {
+    try {
+      const { downloadUpdate, relaunchApp } = await import('./api/updater');
+      await downloadUpdate(onProgress);
+      await relaunchApp();
+    } catch (error) {
+      console.error('Update failed:', error);
+      showToast('Update failed. Please try again.', 'error');
+      throw error;
+    }
+  };
+
+  const handleSkipVersion = () => {
+    if (updateInfo?.latestVersion) {
+      localStorage.setItem('dailyflow_skipped_version', updateInfo.latestVersion);
+    }
+    setShowUpdateModal(false);
+  };
+
+  const handleCloseUpdateModal = () => {
+    setShowUpdateModal(false);
+  };
+
   // Show workspace setup if first run
   if (showWorkspaceSetup) {
     return <WorkspaceSetup onComplete={handleWorkspaceSetupComplete} language={language} />;
@@ -738,7 +774,7 @@ export default function App() {
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
                 <span className="text-accent truncate">{currentFileDate}.md</span>
               </>
-            ) : activeTab === 'ai-prompts' || activeTab === 'ai-models' || activeTab === 'ai-agent' ? (
+            ) : activeTab === 'ai-chat' ? (
               <>
                 <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
                 <span className="text-accent truncate">AI</span>
@@ -785,7 +821,9 @@ export default function App() {
             >
               <Settings className="w-4.5 h-4.5" />
               {updateAvailable && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-stone-500 rounded" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white ring-2 ring-white dark:ring-stone-900">
+                  !
+                </span>
               )}
             </button>
             <ContextSwitcher
@@ -1186,39 +1224,22 @@ export default function App() {
                   />
 
                 </motion.div>
-              ) : activeTab === 'ai-prompts' ? (
+              ) : activeTab === 'ai-chat' ? (
                 <motion.div
-                  key="ai-prompts"
+                  key="ai-chat"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                   className="h-full"
                 >
-                  <PromptLibrary
+                  <AIChat
                     language={language}
-                    activeAiConfigId={activeAiConfigId}
-                    onAiConfigChange={(id) => setActiveAiConfigId(id)}
+                    tasks={tasks}
+                    notes={dailyNotes}
+                    filesMap={filesMap}
+                    currentFileDate={currentFileDate}
+                    showToast={showToast}
                   />
-                </motion.div>
-              ) : activeTab === 'ai-models' || activeTab === 'ai-agent' ? (
-                <motion.div
-                  key="ai-placeholder"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="h-full flex flex-col items-center justify-center text-text-muted"
-                >
-                  <div className="text-center">
-                    <div className="text-4xl mb-4 opacity-30">🔜</div>
-                    <h2 className="text-lg font-semibold mb-2">
-                      {activeTab === 'ai-models'
-                        ? (language === 'zh' ? '模型库' : 'Model Library')
-                        : (language === 'zh' ? 'AI Agent' : 'AI Agent')}
-                    </h2>
-                    <p className="text-sm opacity-60">
-                      {language === 'zh' ? '即将推出...' : 'Coming soon...'}
-                    </p>
-                  </div>
                 </motion.div>
               ) : (
                 <Notes
@@ -1291,6 +1312,15 @@ export default function App() {
         showToast={showToast}
       />
 
+      {/* Update Notification Modal */}
+      {showUpdateModal && updateInfo && (
+        <UpdateNotificationModal
+          updateInfo={updateInfo}
+          onClose={handleCloseUpdateModal}
+          onUpdate={handleUpdate}
+          onSkipVersion={handleSkipVersion}
+        />
+      )}
 
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
