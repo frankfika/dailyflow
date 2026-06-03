@@ -79,6 +79,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: 'DailyFlow ${{ github.event.inputs.tag || github.ref_name }}'
@@ -99,15 +100,14 @@ jobs:
           includeUpdaterJson: true
           args: ${{ matrix.platform.args }}
 
-      - name: Upload signature files
+      - name: Debug signature files
         if: always()
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          # Find and upload all .sig files
-          find src-tauri/target -name "*.sig" -type f | while read sigfile; do
-            echo "Found signature file: $sigfile"
-            gh release upload "$TAG" "$sigfile" --clobber || echo "Failed to upload $sigfile"
+          echo "=== Searching for .sig files ==="
+          find src-tauri/target -name "*.sig" -type f 2>/dev/null || echo "find failed"
+          echo "=== Bundle directory contents ==="
+          find src-tauri/target -type d -name "bundle" 2>/dev/null | while read d; do
+            echo "Bundle dir: $d"
+            ls -la "$d" || true
           done
