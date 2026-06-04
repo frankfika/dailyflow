@@ -6,8 +6,8 @@ import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, aiApi, ipfsApi, type IpfsBackupRecord } from '../api/client';
-import { API_BASE, DEFAULT_MODEL } from '../config/api';
+import { configApi, ipfsApi, type IpfsBackupRecord } from '../api/client';
+import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 
 declare const __APP_VERSION__: string;
@@ -16,27 +16,11 @@ interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'ai' | 'sync' | 'about';
-  setConfigTab: (tab: 'general' | 'ai' | 'sync' | 'about') => void;
+  configTab: 'general' | 'sync' | 'about';
+  setConfigTab: (tab: 'general' | 'sync' | 'about') => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
-  aiProvider: 'deepseek' | 'anthropic' | 'openai' | 'custom';
-  setAiProvider: (v: 'deepseek' | 'anthropic' | 'openai' | 'custom') => void;
-  aiApiKey: string;
-  setAiApiKey: (v: string) => void;
-  aiModel: string;
-  setAiModel: (v: string) => void;
-  aiBaseUrl: string;
-  setAiBaseUrl: (v: string) => void;
-  aiFormat: 'openai' | 'anthropic';
-  setAiFormat: (v: 'openai' | 'anthropic') => void;
-  showApiKey: boolean;
-  setShowApiKey: (v: boolean) => void;
-  aiVerifyStatus: 'idle' | 'loading' | 'success' | 'error';
-  setAiVerifyStatus: (v: 'idle' | 'loading' | 'success' | 'error') => void;
-  aiVerifyMsg: string;
-  setAiVerifyMsg: (v: string) => void;
   syncInterval: number;
   setSyncInterval: (v: number) => void;
   githubRepoInput: string;
@@ -74,24 +58,7 @@ export function SettingsModal({
   configTab,
   setConfigTab,
   workspaceRoot,
-  setWorkspaceRoot,
   setLanguage,
-  aiProvider,
-  setAiProvider,
-  aiApiKey,
-  setAiApiKey,
-  aiModel,
-  setAiModel,
-  aiBaseUrl,
-  setAiBaseUrl,
-  aiFormat,
-  setAiFormat,
-  showApiKey,
-  setShowApiKey,
-  aiVerifyStatus,
-  setAiVerifyStatus,
-  aiVerifyMsg,
-  setAiVerifyMsg,
   syncInterval,
   setSyncInterval,
   githubRepoInput,
@@ -395,16 +362,6 @@ export function SettingsModal({
             {language === 'zh' ? '通用' : 'General'}
           </button>
           <button
-            onClick={() => setConfigTab('ai')}
-            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
-              configTab === 'ai'
-                ? 'border-accent text-accent'
-                : 'border-transparent text-text-muted hover:text-text-heading'
-            }`}
-          >
-            AI
-          </button>
-          <button
             onClick={() => setConfigTab('sync')}
             className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'sync'
@@ -430,42 +387,19 @@ export function SettingsModal({
         <div className="overflow-y-auto p-6 space-y-5">
           {configTab === 'general' && (
             <div className="space-y-5">
-              {/* Workspace Path */}
+              {/* Workspace Path (read-only — manage via sidebar switcher) */}
               <div>
                 <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
-                  {language === 'zh' ? '工作区路径' : 'Workspace Path'}
+                  {language === 'zh' ? '当前工作区' : 'Current Workspace'}
                 </h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={workspaceRoot}
-                    onChange={e => setWorkspaceRoot(e.target.value)}
-                    placeholder={language === 'zh' ? '工作区目录路径' : 'Workspace directory path'}
-                    className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
-                  />
-                  <button
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/config/choose-folder');
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (data.path) {
-                            setWorkspaceRoot(data.path);
-                          }
-                        } else {
-                          const error = await res.json();
-                          alert(error.error || 'Failed to open folder picker');
-                        }
-                      } catch (e: any) {
-                        alert('Failed to open folder picker: ' + e.message);
-                      }
-                    }}
-                    className="px-3 py-2 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors whitespace-nowrap"
-                  >
-                    {language === 'zh' ? '浏览' : 'Browse'}
-                  </button>
+                <div className="bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-text-heading break-all">
+                  {workspaceRoot || (language === 'zh' ? '未设置' : 'Not set')}
                 </div>
-                <p className="text-xs text-text-muted mt-1">{language === 'zh' ? '修改后需重启应用生效' : 'Restart app after changing'}</p>
+                <p className="text-xs text-text-muted mt-1.5">
+                  {language === 'zh'
+                    ? '在左侧栏的笔记本切换器中添加、切换或重命名笔记本，无需重启。'
+                    : 'Add, switch, or rename workspaces from the sidebar switcher — no restart required.'}
+                </p>
               </div>
 
               <hr className="border-border" />
@@ -580,146 +514,6 @@ export function SettingsModal({
                 </div>
               </div>
 
-            </div>
-          )}
-
-          {configTab === 'ai' && (
-            <div className="space-y-5">
-              {/* AI Configuration */}
-              <div>
-                <h3 className="font-sans text-xs font-bold  text-text-muted mb-2">
-                  {language === 'zh' ? 'AI 模型配置' : 'AI Model Configuration'}
-                </h3>
-
-                {/* Provider Selection */}
-                <select
-                  value={aiProvider}
-                  onChange={e => {
-                    const provider = e.target.value as 'deepseek' | 'anthropic' | 'openai' | 'custom';
-                    setAiProvider(provider);
-                    // Set default models
-                    if (provider === 'deepseek') setAiModel(DEFAULT_MODEL.deepseek);
-                    else if (provider === 'anthropic') setAiModel('claude-3-5-sonnet-20241022');
-                    else if (provider === 'openai') setAiModel(DEFAULT_MODEL.openai);
-                  }}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
-                >
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="anthropic">Anthropic (Claude)</option>
-                  <option value="openai">OpenAI (GPT)</option>
-                  <option value="custom">{language === 'zh' ? '自定义' : 'Custom'}</option>
-                </select>
-
-                {/* API Key */}
-                <div className="relative mb-2">
-                  <input
-                    type={showApiKey ? "text" : "password"}
-                    value={aiApiKey}
-                    onChange={e => setAiApiKey(e.target.value)}
-                    placeholder={language === 'zh' ? 'API Key' : 'API Key'}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 pr-10 text-sm outline-none focus:border-accent transition-colors font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-heading transition-colors p-1"
-                  >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                {/* Model Name */}
-                <input
-                  type="text"
-                  value={aiModel}
-                  onChange={e => setAiModel(e.target.value)}
-                  placeholder={language === 'zh' ? '模型名称 (可选)' : 'Model name (optional)'}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
-                />
-
-                {/* Custom Base URL */}
-                {aiProvider === 'custom' && (
-                  <input
-                    type="text"
-                    value={aiBaseUrl}
-                    onChange={e => setAiBaseUrl(e.target.value)}
-                    placeholder={language === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono mb-2"
-                  />
-                )}
-
-                {/* Format Selection for Custom */}
-                {aiProvider === 'custom' && (
-                  <select
-                    value={aiFormat}
-                    onChange={e => setAiFormat(e.target.value as 'openai' | 'anthropic')}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors mb-2"
-                  >
-                    <option value="openai">OpenAI Format</option>
-                    <option value="anthropic">Anthropic Format</option>
-                  </select>
-                )}
-
-                <p className="text-xs text-text-muted mt-1">
-                  {language === 'zh' ? '用于 AI 总结和 Brain Dump 功能。' : 'Used for AI Summary and Brain Dump features. '}
-                  {aiProvider === 'deepseek' && (
-                    <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      {language === 'zh' ? '获取 DeepSeek API Key' : 'Get DeepSeek API Key'}
-                    </a>
-                  )}
-                  {aiProvider === 'anthropic' && (
-                    <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      {language === 'zh' ? '获取 Anthropic API Key' : 'Get Anthropic API Key'}
-                    </a>
-                  )}
-                  {aiProvider === 'openai' && (
-                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      {language === 'zh' ? '获取 OpenAI API Key' : 'Get OpenAI API Key'}
-                    </a>
-                  )}
-                </p>
-
-                {/* AI Test Connection */}
-                <button
-                  disabled={!aiApiKey || aiVerifyStatus === 'loading'}
-                  onClick={async () => {
-                    setAiVerifyStatus('loading');
-                    setAiVerifyMsg('');
-                    try {
-                      const isAnthropicFmt = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic');
-                      const { model: usedModel } = await aiApi.summarize({
-                        provider: aiProvider,
-                        apiKey: aiApiKey,
-                        model: aiModel || undefined,
-                        baseUrl: aiBaseUrl || undefined,
-                        systemPrompt: 'Reply with OK.',
-                        userPrompt: 'hi',
-                        maxTokens: 5,
-                        format: isAnthropicFmt ? 'anthropic' : 'openai',
-                      });
-                      setAiVerifyStatus('success');
-                      setAiVerifyMsg(language === 'zh' ? `✓ 连接成功 (${usedModel})` : `✓ Connected (${usedModel})`);
-                    } catch (e: any) {
-                      setAiVerifyStatus('error');
-                      setAiVerifyMsg(language === 'zh' ? `✗ 验证失败: ${e.message}` : `✗ Failed: ${e.message}`);
-                    }
-                  }}
-                  className={`mt-3 w-full py-2 rounded-md text-xs font-bold  transition-colors ${
-                    aiVerifyStatus === 'success' ? 'bg-stone-500 text-white' :
-                    aiVerifyStatus === 'error' ? 'bg-stone-100 text-stone-500 border border-stone-300' :
-                    'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
-                  } disabled:opacity-50`}
-                >
-                  {aiVerifyStatus === 'loading'
-                    ? (language === 'zh' ? '验证中...' : 'Verifying...')
-                    : (language === 'zh' ? '测试连接' : 'Test Connection')}
-                </button>
-                {aiVerifyMsg && (
-                  <p className={`text-xs mt-1.5 ${aiVerifyStatus === 'success' ? 'text-stone-600' : 'text-stone-500'}`}>
-                    {aiVerifyMsg}
-                  </p>
-                )}
-              </div>
             </div>
           )}
 
@@ -1293,11 +1087,6 @@ export function SettingsModal({
                   workspaceRoot: workspaceRoot.trim(),
                   githubRepo: githubRepoInput.trim() || undefined,
                   githubToken: githubToken.trim() || undefined,
-                  aiProvider,
-                  aiApiKey: aiApiKey.trim(),
-                  aiModel: aiModel.trim(),
-                  aiBaseUrl: aiBaseUrl.trim(),
-                  aiFormat,
                   ipfsEnabled,
                   ipfsProvider: 'pinata',
                   ipfsApiKey: ipfsApiKey.trim() || undefined,

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, X, Check, Loader2, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, Loader2, Zap } from 'lucide-react';
 import { promptsApi, type PromptTemplateData } from '../api/client';
 
 const SCOPE_OPTIONS = [
@@ -143,13 +143,15 @@ export function SkillManager({ language }: SkillManagerProps) {
       </div>
 
       {/* Add/Edit form */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isAdding && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="border-b border-border overflow-hidden"
+            key="skill-form"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="border-b border-border"
           >
             <div className="p-5 bg-surface-white space-y-3">
               <h4 className="text-sm font-semibold text-text-heading">

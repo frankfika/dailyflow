@@ -19,8 +19,17 @@ export interface DailyNote {
   lastModified?: Date;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  path: string;
+  createdAt: string;
+}
+
 export interface Config {
   workspaceRoot: string;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
   dailyPathTemplate: string;
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];

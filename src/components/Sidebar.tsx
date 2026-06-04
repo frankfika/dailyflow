@@ -22,6 +22,7 @@ interface SidebarProps {
   expandedArchiveMonths: Record<string, boolean>;
   toggleArchiveMonth: (month: string) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+  workspaceSwitcher?: React.ReactNode;
 }
 
 export function Sidebar({
@@ -39,6 +40,7 @@ export function Sidebar({
   expandedArchiveMonths,
   toggleArchiveMonth,
   showToast,
+  workspaceSwitcher,
 }: SidebarProps) {
   return (
     <>
@@ -59,10 +61,14 @@ export function Sidebar({
       <aside className={`fixed lg:relative inset-y-0 left-0 w-64 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-700 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'} bg-surface`}>
         <div className="p-6 w-64 flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center gap-2.5 mb-8">
+          <div className="flex items-center gap-2.5 mb-4">
             <div className="w-7 h-7 bg-accent text-white flex items-center justify-center font-sans text-sm font-bold rounded-md shadow-sm">D</div>
             <span className="font-sans text-base font-semibold text-text-heading">DailyFlow</span>
           </div>
+
+          {workspaceSwitcher && (
+            <div className="mb-6">{workspaceSwitcher}</div>
+          )}
 
           <nav className="space-y-6 flex-1 overflow-y-auto">
             {/* Timeline */}

@@ -23,6 +23,8 @@ export interface DailyNoteData {
 
 export interface ConfigData {
   workspaceRoot: string;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
   dailyPathTemplate: string;
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
@@ -39,6 +41,13 @@ export interface ConfigData {
   ipfsProvider?: 'pinata';
   ipfsApiKey?: string;
   ipfsGateway?: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  path: string;
+  createdAt: string;
 }
 
 export interface RolloverPreviewData {
@@ -187,6 +196,68 @@ export const configApi = {
       body: JSON.stringify(config),
     });
     if (!res.ok) throw new Error('Failed to update config');
+  },
+};
+
+export const workspacesApi = {
+  async list(): Promise<{ workspaces: Workspace[]; activeWorkspaceId: string }> {
+    const res = await fetch(`${API_BASE}/config/workspaces`);
+    if (!res.ok) throw new Error('Failed to list workspaces');
+    return res.json();
+  },
+
+  async create(name: string, path: string): Promise<Workspace> {
+    const res = await fetch(`${API_BASE}/config/workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, path }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create workspace');
+    return data.workspace;
+  },
+
+  async rename(id: string, name: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/config/workspaces/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to rename workspace');
+    }
+  },
+
+  async remove(id: string): Promise<{ activeWorkspaceId: string }> {
+    const res = await fetch(`${API_BASE}/config/workspaces/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete workspace');
+    return data;
+  },
+
+  async activate(id: string): Promise<Workspace> {
+    const res = await fetch(`${API_BASE}/config/workspaces/${id}/activate`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to activate workspace');
+    return data.workspace;
+  },
+
+  async pickFolder(): Promise<string | null> {
+    const res = await fetch(`${API_BASE}/config/choose-folder`);
+    if (res.status === 400) return null;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to open folder picker');
+    }
+    const data = await res.json();
+    return data.path || null;
+  },
+
+  async discover(): Promise<{ candidates: { path: string; name: string }[] }> {
+    const res = await fetch(`${API_BASE}/config/workspaces/discover`);
+    if (!res.ok) return { candidates: [] };
+    return res.json();
   },
 };
 

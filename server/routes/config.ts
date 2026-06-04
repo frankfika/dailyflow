@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { loadConfig, saveConfig } from '../services/config.js';
+import { loadConfig, saveConfig, generateWorkspaceId } from '../services/config.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import type { Workspace } from '../types/task.js';
 
 const execAsync = promisify(exec);
 const router = Router();
@@ -80,16 +81,16 @@ router.post('/validate-path', async (req, res) => {
 
 /**
  * GET /api/config/check-first-run - 检查是否首次运行
+ * 判定：工作区路径存在且可读 → 不是首次运行
+ * AI 配置已迁移到 ModelLibrary（前端 localStorage），不再作为首次运行判定条件
  */
-router.get('/check-first-run', async (req, res) => {
+router.get('/check-first-run', async (_req, res) => {
   try {
     const config = await loadConfig();
-    // 如果 aiApiKey 未设置，认为是首次运行（需要完成设置向导）
-    if (!config.aiApiKey) {
+    if (!config.workspaceRoot) {
       res.json({ isFirstRun: true });
       return;
     }
-    // 再检查工作区路径是否存在
     try {
       await fs.access(config.workspaceRoot, fs.constants.R_OK);
       res.json({ isFirstRun: false });
@@ -186,6 +187,200 @@ router.post('/validate-github', async (req, res) => {
     }
   } catch (error: any) {
     console.error('Error validating GitHub repo:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function ensureDirectory(targetPath: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const stats = await fs.stat(targetPath);
+    if (!stats.isDirectory()) return { ok: false, error: 'Path is not a directory' };
+    await fs.access(targetPath, fs.constants.R_OK | fs.constants.W_OK);
+    return { ok: true };
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      try {
+        await fs.mkdir(targetPath, { recursive: true });
+        return { ok: true };
+      } catch (createError: any) {
+        return { ok: false, error: 'Cannot create directory' };
+      }
+    }
+    if (error.code === 'EACCES') return { ok: false, error: 'Permission denied' };
+    return { ok: false, error: error.message };
+  }
+}
+
+/**
+ * GET /api/config/workspaces/discover - 自动发现可能的笔记本目录
+ * 扫描：当前 active 工作区的父目录、~/Desktop、~/Documents 顶层
+ * 候选条件：含 Daily/ 子目录，或顶层至少一个 .md 文件，且不在已配置列表中
+ */
+router.get('/workspaces/discover', async (_req, res) => {
+  try {
+    const config = await loadConfig();
+    const existingPaths = new Set((config.workspaces || []).map(w => w.path));
+    const home = process.env.HOME || '';
+    const active = (config.workspaces || []).find(w => w.id === config.activeWorkspaceId);
+    const roots = new Set<string>();
+    if (active?.path) {
+      const parent = path.dirname(active.path);
+      if (parent && parent !== '/' && parent !== home) roots.add(parent);
+    }
+    if (home) {
+      roots.add(path.join(home, 'Desktop'));
+      roots.add(path.join(home, 'Documents'));
+    }
+
+    const candidates: { path: string; name: string }[] = [];
+    for (const root of roots) {
+      let entries: string[] = [];
+      try {
+        entries = await fs.readdir(root);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue;
+        const full = path.join(root, entry);
+        if (existingPaths.has(full)) continue;
+        try {
+          const stat = await fs.stat(full);
+          if (!stat.isDirectory()) continue;
+          let isCandidate = false;
+          try {
+            const dailyStat = await fs.stat(path.join(full, 'Daily'));
+            if (dailyStat.isDirectory()) isCandidate = true;
+          } catch { /* no Daily/ */ }
+          if (!isCandidate) {
+            try {
+              const inner = await fs.readdir(full);
+              if (inner.some(f => f.toLowerCase().endsWith('.md'))) isCandidate = true;
+            } catch { /* skip */ }
+          }
+          if (isCandidate && !candidates.some(c => c.path === full)) {
+            candidates.push({ path: full, name: entry });
+          }
+        } catch { /* skip */ }
+      }
+    }
+    candidates.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ candidates: candidates.slice(0, 20) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/config/workspaces - 列出所有笔记本
+ */
+router.get('/workspaces', async (_req, res) => {
+  try {
+    const config = await loadConfig();
+    res.json({
+      workspaces: config.workspaces || [],
+      activeWorkspaceId: config.activeWorkspaceId || '',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/config/workspaces - 新建笔记本
+ */
+router.post('/workspaces', async (req, res) => {
+  try {
+    const { name, path: wsPath } = req.body as { name?: string; path?: string };
+    if (!wsPath || !wsPath.trim()) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+    const trimmedPath = wsPath.trim();
+    const result = await ensureDirectory(trimmedPath);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    const config = await loadConfig();
+    const workspaces = config.workspaces ? [...config.workspaces] : [];
+    if (workspaces.some(w => w.path === trimmedPath)) {
+      return res.status(400).json({ error: 'Workspace with this path already exists' });
+    }
+
+    const ws: Workspace = {
+      id: generateWorkspaceId(),
+      name: (name && name.trim()) || path.basename(trimmedPath) || 'Workspace',
+      path: trimmedPath,
+      createdAt: new Date().toISOString(),
+    };
+    workspaces.push(ws);
+    await saveConfig({ ...config, workspaces, activeWorkspaceId: config.activeWorkspaceId || ws.id });
+    res.json({ workspace: ws });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/config/workspaces/:id - 重命名笔记本
+ */
+router.patch('/workspaces/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body as { name?: string };
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+    const config = await loadConfig();
+    const workspaces = (config.workspaces || []).map(w =>
+      w.id === id ? { ...w, name: name.trim() } : w
+    );
+    if (!workspaces.some(w => w.id === id)) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+    await saveConfig({ ...config, workspaces });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/config/workspaces/:id - 删除笔记本（不删磁盘文件）
+ */
+router.delete('/workspaces/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const config = await loadConfig();
+    const workspaces = config.workspaces || [];
+    if (workspaces.length <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the last workspace' });
+    }
+    if (!workspaces.some(w => w.id === id)) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+    const remaining = workspaces.filter(w => w.id !== id);
+    const nextActive = config.activeWorkspaceId === id ? remaining[0].id : config.activeWorkspaceId;
+    await saveConfig({ ...config, workspaces: remaining, activeWorkspaceId: nextActive });
+    res.json({ success: true, activeWorkspaceId: nextActive });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/config/workspaces/:id/activate - 切换当前笔记本
+ */
+router.post('/workspaces/:id/activate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const config = await loadConfig();
+    const target = (config.workspaces || []).find(w => w.id === id);
+    if (!target) return res.status(404).json({ error: 'Workspace not found' });
+
+    const result = await ensureDirectory(target.path);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    await saveConfig({ ...config, activeWorkspaceId: id });
+    res.json({ success: true, workspace: target });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });

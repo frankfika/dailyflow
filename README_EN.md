@@ -77,11 +77,23 @@ Dump scattered thoughts in one go. AI extracts tasks, categorizes them, and sets
 
 Toggle between Work and Life modes with one click. Tasks filter automatically by context.
 
-### 5. Projects Overview
+### 5. Soft Workspace Switching
+
+Switch between multiple notebooks like switching tabs — no app restart. Each notebook is an independent local folder, fully isolated.
+
+- **Sidebar switcher**: top-left dropdown lists all notebooks; one click to switch
+- **Auto-discovery**: opening the dropdown scans your Desktop, Documents, and the active workspace's siblings for notebook-shaped folders — one click adds any of them
+- **Zero typing**: for anything else, "Choose another folder…" pops the system picker. No path input fields anywhere
+- **In-place reload**: file tree and current note refresh smoothly without flicker
+- **Per-notebook memory**: each notebook remembers the last date you opened
+- **Lightweight management**: hover a row to rename or remove
+- **Zero-config migration**: legacy single-workspace configs automatically become the default notebook
+
+### 6. Projects Overview
 
 Aggregate all pending tasks across dates, organized by category and project for a bird's-eye view. Keyword search and tag filters help you zero in on any project.
 
-### 6. Notes System
+### 7. Notes System
 
 A dedicated notes feature with three types:
 - **Regular Notes**: Capture ideas, thoughts, and memos anytime
@@ -96,18 +108,18 @@ Notes features:
 - **Work/Life context**: Follows context switching automatically
 - **AI calls go through backend proxy**: API keys never leak to the browser, no CORS headaches (v0.3.0+)
 
-### 7. Tag Filtering
+### 8. Tag Filtering
 
 Filter content by tags directly within Daily Notes and Notes pages:
 - **Daily Notes**: Tag pills at the top for quick task filtering
 - **Notes page**: Tag pills filter notes, supporting multi-dimensional combined filtering
 - **Context-aware**: Follows Work/Life context switching
 
-### 8. Git Sync
+### 9. Git Sync
 
 One-click commit to GitHub. Automatic backup for all your notes and task data. The top status bar shows sync status and last sync time in real time. Connection auto-verifies on launch and config save — no need to hit "Test Connection" manually.
 
-### 9. IPFS Decentralized Backup
+### 10. IPFS Decentralized Backup
 
 Upload a complete workspace snapshot to IPFS (via Pinata) with one click, getting permanent, decentralized data backup. Each backup generates a unique CID accessible from any IPFS gateway.
 
@@ -116,7 +128,7 @@ Upload a complete workspace snapshot to IPFS (via Pinata) with one click, gettin
 - **Backup history**: View the last 50 backup records, with copy CID and open-in-gateway support
 - **Custom gateway**: Configure a private IPFS gateway, defaults to Pinata Gateway
 
-### 10. In-App Auto Update
+### 11. In-App Auto Update
 
 **v0.6.1+ with proactive notification!** No manual download needed, works like Codex/VS Code:
 
@@ -142,7 +154,7 @@ Upload a complete workspace snapshot to IPFS (via Pinata) with one click, gettin
 
 > See [In-App Update Guide](docs/UPDATE_CHECKER.md) and [v0.6.1 Release Notes](docs/RELEASE_v0.6.1.md)
 
-### 11. AI Features Center
+### 12. AI Features Center
 
 New standalone AI Features section in the sidebar with three modules:
 

@@ -5,8 +5,10 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi, recurringApi } from './api/client';
-import { API_BASE, DEFAULT_MODEL } from './config/api';
+import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi, recurringApi, workspacesApi } from './api/client';
+import type { Workspace } from './api/client';
+import { API_BASE } from './config/api';
+import { getActiveAiConfig } from './types/models';
 import { getTodayStr } from './utils/tagColors';
 import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
@@ -14,6 +16,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
 import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
+import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
@@ -153,11 +156,11 @@ export default function App() {
   const [aiModel, setAiModel] = useState<string>('');
   const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
   const [aiFormat, setAiFormat] = useState<'openai' | 'anthropic'>('openai');
-  const [showApiKey, setShowApiKey] = useState<boolean>(false);
-  const [aiVerifyStatus, setAiVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [aiVerifyMsg, setAiVerifyMsg] = useState<string>('');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'sync' | 'about'>('general');
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
+  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
+  const [configTab, setConfigTab] = useState<'general' | 'sync' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -187,17 +190,38 @@ export default function App() {
         setGithubRepo(config.githubRepo || null);
         setGithubRepoInput(config.githubRepo || '');
         setGithubToken(config.githubToken || '');
-        setAiProvider(config.aiProvider || 'deepseek');
-        setAiApiKey(config.aiApiKey || '');
-        setAiModel(config.aiModel || '');
-        setAiBaseUrl(config.aiBaseUrl || '');
-        setAiFormat(config.aiFormat || 'openai');
         setWorkspaceRoot(config.workspaceRoot || '');
+        setWorkspaces(config.workspaces || []);
+        setActiveWorkspaceId(config.activeWorkspaceId || '');
         setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
         setRolloverTrigger(config.rolloverTrigger || 'manual');
         setIpfsEnabled(Boolean(config.ipfsEnabled));
         setIpfsApiKey(config.ipfsApiKey || '');
         setIpfsGateway(config.ipfsGateway || '');
+
+        // AI: read from ModelLibrary store first; fall back to legacy config fields
+        const active = getActiveAiConfig();
+        if (active) {
+          setAiProvider(active.provider);
+          setAiApiKey(active.apiKey);
+          setAiModel(active.model);
+          setAiBaseUrl(active.baseUrl);
+          setAiFormat(active.format);
+        } else {
+          setAiProvider(config.aiProvider || 'deepseek');
+          setAiApiKey(config.aiApiKey || '');
+          setAiModel(config.aiModel || '');
+          setAiBaseUrl(config.aiBaseUrl || '');
+          setAiFormat(config.aiFormat || 'openai');
+        }
+
+        // Restore last opened date for the active workspace
+        if (config.activeWorkspaceId) {
+          try {
+            const lastDate = localStorage.getItem(`df_last_date_${config.activeWorkspaceId}`);
+            if (lastDate) setCurrentFileDate(lastDate);
+          } catch { /* ignore */ }
+        }
 
         // Verify GitHub connection if repo and token are configured
         if (config.githubRepo && config.githubToken) {
@@ -210,6 +234,21 @@ export default function App() {
     };
     checkFirstRun();
     loadConfigData();
+  }, []);
+
+  // Sync AI state with ModelLibrary's active provider whenever it changes
+  useEffect(() => {
+    const sync = () => {
+      const active = getActiveAiConfig();
+      if (!active) return;
+      setAiProvider(active.provider);
+      setAiApiKey(active.apiKey);
+      setAiModel(active.model);
+      setAiBaseUrl(active.baseUrl);
+      setAiFormat(active.format);
+    };
+    window.addEventListener('df:provider-changed', sync);
+    return () => window.removeEventListener('df:provider-changed', sync);
   }, []);
 
   // Auto-check for updates on app start (silently, only for Settings badge)
@@ -368,6 +407,77 @@ export default function App() {
   useEffect(() => {
     loadTasksForDate(currentFileDate);
   }, [currentFileDate, loadTasksForDate]);
+
+  // Remember the last opened date per workspace
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    try {
+      localStorage.setItem(`df_last_date_${activeWorkspaceId}`, currentFileDate);
+    } catch { /* ignore */ }
+  }, [activeWorkspaceId, currentFileDate]);
+
+  const reloadFileList = useCallback(async () => {
+    try {
+      const files = await filesApi.list();
+      const map: Record<string, string> = {};
+      await Promise.allSettled(
+        files.map(async (f) => {
+          const data = await filesApi.get(f);
+          if (data) map[f] = data.content;
+        })
+      );
+      setFilesMap(map);
+    } catch (e) {
+      console.error('Failed to reload file list', e);
+    }
+  }, []);
+
+  const handleSwitchWorkspace = useCallback(async (id: string) => {
+    if (id === activeWorkspaceId) return;
+    setIsSwitchingWorkspace(true);
+    try {
+      const ws = await workspacesApi.activate(id);
+      setActiveWorkspaceId(id);
+      setWorkspaceRoot(ws.path);
+
+      // Reset state for new workspace
+      setMarkdown('');
+      setLastSyncedMD('');
+      setTasks([]);
+      setDailyNotes([]);
+      setFilesMap({});
+      setRolloverBanner(null);
+
+      // Restore last date for this workspace, fallback to today
+      let nextDate = getTodayStr();
+      try {
+        const saved = localStorage.getItem(`df_last_date_${id}`);
+        if (saved) nextDate = saved;
+      } catch { /* ignore */ }
+
+      await reloadFileList();
+      setCurrentFileDate(nextDate);
+
+      showToast(
+        language === 'zh' ? `已切换到 ${ws.name}` : `Switched to ${ws.name}`,
+        'success'
+      );
+
+      // Re-check git status for the new workspace
+      try {
+        const status = await gitApi.getStatus();
+        setGitHasChanges(status.hasChanges);
+        setGitLastCommitTime(status.lastCommitTime || null);
+      } catch { /* ignore — might not be a git repo */ }
+    } catch (e: any) {
+      showToast(
+        e.message || (language === 'zh' ? '切换笔记本失败' : 'Failed to switch workspace'),
+        'error'
+      );
+    } finally {
+      setIsSwitchingWorkspace(false);
+    }
+  }, [activeWorkspaceId, language, reloadFileList]);
 
   useEffect(() => {
     markdownRef.current = markdown;
@@ -749,6 +859,25 @@ export default function App() {
         expandedArchiveMonths={expandedArchiveMonths}
         toggleArchiveMonth={toggleArchiveMonth}
         showToast={showToast}
+        workspaceSwitcher={
+          workspaces.length > 0 ? (
+            <WorkspaceSwitcher
+              language={language}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onActivate={handleSwitchWorkspace}
+              onAdded={ws => setWorkspaces(prev => [...prev, ws])}
+              onRenamed={(id, name) => setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w))}
+              onRemoved={(id, nextActive) => {
+                setWorkspaces(prev => prev.filter(w => w.id !== id));
+                if (id === activeWorkspaceId && nextActive) {
+                  handleSwitchWorkspace(nextActive);
+                }
+              }}
+              showToast={showToast}
+            />
+          ) : null
+        }
       />
 
       {/* Main Content Area */}
@@ -1237,7 +1366,6 @@ export default function App() {
                     tasks={tasks}
                     notes={dailyNotes}
                     filesMap={filesMap}
-                    currentFileDate={currentFileDate}
                     showToast={showToast}
                   />
                 </motion.div>
@@ -1266,22 +1394,6 @@ export default function App() {
         workspaceRoot={workspaceRoot}
         setWorkspaceRoot={setWorkspaceRoot}
         setLanguage={setLanguage}
-        aiProvider={aiProvider}
-        setAiProvider={setAiProvider}
-        aiApiKey={aiApiKey}
-        setAiApiKey={setAiApiKey}
-        aiModel={aiModel}
-        setAiModel={setAiModel}
-        aiBaseUrl={aiBaseUrl}
-        setAiBaseUrl={setAiBaseUrl}
-        aiFormat={aiFormat}
-        setAiFormat={setAiFormat}
-        showApiKey={showApiKey}
-        setShowApiKey={setShowApiKey}
-        aiVerifyStatus={aiVerifyStatus}
-        setAiVerifyStatus={setAiVerifyStatus}
-        aiVerifyMsg={aiVerifyMsg}
-        setAiVerifyMsg={setAiVerifyMsg}
         syncInterval={syncInterval}
         setSyncInterval={setSyncInterval}
         githubRepoInput={githubRepoInput}

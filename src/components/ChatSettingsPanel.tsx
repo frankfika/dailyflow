@@ -11,10 +11,11 @@ import { SkillManager } from './SkillManager';
 interface ChatSettingsPanelProps {
   language: 'en' | 'zh';
   onClose: () => void;
+  initialTab?: 'providers' | 'skills';
 }
 
-export function ChatSettingsPanel({ language, onClose }: ChatSettingsPanelProps) {
-  const [tab, setTab] = useState<'providers' | 'skills'>('providers');
+export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' }: ChatSettingsPanelProps) {
+  const [tab, setTab] = useState<'providers' | 'skills'>(initialTab);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,27 +34,34 @@ export function ChatSettingsPanel({ language, onClose }: ChatSettingsPanelProps)
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
+        initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-surface w-full max-w-3xl h-[80vh] rounded-lg shadow-xl flex flex-col"
+        exit={{ scale: 0.96, opacity: 0 }}
+        className="bg-background w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-base font-semibold text-text-heading">
-            {language === 'zh' ? 'AI 设置' : 'AI Settings'}
-          </h3>
-          <button onClick={onClose} className="p-1 text-text-muted hover:text-red-500 transition-colors">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-surface-white">
+          <div>
+            <h3 className="text-base font-bold text-text-heading">
+              {language === 'zh' ? '模型 & Skills 设置' : 'Models & Skills'}
+            </h3>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              {language === 'zh'
+                ? '一处搞定：连接模型供应商、维护提示词 Skills'
+                : 'Manage AI providers and prompt skills in one place'}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-text-muted hover:text-red-500 transition-colors rounded hover:bg-surface">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="px-5 pt-2 flex items-center gap-1 border-b border-border">
+        <div className="px-6 flex items-center gap-1 border-b border-border bg-surface-white">
           <button
             onClick={() => setTab('providers')}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-colors ${
               tab === 'providers' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-heading'
             }`}
           >
@@ -62,12 +70,12 @@ export function ChatSettingsPanel({ language, onClose }: ChatSettingsPanelProps)
           </button>
           <button
             onClick={() => setTab('skills')}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-colors ${
               tab === 'skills' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-heading'
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            {language === 'zh' ? 'Skills (提示词)' : 'Skills'}
+            {language === 'zh' ? 'Skills（提示词预设）' : 'Skills (prompt presets)'}
           </button>
         </div>
 
@@ -83,3 +91,4 @@ export function ChatSettingsPanel({ language, onClose }: ChatSettingsPanelProps)
     </motion.div>
   );
 }
+
