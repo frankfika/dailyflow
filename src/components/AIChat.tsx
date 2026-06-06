@@ -285,6 +285,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     });
 
     setInputValue('');
+    setDraftSourceTitle(null);
     setIsStreaming(true);
     setPendingSkillId(null);
 

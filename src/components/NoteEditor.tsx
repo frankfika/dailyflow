@@ -628,7 +628,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               </div>
             ) : (
               <textarea
-                value={bodyWithoutHeading}
+                value={body}
                 onChange={e => setBody(e.target.value)}
                 placeholder={language === 'zh'
                   ? '开始写作... 支持 Markdown 语法'
