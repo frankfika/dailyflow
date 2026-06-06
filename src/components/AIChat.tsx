@@ -46,7 +46,7 @@ function getFriendlyErrorMessage(rawError: string, language: 'en' | 'zh', provid
   // Rate limit / quota (429)
   if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
     return language === 'zh'
-      ? `API 请求超限或额度不足。\n\n请检查账户余额，或稍后重试���\n若持续出现，可在「模型 & Skills」切换到其他供应商。`
+      ? `API 请求超限或额度不足。\n\n请检查账户余额，或稍后重试。\n若持续出现，可在「模型 & Skills」切换到其他供应商。`
       : `API rate limit exceeded or quota insufficient.\n\nCheck account balance or try again later.\n\nSwitch to another provider in "Models & Skills" if it persists.`;
   }
 
