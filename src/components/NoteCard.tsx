@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { FileText, Mic, Sparkles, Clock, Trash2, Edit2, Users, Link } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { NoteData } from '../api/client';
 import { getTagColor } from '../utils/tagColors';
 
@@ -27,34 +29,72 @@ const typeConfigLife = {
   summary: { icon: Sparkles, label: 'Summary', labelZh: '总结', color: 'bg-surface text-text-main border-transparent' },
 };
 
-function renderBodyWithMentions(body: string, onMentionClick?: (m: string) => void) {
-  // Remove markdown heading lines
-  const cleanBody = body.split('\n').filter(l => !l.startsWith('# ')).join('\n').trim();
+// Highlight @mentions inside a text node — used as ReactMarkdown text renderer.
+export function highlightMentions(text: string, onMentionClick?: (m: string) => void): React.ReactNode {
+  if (!text.includes('@')) return text;
+  const parts = text.split(/(@[\w一-龥-]+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      const name = part.slice(1);
+      return (
+        <button
+          key={i}
+          onClick={(e) => { e.stopPropagation(); onMentionClick?.(name); }}
+          className="text-accent font-bold hover:underline"
+        >
+          {part}
+        </button>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+export function renderMarkdownPreview(body: string, onMentionClick?: (m: string) => void, maxChars = 280): React.ReactNode {
+  // Drop H1 (it duplicates the title) but keep other markdown intact
+  let cleanBody = body.split('\n').filter(l => !l.startsWith('# ')).join('\n').trim();
+  // Fallback: if body was only an H1, show the raw body so the card isn't blank
+  if (!cleanBody) cleanBody = body.trim();
   if (!cleanBody) return null;
+  const truncated = cleanBody.length > maxChars ? cleanBody.slice(0, maxChars).replace(/\s+\S*$/, '') + '…' : cleanBody;
 
-  // Truncate to ~200 chars for preview
-  const preview = cleanBody.length > 200 ? cleanBody.slice(0, 200) + '...' : cleanBody;
+  // Custom text renderer: highlight @mentions inside any text node.
+  const transformText = (children: React.ReactNode): React.ReactNode => {
+    if (typeof children === 'string') return highlightMentions(children, onMentionClick);
+    if (Array.isArray(children)) return children.map((c, i) => <React.Fragment key={i}>{transformText(c)}</React.Fragment>);
+    return children;
+  };
 
-  // Split by @mentions and render with highlighting
-  const parts = preview.split(/(@[\w一-龥-]+)/g);
   return (
-    <span className="text-[13px] text-text-muted/80 leading-relaxed">
-      {parts.map((part, i) => {
-        if (part.startsWith('@')) {
-          const name = part.slice(1);
-          return (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); onMentionClick?.(name); }}
-              className="text-accent font-bold hover:underline"
-            >
-              {part}
-            </button>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </span>
+    <div className="markdown-preview text-[13px] text-text-muted/85 leading-relaxed">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="my-1">{transformText(children)}</p>,
+          li: ({ children, className }) => (
+            <li className={`my-0.5 ml-4 ${className?.includes('task-list-item') ? 'list-none' : 'list-disc'}`}>
+              {transformText(children)}
+            </li>
+          ),
+          ul: ({ children }) => <ul className="my-1">{children}</ul>,
+          ol: ({ children }) => <ol className="my-1 list-decimal ml-4">{children}</ol>,
+          h1: ({ children }) => <h1 className="text-sm font-bold text-text-heading my-1">{transformText(children)}</h1>,
+          h2: ({ children }) => <h2 className="text-sm font-bold text-text-heading my-1">{transformText(children)}</h2>,
+          h3: ({ children }) => <h3 className="text-[13px] font-bold text-text-heading my-1">{transformText(children)}</h3>,
+          h4: ({ children }) => <h4 className="text-[13px] font-bold text-text-heading my-1">{transformText(children)}</h4>,
+          code: ({ children }) => <code className="px-1 py-0.5 rounded bg-surface font-mono text-[12px]">{children}</code>,
+          pre: ({ children }) => <pre className="my-1 p-2 rounded bg-surface font-mono text-[12px] overflow-x-auto">{children}</pre>,
+          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>{children}</a>,
+          strong: ({ children }) => <strong className="font-semibold text-text-heading">{transformText(children)}</strong>,
+          em: ({ children }) => <em className="italic">{transformText(children)}</em>,
+          blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-2 my-1 text-text-muted/70">{children}</blockquote>,
+          hr: () => <hr className="my-2 border-border/50" />,
+          input: ({ checked, type }) => type === 'checkbox' ? <input type="checkbox" checked={checked} readOnly className="mr-1" /> : null,
+        }}
+      >
+        {truncated}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -122,7 +162,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
 
           {!compact && (
             <div className="mt-2 mb-1 line-clamp-3">
-              {renderBodyWithMentions(note.body, onMentionClick)}
+              {renderMarkdownPreview(note.body, onMentionClick)}
             </div>
           )}
 

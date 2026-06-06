@@ -17,14 +17,20 @@ export function ContextSwitcher({ activeContext, onChange, language }: ContextSw
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex bg-surface rounded p-1 border border-border"
+      className="relative flex bg-surface rounded-lg p-1 border border-border"
     >
+      {/* Sliding pill background */}
+      <motion.div
+        layout
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="absolute top-1 bottom-1 w-[calc(50%-4px)] bg-accent rounded-md shadow-sm"
+        style={{ left: activeContext === 'work' ? 4 : 'calc(50%)' }}
+      />
+
       <button
         onClick={() => onChange('work')}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-sans  font-bold transition-all ${
-          activeContext === 'work'
-            ? 'bg-accent text-white shadow-sm'
-            : 'text-text-muted hover:text-text-main'
+        className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-sans font-bold transition-colors ${
+          activeContext === 'work' ? 'text-white' : 'text-text-muted hover:text-text-main'
         }`}
       >
         <Briefcase className="w-3 h-3" />
@@ -32,10 +38,8 @@ export function ContextSwitcher({ activeContext, onChange, language }: ContextSw
       </button>
       <button
         onClick={() => onChange('life')}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-sans  font-bold transition-all ${
-          activeContext === 'life'
-            ? 'bg-accent text-white shadow-sm'
-            : 'text-text-muted hover:text-text-main'
+        className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-sans font-bold transition-colors ${
+          activeContext === 'life' ? 'text-white' : 'text-text-muted hover:text-text-main'
         }`}
       >
         <Heart className="w-3 h-3" />

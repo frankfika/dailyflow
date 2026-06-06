@@ -92,9 +92,17 @@ export function WorkspaceSwitcher({
   const addAndActivate = async (folderPath: string, name?: string) => {
     setBusyId('__new__');
     try {
+      const existed = workspaces.some(w => w.path === folderPath);
       const ws = await workspacesApi.create(name || '', folderPath);
-      onAdded?.(ws);
+      const wasDuplicate = existed || workspaces.some(w => w.id === ws.id);
+      if (!wasDuplicate) onAdded?.(ws);
       await onActivate(ws.id);
+      if (wasDuplicate) {
+        showToast(
+          language === 'zh' ? `已切换到现有 Notebook「${ws.name}」` : `Switched to existing notebook "${ws.name}"`,
+          'success'
+        );
+      }
       setOpen(false);
     } catch (e: any) {
       showToast(e.message || (language === 'zh' ? '添加失败' : 'Failed to add'), 'error');

@@ -9,15 +9,17 @@ import { NoteEditor } from './NoteEditor';
 interface NotesProps {
   activeContext: 'work' | 'life';
   language: 'en' | 'zh';
-  aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   aiApiKey?: string;
   aiModel?: string;
   aiBaseUrl?: string;
+  filterByTaskId?: string | null;
+  onClearTaskFilter?: () => void;
+  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type'] }) => void;
 }
 
 type TypeFilter = 'all' | 'note' | 'meeting_note' | 'summary';
 
-export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvider, aiApiKey, aiModel, aiBaseUrl }) => {
+export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey, aiModel, aiBaseUrl, filterByTaskId, onClearTaskFilter, onSendToChat }) => {
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
@@ -116,7 +118,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
   };
 
   const generateSummary = async () => {
-    if (!aiProvider || !aiApiKey) {
+    if (!aiApiKey || !aiBaseUrl) {
       setSummaryError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -163,18 +165,15 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
         });
       });
 
-      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiModel?.includes('claude'));
       const systemPrompt = 'You are a helpful assistant that summarizes notes concisely in Markdown.';
       const userPrompt = `${promptTemplate.prompt}\n\nHere are the notes:\n\n${contextStr}`;
 
       const { summary } = await aiApi.summarize({
-        provider: aiProvider,
         apiKey: aiApiKey,
         model: aiModel,
         baseUrl: aiBaseUrl,
         systemPrompt,
         userPrompt,
-        format: isAnthropicFormat ? 'anthropic' : 'openai',
       });
 
       setGeneratedSummary(summary);
@@ -217,6 +216,9 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
 
   const filteredNotes = useMemo(() => {
     let result = notes;
+    if (filterByTaskId) {
+      result = result.filter(n => n.linkedTaskIds?.includes(filterByTaskId));
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(n =>
@@ -229,7 +231,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
       result = result.filter(n => n.tags.includes(tagFilter));
     }
     return result;
-  }, [notes, searchQuery, tagFilter]);
+  }, [notes, searchQuery, tagFilter, filterByTaskId]);
 
   // Group by date
   const grouped = filteredNotes.reduce<Record<string, NoteData[]>>((acc, note) => {
@@ -260,13 +262,13 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
             activeContext={activeContext}
             availableTasks={availableTasks}
             availableTags={allTags}
-            aiProvider={aiProvider}
             aiApiKey={aiApiKey}
             aiModel={aiModel}
             aiBaseUrl={aiBaseUrl}
             onSave={handleSave}
             onClose={() => { setViewMode('list'); setEditingNote(null); }}
             onDelete={editingNote ? () => handleDelete(editingNote.id) : undefined}
+            onSendToChat={onSendToChat}
           />
         </div>
       ) : (
@@ -380,6 +382,17 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiProvide
               className="flex items-center gap-1 px-2 py-1 rounded bg-accent/10 text-accent text-xs font-bold hover:bg-accent/20 transition-colors"
             >
               #{tagFilter}
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )}
+          {filterByTaskId && (
+            <button
+              onClick={() => onClearTaskFilter?.()}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-accent/15 text-accent text-xs font-bold hover:bg-accent/25 transition-colors"
+              title={language === 'zh' ? '清除任务筛选' : 'Clear task filter'}
+            >
+              <FileText className="w-2.5 h-2.5" />
+              {language === 'zh' ? '关联任务' : 'Linked task'}
               <X className="w-2.5 h-2.5" />
             </button>
           )}

@@ -2,9 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Check, Loader2, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download } from 'lucide-react';
 import { promptsApi, type PromptTemplateData } from '../api/client';
 
 const SCOPE_OPTIONS = [
@@ -31,10 +31,87 @@ export function SkillManager({ language }: SkillManagerProps) {
     prompt: '',
     scope: 'format',
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     load();
   }, []);
+
+  // Parse markdown with optional frontmatter:
+  //   ---
+  //   name: My Skill
+  //   scope: format
+  //   ---
+  //   <prompt body>
+  // Falls back to: first H1/H2 as name, rest as prompt; or filename as name.
+  const parseSkillMarkdown = (text: string, fallbackName: string): { name: string; prompt: string; scope: string } | null => {
+    const trimmed = text.replace(/^﻿/, '');
+    let name = '';
+    let scope = 'format';
+    let body = trimmed;
+
+    const fmMatch = trimmed.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+    if (fmMatch) {
+      const fm = fmMatch[1];
+      body = fmMatch[2] || '';
+      const nameLine = fm.match(/^name:\s*(.+)$/m);
+      const scopeLine = fm.match(/^scope:\s*(.+)$/m);
+      if (nameLine) name = nameLine[1].trim().replace(/^["']|["']$/g, '');
+      if (scopeLine) {
+        const s = scopeLine[1].trim().replace(/^["']|["']$/g, '');
+        if (SCOPE_OPTIONS.some(o => o.value === s)) scope = s;
+      }
+    }
+
+    if (!name) {
+      const heading = body.match(/^#{1,3}\s+(.+)$/m);
+      if (heading) {
+        name = heading[1].trim();
+        body = body.replace(heading[0], '').trim();
+      }
+    }
+    if (!name) name = fallbackName.replace(/\.(md|markdown|txt)$/i, '').trim();
+    body = body.trim();
+    if (!body) return null;
+    return { name, prompt: body, scope };
+  };
+
+  const handleImportFiles = async (files: FileList) => {
+    setImportError(null);
+    const errors: string[] = [];
+    let imported = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const parsed = parseSkillMarkdown(text, file.name);
+        if (!parsed) { errors.push(file.name); continue; }
+        await promptsApi.create(parsed);
+        imported++;
+      } catch (err) {
+        console.error('Import failed for', file.name, err);
+        errors.push(file.name);
+      }
+    }
+    if (imported > 0) await load();
+    if (errors.length) {
+      setImportError(language === 'zh' ? `${errors.length} 个文件导入失败` : `${errors.length} file(s) failed to import`);
+      setTimeout(() => setImportError(null), 4000);
+    }
+  };
+
+  const handleExport = (skill: PromptTemplateData) => {
+    const md = `---\nname: ${skill.name}\nscope: ${skill.scope}\n---\n\n${skill.prompt}\n`;
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${skill.name.replace(/[/\\?%*:|"<>]/g, '_')}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const load = async () => {
     setIsLoading(true);
@@ -108,21 +185,47 @@ export function SkillManager({ language }: SkillManagerProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <div>
-          <p className="text-xs text-text-muted">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-text-muted truncate">
             {language === 'zh'
               ? '管理 AI Skill（提示词），在对话中应用以获得专业输出'
               : 'Manage AI skills (prompts) to get professional outputs in chats'}
           </p>
+          {importError && (
+            <p className="text-[11px] text-red-500 mt-0.5">{importError}</p>
+          )}
         </div>
-        <button
-          onClick={startAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          {language === 'zh' ? '添加 Skill' : 'Add Skill'}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length) {
+                handleImportFiles(e.target.files);
+                e.target.value = '';
+              }
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-text-muted bg-surface border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
+            title={language === 'zh' ? '导入 .md Skill 文件' : 'Import .md skill files'}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {language === 'zh' ? '导入' : 'Import'}
+          </button>
+          <button
+            onClick={startAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {language === 'zh' ? '添加 Skill' : 'Add Skill'}
+          </button>
+        </div>
       </div>
 
       {/* Filter */}
@@ -229,11 +332,28 @@ export function SkillManager({ language }: SkillManagerProps) {
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-text-muted">
             <Zap className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">
+            <p className="text-sm mb-3">
               {filterScope === 'all'
                 ? (language === 'zh' ? '暂无 Skill' : 'No skills yet')
-                : (language === 'zh' ? `暂无此类型 Skill` : 'No skills of this type')}
+                : (language === 'zh' ? '暂无此类型 Skill' : 'No skills of this type')}
             </p>
+            {filterScope === 'all' && (
+              <div className="flex items-center justify-center gap-2 text-xs">
+                <button
+                  onClick={startAdd}
+                  className="px-3 py-1 rounded bg-accent text-white font-bold hover:bg-accent/90 transition-colors"
+                >
+                  {language === 'zh' ? '+ 新建' : '+ Create'}
+                </button>
+                <span className="opacity-50">{language === 'zh' ? '或' : 'or'}</span>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1 rounded border border-border font-bold hover:border-accent/40 hover:text-accent transition-colors"
+                >
+                  {language === 'zh' ? '导入 .md' : 'Import .md'}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           filtered.map(skill => (
@@ -252,6 +372,13 @@ export function SkillManager({ language }: SkillManagerProps) {
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleExport(skill)}
+                    className="p-1 text-text-muted hover:text-accent transition-colors"
+                    title={language === 'zh' ? '导出为 .md' : 'Export as .md'}
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
                   <button
                     onClick={() => startEdit(skill)}
                     className="p-1 text-text-muted hover:text-accent transition-colors"

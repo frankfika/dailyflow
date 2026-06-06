@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, MessageSquare, Trash2, X } from 'lucide-react';
+import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, MessageSquare, Trash2, X, BellOff } from 'lucide-react';
 import type { Task } from '../types/task';
 import { getTagColor } from '../utils/tagColors';
 import { TagInput } from './TagInput';
+
+const SUPPRESS_KEY = 'df_suppress_completion_comments';
+function isCommentSuppressed(): boolean {
+  try { return sessionStorage.getItem(SUPPRESS_KEY) === '1'; } catch { return false; }
+}
+function suppressComments(): void {
+  try { sessionStorage.setItem(SUPPRESS_KEY, '1'); } catch {}
+}
 
 interface TaskCardProps {
   task: Task;
@@ -22,6 +30,8 @@ interface TaskCardProps {
     project?: string;
   }) => void;
   onDelete: () => void;
+  onCreateLinkedNote?: () => void;
+  onShowLinkedNotes?: () => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -33,6 +43,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onCreateLinkedNote,
+  onShowLinkedNotes,
 }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
@@ -83,7 +95,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         ${isDone ? 'bg-background border-transparent shadow-none opacity-60' : 'bg-surface-white border-border/60'}`}
     >
       <button
-        onClick={onToggle}
+        onClick={() => {
+          const wasUndone = !isDone;
+          onToggle();
+          // After completing a task, prompt for a quick "what / how" note.
+          // Only if no comment exists yet — don't bother users on uncheck → check toggles.
+          if (wasUndone && !task.comment && !isCommentSuppressed()) {
+            setTimeout(() => setShowComment(true), 600);
+          }
+        }}
         className="mt-[2px] flex-shrink-0 hover:scale-105 active:scale-95 transition-transform focus:outline-none"
       >
         {isDone ? (
@@ -228,10 +248,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </span>
             )}
             {linkedNotesCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface text-text-muted text-[11px] font-medium border border-transparent">
+              <button
+                onClick={(e) => { e.stopPropagation(); onShowLinkedNotes?.(); }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface text-text-muted hover:text-accent hover:bg-accent/10 text-[11px] font-medium border border-transparent transition-colors cursor-pointer"
+                title={language === 'zh' ? '查看关联笔记' : 'View linked notes'}
+              >
                 <FileText className="w-3 h-3" />
                 <span>{linkedNotesCount}</span>
-              </span>
+              </button>
             )}
           </div>
         )}
@@ -250,34 +274,60 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       setShowComment(false);
                       setCommentText(task.comment || '');
                     }
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      onEdit({ comment: commentText.trim() || undefined });
+                      setShowComment(false);
+                    }
                   }}
-                  placeholder={language === 'zh' ? '添加备注...' : 'Add a note...'}
-                  className="w-full bg-surface border border-border/50 rounded-md px-3 py-2 text-xs outline-none focus:border-accent resize-none min-h-[48px] text-text-muted"
+                  placeholder={isDone
+                    ? (language === 'zh' ? '这事是怎么解决的？(可选, ⌘+Enter 保存)' : "How did you resolve this? (optional, ⌘+Enter to save)")
+                    : (language === 'zh' ? '添加备注... (⌘+Enter 保存)' : 'Add a note... (⌘+Enter to save)')}
+                  className={`w-full bg-surface border rounded-md px-3 py-2 text-xs outline-none resize-none min-h-[48px] ${isDone ? 'border-emerald-200 focus:border-emerald-400 text-emerald-900' : 'border-border/50 focus:border-accent text-text-muted'}`}
                   rows={2}
                 />
-                <div className="flex justify-end gap-1.5">
+                <div className="flex items-center justify-between">
                   <button
-                    onClick={() => { setShowComment(false); setCommentText(task.comment || ''); }}
-                    className="px-2 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
+                    onClick={() => { suppressComments(); setShowComment(false); setCommentText(task.comment || ''); }}
+                    className="flex items-center gap-1 text-[10px] text-text-muted/60 hover:text-text-muted transition-colors"
+                    title={language === 'zh' ? '本次会话不再自动弹出' : 'Stop auto-prompting this session'}
                   >
-                    {language === 'zh' ? '取消' : 'Cancel'}
+                    <BellOff className="w-2.5 h-2.5" />
+                    {language === 'zh' ? '不再询问' : "Don't ask again"}
                   </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => { setShowComment(false); setCommentText(task.comment || ''); }}
+                      className="px-2 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
+                    >
+                      {language === 'zh' ? '取消' : 'Cancel'}
+                    </button>
                   <button
                     onClick={() => {
                       onEdit({ comment: commentText.trim() || undefined });
                       setShowComment(false);
                     }}
-                    className="px-2.5 py-1 bg-accent text-white rounded text-[11px] font-medium hover:bg-accent/90 transition-colors"
+                    className={`px-2.5 py-1 text-white rounded text-[11px] font-medium transition-colors ${isDone ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-accent hover:bg-accent/90'}`}
                   >
                     {language === 'zh' ? '保存' : 'Save'}
                   </button>
                 </div>
               </div>
+            </div>
             ) : task.comment ? (
               <div
                 onClick={() => setShowComment(true)}
-                className="text-xs text-text-muted/70 italic bg-surface/50 rounded px-2.5 py-1.5 cursor-pointer hover:bg-surface transition-colors border-l-2 border-border/50"
+                className={`text-xs rounded px-2.5 py-1.5 cursor-pointer transition-colors border-l-2 ${isDone
+                  ? 'bg-emerald-50/60 text-emerald-800 border-emerald-300 hover:bg-emerald-50 not-italic'
+                  : 'bg-surface/50 text-text-muted/70 italic border-border/50 hover:bg-surface'}`}
+                title={isDone ? (language === 'zh' ? '完成时的总结 — 点击编辑' : 'Completion note — click to edit') : (language === 'zh' ? '点击编辑' : 'Click to edit')}
               >
+                {isDone && (
+                  <span className="inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700/80">
+                    <Check className="w-2.5 h-2.5" />
+                    {language === 'zh' ? '完成总结' : 'Resolution'}
+                  </span>
+                )}
                 {task.comment}
               </div>
             ) : null}
@@ -289,6 +339,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {!isEditing && (
           <button onClick={() => setShowComment(true)} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface" title={language === 'zh' ? '备注' : 'Comment'}>
             <MessageSquare className="w-4 h-4" />
+          </button>
+        )}
+        {!isEditing && onCreateLinkedNote && (
+          <button onClick={onCreateLinkedNote} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface" title={language === 'zh' ? '为此任务写笔记' : 'Write a note for this task'}>
+            <FileText className="w-4 h-4" />
           </button>
         )}
         {!isDone && !isEditing && (

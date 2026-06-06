@@ -31,12 +31,6 @@ export interface ConfigData {
   githubRepo?: string;
   githubToken?: string;
   activeContext?: 'work' | 'life';
-  deepseekApiKey?: string;
-  aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
-  aiApiKey?: string;
-  aiModel?: string;
-  aiBaseUrl?: string;
-  aiFormat?: 'openai' | 'anthropic';
   ipfsEnabled?: boolean;
   ipfsProvider?: 'pinata';
   ipfsApiKey?: string;
@@ -213,6 +207,10 @@ export const workspacesApi = {
       body: JSON.stringify({ name, path }),
     });
     const data = await res.json();
+    // 409 = already exists (server returns the existing workspace) — return it instead of throwing.
+    if (res.status === 409 && data.duplicate && data.workspace) {
+      return data.workspace as Workspace;
+    }
     if (!res.ok) throw new Error(data.error || 'Failed to create workspace');
     return data.workspace;
   },
@@ -567,20 +565,17 @@ export const recurringApi = {
 };
 
 export interface AISummarizeRequest {
-  provider: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   apiKey: string;
   model?: string;
-  baseUrl?: string;
+  baseUrl: string;
   systemPrompt?: string;
   userPrompt: string;
   maxTokens?: number;
-  format?: 'openai' | 'anthropic';
 }
 
 export interface AISummarizeResponse {
   summary: string;
   model: string;
-  provider: string;
 }
 
 /**

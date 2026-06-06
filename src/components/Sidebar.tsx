@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronRight, X, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles } from 'lucide-react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -118,81 +118,66 @@ export function Sidebar({
                 })}
 
               </ul>
+
+              {/* Archive — nested under Timeline */}
+              {Object.keys(archivedMonths).length > 0 && (
+                <div className="mt-4 pl-3 border-l border-border/40">
+                  <h4 className="text-[11px] text-text-muted font-semibold uppercase tracking-wide mb-2 opacity-70">{language === 'zh' ? '归档' : 'Archive'}</h4>
+                  <ul className="space-y-1.5 font-sans">
+                    {Object.keys(archivedMonths).map(monthName => (
+                      <li key={monthName} className="space-y-1.5">
+                        <button
+                          onClick={() => toggleArchiveMonth(monthName)}
+                          className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
+                        >
+                          {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          <span className="ml-[2px]">{monthName}</span>
+                        </button>
+                        {expandedArchiveMonths[monthName] && (
+                          <ul className="space-y-1.5 pl-4 border-l border-border/50 ml-3 pb-1">
+                            {archivedMonths[monthName].map(date => {
+                              const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+                              return (
+                                <li
+                                  key={date}
+                                  onClick={() => { setActiveTab('today'); setCurrentFileDate(date); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                                  className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
+                                >
+                                  {currentFileDate === date && <div className="w-1.5 h-1.5 rounded bg-accent"></div>}
+                                  <span>
+                                    {date}
+                                    <span className="ml-1.5 text-xs opacity-50 font-normal">{weekday}</span>
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {/* Archive (Nested under Timeline originally, now its own section but visually connected) */}
-            {Object.keys(archivedMonths).length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs text-text-muted font-bold mb-3">{language === 'zh' ? '归档' : 'Archive'}</h3>
-                <ul className="space-y-1.5 font-sans">
-                  {Object.keys(archivedMonths).map(monthName => (
-                    <li key={monthName} className="space-y-1.5">
-                      <button
-                        onClick={() => toggleArchiveMonth(monthName)}
-                        className="flex items-center gap-2 text-xs font-bold text-text-muted opacity-80 hover:opacity-100 transition-opacity w-full text-left"
-                      >
-                        {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        <span className="ml-[2px]">{monthName}</span>
-                      </button>
-                      {expandedArchiveMonths[monthName] && (
-                        <ul className="space-y-1.5 pl-4 border-l border-border/50 ml-6 pb-1">
-                          {archivedMonths[monthName].map(date => {
-                            const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                            return (
-                              <li
-                                key={date}
-                                onClick={() => { setActiveTab('today'); setCurrentFileDate(date); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                                className={`flex items-center gap-3 font-semibold cursor-pointer text-xs transition-opacity ${currentFileDate === date ? 'text-accent opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                              >
-                                {currentFileDate === date && <div className="w-1.5 h-1.5 rounded bg-accent"></div>}
-                                <span>
-                                  {date}
-                                  <span className="ml-1.5 text-xs opacity-50 font-normal">{weekday}</span>
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Workspace */}
-            <div>
-              <h3 className="text-xs  text-text-muted font-bold mb-3">{language === 'zh' ? '工作区' : 'Workspace'}</h3>
-              <ul className="space-y-2 text-sm font-sans">
-                <li
-                  onClick={() => { setActiveTab('today'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'today' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-daily-notes"
-                >
-                  <span className="ml-4">{language === 'zh' ? '每日任务' : 'Daily Tasks'}</span>
-                </li>
-                <li
-                  onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'notes' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                  data-testid="nav-notes"
-                >
-                  <span className="ml-4">{language === 'zh' ? '笔记' : 'Notes'}</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* AI Features - top level */}
-            <div>
-              <h3 className="text-xs text-text-muted font-bold mb-3">{language === 'zh' ? 'AI 功能' : 'AI Features'}</h3>
-              <ul className="space-y-2 text-sm font-sans">
-                <li
-                  onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 cursor-pointer transition-opacity ${activeTab === 'ai-chat' ? 'text-text-heading font-semibold opacity-100' : 'text-text-muted opacity-60 hover:opacity-100'}`}
-                >
-                  <span className="ml-4">{language === 'zh' ? 'AI Chat' : 'AI Chat'}</span>
-                </li>
-              </ul>
-            </div>
+            {/* Notes & AI Chat — top-level navigation */}
+            <ul className="space-y-1.5 text-sm font-sans">
+              <li
+                onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                className={`flex items-center gap-2.5 cursor-pointer px-2 py-1.5 -mx-2 rounded-md transition-all ${activeTab === 'notes' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-surface'}`}
+                data-testid="nav-notes"
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
+              </li>
+              <li
+                onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                className={`flex items-center gap-2.5 cursor-pointer px-2 py-1.5 -mx-2 rounded-md transition-all ${activeTab === 'ai-chat' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-surface'}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>{language === 'zh' ? 'AI 对话' : 'AI Chat'}</span>
+              </li>
+            </ul>
           </nav>
 
           {/* Mobile close */}

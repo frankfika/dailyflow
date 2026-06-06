@@ -235,11 +235,7 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
     setTestOutput('');
 
     try {
-      const isAnthropicFormat = activeConfig.provider === 'anthropic' ||
-        (activeConfig.provider === 'custom' && activeConfig.model?.includes('claude'));
-
       const { summary } = await aiApi.summarize({
-        provider: activeConfig.provider,
         apiKey: activeConfig.apiKey,
         model: activeConfig.model,
         baseUrl: activeConfig.baseUrl,
@@ -247,7 +243,6 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
           ? '你是一位专业的笔记整理助手。请根据用户要求对笔记进行格式化整理，返回完整的 Markdown 格式内容。'
           : 'You are a professional note formatting assistant. Please format and reorganize notes according to user requirements.',
         userPrompt: `${prompt.prompt}\n\n---\n\n${testInput}`,
-        format: isAnthropicFormat ? 'anthropic' : 'openai',
       });
 
       setTestOutput(summary);

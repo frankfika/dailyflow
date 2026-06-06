@@ -76,9 +76,11 @@ interface AIChatProps {
   notes: any[];
   filesMap: Record<string, string>;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
+  initialDraft?: { text: string; key: string; sourceTitle?: string } | null;
+  onDraftConsumed?: () => void;
 }
 
-export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatProps) {
+export function AIChat({ language, tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed }: AIChatProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [skills, setSkills] = useState<PromptTemplateData[]>([]);
@@ -93,6 +95,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
   const [pendingSkillId, setPendingSkillId] = useState<string | null>(null);
+  const [draftSourceTitle, setDraftSourceTitle] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -121,6 +124,29 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
       saveChatStore({ sessions, activeSessionId });
     }
   }, [sessions, activeSessionId]);
+
+  // When NoteEditor sends a note over, start a fresh session and prefill the input.
+  // The `key` ensures we don't re-fire if the same draft is still in props.
+  const consumedDraftKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialDraft) return;
+    if (consumedDraftKeyRef.current === initialDraft.key) return;
+    consumedDraftKeyRef.current = initialDraft.key;
+    const newSession = createNewSession();
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionId(newSession.id);
+    setInputValue(initialDraft.text);
+    setDraftSourceTitle(initialDraft.sourceTitle || null);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      const el = textareaRef.current;
+      if (el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+      }
+    }, 50);
+    onDraftConsumed?.();
+  }, [initialDraft, onDraftConsumed]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -278,13 +304,11 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
 
     try {
       const { summary } = await aiApi.summarize({
-        provider: activeProvider.type === 'anthropic' ? 'anthropic' : 'custom',
         apiKey: activeProvider.apiKey,
         model: activeProvider.model,
         baseUrl: activeProvider.baseUrl,
         systemPrompt,
         userPrompt,
-        format: activeProvider.type === 'anthropic' ? 'anthropic' : 'openai',
       });
 
       const aiMessage: ChatMessage = {
@@ -521,7 +545,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
+            <div className="w-full px-6 md:px-12 lg:px-20 py-8 space-y-8">
               <AnimatePresence initial={false}>
                 {activeSession.messages.map(msg => (
                   <motion.div
@@ -612,7 +636,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
 
         {/* Input area — composer card */}
         <div className="px-6 pb-6 pt-2">
-          <div className="max-w-3xl mx-auto">
+          <div className="w-full px-6 md:px-12 lg:px-20">
             {pendingSkillId && activeSkill && (
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-accent/10 text-accent rounded">
@@ -628,11 +652,26 @@ export function AIChat({ language, tasks, notes, filesMap, showToast }: AIChatPr
               </div>
             )}
 
+            {draftSourceTitle && (
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+                  <FileText className="w-3 h-3" />
+                  {language === 'zh' ? '来自笔记: ' : 'From note: '}{draftSourceTitle}
+                </span>
+                <button
+                  onClick={() => setDraftSourceTitle(null)}
+                  className="text-[11px] text-text-muted hover:text-red-500"
+                >
+                  {language === 'zh' ? '清除' : 'Clear'}
+                </button>
+              </div>
+            )}
+
             <div className="bg-surface-white border border-border rounded-2xl shadow-sm focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10 transition-all">
               <textarea
                 ref={textareaRef}
                 value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
+                onChange={e => { setInputValue(e.target.value); setDraftSourceTitle(null); }}
                 onKeyDown={handleKeyDown}
                 placeholder={language === 'zh' ? '问点什么…  Enter 发送 / Shift+Enter 换行' : 'Ask anything…  Enter to send · Shift+Enter for new line'}
                 rows={2}

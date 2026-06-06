@@ -968,7 +968,9 @@ export function SettingsModal({
                           : 'bg-stone-50 border-stone-200'
                     }`}>
                       <div className="flex items-start gap-3">
-                        {updateInfo.error ? (
+                        {updateInfo.errorCode === 'dev_mode' ? (
+                          <CheckCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
+                        ) : updateInfo.error ? (
                           <AlertCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
                         ) : updateInfo.hasUpdate ? (
                           <AlertCircle className="w-5 h-5 text-stone-600 shrink-0 mt-0.5" />
@@ -980,13 +982,21 @@ export function SettingsModal({
                             updateInfo.error ? 'text-stone-700' :
                             updateInfo.hasUpdate ? 'text-stone-700' : 'text-stone-700'
                           }`}>
-                            {updateInfo.error
-                              ? (language === 'zh' ? '检查更新失败' : 'Update check failed')
-                              : updateInfo.hasUpdate
-                                ? (language === 'zh' ? '发现新版本！' : 'New version available!')
-                                : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
+                            {updateInfo.errorCode === 'dev_mode'
+                              ? (language === 'zh' ? '开发模式 — 跳过更新检查' : 'Dev mode — update check skipped')
+                              : updateInfo.error
+                                ? (language === 'zh' ? '检查更新失败' : 'Update check failed')
+                                : updateInfo.hasUpdate
+                                  ? (language === 'zh' ? '发现新版本！' : 'New version available!')
+                                  : (language === 'zh' ? '已是最新版本' : 'You are up to date')}
                           </p>
-                          {updateInfo.error ? (
+                          {updateInfo.errorCode === 'dev_mode' ? (
+                            <p className="text-xs text-stone-600">
+                              {language === 'zh'
+                                ? '更新器仅在打包后的桌面应用中可用'
+                                : 'Updater is only available in the packaged desktop app'}
+                            </p>
+                          ) : updateInfo.error ? (
                             <div className="space-y-2">
                               <p className="text-xs text-stone-600">
                                 {localizeUpdateError(updateInfo.error, language)}

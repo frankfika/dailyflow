@@ -90,6 +90,10 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
+  const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
+  const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
+  const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
+  const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
 
   const taskLinkedNotesCount = useMemo(() => {
@@ -151,11 +155,9 @@ export default function App() {
   const [githubVerifyStatus, setGithubVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [githubVerifyMsg, setGithubVerifyMsg] = useState<string>('');
   const [githubConnected, setGithubConnected] = useState<boolean>(false);
-  const [aiProvider, setAiProvider] = useState<'deepseek' | 'anthropic' | 'openai' | 'custom'>('deepseek');
   const [aiApiKey, setAiApiKey] = useState<string>('');
   const [aiModel, setAiModel] = useState<string>('');
   const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
-  const [aiFormat, setAiFormat] = useState<'openai' | 'anthropic'>('openai');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
@@ -202,17 +204,13 @@ export default function App() {
         // AI: read from ModelLibrary store first; fall back to legacy config fields
         const active = getActiveAiConfig();
         if (active) {
-          setAiProvider(active.provider);
           setAiApiKey(active.apiKey);
           setAiModel(active.model);
           setAiBaseUrl(active.baseUrl);
-          setAiFormat(active.format);
         } else {
-          setAiProvider(config.aiProvider || 'deepseek');
-          setAiApiKey(config.aiApiKey || '');
-          setAiModel(config.aiModel || '');
-          setAiBaseUrl(config.aiBaseUrl || '');
-          setAiFormat(config.aiFormat || 'openai');
+          setAiApiKey('');
+          setAiModel('');
+          setAiBaseUrl('');
         }
 
         // Restore last opened date for the active workspace
@@ -241,11 +239,9 @@ export default function App() {
     const sync = () => {
       const active = getActiveAiConfig();
       if (!active) return;
-      setAiProvider(active.provider);
       setAiApiKey(active.apiKey);
       setAiModel(active.model);
       setAiBaseUrl(active.baseUrl);
-      setAiFormat(active.format);
     };
     window.addEventListener('df:provider-changed', sync);
     return () => window.removeEventListener('df:provider-changed', sync);
@@ -519,18 +515,16 @@ export default function App() {
     if (!brainDumpText.trim()) return;
     setIsProcessingBrainDump(true);
     try {
-      if (!aiApiKey || !aiProvider) {
+      if (!aiApiKey || !aiBaseUrl) {
         throw new Error('AI provider not configured');
       }
 
       const { summary: content } = await aiApi.summarize({
-        provider: aiProvider,
         apiKey: aiApiKey,
         model: aiModel || undefined,
-        baseUrl: aiBaseUrl || undefined,
+        baseUrl: aiBaseUrl,
         systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
         userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"`,
-        format: (aiProvider === 'anthropic' || (aiProvider === 'custom' && aiFormat === 'anthropic')) ? 'anthropic' : 'openai',
       });
 
       const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
@@ -963,8 +957,8 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto w-full p-4 md:p-8 lg:p-12 pb-32">
-          <div className="max-w-4xl mx-auto w-full">
+        <div className={`flex-1 overflow-y-auto w-full ${activeTab === 'ai-chat' ? '' : 'p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-4xl mx-auto w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1188,6 +1182,8 @@ export default function App() {
                                 onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
+                                onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
+                                onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
                               />
                             ))}
                           </AnimatePresence>
@@ -1222,6 +1218,8 @@ export default function App() {
                                       onToggle={() => handleToggleTask(task.id)}
                                       onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
+                                      onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
+                                      onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
                                     />
                                   ))}
                                 </motion.div>
@@ -1262,6 +1260,8 @@ export default function App() {
                                 onToggle={() => handleToggleTask(task.id)}
                                 onEdit={(updates) => handleEditTask(task.id, updates)}
                                 onDelete={() => handleDeleteTask(task.id)}
+                                onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
+                                onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
                               />
                             ))}
                           </AnimatePresence>
@@ -1289,6 +1289,8 @@ export default function App() {
                                       onToggle={() => handleToggleTask(task.id)}
                                       onEdit={(updates) => handleEditTask(task.id, updates)}
                                       onDelete={() => handleDeleteTask(task.id)}
+                                      onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
+                                      onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
                                     />
                                   ))}
                                 </motion.div>
@@ -1344,12 +1346,14 @@ export default function App() {
                     );
                   })()}
 
-                  {/* Daily Tasks */}
+                  {/* Today's Notes */}
                   <DailyNoteCards
                     notes={filterNotesByContext(dailyNotes, activeContext)}
                     language={language}
                     activeContext={activeContext}
                     onViewAll={() => setActiveTab('notes')}
+                    onAddNote={() => { setEditingDailyNote(null); setShowQuickNoteEditor(true); }}
+                    onNoteClick={(n) => { setEditingDailyNote(n); setShowQuickNoteEditor(true); }}
                   />
 
                 </motion.div>
@@ -1367,16 +1371,29 @@ export default function App() {
                     notes={dailyNotes}
                     filesMap={filesMap}
                     showToast={showToast}
+                    initialDraft={chatDraft}
+                    onDraftConsumed={() => setChatDraft(null)}
                   />
                 </motion.div>
               ) : (
                 <Notes
                   activeContext={activeContext}
                   language={language}
-                  aiProvider={aiProvider}
                   aiApiKey={aiApiKey}
                   aiModel={aiModel}
                   aiBaseUrl={aiBaseUrl}
+                  filterByTaskId={notesFilterByTaskId}
+                  onClearTaskFilter={() => setNotesFilterByTaskId(null)}
+                  onSendToChat={({ title, body, type }) => {
+                    const header = type === 'meeting_note'
+                      ? (language === 'zh' ? '帮我基于这份会议笔记继续讨论或回答我的问题：' : 'Continue from this meeting note:')
+                      : type === 'summary'
+                      ? (language === 'zh' ? '基于这份总结继续讨论：' : 'Continue from this summary:')
+                      : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
+                    const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
+                    setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
+                    setActiveTab('ai-chat');
+                  }}
                 />
               )
             )}
@@ -1440,12 +1457,38 @@ export default function App() {
            <NoteEditor
              language={language}
              activeContext={activeContext}
+             note={editingDailyNote || undefined}
+             defaultDate={currentFileDate}
+             defaultLinkedTaskIds={prefillLinkedTaskId ? [prefillLinkedTaskId] : undefined}
+             defaultTitle={prefillLinkedTaskId ? tasks.find(t => t.id === prefillLinkedTaskId)?.title : undefined}
              availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
              availableTags={[]}
+             aiApiKey={aiApiKey}
+             aiModel={aiModel}
+             aiBaseUrl={aiBaseUrl}
+             onSendToChat={({ title, body, type }) => {
+               const header = type === 'meeting_note'
+                 ? (language === 'zh' ? '帮我基于这份会议笔记继续讨论或回答我的问题：' : 'Continue from this meeting note:')
+                 : type === 'summary'
+                 ? (language === 'zh' ? '基于这份总结继续讨论：' : 'Continue from this summary:')
+                 : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
+               const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
+               setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
+               setShowQuickNoteEditor(false);
+               setEditingDailyNote(null);
+               setPrefillLinkedTaskId(null);
+               setActiveTab('ai-chat');
+             }}
              onSave={async (data) => {
                try {
-                 await notesApi.create(data);
+                 if (editingDailyNote) {
+                   await notesApi.update(editingDailyNote.id, data);
+                 } else {
+                   await notesApi.create(data);
+                 }
                  setShowQuickNoteEditor(false);
+                 setEditingDailyNote(null);
+                 setPrefillLinkedTaskId(null);
                  // Refresh daily notes if the note is for today
                  if (data.date === currentFileDate) {
                    const dateNotes = await notesApi.getByDate(currentFileDate);
@@ -1457,7 +1500,7 @@ export default function App() {
                  showToast(language === 'zh' ? '保存失败' : 'Failed to save note', 'error');
                }
              }}
-             onClose={() => setShowQuickNoteEditor(false)}
+             onClose={() => { setShowQuickNoteEditor(false); setEditingDailyNote(null); setPrefillLinkedTaskId(null); }}
            />
          </div>
        )}

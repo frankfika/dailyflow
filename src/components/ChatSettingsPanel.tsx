@@ -30,52 +30,41 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/40"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.96, opacity: 0 }}
-        className="bg-background w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+        className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-background border-l border-border shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-surface-white">
-          <div>
-            <h3 className="text-base font-bold text-text-heading">
-              {language === 'zh' ? '模型 & Skills 设置' : 'Models & Skills'}
-            </h3>
-            <p className="text-[11px] text-text-muted mt-0.5">
-              {language === 'zh'
-                ? '一处搞定：连接模型供应商、维护提示词 Skills'
-                : 'Manage AI providers and prompt skills in one place'}
-            </p>
+        {/* Header: tabs + close */}
+        <div className="px-5 py-3 border-b border-border bg-surface-white flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTab('providers')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-md transition-colors ${
+                tab === 'providers' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-heading hover:bg-surface'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              {language === 'zh' ? '模型供应商' : 'Providers'}
+            </button>
+            <button
+              onClick={() => setTab('skills')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-md transition-colors ${
+                tab === 'skills' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-heading hover:bg-surface'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {language === 'zh' ? 'Skills' : 'Skills'}
+            </button>
           </div>
           <button onClick={onClose} className="p-1.5 text-text-muted hover:text-red-500 transition-colors rounded hover:bg-surface">
             <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="px-6 flex items-center gap-1 border-b border-border bg-surface-white">
-          <button
-            onClick={() => setTab('providers')}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-colors ${
-              tab === 'providers' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-heading'
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            {language === 'zh' ? '模型供应商' : 'Providers'}
-          </button>
-          <button
-            onClick={() => setTab('skills')}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-colors ${
-              tab === 'skills' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-heading'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            {language === 'zh' ? 'Skills（提示词预设）' : 'Skills (prompt presets)'}
           </button>
         </div>
 

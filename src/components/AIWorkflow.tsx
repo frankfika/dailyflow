@@ -11,7 +11,6 @@ import { getTodayStr, getWeekRange } from '../utils/tagColors';
 
 interface AIWorkflowProps {
   language: 'en' | 'zh';
-  aiProvider: string;
   aiApiKey: string;
   aiModel: string;
   aiBaseUrl?: string;
@@ -25,7 +24,6 @@ interface AIWorkflowProps {
 
 export function AIWorkflow({
   language,
-  aiProvider,
   aiApiKey,
   aiModel,
   aiBaseUrl,
@@ -114,18 +112,14 @@ export function AIWorkflow({
     setOutput('');
 
     try {
-      const isAnthropicFormat = aiProvider === 'anthropic' || aiModel.includes('claude');
-
       const { summary } = await aiApi.summarize({
-        provider: aiProvider as any,
         apiKey: aiApiKey,
         model: aiModel,
-        baseUrl: aiBaseUrl,
+        baseUrl: aiBaseUrl || '',
         systemPrompt: language === 'zh'
           ? '你是一位专业的工作助手，请按照用户要求处理内容。'
           : 'You are a professional work assistant. Process content according to user requirements.',
         userPrompt: `${aiStep.config.promptText}\n\n---\n\n${inputPreview}`,
-        format: isAnthropicFormat ? 'anthropic' : 'openai',
       });
 
       setOutput(summary);

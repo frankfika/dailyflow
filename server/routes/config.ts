@@ -2,12 +2,38 @@ import { Router } from 'express';
 import { loadConfig, saveConfig, generateWorkspaceId } from '../services/config.js';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Workspace } from '../types/task.js';
 
 const execAsync = promisify(exec);
 const router = Router();
+
+/**
+ * Normalize a workspace path so equivalent inputs compare equal:
+ * expands ~, resolves to absolute, strips trailing slash, follows symlinks,
+ * and on macOS/Windows lowercases for case-insensitive comparison.
+ * Falls back to the absolute form if realpath fails (path may not exist yet).
+ */
+async function canonicalizeWorkspacePath(input: string): Promise<string> {
+  let p = input.trim();
+  if (p.startsWith('~')) p = path.join(os.homedir(), p.slice(1));
+  let abs = path.resolve(p);
+  try {
+    abs = await fs.realpath(abs);
+  } catch {
+    // path may not exist yet — keep resolved form
+  }
+  // Drop trailing separator (except root)
+  if (abs.length > 1 && (abs.endsWith('/') || abs.endsWith('\\'))) {
+    abs = abs.slice(0, -1);
+  }
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    abs = abs.toLowerCase();
+  }
+  return abs;
+}
 
 /**
  * GET /api/config - 获取当前配置
@@ -295,14 +321,26 @@ router.post('/workspaces', async (req, res) => {
     if (!wsPath || !wsPath.trim()) {
       return res.status(400).json({ error: 'Path is required' });
     }
-    const trimmedPath = wsPath.trim();
+    const trimmedPath = wsPath.trim().replace(/[/\\]+$/, '') || wsPath.trim();
     const result = await ensureDirectory(trimmedPath);
     if (!result.ok) return res.status(400).json({ error: result.error });
 
     const config = await loadConfig();
     const workspaces = config.workspaces ? [...config.workspaces] : [];
-    if (workspaces.some(w => w.path === trimmedPath)) {
-      return res.status(400).json({ error: 'Workspace with this path already exists' });
+
+    // Compare canonical forms so /foo, /foo/, /Foo, ~/foo, and symlinked variants all collapse.
+    const incomingCanon = await canonicalizeWorkspacePath(trimmedPath);
+    const existingCanons = await Promise.all(
+      workspaces.map(w => canonicalizeWorkspacePath(w.path))
+    );
+    const dupIdx = existingCanons.findIndex(c => c === incomingCanon);
+    if (dupIdx !== -1) {
+      const existing = workspaces[dupIdx];
+      return res.status(409).json({
+        error: 'Workspace already exists',
+        workspace: existing,
+        duplicate: true,
+      });
     }
 
     const ws: Workspace = {

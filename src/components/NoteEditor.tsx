@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   X, FileText, Mic, Sparkles, Calendar, Clock, Check,
   Link2, Tag, Users, ArrowLeft, Eye, Edit3, Trash2,
-  Wand2, Loader2,
+  Wand2, Loader2, MessageSquare, ListChecks, ChevronDown,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { NoteData, PromptTemplateData } from '../api/client';
 import { promptsApi, aiApi } from '../api/client';
 import { getTagColor } from '../utils/tagColors';
@@ -22,13 +23,16 @@ interface NoteEditorProps {
   activeContext: 'work' | 'life';
   availableTasks?: AvailableTask[];
   availableTags?: string[];
-  aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
   aiApiKey?: string;
   aiModel?: string;
   aiBaseUrl?: string;
+  defaultDate?: string;
+  defaultLinkedTaskIds?: string[];
+  defaultTitle?: string;
   onSave: (data: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>) => void;
   onClose: () => void;
   onDelete?: () => void;
+  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type'] }) => void;
 }
 
 const typeOptions = [
@@ -43,28 +47,31 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   activeContext,
   availableTasks = [],
   availableTags = [],
-  aiProvider,
   aiApiKey,
   aiModel,
   aiBaseUrl,
+  defaultDate,
+  defaultLinkedTaskIds,
+  defaultTitle,
   onSave,
   onClose,
   onDelete,
+  onSendToChat,
 }) => {
   const today = new Date().toISOString().slice(0, 10);
   const nowTime = new Date().toTimeString().slice(0, 5);
 
   const [type, setType] = useState<NoteData['type']>(note?.type || 'note');
-  const [title, setTitle] = useState(note?.title || '');
+  const [title, setTitle] = useState(note?.title || defaultTitle || '');
   const [body, setBody] = useState(note?.body || '');
-  const [date, setDate] = useState(note?.date || today);
+  const [date, setDate] = useState(note?.date || defaultDate || today);
   const [time, setTime] = useState(note?.time || nowTime);
   const [endTime, setEndTime] = useState(note?.endTime || '');
   const [tags, setTags] = useState<string[]>(note?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [participants, setParticipants] = useState<string[]>(note?.participants || []);
   const [participantInput, setParticipantInput] = useState('');
-  const [linkedTaskIds, setLinkedTaskIds] = useState<string[]>(note?.linkedTaskIds || []);
+  const [linkedTaskIds, setLinkedTaskIds] = useState<string[]>(note?.linkedTaskIds || defaultLinkedTaskIds || []);
   const [previewMode, setPreviewMode] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
 
@@ -115,7 +122,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFormat = async (promptId: string) => {
-    if (!aiProvider || !aiApiKey) {
+    if (!aiApiKey || !aiBaseUrl) {
       setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -128,20 +135,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setShowFormatPanel(false);
 
     try {
-      const isAnthropicFormat = aiProvider === 'anthropic' || (aiProvider === 'custom' && aiModel?.includes('claude'));
       const systemPrompt = language === 'zh'
         ? '你是一位专业的笔记整理助手。请根据用户要求对笔记进行格式化整理，返回完整的 Markdown 格式内容。保留原标题作为一级标题。'
         : 'You are a professional note formatting assistant. Please format and reorganize the note according to the user\'s request. Return the complete content in Markdown format. Preserve the original title as a level-1 heading.';
       const userPrompt = `${promptTemplate.prompt}\n\n---\n\n${body}`;
 
       const { summary } = await aiApi.summarize({
-        provider: aiProvider,
         apiKey: aiApiKey,
         model: aiModel,
         baseUrl: aiBaseUrl,
         systemPrompt,
         userPrompt,
-        format: isAnthropicFormat ? 'anthropic' : 'openai',
       });
 
       setBody(summary);
@@ -151,6 +155,89 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     } finally {
       setIsFormatting(false);
     }
+  };
+
+  // Built-in smart AI actions — independent of user Skills library.
+  // Each action runs the AI and may also reshape note metadata (type, etc.).
+  const runSmartAction = async (action: 'meeting' | 'todos' | 'summary' | 'polish') => {
+    if (!aiApiKey || !aiBaseUrl) {
+      setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
+      return;
+    }
+    if (!body.trim()) {
+      setFormatError(language === 'zh' ? '正文为空，无法整理' : 'Body is empty');
+      return;
+    }
+    setIsFormatting(true);
+    setFormatError('');
+    setShowFormatPanel(false);
+
+    const cfg = {
+      meeting: {
+        zh: '你是会议纪要专家。把以下原始会议记录整理为标准会议纪要：会议主题、时间、参会人员、议题、关键决定、待办事项（每项标负责人和截止日期）、下次会议安排。返回完整 Markdown，保留一级标题。',
+        en: 'You are a meeting-notes expert. Reformat the raw meeting record into: topic, time, participants, agenda, decisions, action items (each with owner & due date), next meeting. Return full Markdown, preserve level-1 heading.',
+        type: 'meeting_note' as NoteData['type'],
+      },
+      todos: {
+        zh: '从笔记中提取所有待办事项、行动项、承诺，整理成清晰的 Markdown 任务清单（- [ ] 格式），保留上下文。返回完整 Markdown，保留一级标题。',
+        en: 'Extract all action items, todos, and commitments. Output as Markdown task list (- [ ] format), preserve context. Return full Markdown, preserve level-1 heading.',
+        type: 'note' as NoteData['type'],
+      },
+      summary: {
+        zh: '把以下内容总结为结构化摘要：核心要点、关键决策、风险与未决事项、下一步。返回完整 Markdown，保留一级标题。',
+        en: 'Summarize into a structured brief: key points, decisions, risks/open issues, next steps. Return full Markdown, preserve level-1 heading.',
+        type: 'summary' as NoteData['type'],
+      },
+      polish: {
+        zh: '润色优化以下笔记。修正语法，提升表达清晰度，保持原意和结构不变。返回完整 Markdown，保留一级标题。',
+        en: 'Polish this note. Fix grammar, improve clarity, preserve meaning and structure. Return full Markdown, preserve level-1 heading.',
+        type, // keep current
+      },
+    } as const;
+
+    try {
+      const { zh, en, type: nextType } = cfg[action];
+      const systemPrompt = language === 'zh'
+        ? '你是一位专业的笔记整理助手。返回完整的 Markdown 内容，无任何前后修饰。'
+        : 'You are a professional note formatting assistant. Return only the complete Markdown content with no preamble.';
+      const userPrompt = `${language === 'zh' ? zh : en}\n\n---\n\n${body}`;
+
+      const { summary } = await aiApi.summarize({
+        apiKey: aiApiKey,
+        model: aiModel,
+        baseUrl: aiBaseUrl,
+        systemPrompt,
+        userPrompt,
+      });
+      setBody(summary);
+      if (nextType !== type) setType(nextType);
+    } catch (err: any) {
+      console.error('Smart action failed:', err);
+      setFormatError(err.message || String(err));
+    } finally {
+      setIsFormatting(false);
+    }
+  };
+
+  const hasUnsavedChanges = !!note && (
+    note.title !== title ||
+    note.body !== body ||
+    note.type !== type ||
+    JSON.stringify(note.tags || []) !== JSON.stringify(tags) ||
+    JSON.stringify(note.linkedTaskIds || []) !== JSON.stringify(linkedTaskIds)
+  );
+
+  const handleSendToChat = () => {
+    if (!onSendToChat) return;
+    if (hasUnsavedChanges) {
+      const ok = window.confirm(
+        language === 'zh'
+          ? '笔记有未保存的修改，确定要发送到对话吗？'
+          : 'This note has unsaved changes. Send to chat anyway?'
+      );
+      if (!ok) return;
+    }
+    onSendToChat({ title, body, type });
   };
 
   const addTag = (value: string) => {
@@ -191,7 +278,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </button>
           )}
 
-          {/* AI Format button */}
+          {/* AI Assistant button — built-in smart actions + custom prompts */}
           <div className="relative">
             <button
               ref={formatBtnRef}
@@ -201,14 +288,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 setFormatError('');
               }}
               disabled={isFormatting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold  text-accent hover:bg-accent/10 rounded-md transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/10 rounded-md transition-colors disabled:opacity-50"
             >
               {isFormatting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Wand2 className="w-3.5 h-3.5" />
               )}
-              {language === 'zh' ? 'AI 整理' : 'AI Format'}
+              {language === 'zh' ? 'AI 助手' : 'AI Assist'}
+              <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             <AnimatePresence>
@@ -218,32 +306,88 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.96 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-md shadow-sm p-3 z-30 min-w-[220px]"
+                  className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-md shadow-lg p-2 z-30 min-w-[260px]"
                 >
-                  <p className="text-xs  text-text-muted font-bold mb-2">
-                    {language === 'zh' ? '选择整理方式' : 'Choose format style'}
+                  <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                    {language === 'zh' ? '智能整理' : 'Smart actions'}
                   </p>
-                  {formatPrompts.length === 0 ? (
-                    <p className="text-xs text-text-muted py-1">
-                      {language === 'zh' ? '暂无格式提示词' : 'No format prompts yet'}
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {formatPrompts.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => handleFormat(p.id)}
-                          className="px-2.5 py-1 rounded-md text-xs font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
-                        >
-                          {p.name}
-                        </button>
-                      ))}
+                  <button
+                    onClick={() => runSmartAction('meeting')}
+                    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                  >
+                    <Mic className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '整理为会议纪要' : 'Format as meeting notes'}</div>
+                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '原始记录 → 议题/决定/待办' : 'Raw record → topics / decisions / actions'}</div>
                     </div>
+                  </button>
+                  <button
+                    onClick={() => runSmartAction('todos')}
+                    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                  >
+                    <ListChecks className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '提取待办' : 'Extract todos'}</div>
+                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => runSmartAction('summary')}
+                    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '生成总结' : 'Generate summary'}</div>
+                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 风险 / 下一步' : 'Key points / decisions / risks / next'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => runSmartAction('polish')}
+                    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '润色优化' : 'Polish'}</div>
+                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
+                    </div>
+                  </button>
+
+                  {formatPrompts.length > 0 && (
+                    <>
+                      <div className="border-t border-border/60 my-1.5" />
+                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                        {language === 'zh' ? '自定义 Skill' : 'Custom skills'}
+                      </p>
+                      <div className="flex flex-wrap gap-1 px-1">
+                        {formatPrompts.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => handleFormat(p.id)}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
+                          >
+                            {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+
+          {/* Send to AI Chat */}
+          {onSendToChat && (
+            <button
+              onClick={handleSendToChat}
+              disabled={!body.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-text-muted hover:text-accent hover:bg-accent/10 rounded-md transition-colors disabled:opacity-40"
+              title={language === 'zh' ? '把这篇笔记发到 AI 对话继续讨论' : 'Continue this note as an AI chat'}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              {language === 'zh' ? '发到对话' : 'Send to Chat'}
+            </button>
+          )}
 
           <button
             onClick={() => setPreviewMode(!previewMode)}
@@ -293,26 +437,29 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           {/* Metadata summary row (always visible, compact) */}
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Type */}
-            <div className="flex items-center gap-1">
-              {typeOptions.map(opt => {
-                const Icon = opt.icon;
-                const active = type === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setType(opt.value)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold  border transition-all ${
-                      active
-                        ? 'bg-accent text-white border-accent'
-                        : 'bg-surface text-text-muted border-border hover:border-accent/50'
-                    }`}
-                  >
-                    <Icon className="w-3 h-3" />
+            {/* Type — compact dropdown chip; AI Assist auto-sets it, manual change is rare */}
+            <div className="relative group">
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as NoteData['type'])}
+                className="appearance-none flex items-center gap-1 pl-7 pr-7 py-1 rounded-md text-xs font-bold border bg-surface text-text-muted border-border hover:border-accent/50 cursor-pointer focus:outline-none focus:border-accent"
+                title={language === 'zh' ? '类型' : 'Type'}
+              >
+                {typeOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
                     {language === 'zh' ? opt.labelZh : opt.label}
-                  </button>
+                  </option>
+                ))}
+              </select>
+              {/* Leading icon */}
+              {(() => {
+                const opt = typeOptions.find(o => o.value === type);
+                const Icon = opt?.icon || FileText;
+                return (
+                  <Icon className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted" />
                 );
-              })}
+              })()}
+              <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
             </div>
 
             {/* Date */}
@@ -466,10 +613,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <div className="border-t border-border/50" />
 
           {/* Content area */}
-          <div className="min-h-[300px]">
+          <div className="min-h-[300px] relative">
+            {isFormatting && (
+              <div className="absolute inset-0 z-10 bg-surface/70 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 rounded">
+                <Loader2 className="w-6 h-6 animate-spin text-accent" />
+                <span className="text-xs font-bold text-text-muted">
+                  {language === 'zh' ? 'AI 整理中...' : 'AI formatting...'}
+                </span>
+              </div>
+            )}
             {previewMode ? (
               <div className="prose prose-slate max-w-none">
-                <ReactMarkdown>{bodyWithoutHeading || body}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{bodyWithoutHeading || body}</ReactMarkdown>
               </div>
             ) : (
               <textarea
