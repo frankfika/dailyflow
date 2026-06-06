@@ -211,4 +211,128 @@ describe('TaskCard completion comment', () => {
     expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
     expect(onEdit).not.toHaveBeenCalled();
   });
+
+  it('suppresses future prompts when "Don\'t ask again" is clicked', async () => {
+    const onEdit = vi.fn();
+    const props = createProps({
+      task: { ...baseTask, status: 'pending' as const },
+      onEdit,
+    });
+    const { rerender } = render(<TaskCard {...props} />);
+
+    // Complete the task
+    const toggleBtn = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleBtn);
+    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const }, onEdit })} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    // Click "Don't ask again"
+    const suppressBtn = screen.getByText(/Don't ask again/i);
+    fireEvent.click(suppressBtn);
+
+    expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
+
+    // Complete another task — should NOT prompt again
+    const props2 = createProps({
+      task: { ...baseTask, id: 'task-2', status: 'pending' as const },
+      onEdit,
+    });
+    const { rerender: rerender2 } = render(<TaskCard {...props2} />);
+    const toggleBtn2 = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleBtn2);
+    rerender2(<TaskCard {...createProps({ task: { ...baseTask, id: 'task-2', status: 'done' as const }, onEdit })} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('TaskCard editing', () => {
+  it('enters edit mode and saves changes', async () => {
+    const onEdit = vi.fn();
+    const props = createProps({ onEdit });
+    render(<TaskCard {...props} />);
+
+    // Click edit button (3rd action button: comment, edit, delete)
+    const editBtn = screen.getByTestId('icon-edit').parentElement;
+    fireEvent.click(editBtn!);
+
+    // Should show textarea with current title
+    const textarea = screen.getByDisplayValue('Test task');
+    expect(textarea).toBeInTheDocument();
+
+    // Modify content
+    fireEvent.change(textarea, { target: { value: 'Updated task\nNew description' } });
+
+    // Click Save button to submit
+    const saveBtn = screen.getByText('Save');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(onEdit).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Updated task', description: 'New description' }),
+      );
+    });
+  });
+
+  it('cancels edit with Escape', () => {
+    const onEdit = vi.fn();
+    const props = createProps({ onEdit });
+    render(<TaskCard {...props} />);
+
+    const editBtn = screen.getByTestId('icon-edit').parentElement;
+    fireEvent.click(editBtn!);
+
+    const textarea = screen.getByDisplayValue('Test task');
+    fireEvent.change(textarea, { target: { value: 'Modified' } });
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByText('Test task')).toBeInTheDocument();
+  });
+});
+
+describe('TaskCard delete', () => {
+  it('confirms before deleting', async () => {
+    const onDelete = vi.fn();
+
+    const props = createProps({ onDelete });
+    render(<TaskCard {...props} />);
+
+    // Click delete button — enters confirm state
+    const deleteBtn = screen.getByTestId('icon-trash').parentElement;
+    fireEvent.click(deleteBtn!);
+
+    // Confirm state shows "Confirm?" button
+    const confirmBtn = screen.getByText(/Confirm/i);
+    fireEvent.click(confirmBtn!);
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('cancels delete when confirm is declined', async () => {
+    const onDelete = vi.fn();
+
+    const props = createProps({ onDelete });
+    render(<TaskCard {...props} />);
+
+    const deleteBtn = screen.getByTestId('icon-trash').parentElement;
+    fireEvent.click(deleteBtn!);
+
+    // Blur the confirm button to cancel
+    const confirmBtn = screen.getByText(/Confirm/i);
+    fireEvent.blur(confirmBtn!);
+
+    await waitFor(() => {
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+  });
 });
