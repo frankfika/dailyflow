@@ -148,6 +148,7 @@ export default function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
+  const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
   const [githubToken, setGithubToken] = useState<string>('');
@@ -577,6 +578,7 @@ export default function App() {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     const newStatus = task.status === 'todo' ? 'done' : 'todo';
+    const wasUndone = task.status !== 'done';
     try {
       await tasksApi.updateStatus(id, currentFileDate, newStatus);
       setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
@@ -587,6 +589,15 @@ export default function App() {
         setTasks(data.tasks as Task[]);
         setLastSyncedMD(data.content);
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+      // Prompt for completion comment when task is newly done and has no comment
+      if (wasUndone && !task.comment) {
+        const suppressed = (() => {
+          try { return sessionStorage.getItem('df_suppress_completion_comments') === '1'; } catch { return false; }
+        })();
+        if (!suppressed) {
+          setCompletionPromptTaskIds(prev => new Set(prev).add(id));
+        }
       }
     } catch (e) {
       console.error('Failed to toggle task', e);
@@ -1184,6 +1195,8 @@ export default function App() {
                                 onDelete={() => handleDeleteTask(task.id)}
                                 onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
                                 onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
+                                showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                                onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
                               />
                             ))}
                           </AnimatePresence>
@@ -1220,6 +1233,8 @@ export default function App() {
                                       onDelete={() => handleDeleteTask(task.id)}
                                       onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
                                       onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
+                                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                                      onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
                                     />
                                   ))}
                                 </motion.div>
@@ -1262,6 +1277,8 @@ export default function App() {
                                 onDelete={() => handleDeleteTask(task.id)}
                                 onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
                                 onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
+                                showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                                onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
                               />
                             ))}
                           </AnimatePresence>
@@ -1291,6 +1308,8 @@ export default function App() {
                                       onDelete={() => handleDeleteTask(task.id)}
                                       onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
                                       onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
+                                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                                      onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
                                     />
                                   ))}
                                 </motion.div>

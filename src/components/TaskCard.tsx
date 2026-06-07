@@ -32,6 +32,8 @@ interface TaskCardProps {
   onDelete: () => void;
   onCreateLinkedNote?: () => void;
   onShowLinkedNotes?: () => void;
+  showCompletionPrompt?: boolean;
+  onCompletionPromptClosed?: () => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -45,6 +47,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onDelete,
   onCreateLinkedNote,
   onShowLinkedNotes,
+  showCompletionPrompt,
+  onCompletionPromptClosed,
 }) => {
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
@@ -57,6 +61,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState<string>(task.deadline || '');
   const [tagInputValue, setTagInputValue] = useState('');
+
+  // Sync external completion prompt signal with local state
+  useEffect(() => {
+    if (showCompletionPrompt && !task.comment) {
+      setShowComment(true);
+    }
+  }, [showCompletionPrompt, task.comment]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -96,13 +107,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     >
       <button
         onClick={() => {
-          const wasUndone = !isDone;
           onToggle();
-          // After completing a task, prompt for a quick "what / how" note.
-          // Only if no comment exists yet — don't bother users on uncheck → check toggles.
-          if (wasUndone && !task.comment && !isCommentSuppressed()) {
-            setTimeout(() => setShowComment(true), 600);
-          }
         }}
         className="mt-[2px] flex-shrink-0 hover:scale-105 active:scale-95 transition-transform focus:outline-none"
       >
@@ -273,11 +278,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     if (e.key === 'Escape') {
                       setShowComment(false);
                       setCommentText(task.comment || '');
+                      onCompletionPromptClosed?.();
                     }
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
                       onEdit({ comment: commentText.trim() || undefined });
                       setShowComment(false);
+                      onCompletionPromptClosed?.();
                     }
                   }}
                   placeholder={isDone
@@ -288,7 +295,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 />
                 <div className="flex items-center justify-between">
                   <button
-                    onClick={() => { suppressComments(); setShowComment(false); setCommentText(task.comment || ''); }}
+                    onClick={() => { suppressComments(); setShowComment(false); setCommentText(task.comment || ''); onCompletionPromptClosed?.(); }}
                     className="flex items-center gap-1 text-[10px] text-text-muted/60 hover:text-text-muted transition-colors"
                     title={language === 'zh' ? '本次会话不再自动弹出' : 'Stop auto-prompting this session'}
                   >
@@ -297,7 +304,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   </button>
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => { setShowComment(false); setCommentText(task.comment || ''); }}
+                      onClick={() => { setShowComment(false); setCommentText(task.comment || ''); onCompletionPromptClosed?.(); }}
                       className="px-2 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
                     >
                       {language === 'zh' ? '取消' : 'Cancel'}
@@ -306,6 +313,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     onClick={() => {
                       onEdit({ comment: commentText.trim() || undefined });
                       setShowComment(false);
+                      onCompletionPromptClosed?.();
                     }}
                     className={`px-2.5 py-1 text-white rounded text-[11px] font-medium transition-colors ${isDone ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-accent hover:bg-accent/90'}`}
                   >

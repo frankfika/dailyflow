@@ -62,6 +62,8 @@ const createProps = (overrides: any = {}) => ({
   onToggle: vi.fn(),
   onEdit: vi.fn(),
   onDelete: vi.fn(),
+  showCompletionPrompt: false,
+  onCompletionPromptClosed: vi.fn(),
   ...overrides,
 });
 
@@ -74,64 +76,31 @@ describe('TaskCard completion comment', () => {
     vi.useRealTimers();
   });
 
-  it('opens comment textarea when completing a task without existing comment', async () => {
+  it('opens comment textarea when showCompletionPrompt becomes true', async () => {
     const props = createProps();
     const { rerender } = render(<TaskCard {...props} />);
 
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-    expect(props.onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
 
-    // Simulate parent re-rendering with done status
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const } })} />);
+    rerender(<TaskCard {...createProps({ showCompletionPrompt: true, task: { ...baseTask, status: 'done' as const } })} />);
 
     await act(async () => {
-      vi.advanceTimersByTime(700);
+      vi.advanceTimersByTime(10);
     });
 
-    // After completion, the done-style placeholder should appear
     expect(screen.getByPlaceholderText(/How did you resolve/i)).toBeInTheDocument();
   });
 
-  it('does NOT open comment textarea when task already has a comment', async () => {
+  it('does NOT open comment textarea when task already has a comment even if prop is true', async () => {
     const props = createProps({
-      task: { ...baseTask, comment: 'Already noted' },
+      task: { ...baseTask, status: 'done' as const, comment: 'Already noted' },
+      showCompletionPrompt: true,
     });
-    const { rerender } = render(<TaskCard {...props} />);
+    render(<TaskCard {...props} />);
 
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const, comment: 'Already noted' } })} />);
-
-    await act(async () => {
-      vi.advanceTimersByTime(700);
-    });
-
-    // Should not show the completion prompt because comment already exists
+    // Should show existing comment display, not the textarea prompt
     expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
-    // Existing comment should still be visible
     expect(screen.getByText('Already noted')).toBeInTheDocument();
-  });
-
-  it('does NOT open comment textarea when unchecking a done task', async () => {
-    const props = createProps({
-      task: { ...baseTask, status: 'done' as const },
-    });
-    const { rerender } = render(<TaskCard {...props} />);
-
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-
-    // Simulate parent re-rendering with pending status (unchecking)
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'pending' as const } })} />);
-
-    await act(async () => {
-      vi.advanceTimersByTime(700);
-    });
-
-    // Unchecking (done -> undone) should not trigger comment prompt
-    expect(screen.queryByPlaceholderText(/Add a note/i)).not.toBeInTheDocument();
   });
 
   it('renders resolution badge for done task with comment', () => {
@@ -156,20 +125,17 @@ describe('TaskCard completion comment', () => {
 
   it('allows editing and saving a completion comment', async () => {
     const onEdit = vi.fn();
+    const onCompletionPromptClosed = vi.fn();
     const props = createProps({
-      task: { ...baseTask, status: 'pending' as const },
+      task: { ...baseTask, status: 'done' as const },
+      showCompletionPrompt: true,
       onEdit,
+      onCompletionPromptClosed,
     });
-    const { rerender } = render(<TaskCard {...props} />);
-
-    // Complete the task
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const }, onEdit })} />);
+    render(<TaskCard {...props} />);
 
     await act(async () => {
-      vi.advanceTimersByTime(700);
+      vi.advanceTimersByTime(10);
     });
 
     const textarea = screen.getByPlaceholderText(/How did you resolve/i);
@@ -183,23 +149,22 @@ describe('TaskCard completion comment', () => {
         expect.objectContaining({ comment: 'Resolved via patch' }),
       );
     });
+    expect(onCompletionPromptClosed).toHaveBeenCalled();
   });
 
   it('cancels comment editing without saving', async () => {
     const onEdit = vi.fn();
+    const onCompletionPromptClosed = vi.fn();
     const props = createProps({
-      task: { ...baseTask, status: 'pending' as const },
+      task: { ...baseTask, status: 'done' as const },
+      showCompletionPrompt: true,
       onEdit,
+      onCompletionPromptClosed,
     });
-    const { rerender } = render(<TaskCard {...props} />);
-
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const }, onEdit })} />);
+    render(<TaskCard {...props} />);
 
     await act(async () => {
-      vi.advanceTimersByTime(700);
+      vi.advanceTimersByTime(10);
     });
 
     const textarea = screen.getByPlaceholderText(/How did you resolve/i);
@@ -210,46 +175,27 @@ describe('TaskCard completion comment', () => {
 
     expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
     expect(onEdit).not.toHaveBeenCalled();
+    expect(onCompletionPromptClosed).toHaveBeenCalled();
   });
 
-  it('suppresses future prompts when "Don\'t ask again" is clicked', async () => {
-    const onEdit = vi.fn();
+  it('closes prompt and calls onCompletionPromptClosed when "Don\'t ask again" is clicked', async () => {
+    const onCompletionPromptClosed = vi.fn();
     const props = createProps({
-      task: { ...baseTask, status: 'pending' as const },
-      onEdit,
+      task: { ...baseTask, status: 'done' as const },
+      showCompletionPrompt: true,
+      onCompletionPromptClosed,
     });
-    const { rerender } = render(<TaskCard {...props} />);
-
-    // Complete the task
-    const toggleBtn = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn);
-    rerender(<TaskCard {...createProps({ task: { ...baseTask, status: 'done' as const }, onEdit })} />);
+    render(<TaskCard {...props} />);
 
     await act(async () => {
-      vi.advanceTimersByTime(700);
+      vi.advanceTimersByTime(10);
     });
 
-    // Click "Don't ask again"
     const suppressBtn = screen.getByText(/Don't ask again/i);
     fireEvent.click(suppressBtn);
 
     expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
-
-    // Complete another task — should NOT prompt again
-    const props2 = createProps({
-      task: { ...baseTask, id: 'task-2', status: 'pending' as const },
-      onEdit,
-    });
-    const { rerender: rerender2 } = render(<TaskCard {...props2} />);
-    const toggleBtn2 = screen.getAllByRole('button')[0];
-    fireEvent.click(toggleBtn2);
-    rerender2(<TaskCard {...createProps({ task: { ...baseTask, id: 'task-2', status: 'done' as const }, onEdit })} />);
-
-    await act(async () => {
-      vi.advanceTimersByTime(700);
-    });
-
-    expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
+    expect(onCompletionPromptClosed).toHaveBeenCalled();
   });
 });
 
@@ -259,7 +205,7 @@ describe('TaskCard editing', () => {
     const props = createProps({ onEdit });
     render(<TaskCard {...props} />);
 
-    // Click edit button (3rd action button: comment, edit, delete)
+    // Click edit button
     const editBtn = screen.getByTestId('icon-edit').parentElement;
     fireEvent.click(editBtn!);
 
