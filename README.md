@@ -10,7 +10,7 @@
 
 ### Markdown 驱动，自动迁移未完成任务，让你专注于当下
 
-![Version](https://img.shields.io/badge/Version-0.6.5-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.6.6-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -117,7 +117,7 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ### 9. Git 同步
 
-一键提交到 GitHub，自动备份你的所有笔记和任务数据。顶部状态栏实时显示同步状态和最近同步时间，启动时自动验证连接状态，保存配置时也会自动重测，无需手动点击「测试连接」。
+一键提交到 GitHub，自动备份你的所有笔记和任务数据。侧边栏底部显示同步状态（绿色=已是最新 / 橙色=未提交的更改）和最近同步时间，启动时自动验证连接状态，保存配置时也会自动重测，无需手动点击「测试连接」。
 
 ### 10. IPFS 去中心化备份
 

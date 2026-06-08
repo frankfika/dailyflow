@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.6.5-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.6.6-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -117,7 +117,7 @@ Filter content by tags directly within Daily Notes and Notes pages:
 
 ### 9. Git Sync
 
-One-click commit to GitHub. Automatic backup for all your notes and task data. The top status bar shows sync status and last sync time in real time. Connection auto-verifies on launch and config save — no need to hit "Test Connection" manually.
+One-click commit to GitHub. Automatic backup for all your notes and task data. The sidebar bottom shows sync status (green = up to date / orange = uncommitted changes) and last sync time. Connection auto-verifies on launch and config save — no need to hit "Test Connection" manually.
 
 ### 10. IPFS Decentralized Backup
 
