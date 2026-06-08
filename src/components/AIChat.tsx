@@ -572,34 +572,6 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
           </div>
         </header>
 
-        {/* Context pills row (only if any) */}
-        {activeSession && activeSession.contextItems.length > 0 && (
-          <div className="px-4 md:px-6 py-2 border-b border-border bg-background flex items-center gap-1.5 flex-wrap shrink-0">
-            <span className="text-[10px] uppercase tracking-wider text-text-muted/70 font-bold mr-1">
-              {language === 'zh' ? '上下文' : 'Context'}
-            </span>
-            {activeSession.contextItems.map(item => (
-              <span
-                key={item.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-surface border border-border rounded-full"
-              >
-                {item.type === 'today-tasks' && <Calendar className="w-3 h-3" />}
-                {item.type === 'date-tasks' && <Calendar className="w-3 h-3" />}
-                {item.type === 'note' && <FileText className="w-3 h-3" />}
-                {item.type === 'project' && <Folder className="w-3 h-3" />}
-                {item.type === 'custom-text' && <FileText className="w-3 h-3" />}
-                <span className="text-text-heading">{item.label}</span>
-                <button
-                  onClick={() => handleRemoveContext(item.id)}
-                  className="text-text-muted hover:text-red-500 transition-colors ml-0.5"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           {!activeSession || activeSession.messages.length === 0 ? (
@@ -747,6 +719,35 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
         {/* Input area — composer card */}
         <div className="px-4 md:px-8 pb-4 md:pb-6 pt-2 shrink-0">
           <div className="w-full">
+            {/* Context pills — sit right above the textarea, where the user types */}
+            {activeSession && activeSession.contextItems.length > 0 && (
+              <div className="mb-1.5 flex items-center gap-1.5 flex-wrap px-1">
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted/70 font-bold mr-0.5">
+                  {language === 'zh' ? '上下文' : 'Context'}
+                </span>
+                {activeSession.contextItems.map(item => (
+                  <span
+                    key={item.id}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] bg-accent/10 border border-accent/20 text-accent rounded-full"
+                  >
+                    {item.type === 'today-tasks' && <Calendar className="w-3 h-3" />}
+                    {item.type === 'date-tasks' && <Calendar className="w-3 h-3" />}
+                    {item.type === 'note' && <FileText className="w-3 h-3" />}
+                    {item.type === 'project' && <Folder className="w-3 h-3" />}
+                    {item.type === 'custom-text' && <FileText className="w-3 h-3" />}
+                    <span className="max-w-[160px] truncate font-medium">{item.label}</span>
+                    <button
+                      onClick={() => handleRemoveContext(item.id)}
+                      className="text-accent/70 hover:text-red-500 transition-colors ml-0.5"
+                      title={language === 'zh' ? '移除' : 'Remove'}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {pendingSkillId && activeSkill && (
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-accent/10 text-accent rounded">
@@ -792,11 +793,20 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
                 {/* Add context */}
                 <button
                   onClick={() => setShowContextPicker(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-text-muted hover:text-accent hover:bg-accent/5 rounded-lg transition-colors"
+                  className={`relative flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    (activeSession?.contextItems.length || 0) > 0
+                      ? 'text-accent bg-accent/10 hover:bg-accent/15'
+                      : 'text-text-muted hover:text-accent hover:bg-accent/5'
+                  }`}
                   title={language === 'zh' ? '挂载上下文' : 'Attach context'}
                 >
                   <Paperclip className="w-3.5 h-3.5" />
                   {language === 'zh' ? '上下文' : 'Context'}
+                  {(activeSession?.contextItems.length || 0) > 0 && (
+                    <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-accent text-white">
+                      {activeSession!.contextItems.length}
+                    </span>
+                  )}
                 </button>
 
                 {/* Skill picker */}
