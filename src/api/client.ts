@@ -432,6 +432,70 @@ export interface PromptTemplateData {
 }
 
 /**
+ * Client-side skill usage tracking. Stored in localStorage as a map of
+ * skill id → { count, lastUsedAt }.
+ *
+ * Skills are ranked by a combined score (see `sortSkillsByUsage`):
+ *   score = log(count + 1) * 0.4 + recency * 0.6
+ * where recency is a 0..1 decay based on how recently the skill was used
+ * (1.0 if just used, decays to 0 over ~30 days).
+ */
+export interface SkillUsageStat {
+  count: number;
+  lastUsedAt: number; // ms epoch
+}
+
+export type SkillUsageMap = Record<string, SkillUsageStat>;
+
+const SKILL_USAGE_KEY = 'df_skill_usage';
+
+export function loadSkillUsage(): SkillUsageMap {
+  try {
+    const raw = localStorage.getItem(SKILL_USAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+}
+
+export function recordSkillUse(skillId: string): void {
+  const map = loadSkillUsage();
+  const prev = map[skillId] || { count: 0, lastUsedAt: 0 };
+  map[skillId] = { count: prev.count + 1, lastUsedAt: Date.now() };
+  try {
+    localStorage.setItem(SKILL_USAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+/**
+ * Rank skills by combined "recently used" + "frequently used" score.
+ * Unused skills fall to the bottom but still respect their natural order
+ * (e.g. by name or createdAt).
+ */
+export function sortSkillsByUsage(
+  skills: PromptTemplateData[],
+  usage: SkillUsageMap,
+  now: number = Date.now()
+): PromptTemplateData[] {
+  const HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  const score = (s: PromptTemplateData): number => {
+    const u = usage[s.id];
+    if (!u) return 0; // unused: bottom (but keep stable order via index)
+    const recency = Math.pow(0.5, (now - u.lastUsedAt) / HALF_LIFE_MS);
+    const freq = Math.log(u.count + 1);
+    return recency * 0.6 + freq * 0.4;
+  };
+  return [...skills]
+    .map((s, idx) => ({ s, idx, score: score(s) }))
+    .sort((a, b) => {
+      // Primary: higher score first
+      if (b.score !== a.score) return b.score - a.score;
+      // Tie: stable by original index
+      return a.idx - b.idx;
+    })
+    .map(x => x.s);
+}
+
+/**
  * 笔记操作 API
  */
 export const notesApi = {

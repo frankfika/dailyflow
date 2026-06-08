@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2, PanelLeftClose } from 'lucide-react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -82,10 +82,17 @@ export function Sidebar({
       {/* Sidebar */}
       <aside className={`fixed lg:relative inset-y-0 left-0 w-[230px] flex flex-col shrink-0 z-30 transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border/60' : '-translate-x-full lg:ml-[-230px] border-r-0'} bg-surface/85 backdrop-blur-xl`}>
         <div className="px-4 py-4 w-[230px] flex flex-col h-full">
-          {/* Logo */}
+          {/* Logo + collapse */}
           <div className="flex items-center gap-2 mb-3 px-1">
             <div className="w-6 h-6 bg-accent text-white flex items-center justify-center text-xs font-bold rounded-lg shadow-sm">D</div>
-            <span className="text-[13px] font-semibold text-text-heading tracking-tight">DailyFlow</span>
+            <span className="text-[13px] font-semibold text-text-heading tracking-tight flex-1">DailyFlow</span>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="hidden lg:flex p-1 text-text-muted hover:text-text-heading rounded transition-colors"
+              title={language === 'zh' ? '隐藏侧边栏' : 'Hide sidebar'}
+            >
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {workspaceSwitcher && (

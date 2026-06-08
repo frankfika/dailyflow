@@ -206,7 +206,7 @@ export function ContextPicker({
         <div className="flex-1 overflow-y-auto p-5 space-y-1.5">
           {tab === 'tasks' && (
             <>
-              {/* Today */}
+              {/* Today — all tasks */}
               {(() => {
                 const item: ContextItem = {
                   id: 'ctx_today_tasks',
@@ -218,16 +218,16 @@ export function ContextPicker({
                 return (
                   <button
                     onClick={() => toggleItem(item)}
-                    className={`w-full flex items-center gap-3 px-3 py-3 text-left border rounded-lg transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-3 text-left border-2 rounded-lg transition-all ${
                       sel
-                        ? 'border-accent bg-accent/5'
-                        : 'border-border hover:border-accent/30 hover:bg-surface-white'
+                        ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                        : 'border-border hover:border-accent/40 hover:bg-surface-white'
                     }`}
                   >
-                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                      sel ? 'bg-accent text-white' : 'border border-border bg-surface'
+                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                      sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
                     }`}>
-                      {sel && <Check className="w-3.5 h-3.5" />}
+                      {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                     </div>
                     <Calendar className="w-4 h-4 text-accent" />
                     <div className="flex-1">
@@ -242,7 +242,51 @@ export function ContextPicker({
                 );
               })()}
 
-              {filteredDates.map(date => {
+              {/* Individual pending tasks */}
+              {tasks.filter((t: any) => t.status !== 'done').slice(0, 50).map((task: any) => {
+                const item: ContextItem = {
+                  id: `ctx_task_${task.id}`,
+                  type: 'today-tasks',
+                  label: task.title,
+                  data: { taskId: task.id },
+                };
+                const sel = selectedIds.has(item.id);
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => toggleItem(item)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
+                      sel
+                        ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                        : 'border-border hover:border-accent/40 hover:bg-surface-white'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                      sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
+                    }`}>
+                      {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                      task.status === 'done' ? 'bg-accent border-accent' : 'border-border'
+                    }`}>
+                      {task.status === 'done' && <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs truncate ${task.status === 'done' ? 'line-through text-text-muted' : 'text-text-heading font-medium'}`}>
+                        {task.title}
+                      </div>
+                      {task.tags?.length > 0 && (
+                        <div className="text-[10px] text-text-muted mt-0.5 truncate">
+                          {task.tags.slice(0, 3).map((t: string) => `#${t}`).join(' ')}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Dates — list of all task days */}
+              {filteredDates.slice(0, 20).map(date => {
                 const item: ContextItem = {
                   id: `ctx_date_${date}`,
                   type: 'date-tasks',
@@ -254,16 +298,16 @@ export function ContextPicker({
                   <button
                     key={date}
                     onClick={() => toggleItem(item)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-left border rounded-lg transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
                       sel
-                        ? 'border-accent bg-accent/5'
-                        : 'border-border hover:border-accent/30 hover:bg-surface-white'
+                        ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                        : 'border-border hover:border-accent/40 hover:bg-surface-white'
                     }`}
                   >
-                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                      sel ? 'bg-accent text-white' : 'border border-border bg-surface'
+                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                      sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
                     }`}>
-                      {sel && <Check className="w-3.5 h-3.5" />}
+                      {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                     </div>
                     <Calendar className="w-3.5 h-3.5 text-text-muted" />
                     <div className="flex-1 text-xs">
@@ -295,16 +339,16 @@ export function ContextPicker({
                 <button
                   key={note.id}
                   onClick={() => toggleItem(item)}
-                  className={`w-full flex items-start gap-3 px-3 py-2 text-left border rounded-lg transition-all ${
+                  className={`w-full flex items-start gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
                     sel
-                      ? 'border-accent bg-accent/5'
-                      : 'border-border hover:border-accent/30 hover:bg-surface-white'
+                      ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                      : 'border-border hover:border-accent/40 hover:bg-surface-white'
                   }`}
                 >
-                  <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center transition-colors flex-shrink-0 ${
-                    sel ? 'bg-accent text-white' : 'border border-border bg-surface'
+                  <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                    sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
                   }`}>
-                    {sel && <Check className="w-3.5 h-3.5" />}
+                    {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                   </div>
                   <FileText className="w-3.5 h-3.5 text-text-muted mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -337,16 +381,16 @@ export function ContextPicker({
                 <button
                   key={project}
                   onClick={() => toggleItem(item)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-left border rounded-lg transition-all ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
                     sel
-                      ? 'border-accent bg-accent/5'
-                      : 'border-border hover:border-accent/30 hover:bg-surface-white'
+                      ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                      : 'border-border hover:border-accent/40 hover:bg-surface-white'
                   }`}
                 >
-                  <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                    sel ? 'bg-accent text-white' : 'border border-border bg-surface'
+                  <div className={`w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                    sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
                   }`}>
-                    {sel && <Check className="w-3.5 h-3.5" />}
+                    {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                   </div>
                   <Folder className="w-3.5 h-3.5 text-text-muted" />
                   <div className="flex-1 text-xs">

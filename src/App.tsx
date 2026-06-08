@@ -954,62 +954,16 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
-          <>
-        <header className={`h-16 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border z-10 shrink-0 transition-colors duration-700 bg-background`}>
-          <div className="flex items-center gap-3 md:gap-4 text-xs font-sans  font-bold overflow-hidden whitespace-nowrap">
-            <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
-              <Menu className="w-5 h-5"/>
-            </button>
-            <button 
-              onClick={() => {
-                setActiveTab('today');
-                setCurrentFileDate(getTodayStr());
-              }}
-              className="text-text-muted opacity-60 hover:opacity-100 hover:text-text-main transition-all hidden sm:inline shrink-0 cursor-pointer"
-              title={language === 'zh' ? '返回今日任务' : 'Return to today'}
-            >
-              {language === 'zh' ? '每日任务' : 'Daily Tasks'}
-            </button>
-            {activeTab === 'today' ? (
-              <>
-                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
-                <span className="text-accent truncate">{currentFileDate}.md</span>
-              </>
-            ) : activeTab === 'ai-chat' ? (
-              <>
-                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
-                <span className="text-accent truncate">AI</span>
-              </>
-            ) : (
-              <>
-                <span className="text-text-muted opacity-40 hidden sm:inline shrink-0">/</span>
-                <span className="text-accent truncate">{language === 'zh' ? '笔记' : 'Notes'}</span>
-              </>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-3 md:gap-4">
-            {activeTab === 'today' && (
-              <button
-                onClick={() => setHideDoneTasks(v => !v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                  hideDoneTasks
-                    ? 'bg-accent/10 text-accent'
-                    : 'text-text-muted hover:text-text-heading hover:bg-black/5'
-                }`}
-                title={language === 'zh' ? '隐藏已完成的任务' : 'Hide completed tasks'}
-                data-testid="hide-done-toggle"
-              >
-                {hideDoneTasks ? (language === 'zh' ? '显示全部' : 'Show all') : (language === 'zh' ? '隐藏已完成' : 'Hide done')}
-              </button>
-            )}
-            <ContextSwitcher
-              activeContext={activeContext}
-              onChange={setActiveContext}
-              language={language}
-            />
-          </div>
-        </header>
+        {/* Floating toggle button — show sidebar when hidden (Codex style) */}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="absolute top-3 left-3 z-20 p-2 rounded-md text-text-muted hover:text-text-heading hover:bg-black/5 transition-colors"
+            title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
 
         <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-4xl mx-auto w-full'}>
@@ -1492,7 +1446,6 @@ export default function App() {
             )}
           </div>
         </div>
-        </>
        </main>
 
       <SettingsModal

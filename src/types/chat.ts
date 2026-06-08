@@ -14,6 +14,7 @@ export interface ContextItem {
     noteId?: string;
     projectName?: string;
     text?: string;
+    taskId?: string;
   };
 }
 

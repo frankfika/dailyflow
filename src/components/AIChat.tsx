@@ -9,7 +9,7 @@ import {
   X, ChevronDown, Zap, Calendar, FileText, Folder, Bot, User,
   StopCircle, Copy, PanelLeftClose, PanelLeftOpen, Bookmark,
 } from 'lucide-react';
-import { aiApi, promptsApi, notesApi, type PromptTemplateData } from '../api/client';
+import { aiApi, promptsApi, notesApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
 import { loadProviderConfigs, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
@@ -130,7 +130,9 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
       setActiveSessionId(chatStore.activeSessionId || chatStore.sessions[0].id);
     }
 
-    promptsApi.getAll().then(setSkills).catch(err => console.error('Load skills failed:', err));
+    promptsApi.getAll()
+      .then(loaded => setSkills(sortSkillsByUsage(loaded, loadSkillUsage())))
+      .catch(err => console.error('Load skills failed:', err));
   }, []);
 
   useEffect(() => {
@@ -306,6 +308,15 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     setDraftSourceTitle(null);
     setIsStreaming(true);
     setPendingSkillId(null);
+    // Record skill usage (if any) and re-sort the skill list so the
+    // just-used one floats to the top next time the menu opens.
+    if (skillForThisMessage) {
+      recordSkillUse(skillForThisMessage.id);
+      setSkills(prev => sortSkillsByUsage(
+        prev.some(s => s.id === skillForThisMessage.id) ? prev : [...prev, skillForThisMessage],
+        loadSkillUsage()
+      ));
+    }
 
     const contextText = buildContextText(contextSnapshot);
     let userPrompt = userInputCopy;
@@ -400,7 +411,9 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     const ps = loadProviderConfigs();
     setProviders(ps.configs);
     setActiveProviderId(ps.activeId);
-    promptsApi.getAll().then(setSkills).catch(() => {});
+    promptsApi.getAll()
+      .then(loaded => setSkills(sortSkillsByUsage(loaded, loadSkillUsage())))
+      .catch(() => {});
   };
 
   return (
