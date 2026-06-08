@@ -6,7 +6,7 @@ import { getTagColor } from '../utils/tagColors';
 interface TagInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
-  availableTags: string[];
+  availableTags?: string[];
   language: 'en' | 'zh';
   placeholder?: string;
 }
@@ -17,7 +17,7 @@ export function TagInput({ tags, onChange, availableTags, language, placeholder 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const filteredTags = availableTags
+  const filteredTags = (availableTags || [])
     .filter(t => !tags.includes(t))
     .filter(t => t.toLowerCase().includes(inputValue.toLowerCase()));
 

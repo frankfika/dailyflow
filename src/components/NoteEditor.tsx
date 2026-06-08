@@ -82,6 +82,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [formatError, setFormatError] = useState('');
   const formatBtnRef = useRef<HTMLButtonElement>(null);
 
+  // Inline AI Edit state
+  const [showAiEditPanel, setShowAiEditPanel] = useState(false);
+  const [aiEditResult, setAiEditResult] = useState('');
+  const [isAiEditing, setIsAiEditing] = useState(false);
+  const aiEditBtnRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     promptsApi.getAll()
       .then(data => {
@@ -159,6 +165,62 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Built-in smart AI actions — independent of user Skills library.
   // Each action runs the AI and may also reshape note metadata (type, etc.).
+  const handleInlineAiEdit = async (action: 'polish' | 'continue' | 'summarize' | 'todos') => {
+    if (!aiApiKey || !aiBaseUrl) {
+      setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
+      return;
+    }
+    if (!body.trim()) {
+      setFormatError(language === 'zh' ? '正文为空，无法编辑' : 'Body is empty');
+      return;
+    }
+    setIsAiEditing(true);
+    setShowAiEditPanel(false);
+    setFormatError('');
+
+    const cfg = {
+      polish: {
+        zh: '润色优化以下笔记。修正语法，提升表达清晰度，保持原意和结构不变。返回完整 Markdown，保留一级标题。',
+        en: 'Polish this note. Fix grammar, improve clarity, preserve meaning and structure. Return full Markdown, preserve level-1 heading.',
+      },
+      continue: {
+        zh: '基于以下笔记的上下文和风格，续写后续内容。保持一致的语气和格式。返回续写部分（不需要重复原文）。',
+        en: 'Continue writing based on the context and style of the note below. Maintain consistent tone and format. Return only the continuation (do not repeat original text).',
+      },
+      summarize: {
+        zh: '把以下内容总结为结构化摘要：核心要点、关键决策、风险与未决事项、下一步。返回完整 Markdown，保留一级标题。',
+        en: 'Summarize into a structured brief: key points, decisions, risks/open issues, next steps. Return full Markdown, preserve level-1 heading.',
+      },
+      todos: {
+        zh: '从笔记中提取所有待办事项、行动项、承诺，整理成清晰的 Markdown 任务清单（- [ ] 格式），保留上下文。返回完整 Markdown，保留一级标题。',
+        en: 'Extract all action items, todos, and commitments. Output as Markdown task list (- [ ] format), preserve context. Return full Markdown, preserve level-1 heading.',
+      },
+    } as const;
+
+    try {
+      const { zh, en } = cfg[action];
+      const systemPrompt = language === 'zh'
+        ? '你是一位专业的笔记编辑助手。返回完整的 Markdown 内容，无任何前后修饰。'
+        : 'You are a professional note editing assistant. Return only the complete Markdown content with no preamble.';
+      const userPrompt = `${language === 'zh' ? zh : en}\n\n---\n\n${body}`;
+
+      const { summary } = await aiApi.summarize({
+        apiKey: aiApiKey,
+        model: aiModel,
+        baseUrl: aiBaseUrl,
+        systemPrompt,
+        userPrompt,
+      });
+      setAiEditResult(summary);
+      setShowAiEditPanel(true);
+    } catch (err: any) {
+      console.error('Inline AI edit failed:', err);
+      setFormatError(err.message || String(err));
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
+
   const runSmartAction = async (action: 'meeting' | 'todos' | 'summary' | 'polish') => {
     if (!aiApiKey || !aiBaseUrl) {
       setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
@@ -370,6 +432,125 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         ))}
                       </div>
                     </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Inline AI Edit */}
+          <div className="relative">
+            <button
+              ref={aiEditBtnRef}
+              onClick={() => {
+                if (isAiEditing) return;
+                setShowAiEditPanel(!showAiEditPanel);
+                setFormatError('');
+              }}
+              disabled={isAiEditing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-text-muted hover:text-accent hover:bg-accent/10 rounded-md transition-colors disabled:opacity-50"
+              title={language === 'zh' ? 'AI 编辑' : 'AI Edit'}
+            >
+              {isAiEditing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Edit3 className="w-3.5 h-3.5" />
+              )}
+              {language === 'zh' ? 'AI 编辑' : 'AI Edit'}
+            </button>
+
+            <AnimatePresence>
+              {showAiEditPanel && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-md shadow-lg p-2 z-30 min-w-[280px] max-w-sm"
+                >
+                  {aiEditResult ? (
+                    <div className="space-y-2">
+                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                        {language === 'zh' ? 'AI 编辑结果' : 'AI Edit Result'}
+                      </p>
+                      <div className="px-2 py-1.5 max-h-48 overflow-y-auto text-xs text-text-heading bg-surface rounded border border-border whitespace-pre-wrap font-mono">
+                        {aiEditResult}
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 pt-1">
+                        <button
+                          onClick={() => {
+                            setBody(aiEditResult);
+                            setAiEditResult('');
+                            setShowAiEditPanel(false);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+                        >
+                          {language === 'zh' ? '替换' : 'Replace'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBody(prev => prev + '\n\n' + aiEditResult);
+                            setAiEditResult('');
+                            setShowAiEditPanel(false);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-bold border border-border rounded hover:border-accent/50 hover:text-accent transition-colors"
+                        >
+                          {language === 'zh' ? '追加' : 'Append'}
+                        </button>
+                        <button
+                          onClick={() => { setAiEditResult(''); }}
+                          className="px-2.5 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
+                        >
+                          {language === 'zh' ? '返回' : 'Back'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                        {language === 'zh' ? 'AI 编辑' : 'AI Edit'}
+                      </p>
+                      <button
+                        onClick={() => handleInlineAiEdit('polish')}
+                        className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '润色优化' : 'Polish'}</div>
+                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleInlineAiEdit('continue')}
+                        className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '续写' : 'Continue'}</div>
+                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '基于上下文续写内容' : 'Continue writing from context'}</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleInlineAiEdit('summarize')}
+                        className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '总结摘要' : 'Summarize'}</div>
+                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 下一步' : 'Key points / decisions / next'}</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleInlineAiEdit('todos')}
+                        className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-accent/10 text-left transition-colors"
+                      >
+                        <ListChecks className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '提取待办' : 'Extract todos'}</div>
+                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
+                        </div>
+                      </button>
+                    </div>
                   )}
                 </motion.div>
               )}

@@ -133,7 +133,12 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
     if (!createForm.name.trim() || !createForm.prompt.trim()) return;
     setSaving(true);
     try {
-      await promptsApi.create({ name: createForm.name.trim(), prompt: createForm.prompt.trim(), scope: createForm.scope });
+      await promptsApi.create({
+        name: createForm.name.trim(),
+        description: '',
+        systemPrompt: createForm.prompt.trim(),
+        scope: createForm.scope,
+      });
       await loadPrompts();
       resetPromptForm();
     } catch (err) {

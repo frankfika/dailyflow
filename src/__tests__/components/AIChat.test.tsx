@@ -37,6 +37,9 @@ vi.mock('lucide-react', () => ({
   User: () => React.createElement('span', { 'data-testid': 'icon-user' }),
   StopCircle: () => React.createElement('span', { 'data-testid': 'icon-stop' }),
   Copy: () => React.createElement('span', { 'data-testid': 'icon-copy' }),
+  PanelLeftClose: () => React.createElement('span', { 'data-testid': 'icon-panel-close' }),
+  PanelLeftOpen: () => React.createElement('span', { 'data-testid': 'icon-panel-open' }),
+  Bookmark: () => React.createElement('span', { 'data-testid': 'icon-bookmark' }),
 }));
 
 vi.mock('../../api/client', () => ({

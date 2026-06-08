@@ -8,6 +8,7 @@ import {
   removeTaskFromMarkdown,
 } from '../services/parser.js';
 import { loadConfig } from '../services/config.js';
+import { withDateLock } from '../services/lock.js';
 import type { Task } from '../types/task.js';
 
 const router = Router();
@@ -41,25 +42,28 @@ router.patch('/:taskId', async (req, res) => {
     const { status, date } = req.body;
     const config = await loadConfig();
 
-    const note = await readDailyNote(date, config);
-    if (!note) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    await withDateLock(date, async () => {
+      const note = await readDailyNote(date, config);
+      if (!note) {
+        throw Object.assign(new Error('File not found'), { status: 404 });
+      }
 
-    // 找到任务
-    const task = note.tasks.find(t => t.id === taskId);
-    if (!task || task.line === undefined) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
+      // 找到任务
+      const task = note.tasks.find(t => t.id === taskId);
+      if (!task || task.line === undefined) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
 
-    // 更新 Markdown 内容
-    const newContent = updateTaskInMarkdown(note.content, task.line, status);
-    await writeDailyNote(date, newContent, config);
+      // 更新 Markdown 内容
+      const newContent = updateTaskInMarkdown(note.content, task.line, status);
+      await writeDailyNote(date, newContent, config);
+    });
 
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error updating task:', error);
-    res.status(500).json({ error: error.message });
+    const status = error?.status ?? 500;
+    res.status(status).json({ error: error.message });
   }
 });
 
@@ -81,38 +85,42 @@ router.put('/:taskId', async (req, res) => {
     };
     const config = await loadConfig();
 
-    const note = await readDailyNote(date, config);
-    if (!note) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    await withDateLock(date, async () => {
+      // 在锁内重新读取最新内容，避免读到陈旧快照
+      const note = await readDailyNote(date, config);
+      if (!note) {
+        throw Object.assign(new Error('File not found'), { status: 404 });
+      }
 
-    const task = note.tasks.find(t => t.id === taskId);
-    if (!task || task.line === undefined) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
+      const task = note.tasks.find(t => t.id === taskId);
+      if (!task || task.line === undefined) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
 
-    // 如果提供了完整的更新数据（tags, deadline等），使用完整编辑
-    if (tags !== undefined || deadline !== undefined || priority !== undefined || project !== undefined || comment !== undefined) {
-      const newContent = editTaskFullInMarkdown(note.content, task.line, {
-        title,
-        description,
-        comment,
-        tags,
-        deadline,
-        priority,
-        project
-      }, date);
-      await writeDailyNote(date, newContent, config);
-    } else {
-      // 否则只更新标题和描述（保留原有元数据）
-      const newContent = editTaskInMarkdown(note.content, task.line, title || task.title, description);
-      await writeDailyNote(date, newContent, config);
-    }
+      // 如果提供了完整的更新数据（tags, deadline等），使用完整编辑
+      if (tags !== undefined || deadline !== undefined || priority !== undefined || project !== undefined || comment !== undefined) {
+        const newContent = editTaskFullInMarkdown(note.content, task.line, {
+          title,
+          description,
+          comment,
+          tags,
+          deadline,
+          priority,
+          project
+        }, date);
+        await writeDailyNote(date, newContent, config);
+      } else {
+        // 否则只更新标题和描述（保留原有元数据）
+        const newContent = editTaskInMarkdown(note.content, task.line, title || task.title, description);
+        await writeDailyNote(date, newContent, config);
+      }
+    });
 
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error editing task:', error);
-    res.status(500).json({ error: error.message });
+    const status = error?.status ?? 500;
+    res.status(status).json({ error: error.message });
   }
 });
 
@@ -124,11 +132,13 @@ router.post('/', async (req, res) => {
     const { date, task } = req.body as { date: string; task: Task };
     const config = await loadConfig();
 
-    const note = await readDailyNote(date, config);
-    const originalContent = note ? note.content : '';
+    await withDateLock(date, async () => {
+      const note = await readDailyNote(date, config);
+      const originalContent = note ? note.content : '';
 
-    const newContent = appendTaskToMarkdown(originalContent, task, date);
-    await writeDailyNote(date, newContent, config);
+      const newContent = appendTaskToMarkdown(originalContent, task, date);
+      await writeDailyNote(date, newContent, config);
+    });
 
     res.json({ success: true, task });
   } catch (error: any) {
@@ -146,23 +156,26 @@ router.delete('/:taskId', async (req, res) => {
     const { date } = req.body;
     const config = await loadConfig();
 
-    const note = await readDailyNote(date, config);
-    if (!note) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    await withDateLock(date, async () => {
+      const note = await readDailyNote(date, config);
+      if (!note) {
+        throw Object.assign(new Error('File not found'), { status: 404 });
+      }
 
-    const task = note.tasks.find(t => t.id === taskId);
-    if (!task || task.line === undefined) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
+      const task = note.tasks.find(t => t.id === taskId);
+      if (!task || task.line === undefined) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
 
-    const newContent = removeTaskFromMarkdown(note.content, task.line);
-    await writeDailyNote(date, newContent, config);
+      const newContent = removeTaskFromMarkdown(note.content, task.line);
+      await writeDailyNote(date, newContent, config);
+    });
 
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting task:', error);
-    res.status(500).json({ error: error.message });
+    const status = error?.status ?? 500;
+    res.status(status).json({ error: error.message });
   }
 });
 

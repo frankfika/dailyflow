@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   Plus, Pencil, Trash2, Check, Loader2, Sparkles, Play, CheckCircle2,
-  ExternalLink, Info, X,
+  ExternalLink, Info, X, Eye, EyeOff,
 } from 'lucide-react';
 import {
   loadProviderConfigs,
@@ -63,6 +63,8 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   const [filterRegion, setFilterRegion] = useState<'all' | 'cn' | 'global' | 'aggregator' | 'custom'>('all');
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; status: 'success' | 'error'; message: string } | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const store = loadProviderConfigs();
@@ -89,6 +91,9 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     setSelectedTemplate('');
     setFilterRegion('all');
     setEditingId(null);
+    setShowApiKey(false);
+    setTouched({});
+    setTestResult(null);
     setDrawerOpen(true);
   };
 
@@ -96,6 +101,9 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     setForm(config);
     setSelectedTemplate('');
     setEditingId(config.id);
+    setShowApiKey(false);
+    setTouched({});
+    setTestResult(null);
     setDrawerOpen(true);
   };
 
@@ -104,6 +112,9 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     setEditingId(null);
     setForm({});
     setSelectedTemplate('');
+    setShowApiKey(false);
+    setTouched({});
+    setTestResult(null);
   };
 
   const applyTemplate = (template: ProviderTemplate) => {
@@ -163,25 +174,27 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     onProviderActivate?.(config);
   };
 
-  const handleTest = async (config: ProviderConfig) => {
-    setTestingId(config.id);
+  const handleTest = async (config: Partial<ProviderConfig>) => {
+    const key = config.id || (editingId || '_new');
+    if (!config.apiKey?.trim() || !config.model?.trim() || !config.baseUrl?.trim()) return;
+    setTestingId(key);
     setTestResult(null);
     try {
       const { summary } = await aiApi.summarize({
-        apiKey: config.apiKey,
-        model: config.model,
-        baseUrl: config.baseUrl,
+        apiKey: config.apiKey.trim(),
+        model: config.model.trim(),
+        baseUrl: config.baseUrl.trim(),
         systemPrompt: 'Reply with OK.',
         userPrompt: 'hi',
       });
       setTestResult({
-        id: config.id,
+        id: key,
         status: 'success',
         message: language === 'zh' ? `连接成功: ${summary.slice(0, 50)}` : `Connected: ${summary.slice(0, 50)}`,
       });
     } catch (err: any) {
       setTestResult({
-        id: config.id,
+        id: key,
         status: 'error',
         message: err.message || String(err),
       });
@@ -467,11 +480,16 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   type="text"
                   value={form.name || ''}
                   onChange={e => setForm({ ...form, name: e.target.value })}
+                  onBlur={() => setTouched(prev => ({ ...prev, name: true }))}
                   placeholder={language === 'zh' ? '配置名称' : 'Config name'}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg bg-surface focus:outline-none focus:ring-2 transition-all ${
+                    touched.name && !form.name?.trim() ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-border focus:border-accent focus:ring-accent/10'
+                  }`}
                 />
+                {touched.name && !form.name?.trim() && (
+                  <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入名称' : 'Name is required'}</p>
+                )}
               </div>
-
 
               <div>
                 <label className="block text-xs font-medium text-text-heading mb-1.5">
@@ -481,9 +499,15 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   type="text"
                   value={form.baseUrl || ''}
                   onChange={e => setForm({ ...form, baseUrl: e.target.value })}
+                  onBlur={() => setTouched(prev => ({ ...prev, baseUrl: true }))}
                   placeholder="https://api.example.com/v1"
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all font-mono"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg bg-surface focus:outline-none focus:ring-2 transition-all font-mono ${
+                    touched.baseUrl && !form.baseUrl?.trim() ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-border focus:border-accent focus:ring-accent/10'
+                  }`}
                 />
+                {touched.baseUrl && !form.baseUrl?.trim() && (
+                  <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 Base URL' : 'Base URL is required'}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -493,19 +517,41 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     type="text"
                     value={form.model || ''}
                     onChange={e => setForm({ ...form, model: e.target.value })}
+                    onBlur={() => setTouched(prev => ({ ...prev, model: true }))}
                     placeholder={language === 'zh' ? '例如 gpt-4o' : 'e.g. gpt-4o'}
-                    className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all font-mono"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-surface focus:outline-none focus:ring-2 transition-all font-mono ${
+                      touched.model && !form.model?.trim() ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-border focus:border-accent focus:ring-accent/10'
+                    }`}
                   />
+                  {touched.model && !form.model?.trim() && (
+                    <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 Model ID' : 'Model ID is required'}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-text-heading mb-1.5">API Key</label>
-                  <input
-                    type="password"
-                    value={form.apiKey || ''}
-                    onChange={e => setForm({ ...form, apiKey: e.target.value })}
-                    placeholder="sk-..."
-                    className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all font-mono"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={form.apiKey || ''}
+                      onChange={e => setForm({ ...form, apiKey: e.target.value })}
+                      onBlur={() => setTouched(prev => ({ ...prev, apiKey: true }))}
+                      placeholder="sk-..."
+                      className={`w-full px-3 py-2 pr-9 text-sm border rounded-lg bg-surface focus:outline-none focus:ring-2 transition-all font-mono ${
+                        touched.apiKey && !form.apiKey?.trim() ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-border focus:border-accent focus:ring-accent/10'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-heading transition-colors"
+                      title={showApiKey ? (language === 'zh' ? '隐藏' : 'Hide') : (language === 'zh' ? '显示' : 'Show')}
+                    >
+                      {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {touched.apiKey && !form.apiKey?.trim() && (
+                    <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 API Key' : 'API Key is required'}</p>
+                  )}
                 </div>
               </div>
 
@@ -520,6 +566,33 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   rows={2}
                   className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all resize-none"
                 />
+              </div>
+
+              <div className="pt-2 border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={() => handleTest(form as ProviderConfig)}
+                  disabled={!formIsValid || testingId === (editingId || '_new')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border rounded-lg transition-colors disabled:opacity-50 bg-surface border-border hover:border-accent/30 text-text-heading"
+                >
+                  {testingId === (editingId || '_new') ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Play className="w-3 h-3" />
+                  )}
+                  {language === 'zh' ? '测试连接' : 'Test Connection'}
+                </button>
+                {testResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`mt-2 px-3 py-1.5 rounded-md text-[11px] ${
+                      testResult.status === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                    }`}
+                  >
+                    {testResult.message}
+                  </motion.div>
+                )}
               </div>
             </div>
           </div>

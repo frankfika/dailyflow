@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2 } from 'lucide-react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -23,6 +23,16 @@ interface SidebarProps {
   toggleArchiveMonth: (month: string) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   workspaceSwitcher?: React.ReactNode;
+  activeContext?: 'work' | 'life';
+  onContextChange?: (ctx: 'work' | 'life') => void;
+  onOpenSettings?: () => void;
+  githubConnected?: boolean;
+  isSyncing?: boolean;
+  hasChanges?: boolean;
+  lastSyncTime?: string | null;
+  gitLastCommitTime?: string | null;
+  formatSyncTime?: (time: string, lang: 'en' | 'zh', now?: number) => string;
+  nowTime?: number;
 }
 
 export function Sidebar({
@@ -41,6 +51,16 @@ export function Sidebar({
   toggleArchiveMonth,
   showToast,
   workspaceSwitcher,
+  activeContext,
+  onContextChange,
+  onOpenSettings,
+  githubConnected,
+  isSyncing,
+  hasChanges,
+  lastSyncTime,
+  gitLastCommitTime,
+  formatSyncTime,
+  nowTime,
 }: SidebarProps) {
   return (
     <>
@@ -58,22 +78,22 @@ export function Sidebar({
       </AnimatePresence>
 
       {/* Sidebar */}
-      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-700 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border' : '-translate-x-full lg:ml-[-16rem] border-r-0'} bg-surface`}>
-        <div className="p-6 w-64 flex flex-col h-full">
+      <aside className={`fixed lg:relative inset-y-0 left-0 w-[230px] flex flex-col shrink-0 z-30 transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border/60' : '-translate-x-full lg:ml-[-230px] border-r-0'} bg-surface/85 backdrop-blur-xl`}>
+        <div className="px-4 py-4 w-[230px] flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-7 h-7 bg-accent text-white flex items-center justify-center font-sans text-sm font-bold rounded-md shadow-sm">D</div>
-            <span className="font-sans text-base font-semibold text-text-heading">DailyFlow</span>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <div className="w-6 h-6 bg-accent text-white flex items-center justify-center text-xs font-bold rounded-lg shadow-sm">D</div>
+            <span className="text-[13px] font-semibold text-text-heading tracking-tight">DailyFlow</span>
           </div>
 
           {workspaceSwitcher && (
-            <div className="mb-6">{workspaceSwitcher}</div>
+            <div className="mb-3 px-1">{workspaceSwitcher}</div>
           )}
 
-          <nav className="space-y-6 flex-1 overflow-y-auto">
+          <nav className="space-y-4 flex-1 overflow-y-auto">
             {/* Timeline */}
             <div>
-              <h3 className="text-xs  text-text-muted font-bold mb-3 flex items-center justify-between">
+              <h3 className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mb-1.5 px-1 flex items-center justify-between">
                 <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
                 <button
                   onClick={async () => {
@@ -93,13 +113,13 @@ export function Sidebar({
                       showToast(language === 'zh' ? '创建失败' : 'Failed to create note', 'error');
                     }
                   }}
-                  className="p-1 rounded-md bg-text-muted/10 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors flex items-center gap-1"
+                  className="p-0.5 rounded text-text-muted hover:text-accent transition-colors"
                   title="New Daily Task"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
               </h3>
-              <ul className="space-y-1.5 text-sm font-sans">
+              <ul className="space-y-0.5 text-[12px]">
                 {recentDates.map(date => {
                   const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
                   return (
@@ -161,35 +181,111 @@ export function Sidebar({
             </div>
 
             {/* Notes & AI Chat — top-level navigation */}
-            <ul className="space-y-1.5 text-sm font-sans">
+            <ul className="space-y-0.5 text-[12px]">
               <li
                 onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`flex items-center gap-2.5 cursor-pointer px-2 py-1.5 -mx-2 rounded-md transition-all ${activeTab === 'notes' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-surface'}`}
+                className={`group flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md transition-all ${activeTab === 'notes' ? 'text-text-heading font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-black/5'}`}
                 data-testid="nav-notes"
               >
-                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'notes' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
                 <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
               </li>
               <li
                 onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`flex items-center gap-2.5 cursor-pointer px-2 py-1.5 -mx-2 rounded-md transition-all ${activeTab === 'ai-chat' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-surface'}`}
+                className={`group flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md transition-all ${activeTab === 'ai-chat' ? 'text-text-heading font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-black/5'}`}
               >
-                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <Sparkles className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'ai-chat' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
                 <span>{language === 'zh' ? 'AI 对话' : 'AI Chat'}</span>
               </li>
             </ul>
           </nav>
 
+          {/* Bottom section: Work/Life toggle + Sync + Settings */}
+          <div className="mt-auto pt-3 border-t border-border/60 space-y-2">
+            {/* Work/Life toggle */}
+            {onContextChange && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-text-muted">
+                  {language === 'zh' ? '模式' : 'Mode'}
+                </span>
+                <div className="flex bg-surface rounded-md p-0.5 border border-border">
+                  <button
+                    onClick={() => onContextChange('work')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all ${
+                      activeContext === 'work'
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'text-text-muted hover:text-text-heading'
+                    }`}
+                  >
+                    <Briefcase className="w-3 h-3" />
+                    {language === 'zh' ? '工作' : 'Work'}
+                  </button>
+                  <button
+                    onClick={() => onContextChange('life')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all ${
+                      activeContext === 'life'
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'text-text-muted hover:text-text-heading'
+                    }`}
+                  >
+                    <Heart className="w-3 h-3" />
+                    {language === 'zh' ? '生活' : 'Life'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Sync status */}
+            {githubConnected && formatSyncTime && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-text-muted">
+                  {language === 'zh' ? '同步' : 'Sync'}
+                </span>
+                <button
+                  onClick={() => { /* sync action handled by parent */ }}
+                  className="flex items-center gap-1.5 text-[11px] text-text-muted"
+                  title={language === 'zh' ? 'GitHub 同步状态' : 'GitHub sync status'}
+                >
+                  {isSyncing ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-accent" />
+                  ) : hasChanges ? (
+                    <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                  ) : (
+                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                  )}
+                  <span>
+                    {isSyncing
+                      ? (language === 'zh' ? '同步中' : 'Syncing')
+                      : hasChanges
+                      ? (language === 'zh' ? '待同步' : 'Unsynced')
+                      : (lastSyncTime || gitLastCommitTime)
+                      ? formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime || Date.now())
+                      : (language === 'zh' ? '已同步' : 'Synced')}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Settings */}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="w-full flex items-center gap-2 px-2 py-1 text-[11px] font-medium text-text-muted hover:text-text-heading rounded-md transition-colors hover:bg-black/5"
+              >
+                <Settings className="w-3.5 h-3.5 opacity-70" />
+                {language === 'zh' ? '设置' : 'Settings'}
+              </button>
+            )}
+          </div>
+
           {/* Mobile close */}
-          <li className="pt-4 mt-auto lg:hidden">
+          <li className="pt-3 mt-1 lg:hidden">
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="flex w-full items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-accent/10 transition-colors text-text-muted justify-center border border-border"
+              className="flex w-full items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-black/5 transition-colors text-text-muted justify-center border border-border/60 text-[12px]"
             >
-              <X className="w-4 h-4" />
-              <span className="text-xs  font-bold">
-                {language === 'zh' ? '关闭' : 'Close'}
-              </span>
+              <X className="w-3.5 h-3.5" />
+              {language === 'zh' ? '关闭' : 'Close'}
             </button>
           </li>
         </div>

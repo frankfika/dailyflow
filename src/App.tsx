@@ -148,6 +148,7 @@ export default function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
+  const [hideDoneTasks, setHideDoneTasks] = useState(false);
   const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
@@ -579,29 +580,51 @@ export default function App() {
     if (!task) return;
     const newStatus = task.status === 'todo' ? 'done' : 'todo';
     const wasUndone = task.status !== 'done';
-    try {
-      await tasksApi.updateStatus(id, currentFileDate, newStatus);
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-      // Refresh markdown after task change
-      const data = await filesApi.get(currentFileDate);
-      if (data) {
-        setMarkdown(data.content);
-        setTasks(data.tasks as Task[]);
-        setLastSyncedMD(data.content);
-        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
-      }
-      // Prompt for completion comment when task is newly done and has no comment
-      if (wasUndone && !task.comment) {
-        const suppressed = (() => {
-          try { return sessionStorage.getItem('df_suppress_completion_comments') === '1'; } catch { return false; }
-        })();
-        if (!suppressed) {
-          setCompletionPromptTaskIds(prev => new Set(prev).add(id));
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await tasksApi.updateStatus(id, currentFileDate, newStatus);
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+        // Refresh markdown after task change
+        const data = await filesApi.get(currentFileDate);
+        if (data) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        }
+        // Prompt for completion comment when task is newly done and has no comment
+        if (wasUndone && !task.comment) {
+          const suppressed = (() => {
+            try { return sessionStorage.getItem('df_suppress_completion_comments') === '1'; } catch { return false; }
+          })();
+          if (!suppressed) {
+            setCompletionPromptTaskIds(prev => new Set(prev).add(id));
+          }
+        }
+        return;
+      } catch (e) {
+        lastError = e;
+        // 404 / 漂移：重试前先同步一次
+        try {
+          const data = await filesApi.get(currentFileDate);
+          if (data) {
+            setMarkdown(data.content);
+            setTasks(data.tasks as Task[]);
+            setLastSyncedMD(data.content);
+            setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+          }
+        } catch {}
+        if (attempt < 2) {
+          await sleep(150);
+          continue;
         }
       }
-    } catch (e) {
-      console.error('Failed to toggle task', e);
     }
+    console.error('Failed to toggle task', lastError);
+    showToast(language === 'zh' ? '切换失败，请重试' : 'Toggle failed — please retry', 'error');
   };
 
   const handleGitSync = async () => {
@@ -668,9 +691,45 @@ export default function App() {
       project?: string;
     }
   ) => {
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await tasksApi.edit(id, currentFileDate, updates);
+        // 成功后重新拉取最新 markdown，避免和别人的并发编辑漂移
+        const data = await filesApi.get(currentFileDate);
+        if (data) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        }
+        showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
+        return;
+      } catch (e: any) {
+        lastError = e;
+        // 404 通常意味着 task id 已失效（文件被外部重写），重试前先同步一次
+        if (e?.status === 404) {
+          try {
+            const data = await filesApi.get(currentFileDate);
+            if (data) {
+              setMarkdown(data.content);
+              setTasks(data.tasks as Task[]);
+              setLastSyncedMD(data.content);
+              setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+            }
+          } catch {}
+        }
+        if (attempt < 2) {
+          await sleep(150);
+          continue;
+        }
+      }
+    }
+    console.error('Failed to edit task', lastError);
+    // 最后再同步一次，保证 UI 不显示过期状态
     try {
-      await tasksApi.edit(id, currentFileDate, updates);
-      // Refresh markdown and re-sync tasks (server may have stable IDs)
       const data = await filesApi.get(currentFileDate);
       if (data) {
         setMarkdown(data.content);
@@ -678,11 +737,8 @@ export default function App() {
         setLastSyncedMD(data.content);
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
-      showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
-    } catch (e) {
-      console.error('Failed to edit task', e);
-      showToast(language === 'zh' ? '更新失败' : 'Failed to update task', 'error');
-    }
+    } catch {}
+    showToast(language === 'zh' ? '更新失败，请重试' : 'Failed to update task — please retry', 'error');
   };
 
   const handleDeleteTask = async (id: string) => {
@@ -947,6 +1003,20 @@ export default function App() {
                 </span>
               </button>
             )}
+            {activeTab === 'today' && (
+              <button
+                onClick={() => setHideDoneTasks(v => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                  hideDoneTasks
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-muted hover:text-text-heading hover:bg-black/5'
+                }`}
+                title={language === 'zh' ? '隐藏已完成的任务' : 'Hide completed tasks'}
+                data-testid="hide-done-toggle"
+              >
+                {hideDoneTasks ? (language === 'zh' ? '显示全部' : 'Show all') : (language === 'zh' ? '隐藏已完成' : 'Hide done')}
+              </button>
+            )}
             <button
               onClick={() => setShowSettings(true)}
               className="relative p-2 text-text-muted hover:text-text-main transition-colors rounded-md hover:bg-surface"
@@ -1160,7 +1230,22 @@ export default function App() {
                     showToast={showToast}
                     setLastAddedCategory={setLastAddedCategory}
                   />
-                  {categories.map(category => {
+                  {(() => {
+                    // 排序：含 pending 的 category 排在前面，全是 done 的排到末尾
+                    const catsWithStats = categories.map(category => {
+                      const catTasks = todayTasks.filter(t => {
+                        const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
+                        return taskCategories[0] === category;
+                      });
+                      const pendingCount = catTasks.filter(t => t.status !== 'done').length;
+                      const doneCount = catTasks.filter(t => t.status === 'done').length;
+                      return { category, pendingCount, doneCount };
+                    });
+                    const sortedCategories = [
+                      ...catsWithStats.filter(c => c.pendingCount > 0),
+                      ...catsWithStats.filter(c => c.pendingCount === 0 && c.doneCount > 0),
+                    ];
+                    return sortedCategories.map(({ category, pendingCount, doneCount }) => {
                     if (selectedCategory && selectedCategory !== category) return null;
                     const catTasks = todayTasks.filter(t => {
                       const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
@@ -1169,7 +1254,8 @@ export default function App() {
 
                     const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
                     const doneCatTasks = catTasks.filter(t => t.status === 'done');
-                    if (pendingCatTasks.length === 0 && doneCatTasks.length === 0) return null;
+                    if (hideDoneTasks && pendingCount === 0) return null;
+                    if (pendingCount === 0 && doneCount === 0) return null;
 
                     const showDone = showDoneByCategory[category] ?? false;
 
@@ -1202,7 +1288,7 @@ export default function App() {
                           </AnimatePresence>
                         </div>
 
-                        {doneCatTasks.length > 0 && (
+                        {doneCatTasks.length > 0 && !hideDoneTasks && (
                           <div className="mt-2">
                             <button
                               onClick={() => setShowDoneByCategory(prev => ({ ...prev, [category]: !prev[category] }))}
@@ -1244,7 +1330,8 @@ export default function App() {
                         )}
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                   {/* 兜底：显示没有任何 category tag 的任务 */}
                   {(() => {
                     const uncategorized = todayTasks.filter(t => {
@@ -1255,6 +1342,7 @@ export default function App() {
                     if (selectedCategory) return null;
                     const pending = uncategorized.filter(t => t.status !== 'done');
                     const done = uncategorized.filter(t => t.status === 'done');
+                    if (hideDoneTasks && pending.length === 0) return null;
                     const showDone = showDoneByCategory['__uncategorized__'] ?? false;
                     return (
                       <div className="space-y-5">
@@ -1283,7 +1371,7 @@ export default function App() {
                             ))}
                           </AnimatePresence>
                         </div>
-                        {done.length > 0 && (
+                        {done.length > 0 && !hideDoneTasks && (
                           <div className="mt-2">
                             <button
                               onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
@@ -1323,7 +1411,13 @@ export default function App() {
 
                   {/* 已迁移任务区域 */}
                   {(() => {
-                    const migratedTasks = contextFilteredTasks.filter(t => t.status === 'migrated');
+                    if (hideDoneTasks) return null;
+                    // A task is "migrated" if its source_date differs from the day we
+                    // are viewing, OR its status is literally "migrated".
+                    const migratedTasks = contextFilteredTasks.filter(t =>
+                      t.status === 'migrated' ||
+                      (t.source_date && t.source_date !== currentFileDate)
+                    );
                     if (migratedTasks.length === 0) return null;
                     const showMigrated = showDoneByCategory['__migrated__'] ?? false;
                     return (

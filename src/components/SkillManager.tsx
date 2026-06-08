@@ -4,14 +4,14 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download, Tag, Info } from 'lucide-react';
 import { promptsApi, type PromptTemplateData } from '../api/client';
+import { TagInput } from './TagInput';
 
 const SCOPE_OPTIONS = [
+  { value: 'chat', zh: '对话', en: 'Chat' },
   { value: 'format', zh: '格式', en: 'Format' },
-  { value: 'date-range', zh: '日期范围', en: 'Date Range' },
-  { value: 'project', zh: '项目', en: 'Project' },
-  { value: 'person', zh: '人员', en: 'Person' },
+  { value: 'note', zh: '笔记', en: 'Note' },
   { value: 'custom', zh: '自定义', en: 'Custom' },
 ];
 
@@ -26,10 +26,24 @@ export function SkillManager({ language }: SkillManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<{ name: string; prompt: string; scope: string }>({
+  const [form, setForm] = useState<{
+    name: string;
+    description: string;
+    systemPrompt: string;
+    scope: string;
+    icon: string;
+    version: string;
+    author: string;
+    tags: string[];
+  }>({
     name: '',
-    prompt: '',
-    scope: 'format',
+    description: '',
+    systemPrompt: '',
+    scope: 'chat',
+    icon: '',
+    version: '',
+    author: '',
+    tags: [],
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -38,29 +52,43 @@ export function SkillManager({ language }: SkillManagerProps) {
     load();
   }, []);
 
-  // Parse markdown with optional frontmatter:
-  //   ---
-  //   name: My Skill
-  //   scope: format
-  //   ---
-  //   <prompt body>
-  // Falls back to: first H1/H2 as name, rest as prompt; or filename as name.
-  const parseSkillMarkdown = (text: string, fallbackName: string): { name: string; prompt: string; scope: string } | null => {
+  // Parse markdown with optional frontmatter supporting AgentSkill fields.
+  const parseSkillMarkdown = (text: string, fallbackName: string): Omit<PromptTemplateData, 'id' | 'createdAt' | 'updatedAt'> | null => {
     const trimmed = text.replace(/^﻿/, '');
     let name = '';
-    let scope = 'format';
+    let description = '';
+    let scope = 'chat';
+    let icon = '';
+    let version = '';
+    let author = '';
+    let tags: string[] | undefined;
     let body = trimmed;
 
     const fmMatch = trimmed.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
     if (fmMatch) {
       const fm = fmMatch[1];
       body = fmMatch[2] || '';
-      const nameLine = fm.match(/^name:\s*(.+)$/m);
-      const scopeLine = fm.match(/^scope:\s*(.+)$/m);
-      if (nameLine) name = nameLine[1].trim().replace(/^["']|["']$/g, '');
-      if (scopeLine) {
-        const s = scopeLine[1].trim().replace(/^["']|["']$/g, '');
-        if (SCOPE_OPTIONS.some(o => o.value === s)) scope = s;
+
+      const getLine = (key: string) => {
+        const m = fm.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+        return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+      };
+
+      name = getLine('name');
+      description = getLine('description');
+      const s = getLine('scope');
+      if (s && SCOPE_OPTIONS.some(o => o.value === s)) scope = s;
+      icon = getLine('icon');
+      version = getLine('version');
+      author = getLine('author');
+
+      const tagsLine = getLine('tags');
+      if (tagsLine) {
+        try {
+          tags = JSON.parse(tagsLine.replace(/'/g, '"')) as string[];
+        } catch {
+          tags = tagsLine.split(/,\s*/).map(t => t.trim()).filter(Boolean);
+        }
       }
     }
 
@@ -74,7 +102,17 @@ export function SkillManager({ language }: SkillManagerProps) {
     if (!name) name = fallbackName.replace(/\.(md|markdown|txt)$/i, '').trim();
     body = body.trim();
     if (!body) return null;
-    return { name, prompt: body, scope };
+
+    return {
+      name,
+      description,
+      systemPrompt: body,
+      scope,
+      icon: icon || undefined,
+      version: version || undefined,
+      author: author || undefined,
+      tags: tags && tags.length > 0 ? tags : undefined,
+    };
   };
 
   const handleImportFiles = async (files: FileList) => {
@@ -101,7 +139,8 @@ export function SkillManager({ language }: SkillManagerProps) {
   };
 
   const handleExport = (skill: PromptTemplateData) => {
-    const md = `---\nname: ${skill.name}\nscope: ${skill.scope}\n---\n\n${skill.prompt}\n`;
+    const tagsStr = skill.tags && skill.tags.length > 0 ? `\ntags: [${skill.tags.map(t => `"${t}"`).join(', ')}]` : '';
+    const md = `---\nname: ${skill.name}\ndescription: ${skill.description || ''}\nscope: ${skill.scope}${skill.icon ? `\nicon: ${skill.icon}` : ''}${skill.version ? `\nversion: ${skill.version}` : ''}${skill.author ? `\nauthor: ${skill.author}` : ''}${tagsStr}\ncreated: ${skill.createdAt}${skill.updatedAt ? `\nupdatedAt: ${skill.updatedAt}` : ''}\n---\n\n${skill.systemPrompt || skill.prompt || ''}\n`;
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -126,38 +165,49 @@ export function SkillManager({ language }: SkillManagerProps) {
   };
 
   const startAdd = () => {
-    setForm({ name: '', prompt: '', scope: 'format' });
+    setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [] });
     setIsAdding(true);
     setEditingId(null);
   };
 
   const startEdit = (skill: PromptTemplateData) => {
-    setForm({ name: skill.name, prompt: skill.prompt, scope: skill.scope });
+    setForm({
+      name: skill.name,
+      description: skill.description || '',
+      systemPrompt: skill.systemPrompt || skill.prompt || '',
+      scope: skill.scope,
+      icon: skill.icon || '',
+      version: skill.version || '',
+      author: skill.author || '',
+      tags: skill.tags || [],
+    });
     setEditingId(skill.id);
     setIsAdding(true);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.prompt.trim()) return;
+    if (!form.name.trim() || !form.systemPrompt.trim()) return;
     setSaving(true);
     try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        systemPrompt: form.systemPrompt.trim(),
+        scope: form.scope,
+        icon: form.icon.trim() || undefined,
+        version: form.version.trim() || undefined,
+        author: form.author.trim() || undefined,
+        tags: form.tags.length > 0 ? form.tags : undefined,
+      };
       if (editingId) {
-        await promptsApi.update(editingId, {
-          name: form.name.trim(),
-          prompt: form.prompt.trim(),
-          scope: form.scope,
-        });
+        await promptsApi.update(editingId, payload);
       } else {
-        await promptsApi.create({
-          name: form.name.trim(),
-          prompt: form.prompt.trim(),
-          scope: form.scope,
-        });
+        await promptsApi.create(payload);
       }
       await load();
       setIsAdding(false);
       setEditingId(null);
-      setForm({ name: '', prompt: '', scope: 'format' });
+      setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [] });
     } catch (err) {
       console.error('Save failed:', err);
     } finally {
@@ -182,6 +232,8 @@ export function SkillManager({ language }: SkillManagerProps) {
     return language === 'zh' ? (opt?.zh || scope) : (opt?.en || scope);
   };
 
+  const formValid = !!(form.name.trim() && form.systemPrompt.trim());
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -189,8 +241,8 @@ export function SkillManager({ language }: SkillManagerProps) {
         <div className="min-w-0">
           <p className="text-xs text-text-muted truncate">
             {language === 'zh'
-              ? '管理 AI Skill（提示词），在对话中应用以获得专业输出'
-              : 'Manage AI skills (prompts) to get professional outputs in chats'}
+              ? '管理 Agent Skill（系统提示词 + 元数据），在对话和笔记中应用以获得专业输出'
+              : 'Manage Agent Skills (system prompt + metadata) for professional outputs'}
           </p>
           {importError && (
             <p className="text-[11px] text-red-500 mt-0.5">{importError}</p>
@@ -256,10 +308,11 @@ export function SkillManager({ language }: SkillManagerProps) {
             transition={{ duration: 0.15 }}
             className="border-b border-border"
           >
-            <div className="p-5 bg-surface-white space-y-3">
+            <div className="p-5 bg-surface-white space-y-3 max-h-[60vh] overflow-y-auto">
               <h4 className="text-sm font-semibold text-text-heading">
                 {editingId ? (language === 'zh' ? '编辑 Skill' : 'Edit Skill') : (language === 'zh' ? '新建 Skill' : 'New Skill')}
               </h4>
+
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <label className="block text-[11px] font-bold text-text-muted mb-1">
@@ -269,7 +322,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                     type="text"
                     value={form.name}
                     onChange={e => setForm({ ...form, name: e.target.value })}
-                    placeholder={language === 'zh' ? '例如：周报总结' : 'e.g. Weekly Summary'}
+                    placeholder={language === 'zh' ? '例如：周报生成器' : 'e.g. Weekly Summary'}
                     className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
                   />
                 </div>
@@ -290,18 +343,77 @@ export function SkillManager({ language }: SkillManagerProps) {
                   </select>
                 </div>
               </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-text-muted mb-1">
-                  {language === 'zh' ? '提示词内容' : 'Prompt Content'} *
+                  {language === 'zh' ? '描述' : 'Description'}
+                </label>
+                <input
+                  type="text"
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder={language === 'zh' ? '这个 Skill 在什么场景下触发？' : 'When should this skill be used?'}
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">Icon</label>
+                  <input
+                    type="text"
+                    value={form.icon}
+                    onChange={e => setForm({ ...form, icon: e.target.value })}
+                    placeholder="Zap"
+                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">Version</label>
+                  <input
+                    type="text"
+                    value={form.version}
+                    onChange={e => setForm({ ...form, version: e.target.value })}
+                    placeholder="1.0"
+                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">Author</label>
+                  <input
+                    type="text"
+                    value={form.author}
+                    onChange={e => setForm({ ...form, author: e.target.value })}
+                    placeholder="your-name"
+                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1">
+                  Tags
+                </label>
+                <TagInput
+                  tags={form.tags}
+                  onChange={tags => setForm({ ...form, tags })}
+                  language={language}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1">
+                  {language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt'} *
                 </label>
                 <textarea
-                  value={form.prompt}
-                  onChange={e => setForm({ ...form, prompt: e.target.value })}
+                  value={form.systemPrompt}
+                  onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
                   placeholder={language === 'zh' ? '请按以下要求处理...' : 'Process the content as follows...'}
                   rows={5}
                   className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
                 />
               </div>
+
               <div className="flex items-center gap-2 justify-end">
                 <button
                   onClick={() => { setIsAdding(false); setEditingId(null); }}
@@ -311,7 +423,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saving || !form.name.trim() || !form.prompt.trim()}
+                  disabled={saving || !formValid}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -364,14 +476,29 @@ export function SkillManager({ language }: SkillManagerProps) {
               className="bg-surface-white border border-border rounded p-3 hover:border-accent/30 transition-colors"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-accent" />
-                  <h4 className="text-sm font-bold text-text-heading">{skill.name}</h4>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-accent/10 text-accent rounded">
-                    {getScopeLabel(skill.scope)}
-                  </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-sm font-bold text-text-heading">{skill.name}</h4>
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-accent/10 text-accent rounded">
+                      {getScopeLabel(skill.scope)}
+                    </span>
+                    {skill.version && (
+                      <span className="text-[10px] text-text-muted font-mono">v{skill.version}</span>
+                    )}
+                  </div>
+                  {skill.description && (
+                    <p className="text-[11px] text-text-muted line-clamp-2 mb-1">{skill.description}</p>
+                  )}
+                  {skill.tags && skill.tags.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Tag className="w-3 h-3 text-text-muted/60" />
+                      {skill.tags.map(tag => (
+                        <span key={tag} className="text-[10px] text-text-muted bg-surface border border-border rounded px-1.5 py-0.5">{tag}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     onClick={() => handleExport(skill)}
                     className="p-1 text-text-muted hover:text-accent transition-colors"
@@ -396,7 +523,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                 </div>
               </div>
               <p className="text-xs text-text-muted font-mono leading-relaxed line-clamp-3">
-                {skill.prompt}
+                {skill.systemPrompt || skill.prompt}
               </p>
             </motion.div>
           ))

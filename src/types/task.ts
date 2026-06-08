@@ -40,6 +40,22 @@ export type Project = {
 
 export type NoteType = 'note' | 'meeting_note' | 'summary';
 
+/**
+ * Data Model: Task vs Note
+ * ------------------------
+ * Tasks and Notes are independent first-class entities. A task is a single
+ * markdown line inside a daily file; a note is its own file under `Notes/`.
+ *
+ * The ONLY relationship is a one-way forward reference stored on the note:
+ *
+ *     Note.linkedTaskIds : string[]   (Note -> Task)
+ *
+ * Tasks do NOT store a back-reference to notes. The "notes for this task"
+ * count (`taskLinkedNotesCount` in App.tsx) is computed at render time, and
+ * the server prunes any `linkedTaskIds` that no longer point to a real task
+ * before responding. This is why the relationship is one-way: avoiding the
+ * two-way sync problem keeps the data honest.
+ */
 export type Note = {
   id: string;
   title: string;
@@ -51,6 +67,7 @@ export type Note = {
   context: 'work' | 'life';
   tags: string[];
   mentions: string[];
+  /** Forward reference to task IDs. May be pruned at read time on the server. */
   linkedTaskIds: string[];
   linkedProjectIds: string[];
   participants?: string[];
@@ -67,7 +84,15 @@ export type Note = {
 export type PromptTemplate = {
   id: string;
   name: string;
-  prompt: string;
+  // `prompt` is kept for backward compatibility; new code should use `systemPrompt`.
+  prompt?: string;
+  systemPrompt: string;
+  description: string;
   scope: string;
+  icon?: string;
+  version?: string;
+  author?: string;
+  tags?: string[];
   createdAt: string;
+  updatedAt?: string;
 };

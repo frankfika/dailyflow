@@ -79,6 +79,29 @@ export interface Project {
 
 export type NoteType = 'note' | 'meeting_note' | 'summary';
 
+/**
+ * Data Model: Task vs Note
+ * ------------------------
+ * Tasks and Notes are independent first-class entities:
+ *  - A Task is a single markdown line inside a daily file
+ *    (`Daily/YYYY/MM/YYYY-MM-DD.md`). Its stable identity is the
+ *    `^id-XXX` marker on that line.
+ *  - A Note is its own file under `Notes/YYYY/MM/<id>.md`. Its stable
+ *    identity is the file path / `id` field.
+ *
+ * A task is NOT a note and never becomes one. The only relationship between
+ * the two is a **forward reference** stored on the note:
+ *
+ *     Note.linkedTaskIds : string[]   (Note -> Task, *one-way*)
+ *
+ * Tasks do NOT store a back-reference to notes. The "notes for this task"
+ * view is derived at query time (see `taskLinkedNotesCount` in App.tsx and
+ * the read-time link pruning in services/notes.ts).
+ *
+ * Stale IDs (e.g. the task was deleted or rolled past) are filtered out at
+ * read time — never propagated, never silently lost. This is why the
+ * relationship is one-way: it avoids the two-way sync problem.
+ */
 export interface Note {
   id: string;
   title: string;
@@ -90,6 +113,7 @@ export interface Note {
   context: 'work' | 'life';
   tags: string[];
   mentions: string[];
+  /** IDs of tasks this note references. Forward reference only. */
   linkedTaskIds: string[];
   linkedProjectIds: string[];
   participants?: string[];
@@ -106,7 +130,15 @@ export interface Note {
 export interface PromptTemplate {
   id: string;
   name: string;
-  prompt: string;
+  // `prompt` is kept for backward compatibility; new code should use `systemPrompt`.
+  prompt?: string;
+  systemPrompt: string;
+  description: string;
   scope: string;
+  icon?: string;
+  version?: string;
+  author?: string;
+  tags?: string[];
   createdAt: string;
+  updatedAt?: string;
 }

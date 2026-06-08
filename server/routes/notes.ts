@@ -7,12 +7,17 @@ import {
   updateNote,
   deleteNote,
   getMentionsList,
+  pruneStaleTaskLinks,
 } from '../services/notes.js';
 
 const router = Router();
 
 /**
  * GET /api/notes - 获取所有笔记（支持筛选）
+ *
+ * Stale `linkedTaskIds` (e.g. task was deleted) are filtered out before
+ * responding, so the client never sees ghost links. The dropped count is
+ * returned in the `X-Pruned-Task-Links` header for observability.
  */
 router.get('/', async (req, res) => {
   try {
@@ -26,7 +31,11 @@ router.get('/', async (req, res) => {
     if (req.query.project) filters.project = req.query.project;
 
     const notes = await getAllNotes(filters);
-    res.json(notes);
+    const { notes: pruned, prunedCount } = await pruneStaleTaskLinks(notes);
+    if (prunedCount > 0) {
+      res.setHeader('X-Pruned-Task-Links', String(prunedCount));
+    }
+    res.json(pruned);
   } catch (error: any) {
     console.error('Error getting notes:', error);
     res.status(500).json({ error: error.message });
@@ -52,7 +61,11 @@ router.get('/mentions', async (req, res) => {
 router.get('/date/:date', async (req, res) => {
   try {
     const notes = await getNotesForDate(req.params.date);
-    res.json(notes);
+    const { notes: pruned, prunedCount } = await pruneStaleTaskLinks(notes);
+    if (prunedCount > 0) {
+      res.setHeader('X-Pruned-Task-Links', String(prunedCount));
+    }
+    res.json(pruned);
   } catch (error: any) {
     console.error('Error getting notes for date:', error);
     res.status(500).json({ error: error.message });
@@ -68,7 +81,8 @@ router.get('/:id', async (req, res) => {
     if (!note) {
       return res.status(404).json({ error: 'Note not found' });
     }
-    res.json(note);
+    const { notes: pruned } = await pruneStaleTaskLinks([note]);
+    res.json(pruned[0]);
   } catch (error: any) {
     console.error('Error getting note:', error);
     res.status(500).json({ error: error.message });

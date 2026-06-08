@@ -112,7 +112,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         className="mt-[2px] flex-shrink-0 hover:scale-105 active:scale-95 transition-transform focus:outline-none"
       >
         {isDone ? (
-          <div className="w-5 h-5 rounded bg-accent flex items-center justify-center shadow-sm">
+          <div className="w-5 h-5 rounded flex items-center justify-center shadow-sm" style={{ background: 'var(--gradient-success)' }}>
             <Check className="w-3 h-3 text-white" />
           </div>
         ) : (
@@ -241,15 +241,31 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span>{task.project}</span>
               </span>
             )}
-            {task.deadline && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent-highlight text-accent border border-accent/10 text-[11px] font-medium">
-                <Calendar className="w-3 h-3" />
-                <span>{task.deadline}</span>
+            {task.deadline && (() => {
+              // 过期日期用 danger 色，未来日期用 info 色；从别的日期迁来的用 muted 色
+              const today = new Date().toISOString().slice(0, 10);
+              const isMigrated = task.status === 'migrated' || (task.source_date && task.source_date !== currentFileDate);
+              const isOverdue = !isDone && !isMigrated && task.deadline < today;
+              const cls = isMigrated
+                ? 'bg-surface text-text-muted border-border/60'
+                : isOverdue
+                  ? 'bg-[var(--color-danger-light)] text-[var(--color-danger)] border-[var(--color-danger)]/20'
+                  : 'bg-[var(--color-info-light)] text-[var(--color-info)] border-[var(--color-info)]/20';
+              return (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium ${cls}`}>
+                  <Calendar className="w-3 h-3" />
+                  <span>{task.deadline}</span>
+                </span>
+              );
+            })()}
+            {task.priority === 'high' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-white text-[11px] font-medium shadow-sm" style={{ background: 'var(--gradient-warm)' }}>
+                <span>Priority</span>
               </span>
             )}
-            {task.priority === 'high' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent text-white text-[11px] font-medium shadow-sm shadow-accent/20">
-                <span>Priority</span>
+            {task.priority === 'medium' && (
+              <span className="status-pill status-pill-warning">
+                <span>Medium</span>
               </span>
             )}
             {linkedNotesCount > 0 && (

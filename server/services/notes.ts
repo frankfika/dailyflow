@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { loadConfig } from './config.js';
-import type { Note, NoteType } from '../types/task.js';
+import { readDailyNote } from './fileSystem.js';
+import type { Config, Note, NoteType } from '../types/task.js';
 
 export interface NoteFilters {
   type?: NoteType;
@@ -187,6 +188,54 @@ export async function getAllNotes(filters?: NoteFilters): Promise<Note[]> {
     if (a.date !== b.date) return b.date.localeCompare(a.date);
     return (b.time || '').localeCompare(a.time || '');
   });
+}
+
+/**
+ * Drop `linkedTaskIds` that don't exist in the referenced date's daily file.
+ *
+ * Notes store forward references to tasks (see the model comment on the
+ * `Note` interface). When a task is deleted, rolled, or never existed, the
+ * note's stored ID becomes stale. Rather than mutating the on-disk file
+ * (which would race with concurrent edits), we filter the IDs at read time
+ * so the UI only ever sees real links.
+ *
+ * We also count how many IDs were dropped so callers can detect the drift
+ * without paying an extra read.
+ */
+export async function pruneStaleTaskLinks(notes: Note[]): Promise<{ notes: Note[]; prunedCount: number }> {
+  if (notes.length === 0) return { notes, prunedCount: 0 };
+
+  const config = await loadConfig();
+  // Cache (date -> set of valid task ids) so we only read each day's file once.
+  const idCache = new Map<string, Set<string>>();
+
+  async function getValidIds(date: string): Promise<Set<string>> {
+    let set = idCache.get(date);
+    if (set) return set;
+    const dailyNote = await readDailyNote(date, config);
+    set = new Set((dailyNote?.tasks || []).map(t => t.id));
+    idCache.set(date, set);
+    return set;
+  }
+
+  let prunedCount = 0;
+  const out: Note[] = [];
+  for (const note of notes) {
+    if (note.linkedTaskIds.length === 0) {
+      out.push(note);
+      continue;
+    }
+    const valid = await getValidIds(note.date);
+    const filtered = note.linkedTaskIds.filter(id => valid.has(id));
+    if (filtered.length !== note.linkedTaskIds.length) {
+      prunedCount += note.linkedTaskIds.length - filtered.length;
+    }
+    out.push(filtered.length === note.linkedTaskIds.length
+      ? note
+      : { ...note, linkedTaskIds: filtered });
+  }
+
+  return { notes: out, prunedCount };
 }
 
 export async function getNotesForDate(date: string): Promise<Note[]> {

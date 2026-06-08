@@ -5,9 +5,8 @@
 @import "tailwindcss";
 
 @theme {
-  /* Eye-friendly clean sans-serif for main reading, easier on the eyes than serif on screens */
-  --font-sans: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  /* Keep a nice serif for headings or special quotes if needed */
+  /* Native macOS-feeling system font stack */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Noto Sans SC", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: "Georgia", "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
@@ -15,39 +14,73 @@
   --text-scale: 1;
   --font-weight-base: 400;
 
-  /* E-ink Light Mode (Classic Paperwhite - Softer contrast) */
-  --color-background: #F2F2F2; /* Slightly darker gray to reduce glare */
-  --color-surface: #FAFAFA; /* Off-white, avoiding pure #FFFFFF */
-  --color-surface-white: #FAFAFA;
-  --color-border: #DCDCDC;
+  /* Modern Desktop Light Mode — crisp, airy, native-app feel */
+  --color-background: #F5F5F7;
+  --color-surface: #FFFFFF;
+  --color-surface-white: #FFFFFF;
+  --color-border: #E5E5E7;
 
-  --color-text-main: #3D3D3D; /* Softer dark gray, avoiding #000 or very dark #333 for less eye strain */
-  --color-text-heading: #222222;
-  --color-text-muted: #737373;
+  --color-text-main: #2C2C2E;
+  --color-text-heading: #1D1D1F;
+  --color-text-muted: #8E8E93;
 
-  --color-accent: #404040; /* Soft ink */
-  --color-accent-light: #EBEBEB;
-  --color-accent-warm: #555555;
-  --color-accent-highlight: #EAEAEA;
+  --color-accent: #007AFF;
+  --color-accent-light: #E5F1FF;
+  --color-accent-warm: #5856D6;
+  --color-accent-highlight: #F2F2F7;
+
+  /* Status palette — used for state indicators (done / warning / migrated) */
+  --color-success: #34C759;
+  --color-success-light: #E8F8EC;
+  --color-warning: #FF9F0A;
+  --color-warning-light: #FFF4E0;
+  --color-danger: #FF3B30;
+  --color-danger-light: #FFE9E7;
+  --color-info: #5AC8FA;
+  --color-info-light: #E1F6FE;
+
+  /* Accent gradient — used for hero elements, primary buttons on hover */
+  --gradient-accent: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+  --gradient-warm: linear-gradient(135deg, #FF9F0A 0%, #FF3B30 100%);
+  --gradient-success: linear-gradient(135deg, #34C759 0%, #30B350 100%);
+  --gradient-muted: linear-gradient(135deg, #8E8E93 0%, #636366 100%);
+
+  /* Glow shadows — depth and "alive" feel for interactive surfaces */
+  --shadow-accent-glow: 0 4px 16px rgba(0, 122, 255, 0.18), 0 1px 2px rgba(0, 122, 255, 0.12);
+  --shadow-warm-glow: 0 4px 16px rgba(255, 159, 10, 0.18), 0 1px 2px rgba(255, 159, 10, 0.12);
+  --shadow-success-glow: 0 4px 16px rgba(52, 199, 89, 0.18), 0 1px 2px rgba(52, 199, 89, 0.12);
 }
 
 :root[data-context="life"] {
-  /* Kindle Sepia Mode (Soft warm - Easy on eyes) */
-  --color-background: #F0E6D8; /* Softer sepia */
-  --color-surface: #F5EDE0; /* Soft warm paper */
-  --color-surface-white: #F5EDE0;
-  --color-border: #DDD0BE;
+  /* Warm life variant */
+  --color-background: #F2F0ED;
+  --color-surface: #FAF9F7;
+  --color-surface-white: #FAF9F7;
+  --color-border: #E5E2DD;
 
-  --color-text-main: #5A4A3D; /* Medium warm brown */
-  --color-text-heading: #4A3A2D;
-  --color-text-muted: #8A7A6A;
+  --color-text-main: #3D3A36;
+  --color-text-heading: #2C2A26;
+  --color-text-muted: #9A9590;
 
-  --color-accent: #5A4A3D;
-  --color-accent-light: #EDE0D0;
-  --color-accent-warm: #7A6A5A;
-  --color-accent-highlight: #F0E5D8;
+  --color-accent: #D46A3E;
+  --color-accent-light: #FCECE5;
+  --color-accent-warm: #C75B32;
+  --color-accent-highlight: #F5F0EB;
 
-  /* Brightness multiplier for life theme */
+  --color-success: #4FA866;
+  --color-success-light: #E9F3EC;
+  --color-warning: #D89043;
+  --color-warning-light: #FAEEE0;
+  --color-danger: #C75B4A;
+  --color-danger-light: #F8E7E5;
+
+  --gradient-accent: linear-gradient(135deg, #D46A3E 0%, #C75B32 100%);
+  --gradient-warm: linear-gradient(135deg, #D89043 0%, #C75B4A 100%);
+  --gradient-success: linear-gradient(135deg, #4FA866 0%, #3D8855 100%);
+
+  --shadow-accent-glow: 0 4px 16px rgba(212, 106, 62, 0.20), 0 1px 2px rgba(212, 106, 62, 0.12);
+  --shadow-warm-glow: 0 4px 16px rgba(216, 144, 67, 0.20), 0 1px 2px rgba(216, 144, 67, 0.12);
+
   --life-brightness: 1;
 }
 
@@ -56,62 +89,97 @@ body {
   color: var(--color-text-main);
   font-family: var(--font-sans);
   font-size: calc(14px * var(--text-scale, 1));
-  transition: background-color 0.8s ease, color 0.8s ease;
+  transition: background-color 0.5s ease, color 0.5s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Slightly more visible paper texture for glare reduction */
-  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
 
-  /* Increase base line-height and letter spacing globally for better readability */
-  line-height: 1.6;
-  letter-spacing: 0.015em;
+/* macOS-style title bar feel for draggable regions */
+.titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.titlebar button,
+.titlebar a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 /* Typography Overrides */
 h1, h2, h3, h4, h5, h6, .editorial-hero {
   font-family: var(--font-sans);
-  letter-spacing: 0.02em;
+  letter-spacing: -0.02em;
   font-weight: 600;
-  line-height: 1.3; /* Tighter line height for headings */
+  line-height: 1.25;
 }
 
-/* Flat Panels (No Glassmorphism on E-ink) */
+/* Glass Panels — subtle depth for native feel */
 .glass-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
 }
 
-/* Paper Cards (Stacked paper effect) */
+/* Elevated Cards — soft native shadow */
 .floating-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 6px; /* Slightly rounded corners are softer on the eyes */
-  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.02); /* Extremely subtle offset */
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0.5px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 .floating-card:hover {
-  transform: none; /* Kindle doesn't float */
-  background: var(--color-surface-white);
-  border-color: var(--color-text-muted);
-  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 0 0.5px rgba(0, 0, 0, 0.1);
+  border-color: rgba(0,0,0,0.08);
 }
 
-/* Command Pill */
+/* Command Pill — native macOS button feel */
 .command-pill {
-  background: var(--color-accent);
-  color: var(--color-surface);
+  background: var(--gradient-accent);
+  color: #FFFFFF;
   border-radius: 6px;
   font-weight: 500;
-  box-shadow: none;
-  border: 1px solid var(--color-accent);
-  transition: all 0.2s ease;
+  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.08);
+  border: none;
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 .command-pill:hover {
-  transform: none;
-  background: var(--color-text-main);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: var(--shadow-accent-glow);
+}
+
+/* Status pills — for "done", "warning", etc. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.status-pill-success { background: var(--color-success-light); color: var(--color-success); }
+.status-pill-warning { background: var(--color-warning-light); color: var(--color-warning); }
+.status-pill-danger  { background: var(--color-danger-light);  color: var(--color-danger);  }
+.status-pill-info    { background: var(--color-info-light);    color: var(--color-info);    }
+.status-pill-accent  { background: var(--color-accent-light);  color: var(--color-accent);  }
+
+/* Interactive accent surface — subtle gradient bg with hover glow */
+.surface-accent {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-accent-light) 200%);
+  border: 1px solid var(--color-border);
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.surface-accent:hover {
+  box-shadow: var(--shadow-accent-glow);
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
 }
 
 /* Custom Scrollbar */
@@ -131,9 +199,19 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: linear-gradient(180deg, var(--color-border) 0%, color-mix(in srgb, var(--color-border) 60%, transparent) 100%);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: var(--color-accent);
+  opacity: 0.6;
+}
+
+/* Subtle entrance animation for newly added tasks */
+@keyframes task-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.task-enter {
+  animation: task-enter 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
 }

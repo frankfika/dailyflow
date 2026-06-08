@@ -1,6 +1,26 @@
 /// <reference types="vite/client" />
 const API_BASE = import.meta.env.DEV ? '/api' : 'http://localhost:3003/api';
 
+/**
+ * Build an Error that carries the HTTP status code so call sites can decide
+ * whether to retry, resync, or surface the error. Server-supplied error
+ * messages are preferred when present.
+ */
+async function httpError(res: Response, fallback: string): Promise<Error> {
+  let message = fallback;
+  try {
+    const body = await res.json();
+    if (body && typeof body.error === 'string') {
+      message = body.error;
+    }
+  } catch {
+    // body was not JSON; stick with the fallback message
+  }
+  const err = new Error(message) as Error & { status?: number };
+  err.status = res.status;
+  return err;
+}
+
 // Inline types that match the server API responses
 export interface TaskInput {
   id: string;
@@ -58,7 +78,7 @@ export const filesApi = {
   async get(date: string): Promise<DailyNoteData | null> {
     const res = await fetch(`${API_BASE}/files/${date}`);
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error('Failed to fetch file');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch file');
     return res.json();
   },
 
@@ -68,7 +88,7 @@ export const filesApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
-    if (!res.ok) throw new Error('Failed to create file');
+    if (!res.ok) throw await httpError(res, 'Failed to create file');
   },
 
   async update(date: string, content: string): Promise<void> {
@@ -77,12 +97,12 @@ export const filesApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
-    if (!res.ok) throw new Error('Failed to update file');
+    if (!res.ok) throw await httpError(res, 'Failed to update file');
   },
 
   async list(): Promise<string[]> {
     const res = await fetch(`${API_BASE}/files/list`);
-    if (!res.ok) throw new Error('Failed to list files');
+    if (!res.ok) throw await httpError(res, 'Failed to list files');
     const data = await res.json();
     return data.files;
   },
@@ -94,7 +114,7 @@ export const filesApi = {
 export const tasksApi = {
   async getByDate(date: string): Promise<TaskInput[]> {
     const res = await fetch(`${API_BASE}/tasks/${date}`);
-    if (!res.ok) throw new Error('Failed to fetch tasks');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch tasks');
     const data = await res.json();
     return data.tasks;
   },
@@ -105,7 +125,7 @@ export const tasksApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, date }),
     });
-    if (!res.ok) throw new Error('Failed to update task');
+    if (!res.ok) throw await httpError(res, 'Failed to update task');
   },
 
   async create(date: string, task: Record<string, unknown>): Promise<void> {
@@ -114,7 +134,7 @@ export const tasksApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date, task }),
     });
-    if (!res.ok) throw new Error('Failed to create task');
+    if (!res.ok) throw await httpError(res, 'Failed to create task');
   },
 
   async edit(
@@ -135,7 +155,7 @@ export const tasksApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date, ...updates }),
     });
-    if (!res.ok) throw new Error('Failed to edit task');
+    if (!res.ok) throw await httpError(res, 'Failed to edit task');
   },
 
   async delete(taskId: string, date: string): Promise<void> {
@@ -144,7 +164,7 @@ export const tasksApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date }),
     });
-    if (!res.ok) throw new Error('Failed to delete task');
+    if (!res.ok) throw await httpError(res, 'Failed to delete task');
   },
 };
 
@@ -158,7 +178,7 @@ export const rolloverApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toDate }),
     });
-    if (!res.ok) throw new Error('Failed to preview rollover');
+    if (!res.ok) throw await httpError(res, 'Failed to preview rollover');
     return res.json();
   },
 
@@ -168,7 +188,7 @@ export const rolloverApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toDate }),
     });
-    if (!res.ok) throw new Error('Failed to apply rollover');
+    if (!res.ok) throw await httpError(res, 'Failed to apply rollover');
     return res.json();
   },
 };
@@ -179,7 +199,7 @@ export const rolloverApi = {
 export const configApi = {
   async get(): Promise<ConfigData> {
     const res = await fetch(`${API_BASE}/config`);
-    if (!res.ok) throw new Error('Failed to fetch config');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch config');
     return res.json();
   },
 
@@ -189,14 +209,14 @@ export const configApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     });
-    if (!res.ok) throw new Error('Failed to update config');
+    if (!res.ok) throw await httpError(res, 'Failed to update config');
   },
 };
 
 export const workspacesApi = {
   async list(): Promise<{ workspaces: Workspace[]; activeWorkspaceId: string }> {
     const res = await fetch(`${API_BASE}/config/workspaces`);
-    if (!res.ok) throw new Error('Failed to list workspaces');
+    if (!res.ok) throw await httpError(res, 'Failed to list workspaces');
     return res.json();
   },
 
@@ -211,7 +231,7 @@ export const workspacesApi = {
     if (res.status === 409 && data.duplicate && data.workspace) {
       return data.workspace as Workspace;
     }
-    if (!res.ok) throw new Error(data.error || 'Failed to create workspace');
+    if (!res.ok) throw await httpError(res, 'Failed to create workspace');
     return data.workspace;
   },
 
@@ -223,21 +243,21 @@ export const workspacesApi = {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Failed to rename workspace');
+      throw await httpError(res, data.error || 'Failed to rename workspace');
     }
   },
 
   async remove(id: string): Promise<{ activeWorkspaceId: string }> {
     const res = await fetch(`${API_BASE}/config/workspaces/${id}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to delete workspace');
+    if (!res.ok) throw await httpError(res, 'Failed to delete workspace');
     return data;
   },
 
   async activate(id: string): Promise<Workspace> {
     const res = await fetch(`${API_BASE}/config/workspaces/${id}/activate`, { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to activate workspace');
+    if (!res.ok) throw await httpError(res, 'Failed to activate workspace');
     return data.workspace;
   },
 
@@ -246,7 +266,7 @@ export const workspacesApi = {
     if (res.status === 400) return null;
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Failed to open folder picker');
+      throw await httpError(res, data.error || 'Failed to open folder picker');
     }
     const data = await res.json();
     return data.path || null;
@@ -277,13 +297,13 @@ export interface ProjectData {
 export const projectsApi = {
   async getAll(): Promise<ProjectData[]> {
     const res = await fetch(`${API_BASE}/projects`);
-    if (!res.ok) throw new Error('Failed to fetch projects');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch projects');
     return res.json();
   },
 
   async getById(id: string): Promise<ProjectData> {
     const res = await fetch(`${API_BASE}/projects/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch project');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch project');
     return res.json();
   },
 
@@ -293,7 +313,7 @@ export const projectsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(project),
     });
-    if (!res.ok) throw new Error('Failed to create project');
+    if (!res.ok) throw await httpError(res, 'Failed to create project');
     return res.json();
   },
 
@@ -303,7 +323,7 @@ export const projectsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error('Failed to update project');
+    if (!res.ok) throw await httpError(res, 'Failed to update project');
     return res.json();
   },
 
@@ -311,7 +331,7 @@ export const projectsApi = {
     const res = await fetch(`${API_BASE}/projects/${id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete project');
+    if (!res.ok) throw await httpError(res, 'Failed to delete project');
   },
 };
 
@@ -340,7 +360,7 @@ export interface GitSyncResult {
 export const gitApi = {
   async getStatus(): Promise<GitStatus> {
     const res = await fetch(`${API_BASE}/git/status`);
-    if (!res.ok) throw new Error('Failed to get git status');
+    if (!res.ok) throw await httpError(res, 'Failed to get git status');
     return res.json();
   },
 
@@ -350,7 +370,7 @@ export const gitApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     });
-    if (!res.ok) throw new Error('Failed to sync');
+    if (!res.ok) throw await httpError(res, 'Failed to sync');
     return res.json();
   },
 
@@ -358,7 +378,7 @@ export const gitApi = {
     const res = await fetch(`${API_BASE}/git/init`, {
       method: 'POST',
     });
-    if (!res.ok) throw new Error('Failed to init git repo');
+    if (!res.ok) throw await httpError(res, 'Failed to init git repo');
     return res.json();
   },
 
@@ -366,7 +386,7 @@ export const gitApi = {
     const res = await fetch(`${API_BASE}/git/set-remote`, {
       method: 'POST',
     });
-    if (!res.ok) throw new Error('Failed to set remote');
+    if (!res.ok) throw await httpError(res, 'Failed to set remote');
     return res.json();
   },
 };
@@ -398,9 +418,17 @@ export interface NoteData {
 export interface PromptTemplateData {
   id: string;
   name: string;
-  prompt: string;
+  // `prompt` is kept for backward compatibility; new code should use `systemPrompt`.
+  prompt?: string;
+  systemPrompt: string;
+  description: string;
   scope: string;
+  icon?: string;
+  version?: string;
+  author?: string;
+  tags?: string[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 /**
@@ -422,19 +450,19 @@ export const notesApi = {
     }
     const query = params.toString() ? `?${params.toString()}` : '';
     const res = await fetch(`${API_BASE}/notes${query}`);
-    if (!res.ok) throw new Error('Failed to fetch notes');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch notes');
     return res.json();
   },
 
   async getByDate(date: string): Promise<NoteData[]> {
     const res = await fetch(`${API_BASE}/notes/date/${date}`);
-    if (!res.ok) throw new Error('Failed to fetch notes for date');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch notes for date');
     return res.json();
   },
 
   async getById(id: string): Promise<NoteData> {
     const res = await fetch(`${API_BASE}/notes/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch note');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch note');
     return res.json();
   },
 
@@ -444,7 +472,7 @@ export const notesApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(note),
     });
-    if (!res.ok) throw new Error('Failed to create note');
+    if (!res.ok) throw await httpError(res, 'Failed to create note');
     return res.json();
   },
 
@@ -454,7 +482,7 @@ export const notesApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error('Failed to update note');
+    if (!res.ok) throw await httpError(res, 'Failed to update note');
     return res.json();
   },
 
@@ -462,12 +490,12 @@ export const notesApi = {
     const res = await fetch(`${API_BASE}/notes/${id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete note');
+    if (!res.ok) throw await httpError(res, 'Failed to delete note');
   },
 
   async getMentions(): Promise<string[]> {
     const res = await fetch(`${API_BASE}/notes/mentions`);
-    if (!res.ok) throw new Error('Failed to fetch mentions');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch mentions');
     return res.json();
   },
 };
@@ -478,7 +506,7 @@ export const notesApi = {
 export const promptsApi = {
   async getAll(): Promise<PromptTemplateData[]> {
     const res = await fetch(`${API_BASE}/prompts`);
-    if (!res.ok) throw new Error('Failed to fetch prompts');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch prompts');
     return res.json();
   },
 
@@ -488,7 +516,7 @@ export const promptsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create prompt');
+    if (!res.ok) throw await httpError(res, 'Failed to create prompt');
     return res.json();
   },
 
@@ -498,7 +526,7 @@ export const promptsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error('Failed to update prompt');
+    if (!res.ok) throw await httpError(res, 'Failed to update prompt');
     return res.json();
   },
 
@@ -506,7 +534,7 @@ export const promptsApi = {
     const res = await fetch(`${API_BASE}/prompts/${id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete prompt');
+    if (!res.ok) throw await httpError(res, 'Failed to delete prompt');
   },
 };
 
@@ -532,7 +560,7 @@ export interface RecurringTaskData {
 export const recurringApi = {
   async getAll(): Promise<RecurringTaskData[]> {
     const res = await fetch(`${API_BASE}/recurring`);
-    if (!res.ok) throw new Error('Failed to fetch recurring tasks');
+    if (!res.ok) throw await httpError(res, 'Failed to fetch recurring tasks');
     return res.json();
   },
 
@@ -542,7 +570,7 @@ export const recurringApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create recurring task');
+    if (!res.ok) throw await httpError(res, 'Failed to create recurring task');
     return res.json();
   },
 
@@ -550,7 +578,7 @@ export const recurringApi = {
     const res = await fetch(`${API_BASE}/recurring/${id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete recurring task');
+    if (!res.ok) throw await httpError(res, 'Failed to delete recurring task');
   },
 
   async instantiate(date: string): Promise<{ created: number }> {
@@ -559,7 +587,7 @@ export const recurringApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date }),
     });
-    if (!res.ok) throw new Error('Failed to instantiate recurring tasks');
+    if (!res.ok) throw await httpError(res, 'Failed to instantiate recurring tasks');
     return res.json();
   },
 };
@@ -590,7 +618,7 @@ export const aiApi = {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || data.detail || `AI request failed (${res.status})`);
+      throw await httpError(res, data.error || data.detail || `AI request failed (${res.status})`);
     }
     return res.json();
   },
@@ -637,7 +665,7 @@ export const ipfsApi = {
 
   async list(): Promise<{ records: IpfsBackupRecord[] }> {
     const res = await fetch(`${API_BASE}/ipfs/backups`);
-    if (!res.ok) throw new Error('Failed to list IPFS backups');
+    if (!res.ok) throw await httpError(res, 'Failed to list IPFS backups');
     return res.json();
   },
 };
