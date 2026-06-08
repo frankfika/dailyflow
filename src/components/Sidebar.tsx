@@ -33,6 +33,7 @@ interface SidebarProps {
   gitLastCommitTime?: string | null;
   formatSyncTime?: (time: string, lang: 'en' | 'zh', now?: number) => string;
   nowTime?: number;
+  onGitSync?: () => void;
 }
 
 export function Sidebar({
@@ -61,6 +62,7 @@ export function Sidebar({
   gitLastCommitTime,
   formatSyncTime,
   nowTime,
+  onGitSync,
 }: SidebarProps) {
   return (
     <>
@@ -201,7 +203,7 @@ export function Sidebar({
           </nav>
 
           {/* Bottom section: Work/Life toggle + Sync + Settings */}
-          <div className="mt-auto pt-3 border-t border-border/60 space-y-2">
+          <div className="mt-auto pt-3 border-t border-border/60 space-y-3">
             {/* Work/Life toggle */}
             {onContextChange && (
               <div className="flex items-center justify-between">
@@ -235,34 +237,37 @@ export function Sidebar({
               </div>
             )}
 
-            {/* Sync status */}
-            {githubConnected && formatSyncTime && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-text-muted">
-                  {language === 'zh' ? '同步' : 'Sync'}
-                </span>
+            {/* GitHub Sync */}
+            {githubConnected && onGitSync && (
+              <div className="space-y-1.5">
                 <button
-                  onClick={() => { /* sync action handled by parent */ }}
-                  className="flex items-center gap-1.5 text-[11px] text-text-muted"
-                  title={language === 'zh' ? 'GitHub 同步状态' : 'GitHub sync status'}
+                  onClick={onGitSync}
+                  disabled={isSyncing || !hasChanges}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-medium rounded-md transition-colors hover:bg-black/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={language === 'zh' ? '同步到 GitHub' : 'Sync to GitHub'}
                 >
-                  {isSyncing ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-accent" />
-                  ) : hasChanges ? (
-                    <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                  ) : (
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                  )}
-                  <span>
-                    {isSyncing
-                      ? (language === 'zh' ? '同步中' : 'Syncing')
-                      : hasChanges
-                      ? (language === 'zh' ? '待同步' : 'Unsynced')
-                      : (lastSyncTime || gitLastCommitTime)
-                      ? formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime || Date.now())
-                      : (language === 'zh' ? '已同步' : 'Synced')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {isSyncing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                    ) : hasChanges ? (
+                      <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                    ) : (
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                    )}
+                    <span className="text-text-muted">
+                      {isSyncing
+                        ? (language === 'zh' ? '同步中' : 'Syncing')
+                        : hasChanges
+                        ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes')
+                        : (language === 'zh' ? '已是最新' : 'Up to date')}
+                    </span>
+                  </div>
                 </button>
+                {!isSyncing && (lastSyncTime || gitLastCommitTime) && formatSyncTime && (
+                  <p className="text-[10px] text-text-muted px-2 opacity-60">
+                    {formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime || Date.now())}
+                  </p>
+                )}
               </div>
             )}
 
@@ -270,7 +275,7 @@ export function Sidebar({
             {onOpenSettings && (
               <button
                 onClick={onOpenSettings}
-                className="w-full flex items-center gap-2 px-2 py-1 text-[11px] font-medium text-text-muted hover:text-text-heading rounded-md transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-text-muted hover:text-text-heading rounded-md transition-colors hover:bg-black/5"
               >
                 <Settings className="w-3.5 h-3.5 opacity-70" />
                 {language === 'zh' ? '设置' : 'Settings'}

@@ -939,6 +939,17 @@ export default function App() {
             />
           ) : null
         }
+        activeContext={activeContext}
+        onContextChange={setActiveContext}
+        onOpenSettings={() => setShowSettings(true)}
+        githubConnected={githubConnected}
+        isSyncing={isSyncing}
+        hasChanges={hasChanges}
+        lastSyncTime={lastSyncTime}
+        gitLastCommitTime={gitLastCommitTime}
+        formatSyncTime={formatSyncTime}
+        nowTime={nowTime}
+        onGitSync={handleGitSync}
       />
 
       {/* Main Content Area */}
@@ -978,31 +989,6 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
-            {githubConnected && (
-              <button
-                onClick={handleGitSync}
-                disabled={isSyncing || !hasChanges}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-bold  bg-surface border border-border rounded hover:bg-surface-white transition-colors disabled:opacity-50"
-                title={language === 'zh' ? '同步到 GitHub' : 'Sync to GitHub'}
-              >
-                {isSyncing ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-accent" />
-                ) : hasChanges ? (
-                  <div className="w-2 h-2 rounded bg-orange-400 animate-pulse" />
-                ) : (
-                  <div className="w-2 h-2 rounded bg-green-400" />
-                )}
-                <span className="text-text-muted">
-                  {isSyncing
-                    ? (language === 'zh' ? '同步中' : 'Syncing')
-                    : hasChanges
-                    ? (language === 'zh' ? '待同步' : 'Unsynced')
-                    : (lastSyncTime || gitLastCommitTime)
-                    ? formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime)
-                    : (language === 'zh' ? '已同步' : 'Synced')}
-                </span>
-              </button>
-            )}
             {activeTab === 'today' && (
               <button
                 onClick={() => setHideDoneTasks(v => !v)}
@@ -1017,19 +1003,6 @@ export default function App() {
                 {hideDoneTasks ? (language === 'zh' ? '显示全部' : 'Show all') : (language === 'zh' ? '隐藏已完成' : 'Hide done')}
               </button>
             )}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="relative p-2 text-text-muted hover:text-text-main transition-colors rounded-md hover:bg-surface"
-              title={language === 'zh' ? '设置' : 'Settings'}
-              data-testid="settings-button"
-            >
-              <Settings className="w-4.5 h-4.5" />
-              {updateAvailable && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white ring-2 ring-white dark:ring-stone-900">
-                  !
-                </span>
-              )}
-            </button>
             <ContextSwitcher
               activeContext={activeContext}
               onChange={setActiveContext}
@@ -1254,8 +1227,10 @@ export default function App() {
 
                     const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
                     const doneCatTasks = catTasks.filter(t => t.status === 'done');
-                    if (hideDoneTasks && pendingCount === 0) return null;
+                    // Don't show empty categories
                     if (pendingCount === 0 && doneCount === 0) return null;
+                    // When hiding done tasks, skip categories with no pending tasks
+                    if (hideDoneTasks && pendingCount === 0) return null;
 
                     const showDone = showDoneByCategory[category] ?? false;
 
@@ -1266,9 +1241,10 @@ export default function App() {
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
 
-                        <div className="space-y-4">
-                          <AnimatePresence>
-                            {pendingCatTasks.slice().reverse().map(task => (
+                        {pendingCatTasks.length > 0 && (
+                          <div className="space-y-4">
+                            <AnimatePresence>
+                              {pendingCatTasks.slice().reverse().map(task => (
                               <TaskCard
                                 key={task.id}
                                 task={task}
@@ -1287,6 +1263,7 @@ export default function App() {
                             ))}
                           </AnimatePresence>
                         </div>
+                        )}
 
                         {doneCatTasks.length > 0 && !hideDoneTasks && (
                           <div className="mt-2">
@@ -1342,6 +1319,7 @@ export default function App() {
                     if (selectedCategory) return null;
                     const pending = uncategorized.filter(t => t.status !== 'done');
                     const done = uncategorized.filter(t => t.status === 'done');
+                    // When hiding done tasks, skip inbox if it has no pending tasks
                     if (hideDoneTasks && pending.length === 0) return null;
                     const showDone = showDoneByCategory['__uncategorized__'] ?? false;
                     return (
@@ -1350,9 +1328,10 @@ export default function App() {
                           <span>{language === 'zh' ? '收集箱' : 'Inbox'}</span>
                           <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
-                        <div className="space-y-4">
-                          <AnimatePresence>
-                            {pending.slice().reverse().map(task => (
+                        {pending.length > 0 && (
+                          <div className="space-y-4">
+                            <AnimatePresence>
+                              {pending.slice().reverse().map(task => (
                               <TaskCard
                                 key={task.id}
                                 task={task}
@@ -1371,6 +1350,7 @@ export default function App() {
                             ))}
                           </AnimatePresence>
                         </div>
+                        )}
                         {done.length > 0 && !hideDoneTasks && (
                           <div className="mt-2">
                             <button
