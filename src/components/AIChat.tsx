@@ -97,7 +97,12 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
   const [pendingSkillId, setPendingSkillId] = useState<string | null>(null);
   const [draftSourceTitle, setDraftSourceTitle] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return localStorage.getItem('df_ai_chat_sidebar_collapsed') === '1'; } catch { return false; }
+    try {
+      const stored = localStorage.getItem('df_ai_chat_sidebar_collapsed');
+      if (stored !== null) return stored === '1';
+      // Default: collapsed on small screens
+      return typeof window !== 'undefined' && window.innerWidth < 768;
+    } catch { return false; }
   });
   const [saveNoteModal, setSaveNoteModal] = useState<{
     open: boolean;
@@ -401,7 +406,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
   return (
     <div className="h-full flex bg-background">
       {/* —— Left: sessions —— */}
-      <aside className={`flex flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-12 items-center' : 'w-[260px]'}`}>
+      <aside className={`flex flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-0 md:w-12 items-center overflow-hidden' : 'w-[260px]'}`}>
         {!sidebarCollapsed ? (
           <>
             <div className="px-4 pt-5 pb-3 border-b border-border">
@@ -518,36 +523,45 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
       {/* —— Right: chat —— */}
       <section className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="px-8 py-4 border-b border-border bg-background flex items-center justify-between">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-text-heading truncate">
-              {activeSession?.title || (language === 'zh' ? '新对话' : 'New chat')}
-            </h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              {activeProvider ? (
-                <>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+        <header className="px-4 md:px-6 py-3 md:py-4 border-b border-border bg-background flex items-center justify-between shrink-0 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="md:hidden p-1 text-text-muted hover:text-text-heading shrink-0"
+              title={language === 'zh' ? '打开对话列表' : 'Open sessions'}
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-text-heading truncate">
+                {activeSession?.title || (language === 'zh' ? '新对话' : 'New chat')}
+              </h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                {activeProvider ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                      <Bot className="w-3 h-3" />
+                      {activeProvider.name}
+                      <span className="text-text-muted/60 font-mono truncate">· {activeProvider.model}</span>
+                    </span>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="inline-flex items-center gap-1 text-[11px] text-amber-600 hover:underline"
+                  >
                     <Bot className="w-3 h-3" />
-                    {activeProvider.name}
-                    <span className="text-text-muted/60 font-mono">· {activeProvider.model}</span>
-                  </span>
-                </>
-              ) : (
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="inline-flex items-center gap-1 text-[11px] text-amber-600 hover:underline"
-                >
-                  <Bot className="w-3 h-3" />
-                  {language === 'zh' ? '尚未配置模型，点这里添加' : 'No model configured — click to add'}
-                </button>
-              )}
+                    {language === 'zh' ? '尚未配置模型，点这里添加' : 'No model configured — click to add'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </header>
 
         {/* Context pills row (only if any) */}
         {activeSession && activeSession.contextItems.length > 0 && (
-          <div className="px-8 py-2 border-b border-border bg-background flex items-center gap-1.5 flex-wrap">
+          <div className="px-4 md:px-6 py-2 border-b border-border bg-background flex items-center gap-1.5 flex-wrap shrink-0">
             <span className="text-[10px] uppercase tracking-wider text-text-muted/70 font-bold mr-1">
               {language === 'zh' ? '上下文' : 'Context'}
             </span>
@@ -576,7 +590,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           {!activeSession || activeSession.messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center px-6">
+            <div className="h-full flex items-center justify-center px-4 md:px-6">
               <div className="text-center max-w-xl w-full">
                 <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-accent to-accent/60 text-white flex items-center justify-center shadow-lg">
                   <Sparkles className="w-8 h-8" />
@@ -589,7 +603,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
                     ? '把今日任务、笔记或某个项目挂上来当上下文，我会基于真实数据帮你分析'
                     : 'Attach tasks, notes, or projects as context. I will work with your real data.'}
                 </p>
-                <div className="grid grid-cols-2 gap-2.5 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
                   {[
                     { icon: '📝', label: language === 'zh' ? '总结今日任务' : 'Summarize today',
                       hint: language === 'zh' ? '一段话回顾今天' : 'Recap today in a paragraph' },
@@ -616,7 +630,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
               </div>
             </div>
           ) : (
-            <div className="w-full px-6 md:px-12 lg:px-20 py-8 space-y-8">
+            <div className="w-full px-4 md:px-8 lg:px-12 py-6 md:py-8 space-y-6 md:space-y-8">
               <AnimatePresence initial={false}>
                 {activeSession.messages.map(msg => (
                   <motion.div
@@ -718,8 +732,8 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
         </div>
 
         {/* Input area — composer card */}
-        <div className="px-6 pb-6 pt-2">
-          <div className="w-full px-6 md:px-12 lg:px-20">
+        <div className="px-4 md:px-8 pb-4 md:pb-6 pt-2 shrink-0">
+          <div className="w-full">
             {pendingSkillId && activeSkill && (
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-accent/10 text-accent rounded">

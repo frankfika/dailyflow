@@ -953,9 +953,9 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
+      <main className="flex-1 flex flex-col h-screen bg-background relative overflow-hidden min-w-0 w-full transition-colors duration-700">
           <>
-        <header className={`h-20 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border  z-10 shrink-0 transition-colors duration-700 bg-background`}>
+        <header className={`h-16 px-4 md:px-8 lg:px-12 flex items-center justify-between border-b border-border z-10 shrink-0 transition-colors duration-700 bg-background`}>
           <div className="flex items-center gap-3 md:gap-4 text-xs font-sans  font-bold overflow-hidden whitespace-nowrap">
             <button className="p-2 -ml-2 text-text-muted hover:text-text-main shrink-0" onClick={() => setIsSidebarOpen(prev => !prev)}>
               <Menu className="w-5 h-5"/>
@@ -1011,7 +1011,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className={`flex-1 overflow-y-auto w-full ${activeTab === 'ai-chat' ? '' : 'p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-4xl mx-auto w-full'}>
             {/* Loading state */}
             {isLoading && (
