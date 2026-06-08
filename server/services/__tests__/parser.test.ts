@@ -242,6 +242,75 @@ describe('editTaskFullInMarkdown', () => {
     expect(result).not.toContain('Desc line 1');
     expect(result).toContain('- [ ] Next task');
   });
+
+  // Partial-update semantics: fields left undefined MUST keep their existing value.
+  // Regression guard for the "save a comment, lose all metadata" bug.
+  describe('partial-update semantics', () => {
+    it('preserves tags/deadline/priority/project when only comments is updated', () => {
+      const md = '- [ ] Buy milk #work #urgent #project:Grocery #deadline:2026-05-10 #priority:high ^id-abc\n';
+      const result = editTaskFullInMarkdown(
+        md,
+        0,
+        { comments: [{ text: 'remembered at 9pm', timestamp: '2026-06-08 21:00' }] },
+      );
+      expect(result).toContain('Buy milk');
+      expect(result).toContain('#work');
+      expect(result).toContain('#urgent');
+      expect(result).toContain('#project:Grocery');
+      expect(result).toContain('#deadline:2026-05-10');
+      expect(result).toContain('#priority:high');
+      expect(result).toContain('^id-abc');
+      expect(result).toContain('  > [2026-06-08 21:00] remembered at 9pm');
+    });
+
+    it('preserves all metadata when only title is updated', () => {
+      const md = '- [ ] Old title #work #deadline:2026-05-10 #priority:medium ^id-xyz\n';
+      const result = editTaskFullInMarkdown(md, 0, { title: 'New title' });
+      expect(result).toContain('- [ ] New title');
+      expect(result).toContain('#work');
+      expect(result).toContain('#deadline:2026-05-10');
+      expect(result).toContain('#priority:medium');
+      expect(result).toContain('^id-xyz');
+      expect(result).not.toContain('Old title');
+    });
+
+    it('clears deadline when explicit empty string is provided', () => {
+      const md = '- [ ] Task #work #deadline:2026-05-10 ^id-abc\n';
+      const result = editTaskFullInMarkdown(md, 0, { deadline: '' });
+      expect(result).toContain('#work');
+      expect(result).not.toContain('#deadline:');
+      expect(result).toContain('^id-abc');
+    });
+
+    it('clears tags when explicit empty array is provided', () => {
+      const md = '- [ ] Task #work #urgent ^id-abc\n';
+      const result = editTaskFullInMarkdown(md, 0, { tags: [] });
+      expect(result).not.toContain('#work');
+      expect(result).not.toContain('#urgent');
+      expect(result).toContain('Task');
+      expect(result).toContain('^id-abc');
+    });
+
+    it('replaces existing comments list when comments is provided', () => {
+      const md = '- [ ] Task #work ^id-abc\n  > [2026-06-01 10:00] old comment\n';
+      const result = editTaskFullInMarkdown(
+        md,
+        0,
+        { comments: [{ text: 'fresh', timestamp: '2026-06-08 12:00' }] },
+      );
+      expect(result).toContain('#work');
+      expect(result).toContain('  > [2026-06-08 12:00] fresh');
+      expect(result).not.toContain('old comment');
+    });
+
+    it('clears comments when an empty array is provided (delete-all)', () => {
+      const md = '- [ ] Task #work ^id-abc\n  > [2026-06-01 10:00] only comment\n';
+      const result = editTaskFullInMarkdown(md, 0, { comments: [] });
+      expect(result).toContain('Task');
+      expect(result).toContain('#work');
+      expect(result).not.toContain('only comment');
+    });
+  });
 });
 
 describe('appendTaskToMarkdown', () => {

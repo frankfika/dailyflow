@@ -143,7 +143,10 @@ export const tasksApi = {
     updates: {
       title?: string;
       description?: string;
+      /** Legacy: single inline comment. New code should use `comments`. */
       comment?: string;
+      /** Timestamped comment list rendered as `> [ts] text` lines under the task. */
+      comments?: { text: string; timestamp: string }[];
       tags?: string[];
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';

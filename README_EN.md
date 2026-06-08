@@ -10,7 +10,7 @@
 
 ### Markdown-powered. Auto-migrates unfinished tasks. Stay focused on today.
 
-![Version](https://img.shields.io/badge/Version-0.6.6-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.6.7-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -68,6 +68,9 @@ Unfinished tasks automatically migrate to today when you open the app, with sour
 ### 2. Visual Task Management
 
 Beautiful card-based interface with tasks organized by tags. Data is always stored as Markdown — open it with any editor.
+
+- **💬 Task comments**: Short timestamped notes attached to a task (completion remarks, progress, gotchas). Stored inline under the task row, deletable one-by-one
+- **📄 Linked notes**: Reference an independent Note file (first-class entity in the Notes system) — ideal for longer meeting minutes / summaries. The two serve different purposes and don't replace each other
 
 ### 3. AI Brain Dump
 

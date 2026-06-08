@@ -3,13 +3,14 @@ export interface Task {
   title: string;
   description?: string;
   comment?: string;
+  comments?: { text: string; timestamp: string }[];
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
-  line?: number; // 任务在文件中的行号
+  line?: number;
 }
 
 export interface DailyNote {

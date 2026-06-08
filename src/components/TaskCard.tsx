@@ -24,6 +24,7 @@ interface TaskCardProps {
     title?: string;
     description?: string;
     comment?: string;
+    comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
     priority?: 'high' | 'medium' | 'low';
@@ -53,7 +54,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const isDone = task.status === 'done';
   const [isEditing, setIsEditing] = useState(false);
   const [showComment, setShowComment] = useState(false);
-  const [commentText, setCommentText] = useState(task.comment || '');
+  const [commentText, setCommentText] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editContent, setEditContent] = useState(
     task.title + (task.description ? '\n' + task.description : ''),
@@ -62,12 +63,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [editDeadline, setEditDeadline] = useState<string>(task.deadline || '');
   const [tagInputValue, setTagInputValue] = useState('');
 
-  // Sync external completion prompt signal with local state
+  // Sync external completion prompt signal with local state.
+  // Defense-in-depth: even if the prompt is asserted true, skip opening the
+  // textarea when the task already carries any comment (legacy or new).
   useEffect(() => {
-    if (showCompletionPrompt && !task.comment) {
-      setShowComment(true);
-    }
-  }, [showCompletionPrompt, task.comment]);
+    if (!showCompletionPrompt) return;
+    const hasAnyComment = !!task.comment || !!(task.comments && task.comments.length > 0);
+    if (hasAnyComment) return;
+    setShowComment(true);
+  }, [showCompletionPrompt, task.comment, task.comments]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -75,7 +79,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       setEditTags(task.tags || []);
       setEditDeadline(task.deadline || '');
     }
-    setCommentText(task.comment || '');
   }, [task, isEditing]);
 
   const submitEdit = () => {
@@ -103,7 +106,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       className={`group relative floating-card p-5 flex items-start space-x-4
-        ${isDone ? 'bg-background border-transparent shadow-none opacity-60' : 'bg-surface-white border-border/60'}`}
+        ${isDone ? 'bg-background border-transparent shadow-none opacity-60' : 'bg-surface-white'}`}
     >
       <button
         onClick={() => {
@@ -281,10 +284,46 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {/* Comment section */}
-        {(task.comment || showComment) && (
-          <div className="mt-2.5">
-            {showComment ? (
+        {/* Comment section — inline, lightweight notes attached to the task itself.
+            Distinct from linked notes (a separate Note file referenced via FileText badge). */}
+        {(task.comment || (task.comments && task.comments.length > 0) || showComment) && (
+          <div className="mt-2.5 space-y-2">
+            {(task.comments && task.comments.length > 0) || task.comment ? (
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-text-muted/70 font-bold">
+                <MessageSquare className="w-2.5 h-2.5" />
+                {isDone
+                  ? (language === 'zh' ? '解决方案' : 'Resolution')
+                  : (language === 'zh' ? '备注' : 'Comments')}
+              </div>
+            ) : null}
+            {/* List existing comments (with per-item delete) */}
+            {(task.comments || []).map((c, idx) => (
+              <div
+                key={idx}
+                className={`group/comment relative text-xs rounded px-2.5 py-1.5 pr-7 transition-colors border-l-2 ${isDone ? 'bg-emerald-50/60 text-emerald-800 border-emerald-300' : 'bg-surface/50 text-text-muted/80 border-border/50'}`}
+              >
+                {c.timestamp && <div className="text-[10px] font-mono text-text-muted mb-0.5 opacity-60">{c.timestamp}</div>}
+                <div className="whitespace-pre-wrap">{c.text}</div>
+                <button
+                  onClick={() => {
+                    const next = (task.comments || []).filter((_, i) => i !== idx);
+                    onEdit({ comments: next });
+                  }}
+                  className="absolute top-1 right-1 p-1 rounded opacity-0 group-hover/comment:opacity-100 text-text-muted/60 hover:text-stone-500 hover:bg-stone-50 transition-all"
+                  title={language === 'zh' ? '删除这条备注' : 'Delete this comment'}
+                  aria-label={language === 'zh' ? '删除这条备注' : 'Delete this comment'}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            {task.comment && (!task.comments || task.comments.length === 0) && (
+              <div className={`text-xs rounded px-2.5 py-1.5 transition-colors border-l-2 ${isDone ? 'bg-emerald-50/60 text-emerald-800 border-emerald-300' : 'bg-surface/50 text-text-muted/80 border-border/50'}`}>
+                <div className="whitespace-pre-wrap">{task.comment}</div>
+              </div>
+            )}
+
+            {showComment && (
               <div className="flex flex-col gap-1.5">
                 <textarea
                   autoFocus
@@ -293,13 +332,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   onKeyDown={e => {
                     if (e.key === 'Escape') {
                       setShowComment(false);
-                      setCommentText(task.comment || '');
+                      setCommentText('');
                       onCompletionPromptClosed?.();
                     }
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
-                      onEdit({ comment: commentText.trim() || undefined });
+                      if (commentText.trim()) {
+                        const now = new Date();
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        const timestamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                        const newComments = [...(task.comments || []), { text: commentText.trim(), timestamp }];
+                        onEdit({ comments: newComments });
+                      }
                       setShowComment(false);
+                      setCommentText('');
                       onCompletionPromptClosed?.();
                     }
                   }}
@@ -311,7 +357,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 />
                 <div className="flex items-center justify-between">
                   <button
-                    onClick={() => { suppressComments(); setShowComment(false); setCommentText(task.comment || ''); onCompletionPromptClosed?.(); }}
+                    onClick={() => { suppressComments(); setShowComment(false); setCommentText(''); onCompletionPromptClosed?.(); }}
                     className="flex items-center gap-1 text-[10px] text-text-muted/60 hover:text-text-muted transition-colors"
                     title={language === 'zh' ? '本次会话不再自动弹出' : 'Stop auto-prompting this session'}
                   >
@@ -320,15 +366,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   </button>
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => { setShowComment(false); setCommentText(task.comment || ''); onCompletionPromptClosed?.(); }}
+                      onClick={() => { setShowComment(false); setCommentText(''); onCompletionPromptClosed?.(); }}
                       className="px-2 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
                     >
                       {language === 'zh' ? '取消' : 'Cancel'}
                     </button>
                   <button
                     onClick={() => {
-                      onEdit({ comment: commentText.trim() || undefined });
+                      if (commentText.trim()) {
+                        const now = new Date();
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        const timestamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                        const newComments = [...(task.comments || []), { text: commentText.trim(), timestamp }];
+                        onEdit({ comments: newComments });
+                      }
                       setShowComment(false);
+                      setCommentText('');
                       onCompletionPromptClosed?.();
                     }}
                     className={`px-2.5 py-1 text-white rounded text-[11px] font-medium transition-colors ${isDone ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-accent hover:bg-accent/90'}`}
@@ -338,35 +391,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
               </div>
             </div>
-            ) : task.comment ? (
-              <div
-                onClick={() => setShowComment(true)}
-                className={`text-xs rounded px-2.5 py-1.5 cursor-pointer transition-colors border-l-2 ${isDone
-                  ? 'bg-emerald-50/60 text-emerald-800 border-emerald-300 hover:bg-emerald-50 not-italic'
-                  : 'bg-surface/50 text-text-muted/70 italic border-border/50 hover:bg-surface'}`}
-                title={isDone ? (language === 'zh' ? '完成时的总结 — 点击编辑' : 'Completion note — click to edit') : (language === 'zh' ? '点击编辑' : 'Click to edit')}
-              >
-                {isDone && (
-                  <span className="inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700/80">
-                    <Check className="w-2.5 h-2.5" />
-                    {language === 'zh' ? '完成总结' : 'Resolution'}
-                  </span>
-                )}
-                {task.comment}
-              </div>
-            ) : null}
+            )}
           </div>
         )}
       </div>
 
       <div className="absolute top-4 right-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center space-x-1">
         {!isEditing && (
-          <button onClick={() => setShowComment(true)} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface" title={language === 'zh' ? '备注' : 'Comment'}>
+          <button
+            onClick={() => setShowComment(true)}
+            className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface"
+            title={language === 'zh' ? '加备注（写在任务上）' : 'Add comment (on this task)'}
+          >
             <MessageSquare className="w-4 h-4" />
           </button>
         )}
         {!isEditing && onCreateLinkedNote && (
-          <button onClick={onCreateLinkedNote} className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface" title={language === 'zh' ? '为此任务写笔记' : 'Write a note for this task'}>
+          <button
+            onClick={onCreateLinkedNote}
+            className="p-1.5 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface"
+            title={language === 'zh' ? '关联一篇笔记（独立文件）' : 'Link a note (separate file)'}
+          >
             <FileText className="w-4 h-4" />
           </button>
         )}

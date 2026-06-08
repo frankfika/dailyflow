@@ -107,7 +107,7 @@ export function TaskInputPanel({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed inset-x-0 bottom-0 z-50 p-4 bg-background  border-t border-border shadow-[0_-10px_20px_rgba(0,0,0,0.05)] sm:sticky sm:bottom-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:shadow-none space-y-4"
+        className="fixed inset-x-0 bottom-0 z-50 p-4 sm:sticky sm:bottom-4 sm:p-0 space-y-4"
       >
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
@@ -122,7 +122,8 @@ export function TaskInputPanel({
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="bg-surface border border-accent/20 rounded-md p-6 shadow-sm overflow-hidden"
+            exit={{ opacity: 0, height: 0 }}
+            className="floating-card p-6 overflow-hidden border-accent/20"
           >
              <div className="flex justify-between items-center mb-4">
                <div className="flex items-center gap-2">
@@ -151,7 +152,7 @@ export function TaskInputPanel({
           </motion.div>
         )}
 
-        <div className="relative rounded-md bg-surface-white flex flex-col p-3 sm:p-4 border border-border focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
+        <div className="relative floating-card flex flex-col p-3 sm:p-4 focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
           <div className="flex flex-1 items-start bg-surface/50 rounded-md p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
             <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
               <Plus className="w-5 h-5" />

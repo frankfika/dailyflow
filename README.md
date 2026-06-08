@@ -10,7 +10,7 @@
 
 ### Markdown 驱动，自动迁移未完成任务，让你专注于当下
 
-![Version](https://img.shields.io/badge/Version-0.6.6-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.6.7-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -68,6 +68,9 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 ### 2. 可视化任务管理
 
 精美的卡片式界面，任务按标签分类展示。数据始终以 Markdown 存储，你可以用任何编辑器打开。
+
+- **💬 任务备注（Comments）**：在任务卡片上加一句简短记录（完成感想、进度、坑点），带时间戳，可逐条删除。直接写在任务行下方，跟着任务走
+- **📄 关联笔记（Linked Notes）**：把任务关联到独立的 Note 文件（笔记系统的一等公民），适合更长的会议纪要 / 总结。两者用途不同、互不替代
 
 ### 3. AI Brain Dump
 

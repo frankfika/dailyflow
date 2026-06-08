@@ -1,0 +1,5 @@
+{
+  "css.customData": [".vscode/css-custom-data.json"],
+  "scss.customData": [".vscode/css-custom-data.json"],
+  "less.customData": [".vscode/css-custom-data.json"]
+}

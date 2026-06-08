@@ -19,7 +19,7 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
-import { AIChat } from './components/AIChat';
+import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -31,7 +31,10 @@ type Task = {
   id: string;
   title: string;
   description?: string;
+  /** Legacy single comment. New code uses `comments`. */
   comment?: string;
+  /** Timestamped inline comments (rendered as `> [ts] text` under the task). */
+  comments?: { text: string; timestamp: string }[];
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;
@@ -94,7 +97,8 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes'>('today');
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -595,8 +599,10 @@ export default function App() {
           setLastSyncedMD(data.content);
           setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
         }
-        // Prompt for completion comment when task is newly done and has no comment
-        if (wasUndone && !task.comment) {
+        // Prompt for completion comment when task is newly done and has no comment yet
+        // (check both legacy single `comment` and the timestamped `comments` list).
+        const hasAnyComment = !!task.comment || !!(task.comments && task.comments.length > 0);
+        if (wasUndone && !hasAnyComment) {
           const suppressed = (() => {
             try { return sessionStorage.getItem('df_suppress_completion_comments') === '1'; } catch { return false; }
           })();
@@ -685,6 +691,7 @@ export default function App() {
       title?: string;
       description?: string;
       comment?: string;
+      comments?: { text: string; timestamp: string }[];
       tags?: string[];
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';
@@ -965,8 +972,39 @@ export default function App() {
           </button>
         )}
 
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-4xl mx-auto w-full'}>
+        {/* Floating AI Panel Toggle */}
+        <button
+          onClick={() => setIsAIPanelOpen(prev => !prev)}
+          className={`fixed top-4 right-6 z-[60] flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md shadow-sm border transition-all ${
+            isAIPanelOpen
+              ? 'bg-accent/10 border-accent/20 text-accent'
+              : 'bg-white/70 border-border/50 text-text-muted hover:text-accent hover:border-accent/30'
+          }`}
+          title={language === 'zh' ? 'AI 助手' : 'AI Assistant'}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span className="text-xs font-bold">{language === 'zh' ? 'AI 助手' : 'AI Assist'}</span>
+        </button>
+
+        <FloatingAIPanel
+          isOpen={isAIPanelOpen}
+          onClose={() => setIsAIPanelOpen(false)}
+          language={language}
+          tasks={tasks}
+          notes={dailyNotes}
+          filesMap={filesMap}
+          showToast={showToast}
+          initialDraft={chatDraft}
+          onDraftConsumed={() => setChatDraft(null)}
+          focusedContext={
+            activeTab === 'notes'
+              ? { type: 'note', title: language === 'zh' ? '笔记库' : 'Notes' }
+              : { type: 'today', title: language === 'zh' ? '今日任务' : 'Today' }
+          }
+        />
+
+        <div className={`flex-1 w-full min-h-0 overflow-y-auto p-4 md:p-8 lg:p-12 pb-32`}>
+          <div className="max-w-3xl mx-auto w-full">
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1112,51 +1150,6 @@ export default function App() {
                   )}
 
 
-                  {/* FAB: Add Task */}
-                  {!showTaskInput && (
-                    <motion.button
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      whileHover={{ scale: 1.08 }}
-                      whileTap={{ scale: 0.92 }}
-                      onClick={() => setShowTaskInput(true)}
-                      className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded bg-accent text-white shadow-sm hover:shadow-sm flex items-center justify-center transition-shadow"
-                      title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
-                    >
-                      <Plus className="w-6 h-6" />
-                    </motion.button>
-                  )}
-
-                  {/* Task Input Panel */}
-                  <TaskInputPanel
-                    showTaskInput={showTaskInput}
-                    setShowTaskInput={setShowTaskInput}
-                    showBrainDump={showBrainDump}
-                    setShowBrainDump={setShowBrainDump}
-                    language={language}
-                    newTaskTitle={newTaskTitle}
-                    setNewTaskTitle={setNewTaskTitle}
-                    newTaskTagsList={newTaskTagsList}
-                    setNewTaskTagsList={setNewTaskTagsList}
-                    tagInputValue={tagInputValue}
-                    setTagInputValue={setTagInputValue}
-                    newTaskDeadline={newTaskDeadline}
-                    setNewTaskDeadline={setNewTaskDeadline}
-                    brainDumpText={brainDumpText}
-                    setBrainDumpText={setBrainDumpText}
-                    isProcessingBrainDump={isProcessingBrainDump}
-                    processBrainDump={processBrainDump}
-                    currentFileDate={currentFileDate}
-                    activeContext={activeContext}
-                    categories={categories}
-                    systemTags={systemTags}
-                    setTasks={setTasks}
-                    setMarkdown={setMarkdown}
-                    setLastSyncedMD={setLastSyncedMD}
-                    setFilesMap={setFilesMap}
-                    showToast={showToast}
-                    setLastAddedCategory={setLastAddedCategory}
-                  />
                   {(() => {
                     // 排序：含 pending 的 category 排在前面，全是 done 的排到末尾
                     const catsWithStats = categories.map(category => {
@@ -1404,24 +1397,6 @@ export default function App() {
                   />
 
                 </motion.div>
-              ) : activeTab === 'ai-chat' ? (
-                <motion.div
-                  key="ai-chat"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="h-full"
-                >
-                  <AIChat
-                    language={language}
-                    tasks={tasks}
-                    notes={dailyNotes}
-                    filesMap={filesMap}
-                    showToast={showToast}
-                    initialDraft={chatDraft}
-                    onDraftConsumed={() => setChatDraft(null)}
-                  />
-                </motion.div>
               ) : (
                 <Notes
                   activeContext={activeContext}
@@ -1439,13 +1414,61 @@ export default function App() {
                       : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
                     const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
                     setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
-                    setActiveTab('ai-chat');
+                    setIsAIPanelOpen(true);
                   }}
                 />
               )
             )}
           </div>
         </div>
+
+        {/* FAB: Add Task */}
+        {activeTab === 'today' && !showTaskInput && !isAIPanelOpen && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setShowTaskInput(true)}
+            className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded bg-accent text-white shadow-sm hover:shadow-sm flex items-center justify-center transition-shadow"
+            title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
+          >
+            <Plus className="w-6 h-6" />
+          </motion.button>
+        )}
+
+        {/* Task Input Panel */}
+        {activeTab === 'today' && (
+          <TaskInputPanel
+            showTaskInput={showTaskInput}
+            setShowTaskInput={setShowTaskInput}
+            showBrainDump={showBrainDump}
+            setShowBrainDump={setShowBrainDump}
+            language={language}
+            newTaskTitle={newTaskTitle}
+            setNewTaskTitle={setNewTaskTitle}
+            newTaskTagsList={newTaskTagsList}
+            setNewTaskTagsList={setNewTaskTagsList}
+            tagInputValue={tagInputValue}
+            setTagInputValue={setTagInputValue}
+            newTaskDeadline={newTaskDeadline}
+            setNewTaskDeadline={setNewTaskDeadline}
+            brainDumpText={brainDumpText}
+            setBrainDumpText={setBrainDumpText}
+            isProcessingBrainDump={isProcessingBrainDump}
+            processBrainDump={processBrainDump}
+            currentFileDate={currentFileDate}
+            activeContext={activeContext}
+            categories={categories}
+            systemTags={systemTags}
+            setTasks={setTasks}
+            setMarkdown={setMarkdown}
+            setLastSyncedMD={setLastSyncedMD}
+            setFilesMap={setFilesMap}
+            showToast={showToast}
+            setLastAddedCategory={setLastAddedCategory}
+          />
+        )}
        </main>
 
       <SettingsModal
@@ -1499,8 +1522,9 @@ export default function App() {
 
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
-         <div className="fixed inset-0 z-50 bg-background">
-           <NoteEditor
+         <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-[8px] flex items-center justify-center p-4 sm:p-8">
+           <div className="w-full max-w-5xl h-[85vh] floating-card overflow-hidden flex flex-col">
+             <NoteEditor
              language={language}
              activeContext={activeContext}
              note={editingDailyNote || undefined}
@@ -1523,7 +1547,7 @@ export default function App() {
                setShowQuickNoteEditor(false);
                setEditingDailyNote(null);
                setPrefillLinkedTaskId(null);
-               setActiveTab('ai-chat');
+               setIsAIPanelOpen(true);
              }}
              onSave={async (data) => {
                try {
@@ -1548,6 +1572,7 @@ export default function App() {
              }}
              onClose={() => { setShowQuickNoteEditor(false); setEditingDailyNote(null); setPrefillLinkedTaskId(null); }}
            />
+           </div>
          </div>
        )}
      </div>

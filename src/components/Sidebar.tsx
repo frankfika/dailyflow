@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes' | 'ai-chat';
-  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat') => void;
+  activeTab: 'today' | 'notes';
+  setActiveTab: (tab: 'today' | 'notes') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -80,7 +80,7 @@ export function Sidebar({
       </AnimatePresence>
 
       {/* Sidebar */}
-      <aside className={`fixed lg:relative inset-y-0 left-0 w-[230px] flex flex-col shrink-0 z-30 transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0 border-r border-border/60' : '-translate-x-full lg:ml-[-230px] border-r-0'} bg-surface/85 backdrop-blur-xl`}>
+      <aside className={`fixed lg:relative inset-y-0 left-0 w-[230px] flex flex-col shrink-0 z-30 transition-all duration-300 ${isSidebarOpen ? 'translate-x-0 lg:ml-0' : '-translate-x-full lg:ml-[-230px]'} bg-stone-50 backdrop-blur-xl`}>
         <div className="px-4 py-4 w-[230px] flex flex-col h-full">
           {/* Logo + collapse */}
           <div className="flex items-center gap-2 mb-3 px-1">
@@ -189,7 +189,7 @@ export function Sidebar({
               )}
             </div>
 
-            {/* Notes & AI Chat — top-level navigation */}
+            {/* Notes — top-level navigation */}
             <ul className="space-y-0.5 text-[12px]">
               <li
                 onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
@@ -198,13 +198,6 @@ export function Sidebar({
               >
                 <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'notes' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
                 <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
-              </li>
-              <li
-                onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`group flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md transition-all ${activeTab === 'ai-chat' ? 'text-text-heading font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-black/5'}`}
-              >
-                <Sparkles className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'ai-chat' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
-                <span>{language === 'zh' ? 'AI 对话' : 'AI Chat'}</span>
               </li>
             </ul>
           </nav>

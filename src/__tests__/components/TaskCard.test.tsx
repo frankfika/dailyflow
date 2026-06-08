@@ -145,8 +145,13 @@ describe('TaskCard completion comment', () => {
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
+      // New payload shape: comments is a timestamped array, not a single string.
       expect(onEdit).toHaveBeenCalledWith(
-        expect.objectContaining({ comment: 'Resolved via patch' }),
+        expect.objectContaining({
+          comments: expect.arrayContaining([
+            expect.objectContaining({ text: 'Resolved via patch' }),
+          ]),
+        }),
       );
     });
     expect(onCompletionPromptClosed).toHaveBeenCalled();

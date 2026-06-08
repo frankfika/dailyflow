@@ -317,9 +317,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     : body;
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full bg-surface-white">
       {/* Top toolbar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}

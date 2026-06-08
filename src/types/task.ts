@@ -2,7 +2,8 @@ export type Task = {
   id: string;
   title: string;
   description?: string;
-  comment?: string;
+  comment?: string; // Legacy
+  comments?: { text: string; timestamp: string }[];
   status: 'todo' | 'done' | 'migrated';
   tags?: string[];
   project?: string;

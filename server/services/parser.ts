@@ -83,19 +83,31 @@ export function parseMarkdown(md: string): Task[] {
 
       // 解析描述和评论（支持空行分隔的多段落）
       let descriptionLines = [];
-      let commentLines = [];
+      let comments: { timestamp: string; text: string }[] = [];
+      let currentComment: { timestamp: string; text: string } | null = null;
       let descIdx = i + 1;
       const descEnd = findDescriptionEnd(lines, descIdx);
       for (let d = descIdx; d < descEnd; d++) {
         const trimmed = lines[d].trim();
         if (trimmed.startsWith('> ')) {
-          commentLines.push(trimmed.slice(2));
+          const content = trimmed.slice(2);
+          const timeMatch = content.match(/^\[([^\]]+)\]\s+(.*)$/);
+          if (timeMatch) {
+            if (currentComment) comments.push(currentComment);
+            currentComment = { timestamp: timeMatch[1], text: timeMatch[2] };
+          } else {
+            if (currentComment) {
+              currentComment.text += '\n' + content;
+            } else {
+              currentComment = { timestamp: '', text: content };
+            }
+          }
         } else {
           descriptionLines.push(trimmed);
         }
       }
+      if (currentComment) comments.push(currentComment);
       const description = descriptionLines.length > 0 ? descriptionLines.join('\n') : undefined;
-      const comment = commentLines.length > 0 ? commentLines.join('\n') : undefined;
 
         let taskId = explicitId || `t_${hashStr(content)}`;
         // 同名任务去重：加序号后缀
@@ -110,7 +122,7 @@ export function parseMarkdown(md: string): Task[] {
         id: taskId,
         title: content,
         description,
-        comment,
+        comments,
         status: isDone ? 'done' : isMigrated ? 'migrated' : 'todo',
         tags: Array.from(tags),
         project,
@@ -196,7 +208,20 @@ function taskToLine(task: Task, currentDate?: string): string {
     line += '\n' + descLines.join('\n');
   }
 
-  if (task.comment) {
+  if (task.comments && task.comments.length > 0) {
+    const lines = task.comments.flatMap(c => {
+      const parts = c.text.split('\n');
+      if (c.timestamp) {
+        return [
+          `  > [${c.timestamp}] ${parts[0]}`,
+          ...parts.slice(1).map(p => `  > ${p}`)
+        ];
+      } else {
+        return parts.map(p => `  > ${p}`);
+      }
+    });
+    line += '\n' + lines.join('\n');
+  } else if (task.comment) {
     const commentLines = task.comment.split('\n').map(c => `  > ${c}`);
     line += '\n' + commentLines.join('\n');
   }
@@ -277,7 +302,73 @@ export function editTaskInMarkdown(
 }
 
 /**
+ * 把单行任务文本拆成结构化字段。供 editTaskFullInMarkdown 在 partial-update
+ * 时读取"现有值"使用 —— updates 里 undefined 的字段保留原值，避免静默丢数据。
+ *
+ * 与 parseMarkdown 的差别：这里只处理一行、不做去重/分类合并，纯粹解析行内 token。
+ */
+function parseTaskLine(rawLine: string): {
+  indent: string;
+  bullet: string;
+  checkbox: string;
+  title: string;
+  tags: string[];
+  project?: string;
+  deadline?: string;
+  priority?: 'high' | 'medium' | 'low';
+  sourceDateFromMigrated?: string;
+  id?: string;
+} | null {
+  const m = rawLine.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
+  if (!m) return null;
+  let content = m[4];
+
+  const idMatch = content.match(/\^id-([a-zA-Z0-9_-]+)/);
+  const id = idMatch ? idMatch[1] : undefined;
+  content = content.replace(/\^id-[a-zA-Z0-9_-]+/, '').trim();
+
+  const priorityMatch = content.match(/#priority:(high|medium|low)/);
+  const priority = priorityMatch ? (priorityMatch[1] as 'high' | 'medium' | 'low') : undefined;
+  content = content.replace(/#priority:(high|medium|low)/, '').trim();
+
+  const deadlineMatch = content.match(/#deadline:(\S+)/);
+  const deadline = deadlineMatch ? deadlineMatch[1] : undefined;
+  content = content.replace(/#deadline:\S+/, '').trim();
+
+  const projectMatch = content.match(/#project:(\S+)/);
+  const project = projectMatch ? projectMatch[1].replace(/_/g, ' ') : undefined;
+  content = content.replace(/#project:\S+/, '').trim();
+
+  const migratedMatch = content.match(/↗\s*migrated:(\S+)/);
+  const sourceDateFromMigrated = migratedMatch ? migratedMatch[1] : undefined;
+  content = content.replace(/↗\s*migrated:\S+/, '').trim();
+
+  const tagsMatches = content.match(/#([a-zA-Z0-9_一-龥-]+)/g) || [];
+  const tags = tagsMatches.map(t => t.slice(1).toLowerCase());
+  content = content.replace(/#([a-zA-Z0-9_一-龥-]+)/g, '').trim();
+
+  return {
+    indent: m[1],
+    bullet: m[2],
+    checkbox: m[3],
+    title: content,
+    tags,
+    project,
+    deadline,
+    priority,
+    sourceDateFromMigrated,
+    id,
+  };
+}
+
+/**
  * 完整编辑任务（包括所有属性：title, description, tags, deadline, priority, project）
+ *
+ * **Partial-update 语义**：updates 中的字段为 undefined 时保留任务行的现有值，
+ * 仅当显式传入新值（包括 [] 或 ''）时才覆盖。这避免了"只想加条 comment 却把
+ * tags/deadline/priority 全清空"的静默数据丢失。
+ *
+ * 清除字段的约定：tags: [] / project: '' / deadline: '' 表示删除。
  */
 export function editTaskFullInMarkdown(
   md: string,
@@ -286,6 +377,7 @@ export function editTaskFullInMarkdown(
     title?: string;
     description?: string;
     comment?: string;
+    comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
     priority?: 'high' | 'medium' | 'low';
@@ -296,58 +388,47 @@ export function editTaskFullInMarkdown(
   const lines = md.split('\n');
   if (taskLine < 0 || taskLine >= lines.length) return md;
 
-  const line = lines[taskLine];
-  const taskMatch = line.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
-  if (!taskMatch) return md;
+  const parsed = parseTaskLine(lines[taskLine]);
+  if (!parsed) return md;
 
-  const indent = taskMatch[1];
-  const bullet = taskMatch[2];
-  const checkbox = taskMatch[3];
-  const originalContent = taskMatch[4];
+  // Merge: updates.X if explicitly provided, else keep existing parsed value.
+  // Explicit '' / [] count as "clear this field".
+  const title = updates.title !== undefined ? updates.title : parsed.title;
+  const tags = updates.tags !== undefined ? updates.tags : parsed.tags;
+  const project = updates.project !== undefined ? updates.project : parsed.project;
+  const deadline = updates.deadline !== undefined ? updates.deadline : parsed.deadline;
+  const priority = updates.priority !== undefined ? updates.priority : parsed.priority;
 
-  // 提取原有的ID和migrated标记
-  const idMatch = originalContent.match(/\^id-([a-zA-Z0-9_-]+)/);
-  const taskId = idMatch ? idMatch[1] : undefined;
+  // Build the new task line
+  let newLine = `${parsed.indent}${parsed.bullet} [${parsed.checkbox}] ${title}`;
 
-  const migratedMatch = originalContent.match(/↗\s*migrated:(\S+)/);
-  const sourceDateFromMigrated = migratedMatch ? migratedMatch[1] : undefined;
-
-  // 构建新的任务行
-  const title = updates.title !== undefined ? updates.title : originalContent.replace(/\s*(#[^\s]+|\^id-[^\s]+|↗\s*migrated:\S+)/g, '').trim();
-
-  let newLine = `${indent}${bullet} [${checkbox}] ${title}`;
-
-  // 添加tags
-  if (updates.tags && updates.tags.length > 0) {
-    const filteredTags = updates.tags.filter(t => t && t !== 'tasks');
+  if (tags && tags.length > 0) {
+    const filteredTags = tags.filter(t => t && t !== 'tasks');
     if (filteredTags.length > 0) {
       newLine += ` ${filteredTags.map(t => `#${t.replace(/\s+/g, '-')}`).join(' ')}`;
     }
   }
 
-  // 添加project
-  if (updates.project) {
-    newLine += ` #project:${updates.project.replace(/ /g, '_')}`;
+  if (project) {
+    newLine += ` #project:${project.replace(/ /g, '_')}`;
   }
 
-  // 添加deadline
-  if (updates.deadline) {
-    newLine += ` #deadline:${updates.deadline}`;
+  if (deadline) {
+    newLine += ` #deadline:${deadline}`;
   }
 
-  // 添加priority
-  if (updates.priority) {
-    newLine += ` #priority:${updates.priority}`;
+  if (priority) {
+    newLine += ` #priority:${priority}`;
   }
 
-  // 保留migrated标记
-  if (sourceDateFromMigrated && sourceDateFromMigrated !== currentDate) {
-    newLine += ` ↗ migrated:${sourceDateFromMigrated}`;
+  // 保留 migrated 标记（用户编辑不会改变迁移来源）
+  if (parsed.sourceDateFromMigrated && parsed.sourceDateFromMigrated !== currentDate) {
+    newLine += ` ↗ migrated:${parsed.sourceDateFromMigrated}`;
   }
 
-  // 保留ID
-  if (taskId) {
-    newLine += ` ^id-${taskId}`;
+  // 保留 ID
+  if (parsed.id) {
+    newLine += ` ^id-${parsed.id}`;
   }
 
   lines[taskLine] = newLine;
@@ -358,7 +439,7 @@ export function editTaskFullInMarkdown(
   const before = lines.slice(0, taskLine + 1);
   const after = lines.slice(descEnd);
 
-  if (updates.description === undefined && updates.comment === undefined) {
+  if (updates.description === undefined && updates.comment === undefined && updates.comments === undefined) {
     // 保留原有描述和评论
     return [...before, ...lines.slice(taskLine + 1, descEnd), ...after].join('\n');
   }
@@ -379,9 +460,21 @@ export function editTaskFullInMarkdown(
     ? (updates.description ? updates.description.split('\n').map(d => `  ${d}`) : [])
     : existingDescLines;
 
-  const commentLines = updates.comment !== undefined
-    ? (updates.comment ? updates.comment.split('\n').map(c => `  > ${c}`) : [])
-    : existingCommentLines;
+  let commentLines = existingCommentLines;
+  if (updates.comments !== undefined) {
+    commentLines = updates.comments.flatMap(c => {
+      const parts = c.text.split('\n');
+      if (c.timestamp) {
+        return [
+          `  > [${c.timestamp}] ${parts[0]}`,
+          ...parts.slice(1).map(p => `  > ${p}`)
+        ];
+      }
+      return parts.map(p => `  > ${p}`);
+    });
+  } else if (updates.comment !== undefined) {
+    commentLines = updates.comment ? updates.comment.split('\n').map(c => `  > ${c}`) : [];
+  }
 
   return [...before, ...descLines, ...commentLines, ...after].join('\n');
 }

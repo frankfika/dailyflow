@@ -255,7 +255,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       className="space-y-6"
     >
       {viewMode === 'edit' ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col floating-card overflow-hidden h-[calc(100vh-140px)]">
           <NoteEditor
             note={editingNote}
             language={language}
@@ -290,13 +290,13 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       {/* Filter bar */}
       <div className="space-y-3">
         {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+        <div className="relative floating-card flex items-center h-10 px-3">
+          <Search className="w-4 h-4 text-text-muted shrink-0" />
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={language === 'zh' ? '搜索笔记、@人名、标签...' : 'Search notes, @mentions, tags...'}
-            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-border rounded-md text-sm text-text-main outline-none focus:border-accent transition-colors"
+            className="flex-1 w-full h-full pl-2.5 bg-transparent border-none text-sm text-text-main outline-none placeholder:text-text-muted/60"
           />
         </div>
 
@@ -419,14 +419,14 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       </div>
 
       {/* AI Summary Generator */}
-      <div className="bg-surface-white border border-border rounded-md p-4 space-y-3">
+      <div className="floating-card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <button
             onClick={() => setShowSummaryPanel(!showSummaryPanel)}
             className="flex items-center gap-2 text-text-heading hover:text-accent transition-colors"
           >
             <Sparkles className="w-4 h-4" />
-            <span className="font-sans text-sm italic">
+            <span className="font-sans text-sm font-medium">
               {language === 'zh' ? 'AI 总结生成器' : 'AI Summary Generator'}
             </span>
           </button>
