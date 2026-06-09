@@ -92,7 +92,15 @@ jobs:
             | Windows | `DailyFlow_*_x64-setup.exe` / `DailyFlow_*_x64_en-US.msi` |
             | Linux | `DailyFlow_*_amd64.AppImage` / `DailyFlow_*_amd64.deb` |
 
-            > macOS users: this build is not notarized. On first launch, right-click the app and choose **Open** to bypass Gatekeeper.
+            ### 🍎 macOS Note
+
+            This build is not notarized. If you see **"DailyFlow is damaged"**, run:
+
+            ```bash
+            sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
+            ```
+
+            Then right-click the app and choose **Open** to bypass Gatekeeper.
 
             See commits for full changelog.
           releaseDraft: false
