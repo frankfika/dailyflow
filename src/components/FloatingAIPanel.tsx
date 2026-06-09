@@ -286,6 +286,47 @@ export function FloatingAIPanel({
     return parts.join('\n\n');
   };
 
+  const buildAutoContextText = (): string => {
+    if (!focusedContext) return '';
+
+    if (focusedContext.type === 'today') {
+      const todayTasks = tasks.filter((t: any) => t.status !== 'done');
+      if (todayTasks.length === 0) return '';
+      return `## ${language === 'zh' ? '今日任务' : "Today's Tasks"}\n${todayTasks.map((t: any) => `- [${t.status === 'done' ? 'x' : ' '}] ${t.title}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}`).join('\n')}`;
+    }
+
+    if (focusedContext.type === 'note') {
+      if (focusedContext.content) {
+        return `## ${language === 'zh' ? '当前笔记' : 'Current Note'}${focusedContext.title ? ': ' + focusedContext.title : ''}\n${focusedContext.content}`;
+      }
+      if (notes.length > 0) {
+        const recentNotes = notes.slice(0, 5);
+        return `## ${language === 'zh' ? '笔记列表' : 'Notes'}\n${recentNotes.map((n: any) => `- ${n.title || (language === 'zh' ? '（无标题）' : '(untitled)')}`).join('\n')}`;
+      }
+    }
+
+    return '';
+  };
+
+  const autoContextLabel = useMemo(() => {
+    if (!focusedContext) return null;
+    if (focusedContext.type === 'today') {
+      const count = tasks.filter((t: any) => t.status !== 'done').length;
+      return `${language === 'zh' ? '今日任务' : "Today's Tasks"} (${count})`;
+    }
+    if (focusedContext.type === 'note') {
+      return focusedContext.title || (language === 'zh' ? '当前笔记' : 'Current Note');
+    }
+    return null;
+  }, [focusedContext, tasks, language]);
+
+  const placeholderText = useMemo(() => {
+    if (focusedContext) {
+      return language === 'zh' ? '关于当前内容问点什么…' : 'Ask about the current content…';
+    }
+    return language === 'zh' ? '问点什么…' : 'Ask anything…';
+  }, [focusedContext, language]);
+
   const handleSend = async () => {
     if (!inputValue.trim() || isStreaming || !activeSession) return;
     if (!activeProvider) {
@@ -333,9 +374,15 @@ export function FloatingAIPanel({
     }
 
     const contextText = buildContextText(contextSnapshot);
+    const autoContextText = buildAutoContextText();
     let userPrompt = userInputCopy;
-    if (contextText) {
-      userPrompt = `${userPrompt}\n\n---\n${language === 'zh' ? '参考以下上下文：' : 'Reference context:'}\n\n${contextText}`;
+
+    const contexts: string[] = [];
+    if (autoContextText) contexts.push(autoContextText);
+    if (contextText) contexts.push(contextText);
+
+    if (contexts.length > 0) {
+      userPrompt = `${userPrompt}\n\n---\n${language === 'zh' ? '参考以下上下文：' : 'Reference context:'}\n\n${contexts.join('\n\n---\n')}`;
     }
 
     const systemPrompt = skillForThisMessage
@@ -591,13 +638,38 @@ export function FloatingAIPanel({
 
           {/* Input area */}
           <div className="p-3 bg-surface-white border-t border-border/30 shrink-0">
+            {/* Context pills bar */}
+            {(focusedContext || (activeSession && activeSession.contextItems.length > 0)) && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {focusedContext && autoContextLabel && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[10px] font-medium border border-accent/20">
+                    {focusedContext.type === 'today' ? '📋' : '📄'}
+                    <span className="opacity-70">{language === 'zh' ? '自动' : 'Auto'}</span>
+                    <span className="opacity-50">·</span>
+                    <span>{autoContextLabel}</span>
+                  </span>
+                )}
+                {activeSession?.contextItems.map(item => (
+                  <span key={item.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface text-text-muted text-[10px] font-medium border border-border/50">
+                    {item.label}
+                    <button
+                      onClick={() => handleRemoveContext(item.id)}
+                      className="hover:text-red-500 transition-colors"
+                      title={language === 'zh' ? '移除' : 'Remove'}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="bg-surface border border-border/50 rounded-xl shadow-sm focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/10 transition-all">
               <textarea
                 ref={textareaRef}
                 value={inputValue}
                 onChange={e => { setInputValue(e.target.value); setDraftSourceTitle(null); }}
                 onKeyDown={handleKeyDown}
-                placeholder={language === 'zh' ? '问点什么…' : 'Ask anything…'}
+                placeholder={placeholderText}
                 rows={1}
                 className="w-full px-3 py-2.5 text-sm bg-transparent focus:outline-none resize-none placeholder:text-text-muted/60 leading-relaxed max-h-32"
               />
