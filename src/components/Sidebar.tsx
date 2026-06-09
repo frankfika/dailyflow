@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes';
-  setActiveTab: (tab: 'today' | 'notes') => void;
+  activeTab: 'today' | 'notes' | 'ai-chat';
+  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -198,6 +198,14 @@ export function Sidebar({
               >
                 <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'notes' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
                 <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
+              </li>
+              <li
+                onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                className={`group flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md transition-all ${activeTab === 'ai-chat' ? 'text-text-heading font-semibold' : 'text-text-muted hover:text-text-heading hover:bg-black/5'}`}
+                data-testid="nav-ai-chat"
+              >
+                <Sparkles className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'ai-chat' ? 'text-accent opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
+                <span>{language === 'zh' ? 'AI 对话' : 'AI Chat'}</span>
               </li>
             </ul>
           </nav>

@@ -19,6 +19,7 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
+import { AIChat } from './components/AIChat';
 import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
@@ -97,7 +98,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
   const taskLinkedNotesCount = useMemo(() => {
@@ -1003,8 +1004,8 @@ export default function App() {
           }
         />
 
-        <div className={`flex-1 w-full min-h-0 overflow-y-auto p-4 md:p-8 lg:p-12 pb-32`}>
-          <div className="max-w-3xl mx-auto w-full">
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1397,6 +1398,24 @@ export default function App() {
                   />
 
                 </motion.div>
+              ) : activeTab === 'ai-chat' ? (
+                <motion.div
+                  key="ai-chat"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full"
+                >
+                  <AIChat
+                    language={language}
+                    tasks={tasks}
+                    notes={dailyNotes}
+                    filesMap={filesMap}
+                    showToast={showToast}
+                    initialDraft={chatDraft}
+                    onDraftConsumed={() => setChatDraft(null)}
+                  />
+                </motion.div>
               ) : (
                 <Notes
                   activeContext={activeContext}
@@ -1414,7 +1433,7 @@ export default function App() {
                       : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
                     const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
                     setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
-                    setIsAIPanelOpen(true);
+                    setActiveTab('ai-chat');
                   }}
                 />
               )
@@ -1547,7 +1566,7 @@ export default function App() {
                setShowQuickNoteEditor(false);
                setEditingDailyNote(null);
                setPrefillLinkedTaskId(null);
-               setIsAIPanelOpen(true);
+               setActiveTab('ai-chat');
              }}
              onSave={async (data) => {
                try {
