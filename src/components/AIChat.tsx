@@ -10,6 +10,8 @@ import {
   StopCircle, Copy, PanelLeftClose, PanelLeftOpen, Bookmark,
   PlusCircle, RotateCcw,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
 import { loadProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
@@ -768,8 +770,25 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                             </div>
                           </div>
                         ) : (
-                          <div className="text-[15px] text-text-heading whitespace-pre-wrap leading-[1.7]">
-                            {msg.content}
+                          <div className="text-[15px] text-text-heading leading-[1.7]">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }) => <ul className="list-disc pl-5 mb-2">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal pl-5 mb-2">{children}</ol>,
+                              li: ({ children }) => <li className="mb-0.5">{children}</li>,
+                              h1: ({ children }) => <h1 className="text-lg font-bold mt-3 mb-2">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
+                              hr: () => <hr className="my-3 border-border/50" />,
+                              code: ({ children, className }) => (
+                                <code className={`${className ? 'block bg-surface p-2 rounded text-xs overflow-x-auto my-2' : 'bg-surface px-1 py-0.5 rounded text-xs'}`}>
+                                  {children}
+                                </code>
+                              ),
+                              pre: ({ children }) => <pre className="whitespace-pre-wrap">{children}</pre>,
+                            }}>
+                              {msg.content}
+                            </ReactMarkdown>
                           </div>
                         )}
                         {/* Message action bar */}

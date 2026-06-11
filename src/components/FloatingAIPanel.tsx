@@ -11,6 +11,8 @@ import {
   StopCircle, Copy, PanelLeftClose, PanelLeftOpen, Bookmark,
   PlusCircle, RotateCcw,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
 import { loadProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
@@ -656,7 +658,26 @@ export function FloatingAIPanel({
                         {msg.error ? (
                           <div className="text-amber-800 text-xs">{msg.error}</div>
                         ) : (
-                          <div className="whitespace-pre-wrap">{msg.content}</div>
+                          <div className="text-sm leading-relaxed">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                              p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                              ul: ({ children }) => <ul className="list-disc pl-4 mb-1.5">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal pl-4 mb-1.5">{children}</ol>,
+                              li: ({ children }) => <li className="mb-0.5">{children}</li>,
+                              h1: ({ children }) => <h1 className="text-base font-bold mt-2 mb-1">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-sm font-bold mt-2 mb-1">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-xs font-bold mt-1.5 mb-0.5">{children}</h3>,
+                              hr: () => <hr className="my-2 border-border/50" />,
+                              code: ({ children, className }) => (
+                                <code className={`${className ? 'block bg-surface p-1.5 rounded text-[11px] overflow-x-auto my-1.5' : 'bg-surface px-1 py-0.5 rounded text-[11px]'}`}>
+                                  {children}
+                                </code>
+                              ),
+                              pre: ({ children }) => <pre className="whitespace-pre-wrap">{children}</pre>,
+                            }}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
                         )}
                       </div>
 
