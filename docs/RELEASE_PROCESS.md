@@ -54,12 +54,7 @@ npm run bump 0.4.0
    const CURRENT_VERSION = '0.4.0'; // 更新这里
    ```
 
-2. **README.md**
-   ```markdown
-   ![Version](https://img.shields.io/badge/Version-0.4.0-blue?style=flat-square)
-   ```
-
-3. **README_EN.md**
+2. **README.md**（中英双语，版本 badge）
    ```markdown
    ![Version](https://img.shields.io/badge/Version-0.4.0-blue?style=flat-square)
    ```
@@ -191,8 +186,7 @@ gh run view <run-id>
 
 - [ ] 运行 `npm run bump X.Y.Z`
 - [ ] 更新 `src/api/updater.ts`
-- [ ] 更新 `README.md`
-- [ ] 更新 `README_EN.md`
+- [ ] 更新 `README.md`（中英双语版本 badge）
 - [ ] 提交并推送
 
 创建 Release：

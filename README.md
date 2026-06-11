@@ -4,41 +4,40 @@
 
 # DailyFlow
 
-> 本地优先的每日任务管理工具 · Local-First Daily Task Management
+> 本地优先的智能任务管理 · Local-First Intelligent Task Management
 
 ![Main Interface](./docs/assets/home.png)
 
-### Markdown 驱动，自动迁移未完成任务，让你专注于当下
-
-![Version](https://img.shields.io/badge/Version-0.7.1-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.7.2-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
 
-[核心功能](#-核心功能) • [下载](#-下载) • [界面预览](#-界面预览) • [快速开始](#-快速开始) • [架构设计](#-架构设计)
+**[中文](#中文)** | **[English](#english)**
 
-__简体中文__ | [English](./README_EN.md)
+</div>
 
 ---
-</div>
+
+# 中文
 
 ## 项目简介
 
-DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Markdown 文件为数据源，自动处理跨日任务迁移，让你不再需要每天手动整理昨天的未完成事项。
+DailyFlow 是一个**本地优先**的智能任务管理桌面应用。以 Markdown 文件为数据源，内置 AI 助手，自动处理跨日任务迁移，让你不再每天手动整理昨天的未完成事项。
 
 ### 为什么选择 DailyFlow？
 
 | 传统方式 | DailyFlow |
 |---------|-----------|
-| 每天手动复制未完成任务到新页面 | 自动迁移，打开即用 |
-| 任务数据锁在某个 SaaS 平台 | 本地 Markdown 文件，完全可控 |
+| 每天手动复制未完成任务 | 自动迁移，打开即用 |
+| 数据锁在 SaaS 平台 | 本地 Markdown，完全可控 |
 | 需要网络才能使用 | 离线优先，随时可用 |
 | 复杂的项目管理界面 | 极简设计，专注当日 |
-| 与 Obsidian 等工具不兼容 | 原生 Markdown，无缝衔接 |
+| AI 功能要额外付费 | 内置 AI，支持 15+ 模型供应商 |
 
 ## 📦 下载
 
-前往 [Releases](https://github.com/frankfika/dailyflow/releases/latest) 下载对应平台的安装包：
+前往 [Releases](https://github.com/frankfika/dailyflow/releases/latest) 下载：
 
 | 平台 | 文件 |
 |------|------|
@@ -46,149 +45,56 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 | Windows | `DailyFlow_x.x.x_x64-setup.exe` |
 | Linux | `DailyFlow_x.x.x_amd64.AppImage` |
 
-> **macOS 用户注意**：
-> 
-> 如果遇到 "DailyFlow is damaged" 错误，请执行：
-> ```bash
-> sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
-> ```
-> 详见 [macOS 错误修复指南](docs/MACOS_DAMAGED_FIX.md)
+> **macOS 用户**：遇到 "damaged" 错误请执行 `sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app`
 
 ## ✨ 核心功能
 
-### 1. 自动任务迁移 (Rollover)
+### 📋 任务管理
 
-未完成的任务会在你打开应用时自动迁移到今天，并保留来源日期标记。已迁移的任务不会重复迁移。
+- **自动迁移**：未完成任务在次日自动迁移，保留来源日期标记
+- **卡片式界面**：任务按标签分类展示，支持评论和关联笔记
+- **Work/Life 切换**：一键切换工作/生活上下文，任务自动过滤
+- **项目概览**：跨日期聚合待办，按分类查看全局进度
+- **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`
 
-- **自动迁移**：打开应用时检测并迁移
-- **手动迁移**：预览待迁移任务，确认后执行
-- **来源追踪**：每个迁移任务标注原始日期
-- **防重复**：已迁移任务（`[>]`）不会再次出现在迁移列表中
+### 🤖 AI 助手
 
-### 2. 可视化任务管理
+- **AI Chat**：完整聊���界���，支持多会话、上下文注入（今日任务/笔记/项目）
+- **AI Tool Use**：AI 可直接创建任务、保存笔记、操作项目
+- **Brain Dump**：把零散想法倒进去，AI 自动提取和分类任务
+- **AI 总结**：选择范围和提示词，生成结构化日报/周报
+- **Skill Marketplace**：技能市场，支持 Slash Command 和 Agent Skill
+- **提示词库**：管理和测试 AI 格式化提示词模板
 
-精美的卡片式界面，任务按标签分类展示。数据始终以 Markdown 存储，你可以用任何编辑器打开。
+### 🔌 AI 模型支持
 
-- **💬 任务备注（Comments）**：在任务卡片上加一句简短记录（完成感想、进度、坑点），带时间戳，可逐条删除。直接写在任务行下方，跟着任务走
-- **📄 关联笔记（Linked Notes）**：把任务关联到独立的 Note 文件（笔记系统的一等公民），适合更长的会议纪要 / 总结。两者用途不同、互不替代
+一键配置，支持 15+ AI 供应商：
 
-### 3. AI Brain Dump
+| 类型 | 供应商 |
+|------|--------|
+| 聚合平台 | **B.AI**（29+ 模型一个 Key）、OpenRouter |
+| 国内 | DeepSeek、Kimi、MiniMax、智谱 GLM、豆包、阿里云 Qwen、硅基流动 |
+| 海外 | Anthropic Claude、OpenAI、Google Gemini、Groq |
+| 自定义 | 任何 OpenAI 兼容 API |
 
-把零散想法一股脑倒进去，AI 自动提取任务、分类、设置截止日期。支持 DeepSeek、OpenAI、Anthropic 等多种 AI 服务，内置连接测试一键验证配置。
+### 📝 笔记系统
 
-### 4. 工作/生活上下文切换
+- **多类型**：普通笔记、会议记录、AI 总结
+- **@提及**：`@人名` 自动解析，支持按人员筛选
+- **多维筛选**：按类型、人员、项目、标签、时间范围过滤
+- **任务关联**：笔记与任务双向关联
 
-一键切换工作和生活模式，任务自动按上下文过滤，互不干扰。
+### 📚 多笔记本
 
-### 5. 多笔记本柔性切换
+- 侧边栏一键切换多个工作区
+- 自动发现本地笔记文件夹
+- 每个笔记本记住最后停留日期
 
-像换 tab 一样在多个工作区之间切换，无需重启应用。每个笔记本是一个独立的本地文件夹，互不干扰。
+### 🔄 同步与备份
 
-- **侧边栏切换器**：点开左上角下拉，列出所有笔记本，一键切换
-- **本地自动发现**：打开下拉时自动扫描 Desktop / Documents / 当前笔记本同级目录，把含笔记的文件夹做成候选项，一键加入
-- **零输入添加**：除了候选项之外可以"选择其他文件夹…"，调起系统目录选择器，全程无需手输路径
-- **柔性加载**：切换时原地刷新文件树和当前打开的笔记，状态平滑过渡
-- **记忆位置**：每个笔记本会记住你最后停留的日期
-- **轻量管理**：行内悬浮可重命名 / 移除
-- **零配置迁移**：旧版的单工作区配置自动迁移成默认笔记本
-
-### 6. 项目概览
-
-跨日期聚合所有待办任务，按分类/项目维度查看全局进度。支持关键字搜索和标签筛选，快速定位任意项目下的待办事项。
-
-### 7. 笔记系统 (Notes)
-
-独立的笔记功能，支持三种类型：
-- **普通笔记**：随时记录想法、灵感、备忘
-- **会议记录**：参会人、时间段、录音文件、语音转文字
-- **AI 总结**：选择范围和提示词，AI 生成结构化总结并保存为笔记
-
-笔记特性：
-- **@提及**：在笔记中 `@人名` 自动解析，支持按人员筛选
-- **多维筛选**：按类型、@人员、项目、标签、时间范围过滤
-- **任务关联**：笔记可关联任务和项目，双向可查
-- **时间线集成**：当天的笔记自动出现在每日视图中
-- **Work/Life 联动**：跟随上下文切换自动过滤
-- **AI 调用走后端代理**：API key 不暴露到浏览器，避免 CORS 问题（v0.3.0+）
-
-### 8. 标签筛选
-
-在每日笔记和笔记页面内直接按标签筛选内容：
-- **每日笔记**：顶部标签 pills 快速筛选当日任务
-- **笔记页面**：标签 pills 筛选笔记，支持多维度组合过滤
-- **上下文联动**：跟随 Work/Life 上下文自动过滤
-
-### 9. Git 同步
-
-一键提交到 GitHub，自动备份你的所有笔记和任务数据。侧边栏底部显示同步状态（绿色=已是最新 / 橙色=未提交的更改）和最近同步时间，启动时自动验证连接状态，保存配置时也会自动重测，无需手动点击「测试连接」。
-
-### 10. IPFS 去中心化备份
-
-将工作区完整快照一键上传到 IPFS（通过 Pinata），获得永久、去中心化的数据备份。每次备份生成唯一的 CID，可在任意 IPFS 网关访问。
-
-- **一键备份**：设置页面点击「立即备份」，自动打包所有 Markdown 文件上传
-- **连接测试**：内置 Pinata JWT 验证，一键检测配置是否正确
-- **备份历史**：查看最近 50 条备份记录，支持复制 CID 和在网关打开
-- **自定义网关**：可配置私有 IPFS 网关，默认使用 Pinata Gateway
-
-### 11. 应用内自动更新
-
-**v0.6.1+ 新增主动通知功能！**无需手动查找更新，像 Codex、VS Code 一样智能：
-
-- **启动时自动检查**：应用启动后 3 秒自动检测新版本
-- **主动弹窗提醒**：发现新版本时自动弹出更新通知，显示版本号和更新日志
-- **一键下载安装**：点击"立即更新"按钮，自动下载并安装，显示实时进度
-- **自动重启应用**：下载完成后自动重启，无需手动操作
-- **跳过版本**：可选择跳过某个版本的更新，不再弹窗提醒
-- **稍后提醒**：暂时关闭通知，下次启动再提醒
-- **手动检查**：设置页面提供"检查更新"按钮，随时查看版本状态
-- **蓝色徽章提示**：设置按钮显示醒目的蓝色感叹号徽章
-- **代码签名验证**：所有更新包经过签名验证，确保安全性
-
-**更新流程**：
-1. 应用启动 → 自动检查更新（后台静默）
-2. 发现新版本 → 弹出更新通知模态窗口
-3. 点击"立即更新" → 显示下载进度条
-4. 下载完成 → 自动重启应用以应用更新
-
-**与传统方式对比**：
-- ❌ 旧方式：手动访问 GitHub Releases → 找到对应平台的包 → 下载 → 安装 → 重启
-- ✅ 新方式：点击"立即更新" → 等待几秒 → 完成
-
-> 详见 [应用内更新指南](docs/UPDATE_CHECKER.md) 和 [v0.6.1 发布说明](docs/RELEASE_v0.6.1.md)
-
-### 12. AI 功能中心
-
-侧边栏新增独立的 AI 功能区域，包含三个模块：
-
-#### 提示词库
-- 管理和编辑 AI 格式化提示词模板
-- 支持多种 scope（格式、日期范围、项目、人员、自定义）
-- **提示词测试**：输入测试文本，运行提示词，实时查看 AI 输出效果
-- 添加/编辑/删除提示词，完全可控
-
-#### 模型库 ✨ NEW
-浏览和管理 AI 模型配置，一键切换不同模型：
-- **预设模型库**：内置 DeepSeek V3/R1、Claude Opus/Sonnet/Haiku、GPT-4o/o1、Gemini 2.0、Qwen Max 等主流模型
-- **模型对比**：查看上下文窗口、定价、特性标签（视觉、推理、函数调用等）
-- **模型测试**：输入测试内容，实时验证模型响应
-- **自定义模型**：添加私有部署或其他兼容 OpenAI API 的模型
-- **一键切换**：点击「使用」按钮即可切换到该模型配置
-
-#### AI 工作流 ✨ NEW
-预设和自定义的 AI 自动化处理流程：
-- **日报生成器**：自动读取今日任务，AI 生成结构化日报
-- **周报生成器**：汇总本周任务，生成专业周报
-- **智能标签**：分析笔记内容，AI 推荐相关标签
-- **任务拆解**：输入大任务，AI 自动拆解为可执行的子任务
-- **输入预览**：运行前预览将要处理的内容
-- **一键保存**：AI 生成的内容可直接保存到笔记
-
-
-**多配置支持**：
-- 可创建多个 AI 配置（不同 API Key、不同模型）
-- 同一时间只使用一个配置，点击切换
-- 配置存储在本地，安全私密
+- **Git 同步**：一键提交到 GitHub，侧边栏显示同步状态
+- **IPFS 备份**：通过 Pinata 上传去中心化备份，获得永久 CID
+- **应用内更新**：自动检测新版本，一键下载安装
 
 ## 📸 界面预览
 
@@ -202,136 +108,214 @@ DailyFlow 是一个**本地优先**的每日任务管理桌面应用。它以 Ma
 
 ## 🚀 快速开始
 
-### 方式一：下载安装包（推荐）
+### 下载安装（推荐）
 
-见上方 [📦 下载](#-下载) 章节。
+前往 [Releases](https://github.com/frankfika/dailyflow/releases/latest) 下载对应平台安装包。
 
-### 方式二：从源码运行
+### 从源码运行
 
 ```bash
-# 克隆仓库
 git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
-
-# 安装依赖
 npm install
-
-# 启动开发服务器（前端 + 后端）
-npm run dev:all  # 同时启动前端和后端
-
-# 或者启动 Tauri 桌面应用
-npm run tauri dev
+npm run dev:all     # 前端 + 后端
+# 或
+npm run tauri dev   # Tauri 桌面应用
 ```
 
 ### 首次使用
 
-1. 启动应用后，设置你的工作区目录（存放 Markdown 文件的位置）
-2. 应用会自动创建今天的日记文件
+1. 设置工作区目录（存放 Markdown 文件的位置）
+2. 应用自动创建今天的日记文件
 3. 开始添加任务，使用标签分类
-4. 第二天打开时，未完成任务自动迁移到今天
+4. 第二天打开时，未完成任务自动迁移
 
-## 🏗 架构设计
+## 🏗 架构
 
 ```
-┌─────────────────────────────────────────────┐
-│              Tauri Desktop Shell             │
-├─────────────────────────────────────────────┤
-│                                             │
-│  ┌─────────────┐     ┌──────────────────┐  │
-│  │   React UI  │────▶│  Express Backend  │  │
-│  │  (Vite/TS)  │◀────│   (Port 3003)    │  │
-│  └─────────────┘     └──────────────────┘  │
-│                              │               │
-│                              ▼               │
-│                    ┌──────────────────┐      │
-│                    │  Markdown Files  │      │
-│                    │  (Source of Truth)│      │
-│                    └──────────────────┘      │
-│                              │               │
-│                              ▼               │
-│                    ┌──────────────────┐      │
-│                    │  Markdown Files  │      │
-│                    │  (Source of Truth)│      │
-│                    └──────────────────┘      │
-│                              │               │
-│              ┌───────────────┴───────────────┐│
-│              ▼                               ▼│
-│    ┌──────────────────┐        ┌──────────────────┐ │
-│    │   Git (Optional) │        │ IPFS (Optional)  │ │
-│    │   GitHub Sync    │        │  Pinata Backup   │ │
-│    └──────────────────┘        └──────────────────┘ │
-│                                             │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│           Tauri Desktop Shell            │
+├──────────────────────────────────────────┤
+│  ┌────────────┐     ┌─────────────────┐ │
+│  │  React UI  │◀───▶│ Express Backend  │ │
+│  │ (Vite/TS)  │     │  (Port 3003)    │ │
+│  └────────────┘     └────────┬────────┘ │
+│                              │           │
+│                    ┌─────────▼─────────┐ │
+│                    │  Markdown Files   │ │
+│                    │ (Source of Truth)  │ │
+│                    └─────────┬─────────┘ │
+│              ┌───────────────┼───────────┐
+│              ▼               ▼           ▼
+│     ┌──────────────┐ ┌────────────┐ ┌────────┐
+│     │ Git (GitHub) │ │ IPFS/Pinata│ │ AI API │
+│     └──────────────┘ └────────────┘ └────────┘
+└──────────────────────────────────────────┘
 ```
-
-**核心原则：**
-- **Markdown 为源**：所有数据以 Markdown 文件存储，是唯一的数据源
-- **本地优先**：所有操作在本地完成，无需网络
-- **非破坏性**：所有写入操作都有预览和确认机制
-- **Git 友好**：每次操作都可以生成有意义的 commit
 
 ## 🛠 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 19 + TypeScript + Tailwind CSS 4 |
-| 动画 | Framer Motion |
+| 前端 | React 19 + TypeScript + Tailwind CSS 4 + Framer Motion |
 | 构建 | Vite 6 |
 | 后端 | Express.js (TypeScript) |
 | 桌面 | Tauri 2 (Rust) |
-| AI | DeepSeek / OpenAI / Anthropic (可选) |
-| 版本控制 | Git + GitHub API |
-| 去中心化备份 | IPFS + Pinata (可选) |
+| AI | 15+ 供应商（B.AI / Claude / GPT / Gemini / DeepSeek 等） |
+| 同步 | Git + GitHub API |
+| 备份 | IPFS + Pinata |
 
-## 📝 数据格式
+## 📄 License
 
-DailyFlow 使用标准 Markdown 格式存储任务：
+[Apache License 2.0](./LICENSE)
 
-```markdown
-## Tasks
-
-- [ ] 完成项目报告 #work #deadline:2026-05-15
-- [x] 回复客户邮件 #work
-- [>] 整理会议纪要 #work (migrated to 2026-05-12)
-```
-
-**笔记格式（Markdown + YAML frontmatter）：**
-
-```markdown
----
-type: meeting_note
-date: 2026-05-17
-time: "14:00"
-end_time: "15:00"
-context: work
-tags: [投资, 策略]
-mentions: [张总, 李明]
-participants: [陈方, 东海投资-张总]
 ---
 
-# 东海投资沟通会议
+# English
 
-## 会议要点
+## Introduction
 
-1. 投决会延后到6月初
-2. 需要补充盈利预测材料
+DailyFlow is a **local-first** intelligent task management desktop app. It uses Markdown files as its data source, features a built-in AI assistant, and automatically handles cross-day task migration — so you never have to manually carry over yesterday's unfinished items.
 
-## 待办事项
+### Why DailyFlow?
 
-- [ ] 补充盈利预测 @李明
-- [ ] 发送补充材料给 @张总
+| Traditional | DailyFlow |
+|-------------|-----------|
+| Manually copy unfinished tasks every day | Auto-migration, ready when you open |
+| Data locked in SaaS platforms | Local Markdown files, full ownership |
+| Requires internet | Offline-first, always available |
+| Complex project management UI | Minimal design, focused on today |
+| AI features cost extra | Built-in AI, 15+ model providers |
+
+## 📦 Download
+
+Head to [Releases](https://github.com/frankfika/dailyflow/releases/latest):
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` |
+| Windows | `DailyFlow_x.x.x_x64-setup.exe` |
+| Linux | `DailyFlow_x.x.x_amd64.AppImage` |
+
+> **macOS users**: If you see a "damaged" error, run `sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app`
+
+## ✨ Features
+
+### 📋 Task Management
+
+- **Auto Migration**: Unfinished tasks automatically roll over to the next day with source date tracking
+- **Card-based UI**: Tasks grouped by tags, with comments and linked notes
+- **Work/Life Switch**: One-click context switching, tasks auto-filtered
+- **Project Overview**: Cross-date task aggregation by category
+- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
+
+### 🤖 AI Assistant
+
+- **AI Chat**: Full chat interface with multi-session, context injection (today's tasks/notes/projects)
+- **AI Tool Use**: AI can directly create tasks, save notes, manage projects
+- **Brain Dump**: Pour in scattered thoughts, AI extracts and categorizes tasks
+- **AI Summary**: Generate structured daily/weekly reports
+- **Skill Marketplace**: Slash commands and Agent Skills
+- **Prompt Library**: Manage and test AI formatting prompt templates
+
+### 🔌 AI Model Support
+
+One-click configuration for 15+ AI providers:
+
+| Type | Providers |
+|------|-----------|
+| Aggregator | **B.AI** (29+ models, one key), OpenRouter |
+| China | DeepSeek, Kimi, MiniMax, GLM, Doubao, Qwen, SiliconFlow |
+| Global | Anthropic Claude, OpenAI, Google Gemini, Groq |
+| Custom | Any OpenAI-compatible API |
+
+### 📝 Notes
+
+- **Multi-type**: Regular notes, meeting notes, AI summaries
+- **@Mentions**: Auto-parsed, filterable by person
+- **Multi-dimensional Filters**: By type, person, project, tag, date range
+- **Task Linking**: Bidirectional linking between notes and tasks
+
+### 📚 Multi-Notebook
+
+- Sidebar switcher for multiple workspaces
+- Auto-discovers local note folders
+- Each notebook remembers last visited date
+
+### 🔄 Sync & Backup
+
+- **Git Sync**: One-click push to GitHub, status displayed in sidebar
+- **IPFS Backup**: Decentralized backup via Pinata with permanent CID
+- **In-app Updates**: Auto-detect new versions, one-click install
+
+## 📸 Screenshots
+
+| Home | Add Task |
+|------|----------|
+| ![Home](./docs/assets/home.png) | ![Add Task](./docs/assets/add-task.png) |
+
+| Projects | Notes |
+|----------|-------|
+| ![Projects](./docs/assets/projects.png) | ![Notes](./docs/assets/notes.png) |
+
+## 🚀 Quick Start
+
+### Download (Recommended)
+
+Grab the installer from [Releases](https://github.com/frankfika/dailyflow/releases/latest).
+
+### Run from Source
+
+```bash
+git clone https://github.com/frankfika/dailyflow.git
+cd dailyflow
+npm install
+npm run dev:all     # Frontend + Backend
+# or
+npm run tauri dev   # Tauri desktop app
 ```
 
-**任务状态：**
-- `- [ ]` 待办
-- `- [x]` 已完成
-- `- [>]` 已迁移
+### First Use
 
-**支持的标签：**
-- `#tag` — 分类标签
-- `#deadline:YYYY-MM-DD` — 截止日期
-- `#priority:high|medium|low` — 优先级
-- `#project:name` — 所属项目
+1. Set your workspace directory (where Markdown files will be stored)
+2. App auto-creates today's journal file
+3. Start adding tasks with tags
+4. Next day, unfinished tasks auto-migrate
+
+## 🏗 Architecture
+
+```
+┌──────────────────────────────────────────┐
+│           Tauri Desktop Shell            │
+├──────────────────────────────────────────┤
+│  ┌────────────┐     ┌─────────────────┐ │
+│  │  React UI  │◀───▶│ Express Backend  │ │
+│  │ (Vite/TS)  │     │  (Port 3003)    │ │
+│  └────────────┘     └────────┬────────┘ │
+│                              │           │
+│                    ┌─────────▼─────────┐ │
+│                    │  Markdown Files   │ │
+│                    │ (Source of Truth)  │ │
+│                    └─────────┬─────────┘ │
+│              ┌───────────────┼───────────┐
+│              ▼               ▼           ▼
+│     ┌──────────────┐ ┌────────────┐ ┌────────┐
+│     │ Git (GitHub) │ │ IPFS/Pinata│ │ AI API │
+│     └──────────────┘ └────────────┘ └────────┘
+└──────────────────────────────────────────┘
+```
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19 + TypeScript + Tailwind CSS 4 + Framer Motion |
+| Build | Vite 6 |
+| Backend | Express.js (TypeScript) |
+| Desktop | Tauri 2 (Rust) |
+| AI | 15+ providers (B.AI / Claude / GPT / Gemini / DeepSeek etc.) |
+| Sync | Git + GitHub API |
+| Backup | IPFS + Pinata |
 
 ## 📄 License
 
