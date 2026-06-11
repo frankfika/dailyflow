@@ -28,6 +28,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [mentionFilter, setMentionFilter] = useState<string | null>(null);
   const [allMentions, setAllMentions] = useState<string[]>([]);
+  const [isNoteMaximized, setIsNoteMaximized] = useState(false);
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [availableTasks, setAvailableTasks] = useState<{ id: string; title: string }[]>([]);
@@ -255,7 +256,11 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       className="space-y-6"
     >
       {viewMode === 'edit' ? (
-        <div className="flex flex-col floating-card overflow-hidden h-[calc(100vh-140px)]">
+        <div className={`flex flex-col floating-card overflow-hidden transition-all ${
+          isNoteMaximized
+            ? 'fixed inset-0 z-40 rounded-none h-screen'
+            : 'h-[calc(100vh-140px)]'
+        }`}>
           <NoteEditor
             note={editingNote}
             language={language}
@@ -265,8 +270,10 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
             aiApiKey={aiApiKey}
             aiModel={aiModel}
             aiBaseUrl={aiBaseUrl}
+            isMaximized={isNoteMaximized}
+            onToggleMaximize={() => setIsNoteMaximized(v => !v)}
             onSave={handleSave}
-            onClose={() => { setViewMode('list'); setEditingNote(null); }}
+            onClose={() => { setViewMode('list'); setEditingNote(null); setIsNoteMaximized(false); }}
             onDelete={editingNote ? () => handleDelete(editingNote.id) : undefined}
             onSendToChat={onSendToChat}
           />
