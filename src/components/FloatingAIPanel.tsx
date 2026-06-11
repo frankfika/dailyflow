@@ -388,7 +388,8 @@ export function FloatingAIPanel({
 
     const contextSnapshot = [...activeSession.contextItems];
     const userInputCopy = contentToSend;
-    const skillForThisMessage = activeSkill;
+    // Use matchedSkill directly (from slash command) to avoid race with useMemo
+    const skillForThisMessage = matchedSkill || activeSkill;
 
     updateActiveSession(s => {
       const newMessages = [...s.messages, userMessage];
@@ -403,7 +404,8 @@ export function FloatingAIPanel({
     setInputValue('');
     setDraftSourceTitle(null);
     setIsStreaming(true);
-    setPendingSkillId(null);
+    // Clear pending skill only if it wasn't set by slash command this turn
+    if (!matchedSkill) setPendingSkillId(null);
     // Record skill usage (if any) and re-sort the skill list so the
     // just-used one floats to the top next time the menu opens.
     if (skillForThisMessage) {

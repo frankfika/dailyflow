@@ -155,6 +155,55 @@ author: DailyFlow
 
 保持简洁、积极、有行动导向。`,
   },
+  {
+    id: 'builtin_dailyflow_kb',
+    name: 'DailyFlow 项目知识库',
+    markdown: `---
+name: DailyFlow 项目知识库
+description: DailyFlow 本地优先任务管理工具的项目上下文
+scope: chat
+type: agent
+commands: ["/df", "/dailyflow"]
+icon: BookOpen
+version: 1.0
+author: DailyFlow
+---
+
+# DailyFlow 项目知识库
+
+## Overview
+DailyFlow 是一个本地优先的每日任务管理工具，基于 Markdown 驱动。核心特性：
+- 每日任务自动迁移（未完成任务自动带到下一天）
+- work / life 双上下文分离
+- AI 助手集成（支持多种模型供应商）
+- Skill 系统（Prompt + Agent 双模式）
+
+## Tech Stack
+- **Frontend**: React 19 + TypeScript + Tailwind CSS + Tauri v2
+- **Backend**: Node.js + Express (port 3003)
+- **Storage**: 本地 Markdown 文件系统
+- **AI**: OpenAI-compatible API（DeepSeek、Moonshot、MiniMax、Anthropic 等）
+
+## Project Structure
+- \`src/components/\` — React UI 组件
+- \`src/utils/\` — 工具函数（idGenerator、chatActions、builtInSkills 等）
+- \`server/routes/\` — Express API 路由
+- \`server/services/\` — 业务逻辑（fileSystem、parser、rollover 等）
+- \`src-tauri/\` — Tauri 桌面端配置
+
+## Common Commands
+- \`npm run dev:all\` — 同时启动前端 dev server 和后端 API
+- \`npm test\` — 运行 vitest 测试套件
+- \`npm run build\` — 构建前端
+- \`npm run build:server\` — 构建后端（esbuild bundle）
+
+## Conventions
+- 组件文件用 PascalCase（如 \`AIChat.tsx\`）
+- 工具文件用 camelCase（如 \`idGenerator.ts\`）
+- 后端路由文件用 kebab-case（如 \`ai.ts\`）
+- 所有新增功能必须保持 TypeScript 零错误
+- 提交前运行 \`npm test\` 确保测试通过`,
+  },
 ];
 
 /**
