@@ -144,7 +144,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 e.target.style.height = `${e.target.scrollHeight}px`;
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                   setEditContent(task.title + (task.description ? '\n' + task.description : ''));
                   setEditTags(task.tags || []);
                   setEditDeadline(task.deadline || '');
@@ -331,12 +331,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   value={commentText}
                   onChange={e => setCommentText(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Escape') {
+                    if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                       setShowComment(false);
                       setCommentText('');
                       onCompletionPromptClosed?.();
                     }
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
                       e.preventDefault();
                       if (commentText.trim()) {
                         const now = new Date();

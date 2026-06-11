@@ -82,11 +82,12 @@ export function TaskInputPanel({
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [isComposing, setIsComposing] = useState(false);
 
   useEffect(() => {
     if (!showTaskInput) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.isComposing) {
         setShowTaskInput(false);
         setShowBrainDump(false);
       }
@@ -111,7 +112,7 @@ export function TaskInputPanel({
       >
         <div className="max-w-3xl mx-auto space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
+            <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '⌘/Ctrl + Enter 添加 · Esc 关闭' : '⌘/Ctrl + Enter to add · Esc to close'}</span>
             <button
               onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
               className="text-text-muted hover:text-text-heading p-1"
@@ -170,8 +171,10 @@ export function TaskInputPanel({
                 e.target.style.height = 'inherit';
                 e.target.style.height = `${e.target.scrollHeight}px`;
               }}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey && newTaskTitle.trim()) {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !isComposing && !e.nativeEvent.isComposing && newTaskTitle.trim()) {
                   e.preventDefault();
                   document.getElementById('add-task-btn')?.click();
                 }

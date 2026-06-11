@@ -202,8 +202,8 @@ export function WorkspaceSwitcher({
                         onClick={e => e.stopPropagation()}
                         onChange={e => setRenameValue(e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter') handleRename(ws.id);
-                          if (e.key === 'Escape') setRenamingId(null);
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleRename(ws.id);
+                          if (e.key === 'Escape' && !e.nativeEvent.isComposing) setRenamingId(null);
                         }}
                         onBlur={() => handleRename(ws.id)}
                         className="w-full bg-surface border border-accent/40 rounded px-1.5 py-0.5 text-xs outline-none"

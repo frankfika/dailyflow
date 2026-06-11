@@ -14,6 +14,7 @@ interface TagInputProps {
 export function TagInput({ tags, onChange, availableTags, language, placeholder }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -34,7 +35,7 @@ export function TagInput({ tags, onChange, availableTags, language, placeholder 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
       onChange(tags.slice(0, -1));
-    } else if (e.key === 'Enter' || e.key === ',') {
+    } else if ((e.key === 'Enter' || e.key === ',') && !isComposing && !e.nativeEvent.isComposing) {
       e.preventDefault();
       const val = inputValue.trim().toLowerCase();
       if (val && !tags.includes(val)) {
@@ -88,6 +89,8 @@ export function TagInput({ tags, onChange, availableTags, language, placeholder 
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onFocus={() => setIsFocused(true)}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
         />
       </div>

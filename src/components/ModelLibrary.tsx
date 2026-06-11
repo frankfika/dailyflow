@@ -46,7 +46,14 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
 
   useEffect(() => {
     if (drawerOpen) {
-      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer(); };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Escape') return;
+        const target = e.target as HTMLElement;
+        const isEditing = target instanceof HTMLElement &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (isEditing || e.isComposing) return;
+        closeDrawer();
+      };
       document.addEventListener('keydown', onKey);
       return () => document.removeEventListener('keydown', onKey);
     }

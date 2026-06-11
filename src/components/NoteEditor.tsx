@@ -785,7 +785,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       value={participantInput}
                       onChange={e => setParticipantInput(e.target.value)}
                       onKeyDown={e => {
-                        if ((e.key === 'Enter' || e.key === ',') && participantInput.trim()) {
+                        if ((e.key === 'Enter' || e.key === ',') && !e.nativeEvent.isComposing && participantInput.trim()) {
                           e.preventDefault();
                           addParticipant(participantInput);
                           setParticipantInput('');

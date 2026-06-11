@@ -99,6 +99,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   const [inputValue, setInputValue] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
@@ -512,7 +513,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -592,8 +593,8 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                       onChange={e => setEditTitle(e.target.value)}
                       onBlur={commitRename}
                       onKeyDown={e => {
-                        if (e.key === 'Enter') commitRename();
-                        if (e.key === 'Escape') setEditingSessionId(null);
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitRename();
+                        if (e.key === 'Escape' && !e.nativeEvent.isComposing) setEditingSessionId(null);
                       }}
                       onClick={e => e.stopPropagation()}
                       className="flex-1 text-xs bg-white border border-accent/40 rounded px-1.5 py-0.5 outline-none"
@@ -980,6 +981,8 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                 ref={textareaRef}
                 value={inputValue}
                 onChange={e => { setInputValue(e.target.value); setDraftSourceTitle(null); }}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
                 onKeyDown={handleKeyDown}
                 placeholder={language === 'zh' ? '问点什么…  Enter 发送 / Shift+Enter 换行' : 'Ask anything…  Enter to send · Shift+Enter for new line'}
                 rows={2}
@@ -1258,7 +1261,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                       type="text"
                       placeholder={language === 'zh' ? '+ 添加标签' : '+ Add tag'}
                       onKeyDown={e => {
-                        if (e.key === 'Enter') {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                           const v = (e.target as HTMLInputElement).value.trim().toLowerCase();
                           if (v && !saveNoteModal.tags.includes(v)) {
                             setSaveNoteModal(prev => ({ ...prev, tags: [...prev.tags, v] }));

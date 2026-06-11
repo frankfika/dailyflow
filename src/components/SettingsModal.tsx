@@ -133,7 +133,12 @@ export function SettingsModal({
   useEffect(() => {
     if (!showSettings) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowSettings(false);
+      if (e.key !== 'Escape') return;
+      const target = e.target as HTMLElement;
+      const isEditing = target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (isEditing || e.isComposing) return;
+      setShowSettings(false);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);

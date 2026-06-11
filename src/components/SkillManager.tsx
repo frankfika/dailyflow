@@ -580,7 +580,7 @@ export function SkillManager({ language }: SkillManagerProps) {
           <input
             value={pasteText}
             onChange={e => setPasteText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleImportFromText(); }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleImportFromText(); }}
             placeholder={language === 'zh' ? '粘贴 Markdown 或 GitHub Raw URL...' : 'Paste markdown or GitHub raw URL...'}
             className="flex-1 min-w-0 px-3 py-1.5 text-xs border border-border rounded bg-surface focus:outline-none focus:border-accent"
           />

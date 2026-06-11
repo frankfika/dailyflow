@@ -114,6 +114,7 @@ export function FloatingAIPanel({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   const [inputValue, setInputValue] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
@@ -587,7 +588,7 @@ export function FloatingAIPanel({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -857,6 +858,8 @@ export function FloatingAIPanel({
                 ref={textareaRef}
                 value={inputValue}
                 onChange={e => { setInputValue(e.target.value); setDraftSourceTitle(null); }}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholderText}
                 rows={1}
