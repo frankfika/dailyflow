@@ -78,7 +78,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [participantInput, setParticipantInput] = useState('');
   const [linkedTaskIds, setLinkedTaskIds] = useState<string[]>(note?.linkedTaskIds || defaultLinkedTaskIds || []);
   const [previewMode, setPreviewMode] = useState(false);
-  const [showMeta, setShowMeta] = useState(false);
+  const [showMeta, setShowMeta] = useState(true);
 
   // AI Format state
   const [formatPrompts, setFormatPrompts] = useState<PromptTemplateData[]>([]);
@@ -116,7 +116,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleSave = () => {
     if (!title.trim()) return;
-    const fullBody = body.startsWith('# ') ? body : `# ${title}\n\n${body}`;
+    // Only prepend H1 if body doesn't already start with one
+    const firstLine = body.trimStart().split('\n')[0];
+    const hasH1 = firstLine.startsWith('# ');
+    const fullBody = hasH1 ? body : `# ${title}\n\n${body}`;
     onSave({
       title: title.trim(),
       body: fullBody,
@@ -286,13 +289,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
-  const hasUnsavedChanges = !!note && (
-    note.title !== title ||
-    note.body !== body ||
-    note.type !== type ||
-    JSON.stringify(note.tags || []) !== JSON.stringify(tags) ||
-    JSON.stringify(note.linkedTaskIds || []) !== JSON.stringify(linkedTaskIds)
-  );
+  const hasUnsavedChanges = note
+    ? (
+        note.title !== title ||
+        note.body !== body ||
+        note.type !== type ||
+        JSON.stringify(note.tags || []) !== JSON.stringify(tags) ||
+        JSON.stringify(note.linkedTaskIds || []) !== JSON.stringify(linkedTaskIds)
+      )
+    : (
+        title.trim() !== '' ||
+        body.trim() !== '' ||
+        type !== 'note' ||
+        tags.length > 0 ||
+        linkedTaskIds.length > 0 ||
+        participants.length > 0
+      );
 
   const handleSendToChat = () => {
     if (!onSendToChat) return;
@@ -317,8 +329,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (p && !participants.includes(p)) setParticipants([...participants, p]);
   };
 
-  const bodyWithoutHeading = body.startsWith('# ')
-    ? body.split('\n').slice(1).join('\n').trim()
+  const bodyWithoutHeading = body.trimStart().startsWith('# ')
+    ? body.trimStart().replace(/^#\s+.*\n?/, '').trimStart()
     : body;
 
   return (

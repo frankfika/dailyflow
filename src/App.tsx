@@ -1455,12 +1455,23 @@ export default function App() {
                 >
                   <AIChat
                     language={language}
+                    activeContext={activeContext}
                     tasks={contextFilteredTasks}
                     notes={filterNotesByContext(dailyNotes, activeContext)}
                     filesMap={filesMap}
                     showToast={showToast}
                     initialDraft={chatDraft}
                     onDraftConsumed={() => setChatDraft(null)}
+                    onNoteCreated={() => {
+                      // Refresh daily notes for today so the new note appears immediately
+                      const today = new Date().toISOString().slice(0, 10);
+                      notesApi.getByDate(today).then(dateNotes => {
+                        setDailyNotes(prev => {
+                          const others = prev.filter(n => n.date !== today);
+                          return [...others, ...dateNotes];
+                        });
+                      }).catch(err => console.error('Failed to refresh daily notes:', err));
+                    }}
                   />
                 </motion.div>
               ) : (

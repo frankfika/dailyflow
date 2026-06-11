@@ -4,7 +4,12 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download, Tag, Info } from 'lucide-react';
+import {
+  Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download, Tag, Info,
+  Search, X, BarChart3, GitBranch, Users, Target, CalendarCheck, BookOpen,
+  Bot, Code, FileText, MessageSquare, Sparkles, Wrench, Palette, Database,
+  PenTool, Lightbulb, Layers, Puzzle, Command,
+} from 'lucide-react';
 import { promptsApi, type PromptTemplateData } from '../api/client';
 import { TagInput } from './TagInput';
 import { getUnimportedBuiltInSkills, markBuiltInSkillImported, BUILT_IN_SKILLS } from '../utils/builtInSkills';
@@ -16,6 +21,76 @@ const SCOPE_OPTIONS = [
   { value: 'custom', zh: '自定义', en: 'Custom' },
 ];
 
+const CATEGORIES = [
+  { key: 'All', zh: '全部', en: 'All' },
+  { key: 'Productivity', zh: '效率', en: 'Productivity' },
+  { key: 'Developer Tools', zh: '开发工具', en: 'Developer Tools' },
+  { key: 'Content Creation', zh: '内容创作', en: 'Content Creation' },
+  { key: 'Data Analysis', zh: '数据分析', en: 'Data Analysis' },
+  { key: 'UI Design', zh: 'UI 设计', en: 'UI Design' },
+  { key: 'Custom', zh: '自定义', en: 'Custom' },
+];
+
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Productivity: Zap,
+  'Developer Tools': Code,
+  'Content Creation': PenTool,
+  'Data Analysis': BarChart3,
+  'UI Design': Palette,
+  Custom: Puzzle,
+};
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  BarChart: BarChart3,
+  GitBranch,
+  Users,
+  Target,
+  CalendarCheck,
+  BookOpen,
+  Zap,
+  Sparkles,
+  FileText,
+  Code,
+  Palette,
+  Database,
+  Wrench,
+  PenTool,
+  MessageSquare,
+  Bot,
+  Puzzle,
+  Lightbulb,
+  Layers,
+  Info,
+  Tag,
+  Command,
+};
+
+function getSkillCategory(skill: PromptTemplateData | typeof BUILT_IN_SKILLS[0]): string {
+  if ('category' in skill && skill.category) return skill.category;
+  const tags = skill.tags || [];
+  const tagSet = new Set(tags.map(t => t.toLowerCase()));
+  if (tagSet.has('developer-tools') || tagSet.has('dev') || tagSet.has('coding') || tagSet.has('knowledge-base')) return 'Developer Tools';
+  if (tagSet.has('content-creation') || tagSet.has('writing') || tagSet.has('blog')) return 'Content Creation';
+  if (tagSet.has('data-analysis') || tagSet.has('data') || tagSet.has('analytics')) return 'Data Analysis';
+  if (tagSet.has('ui-design') || tagSet.has('design') || tagSet.has('frontend')) return 'UI Design';
+  if (tagSet.has('productivity') || tagSet.has('weekly') || tagSet.has('okr') || tagSet.has('task') || tagSet.has('meeting') || tagSet.has('summary') || tagSet.has('daily')) return 'Productivity';
+  return 'Custom';
+}
+
+function SkillIcon({ name, className = 'w-5 h-5' }: { name?: string; className?: string }) {
+  if (name && ICON_MAP[name]) {
+    const Icon = ICON_MAP[name];
+    return <Icon className={className} />;
+  }
+  // Fallback: first letter avatar
+  const letter = (name || 'S').charAt(0).toUpperCase();
+  return (
+    <span className={`inline-flex items-center justify-center rounded-md bg-accent/10 text-accent font-bold text-sm ${className}`}>
+      {letter}
+    </span>
+  );
+}
+
 interface SkillManagerProps {
   language: 'en' | 'zh';
 }
@@ -23,7 +98,9 @@ interface SkillManagerProps {
 export function SkillManager({ language }: SkillManagerProps) {
   const [skills, setSkills] = useState<PromptTemplateData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterScope, setFilterScope] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'installed'>('marketplace');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -188,6 +265,7 @@ export function SkillManager({ language }: SkillManagerProps) {
       await promptsApi.create(parsed);
       await load();
       setPasteText('');
+      setActiveTab('installed');
     } catch (err: any) {
       setImportError(err.message || (language === 'zh' ? '导入失败' : 'Import failed'));
       setTimeout(() => setImportError(null), 4000);
@@ -204,6 +282,7 @@ export function SkillManager({ language }: SkillManagerProps) {
       markBuiltInSkillImported(skill.id);
       setBuiltInSkills(prev => prev.filter(s => s.id !== skill.id));
       await load();
+      setActiveTab('installed');
     } catch (err) {
       console.error('Built-in skill import failed:', err);
     }
@@ -303,264 +382,402 @@ export function SkillManager({ language }: SkillManagerProps) {
     }
   };
 
-  const filtered = filterScope === 'all' ? skills : skills.filter(s => s.scope === filterScope);
+  // Filter logic
+  const installedIds = new Set(skills.map(s => s.name));
 
-  const getScopeLabel = (scope: string) => {
-    const opt = SCOPE_OPTIONS.find(o => o.value === scope);
-    return language === 'zh' ? (opt?.zh || scope) : (opt?.en || scope);
+  const marketplaceSkills = builtInSkills.filter(b => !installedIds.has(b.name));
+
+  const filterBySearch = (list: (PromptTemplateData | typeof BUILT_IN_SKILLS[0])[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.description || '').toLowerCase().includes(q) ||
+      (s.tags || []).some(t => t.toLowerCase().includes(q))
+    );
   };
+
+  const filterByCategory = (list: (PromptTemplateData | typeof BUILT_IN_SKILLS[0])[]) => {
+    if (selectedCategory === 'All') return list;
+    return list.filter(s => getSkillCategory(s) === selectedCategory);
+  };
+
+  const displayedMarketplace = filterByCategory(filterBySearch(marketplaceSkills));
+  const displayedInstalled = filterByCategory(filterBySearch(skills));
 
   const formValid = !!(form.name.trim() && form.systemPrompt.trim());
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* Header + Paste Import */}
-      <div className="px-5 py-3 border-b border-border space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-text-muted">
+  const renderSkillCard = (skill: PromptTemplateData | typeof BUILT_IN_SKILLS[0], isInstalled: boolean) => {
+    const category = getSkillCategory(skill);
+    const CatIcon = CATEGORY_ICONS[category] || Puzzle;
+    const isBuiltIn = !isInstalled;
+
+    return (
+      <motion.div
+        key={isInstalled ? (skill as PromptTemplateData).id : (skill as typeof BUILT_IN_SKILLS[0]).id}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="group bg-surface-white border border-border rounded-xl p-4 hover:border-accent/30 hover:shadow-sm transition-all flex flex-col gap-3"
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+            <SkillIcon name={(skill as any).icon || ''} className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-bold text-text-heading truncate">{skill.name}</h4>
+            <p className="text-[11px] text-text-muted line-clamp-2 mt-0.5">{(skill as any).description || (language === 'zh' ? '暂无描述' : 'No description')}</p>
+          </div>
+          <div className="flex-shrink-0">
+            {isBuiltIn ? (
+              <button
+                onClick={() => handleImportBuiltIn(skill as typeof BUILT_IN_SKILLS[0])}
+                className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent/90 transition-colors"
+                title={language === 'zh' ? '安装' : 'Install'}
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => handleExport(skill as PromptTemplateData)}
+                  className="p-1.5 text-text-muted hover:text-accent transition-colors"
+                  title={language === 'zh' ? '导出' : 'Export'}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => startEdit(skill as PromptTemplateData)}
+                  className="p-1.5 text-text-muted hover:text-accent transition-colors"
+                  title={language === 'zh' ? '编辑' : 'Edit'}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete((skill as PromptTemplateData).id)}
+                  className="p-1.5 text-text-muted hover:text-red-500 transition-colors"
+                  title={language === 'zh' ? '删除' : 'Delete'}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Meta row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface text-text-muted border border-border">
+            <CatIcon className="w-2.5 h-2.5" />
             {language === 'zh'
-              ? '粘贴 Markdown、GitHub Raw URL 或本地文件导入 Skill'
-              : 'Paste Markdown, GitHub Raw URL, or import local files'}
-          </p>
-          {importError && (
-            <p className="text-[11px] text-red-500">{importError}</p>
+              ? CATEGORIES.find(c => c.key === category)?.zh || category
+              : CATEGORIES.find(c => c.key === category)?.en || category}
+          </span>
+          {(skill as any).type === 'agent' && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+              Agent
+            </span>
+          )}
+          {(skill as any).version && (
+            <span className="text-[10px] text-text-muted font-mono">v{(skill as any).version}</span>
+          )}
+          {(skill as any).author && (
+            <span className="text-[10px] text-text-muted">@{(skill as any).author}</span>
           )}
         </div>
 
-        {/* Paste input row */}
+        {/* Tags */}
+        {(skill as any).tags && (skill as any).tags.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {(skill as any).tags.map((tag: string) => (
+              <span key={tag} className="text-[10px] text-text-muted bg-surface border border-border rounded px-1.5 py-0.5">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Top bar */}
+      <div className="px-5 py-3 border-b border-border space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          {/* Tabs */}
+          <div className="flex items-center gap-1 bg-surface rounded-lg p-1 border border-border">
+            <button
+              onClick={() => setActiveTab('marketplace')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                activeTab === 'marketplace'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-heading'
+              }`}
+            >
+              {language === 'zh' ? '技能市场' : 'Skills Marketplace'}
+            </button>
+            <button
+              onClick={() => setActiveTab('installed')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                activeTab === 'installed'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-heading'
+              }`}
+            >
+              {language === 'zh' ? '已安装' : 'Installed'}
+              {skills.length > 0 && (
+                <span className="ml-1.5 px-1 py-0.5 rounded-full bg-accent/20 text-[10px]">{skills.length}</span>
+              )}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={language === 'zh' ? '搜索技能...' : 'Search skills...'}
+                className="pl-8 pr-3 py-1.5 text-xs border border-border rounded bg-surface focus:outline-none focus:border-accent w-40 sm:w-56"
+              />
+            </div>
+            {/* Upload */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.markdown,.txt,text/markdown,text/plain"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length) {
+                  handleImportFiles(e.target.files);
+                  e.target.value = '';
+                }
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-surface text-text-heading border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
+              title={language === 'zh' ? '上传 Skill' : 'Upload Skill'}
+            >
+              <Upload className="w-3 h-3" />
+              {language === 'zh' ? '上传' : 'Upload'}
+            </button>
+            <button
+              onClick={startAdd}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+              title={language === 'zh' ? '新建 Skill' : 'New Skill'}
+            >
+              <Plus className="w-3 h-3" />
+              {language === 'zh' ? '新建' : 'New'}
+            </button>
+          </div>
+        </div>
+
+        {/* Paste import row (compact) */}
         <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.markdown,.txt,text/markdown,text/plain"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length) {
-                handleImportFiles(e.target.files);
-                e.target.value = '';
-              }
-            }}
-          />
           <input
             value={pasteText}
             onChange={e => setPasteText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleImportFromText(); }}
-            placeholder={language === 'zh' ? '粘贴 Skill Markdown 或 GitHub Raw URL...' : 'Paste skill markdown or GitHub raw URL...'}
+            placeholder={language === 'zh' ? '粘贴 Markdown 或 GitHub Raw URL...' : 'Paste markdown or GitHub raw URL...'}
             className="flex-1 min-w-0 px-3 py-1.5 text-xs border border-border rounded bg-surface focus:outline-none focus:border-accent"
           />
           <button
             onClick={handleImportFromText}
             disabled={pasting || !pasteText.trim()}
-            className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+            className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-surface text-text-heading border border-border rounded hover:border-accent/40 hover:text-accent transition-colors disabled:opacity-50"
           >
-            {pasting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {pasting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
             {language === 'zh' ? '导入' : 'Import'}
           </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-text-muted bg-surface border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
-            title={language === 'zh' ? '本地文件' : 'Local file'}
-          >
-            <Upload className="w-3 h-3" />
-          </button>
-          <button
-            onClick={startAdd}
-            className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-surface text-text-heading border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
-            title={language === 'zh' ? '手动编写' : 'Write manually'}
-          >
-            <Plus className="w-3 h-3" />
-          </button>
+          {importError && (
+            <span className="text-[11px] text-red-500 shrink-0">{importError}</span>
+          )}
         </div>
 
-        {/* Built-in skills */}
-        {builtInSkills.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-              {language === 'zh' ? '内置' : 'Built-in'}
-            </span>
-            {builtInSkills.map(skill => (
-              <button
-                key={skill.id}
-                onClick={() => handleImportBuiltIn(skill)}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-accent/10 text-accent border border-accent/20 rounded hover:bg-accent/20 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                {skill.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Category chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setSelectedCategory(cat.key)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
+                selectedCategory === cat.key
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface text-text-muted border-border hover:border-accent/30'
+              }`}
+            >
+              {language === 'zh' ? cat.zh : cat.en}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Filter */}
-      <div className="px-5 py-2 border-b border-border flex items-center gap-2 flex-wrap">
-        {[{ value: 'all', label: language === 'zh' ? '全部' : 'All' }, ...SCOPE_OPTIONS.map(s => ({ value: s.value, label: language === 'zh' ? s.zh : s.en }))].map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => setFilterScope(opt.value)}
-            className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${
-              filterScope === opt.value
-                ? 'bg-accent/10 text-accent border-accent/30'
-                : 'bg-surface text-text-muted border-border hover:border-accent/30'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Add/Edit form */}
-      <AnimatePresence initial={false}>
+      {/* Add/Edit Modal */}
+      <AnimatePresence>
         {isAdding && (
           <motion.div
-            key="skill-form"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.15 }}
-            className="border-b border-border"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center p-4"
+            onClick={() => { setIsAdding(false); setEditingId(null); }}
           >
-            <div className="p-5 bg-surface-white space-y-3 max-h-[60vh] overflow-y-auto">
-              <h4 className="text-sm font-semibold text-text-heading">
-                {editingId ? (language === 'zh' ? '编辑 Skill' : 'Edit Skill') : (language === 'zh' ? '新建 Skill' : 'New Skill')}
-              </h4>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15 }}
+              className="bg-surface-white border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <h4 className="text-sm font-bold text-text-heading">
+                  {editingId ? (language === 'zh' ? '编辑 Skill' : 'Edit Skill') : (language === 'zh' ? '新建 Skill' : 'New Skill')}
+                </h4>
+                <button
+                  onClick={() => { setIsAdding(false); setEditingId(null); }}
+                  className="p-1 text-text-muted hover:text-red-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-3 overflow-y-auto">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                      {language === 'zh' ? '名称' : 'Name'} *
+                    </label>
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                      placeholder={language === 'zh' ? '例如：周报生成器' : 'e.g. Weekly Summary'}
+                      className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                      {language === 'zh' ? '范围' : 'Scope'}
+                    </label>
+                    <select
+                      value={form.scope}
+                      onChange={e => setForm({ ...form, scope: e.target.value })}
+                      className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                    >
+                      {SCOPE_OPTIONS.map(s => (
+                        <option key={s.value} value={s.value}>
+                          {language === 'zh' ? s.zh : s.en}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
+                <div>
                   <label className="block text-[11px] font-bold text-text-muted mb-1">
-                    {language === 'zh' ? '名称' : 'Name'} *
+                    {language === 'zh' ? '描述' : 'Description'}
                   </label>
                   <input
                     type="text"
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                    placeholder={language === 'zh' ? '例如：周报生成器' : 'e.g. Weekly Summary'}
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                    placeholder={language === 'zh' ? '这个 Skill 在什么场景下触发？' : 'When should this skill be used?'}
                     className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
                   />
                 </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">Icon</label>
+                    <input
+                      type="text"
+                      value={form.icon}
+                      onChange={e => setForm({ ...form, icon: e.target.value })}
+                      placeholder="Zap"
+                      className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">Version</label>
+                    <input
+                      type="text"
+                      value={form.version}
+                      onChange={e => setForm({ ...form, version: e.target.value })}
+                      placeholder="1.0"
+                      className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">Author</label>
+                    <input
+                      type="text"
+                      value={form.author}
+                      onChange={e => setForm({ ...form, author: e.target.value })}
+                      placeholder="your-name"
+                      className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">Tags</label>
+                  <TagInput
+                    tags={form.tags}
+                    onChange={tags => setForm({ ...form, tags })}
+                    language={language}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                      {language === 'zh' ? '类型' : 'Type'}
+                    </label>
+                    <select
+                      value={form.type}
+                      onChange={e => setForm({ ...form, type: e.target.value as 'prompt' | 'agent' })}
+                      className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                    >
+                      <option value="prompt">{language === 'zh' ? 'Prompt (角色/指令)' : 'Prompt (Role/Instruction)'}</option>
+                      <option value="agent">{language === 'zh' ? 'Agent (知识库/上下文)' : 'Agent (Knowledge/Context)'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                      {language === 'zh' ? '快捷命令 (用逗号分隔)' : 'Commands (comma separated)'}
+                    </label>
+                    <input
+                      value={form.commands}
+                      onChange={e => setForm({ ...form, commands: e.target.value })}
+                      placeholder={language === 'zh' ? '/weekly, /wr' : '/weekly, /wr'}
+                      className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-bold text-text-muted mb-1">
-                    {language === 'zh' ? '范围' : 'Scope'}
+                    {form.type === 'agent'
+                      ? (language === 'zh' ? '知识库内容 (Knowledge Base)' : 'Knowledge Base')
+                      : (language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt')} *
                   </label>
-                  <select
-                    value={form.scope}
-                    onChange={e => setForm({ ...form, scope: e.target.value })}
-                    className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
-                  >
-                    {SCOPE_OPTIONS.map(s => (
-                      <option key={s.value} value={s.value}>
-                        {language === 'zh' ? s.zh : s.en}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-text-muted mb-1">
-                  {language === 'zh' ? '描述' : 'Description'}
-                </label>
-                <input
-                  type="text"
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  placeholder={language === 'zh' ? '这个 Skill 在什么场景下触发？' : 'When should this skill be used?'}
-                  className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">Icon</label>
-                  <input
-                    type="text"
-                    value={form.icon}
-                    onChange={e => setForm({ ...form, icon: e.target.value })}
-                    placeholder="Zap"
-                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">Version</label>
-                  <input
-                    type="text"
-                    value={form.version}
-                    onChange={e => setForm({ ...form, version: e.target.value })}
-                    placeholder="1.0"
-                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">Author</label>
-                  <input
-                    type="text"
-                    value={form.author}
-                    onChange={e => setForm({ ...form, author: e.target.value })}
-                    placeholder="your-name"
-                    className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                  <textarea
+                    value={form.systemPrompt}
+                    onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
+                    placeholder={form.type === 'agent'
+                      ? (language === 'zh'
+                        ? '## Overview\n项目概述...\n\n## Common Commands\n常用命令...'
+                        : '## Overview\nProject overview...\n\n## Common Commands\nCommands...')
+                      : (language === 'zh' ? '请按以下要求处理...' : 'Process the content as follows...')}
+                    rows={5}
+                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-text-muted mb-1">
-                  Tags
-                </label>
-                <TagInput
-                  tags={form.tags}
-                  onChange={tags => setForm({ ...form, tags })}
-                  language={language}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">
-                    {language === 'zh' ? '类型' : 'Type'}
-                  </label>
-                  <select
-                    value={form.type}
-                    onChange={e => setForm({ ...form, type: e.target.value as 'prompt' | 'agent' })}
-                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
-                  >
-                    <option value="prompt">{language === 'zh' ? 'Prompt (角色/指令)' : 'Prompt (Role/Instruction)'}</option>
-                    <option value="agent">{language === 'zh' ? 'Agent (知识库/上下文)' : 'Agent (Knowledge/Context)'}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">
-                    {language === 'zh' ? '快捷命令 (用逗号分隔)' : 'Commands (comma separated)'}
-                  </label>
-                  <input
-                    value={form.commands}
-                    onChange={e => setForm({ ...form, commands: e.target.value })}
-                    placeholder={language === 'zh' ? '/weekly, /wr' : '/weekly, /wr'}
-                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-text-muted mb-1">
-                  {form.type === 'agent'
-                    ? (language === 'zh' ? '知识库内容 (Knowledge Base)' : 'Knowledge Base')
-                    : (language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt')} *
-                </label>
-                <textarea
-                  value={form.systemPrompt}
-                  onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
-                  placeholder={form.type === 'agent'
-                    ? (language === 'zh'
-                      ? '## Overview\n项目概述...\n\n## Common Commands\n常用命令...'
-                      : '## Overview\nProject overview...\n\n## Common Commands\nCommands...')
-                    : (language === 'zh' ? '请按以下要求处理...' : 'Process the content as follows...')}
-                  rows={5}
-                  className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 justify-end">
+              <div className="px-5 py-3 border-t border-border flex items-center gap-2 justify-end">
                 <button
                   onClick={() => { setIsAdding(false); setEditingId(null); }}
                   className="px-3 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading transition-colors"
@@ -576,99 +793,49 @@ export function SkillManager({ language }: SkillManagerProps) {
                   {editingId ? (language === 'zh' ? '保存' : 'Save') : (language === 'zh' ? '创建' : 'Create')}
                 </button>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-2">
+      {/* Content Grid */}
+      <div className="flex-1 overflow-y-auto p-5">
         {isLoading ? (
-          <div className="py-8 text-center text-text-muted">
-            <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-          </div>
-        ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-text-muted">
-            <Zap className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm mb-3">
-              {filterScope === 'all'
-                ? (language === 'zh' ? '暂无 Skill' : 'No skills yet')
-                : (language === 'zh' ? '暂无此类型 Skill' : 'No skills of this type')}
-            </p>
-            {filterScope === 'all' && (
-              <div className="flex items-center justify-center gap-2 text-xs">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1 rounded border border-border font-bold hover:border-accent/40 hover:text-accent transition-colors"
-                >
-                  {language === 'zh' ? '导入 .md' : 'Import .md'}
-                </button>
-              </div>
-            )}
+            <Loader2 className="w-6 h-6 animate-spin mx-auto" />
           </div>
-        ) : (
-          filtered.map(skill => (
-            <motion.div
-              key={skill.id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-surface-white border border-border rounded p-3 hover:border-accent/30 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-sm font-bold text-text-heading">{skill.name}</h4>
-                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${skill.type === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-accent/10 text-accent'}`}>
-                      {skill.type === 'agent' ? 'Agent' : 'Prompt'}
-                    </span>
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-accent/10 text-accent rounded">
-                      {getScopeLabel(skill.scope)}
-                    </span>
-                    {skill.version && (
-                      <span className="text-[10px] text-text-muted font-mono">v{skill.version}</span>
-                    )}
-                  </div>
-                  {skill.description && (
-                    <p className="text-[11px] text-text-muted line-clamp-2 mb-1">{skill.description}</p>
-                  )}
-                  {skill.tags && skill.tags.length > 0 && (
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Tag className="w-3 h-3 text-text-muted/60" />
-                      {skill.tags.map(tag => (
-                        <span key={tag} className="text-[10px] text-text-muted bg-surface border border-border rounded px-1.5 py-0.5">{tag}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => handleExport(skill)}
-                    className="p-1 text-text-muted hover:text-accent transition-colors"
-                    title={language === 'zh' ? '导出为 .md' : 'Export as .md'}
-                  >
-                    <Download className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => startEdit(skill)}
-                    className="p-1 text-text-muted hover:text-accent transition-colors"
-                    title={language === 'zh' ? '编辑' : 'Edit'}
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(skill.id)}
-                    className="p-1 text-text-muted hover:text-red-500 transition-colors"
-                    title={language === 'zh' ? '删除' : 'Delete'}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-              <p className="text-xs text-text-muted font-mono leading-relaxed line-clamp-3">
-                {skill.systemPrompt || skill.prompt}
+        ) : activeTab === 'marketplace' ? (
+          displayedMarketplace.length === 0 ? (
+            <div className="py-16 text-center text-text-muted">
+              <Puzzle className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">
+                {searchQuery || selectedCategory !== 'All'
+                  ? (language === 'zh' ? '没有匹配的技能' : 'No matching skills')
+                  : (language === 'zh' ? '所有内置技能已安装' : 'All built-in skills are installed')}
               </p>
-            </motion.div>
-          ))
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {displayedMarketplace.map(skill => renderSkillCard(skill, false))}
+            </div>
+          )
+        ) : (
+          displayedInstalled.length === 0 ? (
+            <div className="py-16 text-center text-text-muted">
+              <Zap className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm mb-3">{language === 'zh' ? '暂无已安装 Skill' : 'No installed skills yet'}</p>
+              <button
+                onClick={() => setActiveTab('marketplace')}
+                className="px-4 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+              >
+                {language === 'zh' ? '去技能市场看看' : 'Browse Marketplace'}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {displayedInstalled.map(skill => renderSkillCard(skill, true))}
+            </div>
+          )
         )}
       </div>
     </div>

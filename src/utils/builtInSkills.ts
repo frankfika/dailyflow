@@ -7,12 +7,18 @@ export interface BuiltInSkill {
   id: string;
   name: string;
   markdown: string;
+  category?: string;
+  description?: string;
+  icon?: string;
+  tags?: string[];
 }
 
 export const BUILT_IN_SKILLS: BuiltInSkill[] = [
   {
     id: 'builtin_weekly_report',
     name: '周报生成器',
+    category: 'Productivity',
+    description: '基于本周任务自动生成结构化周报',
     markdown: `---
 name: 周报生成器
 description: 基于本周任务自动生成结构化周报
@@ -20,6 +26,7 @@ scope: chat
 icon: BarChart
 version: 1.0
 author: DailyFlow
+tags: ["productivity", "weekly", "report"]
 ---
 
 请根据用户提供的任务列表，生成一份结构化的周报。周报应包含以下部分：
@@ -41,6 +48,8 @@ author: DailyFlow
   {
     id: 'builtin_task_breakdown',
     name: '任务拆解',
+    category: 'Productivity',
+    description: '把一个大目标拆成可执行的子任务',
     markdown: `---
 name: 任务拆解
 description: 把一个大目标拆成可执行的子任务
@@ -48,6 +57,7 @@ scope: chat
 icon: GitBranch
 version: 1.0
 author: DailyFlow
+tags: ["productivity", "task", "planning"]
 ---
 
 你是一个任务拆解专家。用户会给你一个目标或项目，你需要把它拆解成具体、可执行、有明确截止日期的子任务。
@@ -65,6 +75,8 @@ author: DailyFlow
   {
     id: 'builtin_meeting_notes',
     name: '会议记录整理',
+    category: 'Productivity',
+    description: '把杂乱的会议速记整理成结构化的会议纪要',
     markdown: `---
 name: 会议记录整理
 description: 把杂乱的会议速记整理成结构化的会议纪要
@@ -72,6 +84,7 @@ scope: note
 icon: Users
 version: 1.0
 author: DailyFlow
+tags: ["productivity", "meeting", "notes"]
 ---
 
 请把用户提供的会议速记/录音转文字，整理成一份结构化的会议纪要：
@@ -97,6 +110,8 @@ author: DailyFlow
   {
     id: 'builtin_okr_review',
     name: 'OKR 回顾',
+    category: 'Productivity',
+    description: '基于任务完成情况评估 OKR 进度',
     markdown: `---
 name: OKR 回顾
 description: 基于任务完成情况评估 OKR 进度
@@ -104,6 +119,7 @@ scope: chat
 icon: Target
 version: 1.0
 author: DailyFlow
+tags: ["productivity", "okr", "review"]
 ---
 
 你是一位 OKR 教练。用户会提供他们的 OKR（目标与关键结果）和一段时间内的任务清单，你需要帮助他们评估进度并给出建议。
@@ -125,6 +141,8 @@ author: DailyFlow
   {
     id: 'builtin_daily_summary',
     name: '今日任务总结',
+    category: 'Productivity',
+    description: '总结今日任务完成情况，生成日终回顾',
     markdown: `---
 name: 今日任务总结
 description: 总结今日任务完成情况，生成日终回顾
@@ -132,6 +150,7 @@ scope: chat
 icon: CalendarCheck
 version: 1.0
 author: DailyFlow
+tags: ["productivity", "daily", "summary"]
 ---
 
 请基于用户今日的任务清单，生成一份日终回顾：
@@ -158,6 +177,8 @@ author: DailyFlow
   {
     id: 'builtin_dailyflow_kb',
     name: 'DailyFlow 项目知识库',
+    category: 'Developer Tools',
+    description: 'DailyFlow 本地优先任务管理工具的项目上下文',
     markdown: `---
 name: DailyFlow 项目知识库
 description: DailyFlow 本地优先任务管理工具的项目上下文
@@ -167,6 +188,7 @@ commands: ["/df", "/dailyflow"]
 icon: BookOpen
 version: 1.0
 author: DailyFlow
+tags: ["developer-tools", "knowledge-base", "dailyflow"]
 ---
 
 # DailyFlow 项目知识库

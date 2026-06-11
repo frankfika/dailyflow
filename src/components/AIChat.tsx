@@ -87,9 +87,10 @@ interface AIChatProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   initialDraft?: { text: string; key: string; sourceTitle?: string } | null;
   onDraftConsumed?: () => void;
+  onNoteCreated?: () => void;
 }
 
-export function AIChat({ language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed }: AIChatProps) {
+export function AIChat({ language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onNoteCreated }: AIChatProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [skills, setSkills] = useState<PromptTemplateData[]>([]);
@@ -118,7 +119,9 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
     title: string;
     content: string;
     type: 'note' | 'meeting_note' | 'summary';
-  }>({ open: false, title: '', content: '', type: 'note' });
+    tags: string[];
+    savedNoteId: string | null;
+  }>({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -829,8 +832,25 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                             </button>
                             <button
                               onClick={() => {
-                                const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
-                                setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
+                                // Auto-extract title from first H1 or first line
+                                let title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
+                                const h1Match = msg.content.match(/^#\s+(.+)$/m);
+                                if (h1Match) {
+                                  title = h1Match[1].trim();
+                                } else {
+                                  const firstLine = msg.content.split('\n')[0].trim();
+                                  if (firstLine && firstLine.length <= 80) title = firstLine;
+                                }
+                                // Check for duplicate: same content already saved as a note
+                                const duplicate = notes.find((n: any) => n.body === msg.content);
+                                setSaveNoteModal({
+                                  open: true,
+                                  title,
+                                  content: msg.content,
+                                  type: 'note',
+                                  tags: ['ai-generated'],
+                                  savedNoteId: duplicate?.id || null,
+                                });
                               }}
                               className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
                               title={language === 'zh' ? '保存为笔记' : 'Save as note'}
@@ -1162,7 +1182,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                   {language === 'zh' ? '保存为笔记' : 'Save as Note'}
                 </h3>
                 <button
-                  onClick={() => setSaveNoteModal(prev => ({ ...prev, open: false }))}
+                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null })}
                   className="p-1 text-text-muted hover:text-red-500 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -1170,6 +1190,13 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
               </div>
               <div className="p-5 space-y-3"
               >
+                {saveNoteModal.savedNoteId && (
+                  <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                    {language === 'zh'
+                      ? '⚠️ 这条内容已经保存过笔记，继续保存将创建重复条目。'
+                      : '⚠️ This content has already been saved as a note. Continuing will create a duplicate.'}
+                  </div>
+                )}
                 <div>
                   <label className="block text-[11px] font-bold text-text-muted mb-1"
                   >{language === 'zh' ? '标题' : 'Title'}</label>
@@ -1198,36 +1225,81 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-text-muted mb-1"
-                  >{language === 'zh' ? '内容预览' : 'Content Preview'}</label>
-                  <div className="w-full px-3 py-2 text-sm border border-border rounded bg-surface max-h-40 overflow-y-auto whitespace-pre-wrap"
-                  >
-                    {saveNoteModal.content}
+                  >{language === 'zh' ? '标签' : 'Tags'}</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {saveNoteModal.tags.map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
+                        #{tag}
+                        <button
+                          onClick={() => setSaveNoteModal(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }))}
+                          className="hover:text-red-500"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      placeholder={language === 'zh' ? '+ 添加标签' : '+ Add tag'}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const v = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                          if (v && !saveNoteModal.tags.includes(v)) {
+                            setSaveNoteModal(prev => ({ ...prev, tags: [...prev.tags, v] }));
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }
+                      }}
+                      className="w-24 px-2 py-0.5 text-[11px] border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                    />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1"
+                  >{language === 'zh' ? '内容' : 'Content'}</label>
+                  <textarea
+                    value={saveNoteModal.content}
+                    onChange={e => setSaveNoteModal(prev => ({ ...prev, content: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent max-h-60 min-h-[120px] resize-y"
+                  />
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2"
               >
                 <button
-                  onClick={() => setSaveNoteModal(prev => ({ ...prev, open: false }))}
+                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null })}
                   className="px-3 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading transition-colors"
                 >
                   {language === 'zh' ? '取消' : 'Cancel'}
                 </button>
+                {saveNoteModal.savedNoteId ? (
+                  <button
+                    onClick={() => {
+                      // Open the existing note in Notes tab (best-effort via URL or parent callback)
+                      showToast(language === 'zh' ? '请前往「笔记」页查看' : 'Go to Notes tab to view', 'info');
+                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
+                    }}
+                    className="px-4 py-1.5 text-xs font-bold border border-accent text-accent rounded hover:bg-accent/10 transition-colors"
+                  >
+                    {language === 'zh' ? '查看笔记' : 'View Note'}
+                  </button>
+                ) : null}
                 <button
                   onClick={async () => {
                     try {
-                      await notesApi.create({
+                      const created = await notesApi.create({
                         title: saveNoteModal.title.trim(),
                         body: saveNoteModal.content,
                         type: saveNoteModal.type as any,
                         date: new Date().toISOString().slice(0, 10),
-                        context: 'work',
-                        tags: ['ai-generated'],
+                        context: activeContext,
+                        tags: saveNoteModal.tags,
                         linkedTaskIds: [],
                         linkedProjectIds: [],
                       });
                       showToast(language === 'zh' ? '已保存到笔记' : 'Saved to notes', 'success');
-                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note' });
+                      onNoteCreated?.();
+                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
                     } catch (e) {
                       showToast(language === 'zh' ? '保存失败' : 'Save failed', 'error');
                     }
