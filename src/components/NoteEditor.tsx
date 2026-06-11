@@ -4,6 +4,7 @@ import {
   X, FileText, Mic, Sparkles, Calendar, Clock, Check,
   Link2, Tag, Users, ArrowLeft, Eye, Edit3, Trash2,
   Wand2, Loader2, MessageSquare, ListChecks, ChevronDown,
+  Maximize2, Minimize2,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -29,6 +30,8 @@ interface NoteEditorProps {
   defaultDate?: string;
   defaultLinkedTaskIds?: string[];
   defaultTitle?: string;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
   onSave: (data: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>) => void;
   onClose: () => void;
   onDelete?: () => void;
@@ -53,6 +56,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   defaultDate,
   defaultLinkedTaskIds,
   defaultTitle,
+  isMaximized,
+  onToggleMaximize,
   onSave,
   onClose,
   onDelete,
@@ -330,6 +335,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </button>
         </div>
         <div className="flex items-center gap-2">
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading hover:bg-surface rounded-md transition-colors"
+              title={isMaximized ? (language === 'zh' ? '还原' : 'Restore') : (language === 'zh' ? '最大化' : 'Maximize')}
+            >
+              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          )}
           {onDelete && note && (
             <button
               onClick={onDelete}

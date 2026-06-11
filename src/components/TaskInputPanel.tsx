@@ -107,16 +107,18 @@ export function TaskInputPanel({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed inset-x-0 bottom-0 z-50 p-4 sm:sticky sm:bottom-4 sm:p-0 space-y-4"
+        className="fixed inset-x-0 bottom-0 z-50 p-4 sm:sticky sm:bottom-6 sm:px-8 lg:px-12 space-y-4"
       >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
-          <button
-            onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
-            className="text-text-muted hover:text-text-heading p-1"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="max-w-3xl mx-auto space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '按 Esc 关闭' : 'Press Esc to close'}</span>
+            <button
+              onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
+              className="text-text-muted hover:text-text-heading p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         {showBrainDump && (
           <motion.div

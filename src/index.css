@@ -84,11 +84,15 @@
   --life-brightness: 1;
 }
 
+html {
+  font-size: calc(14px * var(--text-scale, 1));
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-text-main);
   font-family: var(--font-sans);
-  font-size: calc(14px * var(--text-scale, 1));
+  font-weight: var(--font-weight-base, 400);
   transition: background-color 0.5s ease, color 0.5s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

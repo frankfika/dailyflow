@@ -16,7 +16,22 @@ const app = express();
 const PORT = process.env.PORT || 3003;
 
 // 中间件
-app.use(cors({ origin: true, credentials: true }));
+// CORS: restrict to Tauri frontend origins and local dev server
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://localhost:5173',
+  'tauri://localhost',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // 路由

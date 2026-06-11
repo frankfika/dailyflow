@@ -170,6 +170,24 @@ export function saveProviderConfigs(store: ProviderConfigStore): void {
   } catch { /* ignore */ }
 }
 
+/**
+ * Persist provider configs to the backend config file so they survive app updates.
+ * Best-effort: if the backend call fails, localStorage still holds the data.
+ */
+export async function persistProviderConfigsToBackend(): Promise<void> {
+  try {
+    const { configApi } = await import('../api/client.js');
+    const store = loadProviderConfigs();
+    const config = await configApi.get();
+    await configApi.update({
+      ...config,
+      providerConfigs: JSON.stringify(store),
+    });
+  } catch {
+    // Best-effort persistence to backend
+  }
+}
+
 export interface ActiveAiConfig {
   apiKey: string;
   model: string;

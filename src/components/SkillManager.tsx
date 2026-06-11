@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download, Tag, Info } from 'lucide-react';
 import { promptsApi, type PromptTemplateData } from '../api/client';
 import { TagInput } from './TagInput';
+import { getUnimportedBuiltInSkills, markBuiltInSkillImported, BUILT_IN_SKILLS } from '../utils/builtInSkills';
 
 const SCOPE_OPTIONS = [
   { value: 'chat', zh: '对话', en: 'Chat' },
@@ -47,9 +48,13 @@ export function SkillManager({ language }: SkillManagerProps) {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const [pasting, setPasting] = useState(false);
+  const [builtInSkills, setBuiltInSkills] = useState(BUILT_IN_SKILLS);
 
   useEffect(() => {
     load();
+    setBuiltInSkills(getUnimportedBuiltInSkills());
   }, []);
 
   // Parse markdown with optional frontmatter supporting AgentSkill fields.
@@ -135,6 +140,44 @@ export function SkillManager({ language }: SkillManagerProps) {
     if (errors.length) {
       setImportError(language === 'zh' ? `${errors.length} 个文件导入失败` : `${errors.length} file(s) failed to import`);
       setTimeout(() => setImportError(null), 4000);
+    }
+  };
+
+  const handleImportFromText = async () => {
+    if (!pasteText.trim()) return;
+    setImportError(null);
+    setPasting(true);
+    try {
+      let text = pasteText.trim();
+      // If it looks like a URL, try to fetch it
+      if (text.match(/^https?:\/\/.+\.(md|markdown|txt)$/i) || text.match(/^https:\/\/raw\.githubusercontent\.com\//i)) {
+        const res = await fetch(text);
+        if (!res.ok) throw new Error('Failed to fetch URL');
+        text = await res.text();
+      }
+      const parsed = parseSkillMarkdown(text, 'pasted-skill');
+      if (!parsed) throw new Error('Invalid skill markdown');
+      await promptsApi.create(parsed);
+      await load();
+      setPasteText('');
+    } catch (err: any) {
+      setImportError(err.message || (language === 'zh' ? '导入失败' : 'Import failed'));
+      setTimeout(() => setImportError(null), 4000);
+    } finally {
+      setPasting(false);
+    }
+  };
+
+  const handleImportBuiltIn = async (skill: typeof BUILT_IN_SKILLS[0]) => {
+    try {
+      const parsed = parseSkillMarkdown(skill.markdown, skill.name);
+      if (!parsed) return;
+      await promptsApi.create(parsed);
+      markBuiltInSkillImported(skill.id);
+      setBuiltInSkills(prev => prev.filter(s => s.id !== skill.id));
+      await load();
+    } catch (err) {
+      console.error('Built-in skill import failed:', err);
     }
   };
 
@@ -236,19 +279,21 @@ export function SkillManager({ language }: SkillManagerProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-text-muted truncate">
+      {/* Header + Paste Import */}
+      <div className="px-5 py-3 border-b border-border space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-text-muted">
             {language === 'zh'
-              ? '管理 Agent Skill（系统提示词 + 元数据），在对话和笔记中应用以获得专业输出'
-              : 'Manage Agent Skills (system prompt + metadata) for professional outputs'}
+              ? '粘贴 Markdown、GitHub Raw URL 或本地文件导入 Skill'
+              : 'Paste Markdown, GitHub Raw URL, or import local files'}
           </p>
           {importError && (
-            <p className="text-[11px] text-red-500 mt-0.5">{importError}</p>
+            <p className="text-[11px] text-red-500">{importError}</p>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+
+        {/* Paste input row */}
+        <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -262,22 +307,55 @@ export function SkillManager({ language }: SkillManagerProps) {
               }
             }}
           />
+          <input
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleImportFromText(); }}
+            placeholder={language === 'zh' ? '粘贴 Skill Markdown 或 GitHub Raw URL...' : 'Paste skill markdown or GitHub raw URL...'}
+            className="flex-1 min-w-0 px-3 py-1.5 text-xs border border-border rounded bg-surface focus:outline-none focus:border-accent"
+          />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-text-muted bg-surface border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
-            title={language === 'zh' ? '导入 .md Skill 文件' : 'Import .md skill files'}
+            onClick={handleImportFromText}
+            disabled={pasting || !pasteText.trim()}
+            className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
-            <Upload className="w-3.5 h-3.5" />
+            {pasting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
             {language === 'zh' ? '导入' : 'Import'}
           </button>
           <button
-            onClick={startAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-text-muted bg-surface border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
+            title={language === 'zh' ? '本地文件' : 'Local file'}
           >
-            <Plus className="w-3.5 h-3.5" />
-            {language === 'zh' ? '添加 Skill' : 'Add Skill'}
+            <Upload className="w-3 h-3" />
+          </button>
+          <button
+            onClick={startAdd}
+            className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-surface text-text-heading border border-border rounded hover:border-accent/40 hover:text-accent transition-colors"
+            title={language === 'zh' ? '手动编写' : 'Write manually'}
+          >
+            <Plus className="w-3 h-3" />
           </button>
         </div>
+
+        {/* Built-in skills */}
+        {builtInSkills.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+              {language === 'zh' ? '内置' : 'Built-in'}
+            </span>
+            {builtInSkills.map(skill => (
+              <button
+                key={skill.id}
+                onClick={() => handleImportBuiltIn(skill)}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-accent/10 text-accent border border-accent/20 rounded hover:bg-accent/20 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                {skill.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Filter */}
@@ -451,13 +529,6 @@ export function SkillManager({ language }: SkillManagerProps) {
             </p>
             {filterScope === 'all' && (
               <div className="flex items-center justify-center gap-2 text-xs">
-                <button
-                  onClick={startAdd}
-                  className="px-3 py-1 rounded bg-accent text-white font-bold hover:bg-accent/90 transition-colors"
-                >
-                  {language === 'zh' ? '+ 新建' : '+ Create'}
-                </button>
-                <span className="opacity-50">{language === 'zh' ? '或' : 'or'}</span>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="px-3 py-1 rounded border border-border font-bold hover:border-accent/40 hover:text-accent transition-colors"

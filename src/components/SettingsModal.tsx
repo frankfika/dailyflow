@@ -102,8 +102,15 @@ export function SettingsModal({
   });
 
   // Display settings state
-  const [textScale, setTextScale] = useState(5); // 0-10, default 5 = 100%
-  const [fontWeight, setFontWeight] = useState(0); // 0=400, 1=500, 2=600
+  const [textScale, setTextScale] = useState(() => {
+    try { const v = localStorage.getItem('df_text_scale'); return v ? parseInt(v, 10) : 5; } catch { return 5; }
+  });
+  const [fontWeight, setFontWeight] = useState(() => {
+    try { const v = localStorage.getItem('df_font_weight'); return v ? parseInt(v, 10) : 0; } catch { return 0; }
+  });
+  const [selectedFont, setSelectedFont] = useState(() => {
+    try { return localStorage.getItem('df_selected_font') || 'system'; } catch { return 'system'; }
+  });
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
 
   // Sync sub-tab state
@@ -433,6 +440,37 @@ export function SettingsModal({
                   {language === 'zh' ? '显示设置' : 'Display Settings'}
                 </h3>
 
+                {/* Font Family */}
+                <div className="mb-3">
+                  <label className="text-xs text-text-muted mb-1.5 block">
+                    {language === 'zh' ? '字体' : 'Font'}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'system', label: language === 'zh' ? '系统默认' : 'System', font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+                      { key: 'inter', label: 'Inter / 黑体', font: '"Inter", "Noto Sans SC", -apple-system, sans-serif' },
+                      { key: 'serif', label: language === 'zh' ? '衬线' : 'Serif', font: '"Georgia", "Noto Serif SC", serif' },
+                    ].map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => {
+                          setSelectedFont(f.key);
+                          document.documentElement.style.setProperty('--font-sans', f.font);
+                          try { localStorage.setItem('df_selected_font', f.key); } catch {}
+                        }}
+                        className={`px-2 py-2 rounded-md text-[11px] font-medium transition-all border ${
+                          selectedFont === f.key
+                            ? 'bg-accent text-white border-accent shadow-sm'
+                            : 'bg-surface text-text-muted border-border/50 hover:border-accent/30 hover:text-text-main'
+                        }`}
+                        style={{ fontFamily: f.font }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Font Size */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-1.5">
@@ -449,7 +487,9 @@ export function SettingsModal({
                     onChange={e => {
                       const val = parseInt(e.target.value);
                       setTextScale(val);
-                      document.documentElement.style.setProperty('--text-scale', (0.8 + val * 0.04).toString());
+                      const scale = 0.8 + val * 0.04;
+                      document.documentElement.style.setProperty('--text-scale', scale.toString());
+                      try { localStorage.setItem('df_text_scale', String(val)); } catch {}
                     }}
                     className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
                   />
@@ -476,7 +516,9 @@ export function SettingsModal({
                       const val = parseInt(e.target.value);
                       setFontWeight(val);
                       const weights = [400, 500, 600];
-                      document.documentElement.style.setProperty('--font-weight-base', weights[val].toString());
+                      const w = weights[val];
+                      document.documentElement.style.setProperty('--font-weight-base', String(w));
+                      try { localStorage.setItem('df_font_weight', String(val)); } catch {}
                     }}
                     className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
                   />

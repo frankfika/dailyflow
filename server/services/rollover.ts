@@ -1,14 +1,18 @@
 import { readDailyNote, writeDailyNote, listDailyNotes } from './fileSystem.js';
 import { generateMarkdown, appendTaskToMarkdown, updateTaskInMarkdown } from './parser.js';
 import { withDateLock } from './lock.js';
+import { taskMatchesContext } from '../utils/contextFilter.js';
 import type { Task, Config, RolloverPreview } from '../types/task.js';
+import { randomUUID } from 'crypto';
 
 /**
  * 预览任务迁移（收集所有早于目标日期的未完成任务）
+ * @param context - 只迁移匹配该 context 的任务（work/life）
  */
 export async function previewRollover(
   toDate: string,
-  config: Config
+  config: Config,
+  context: 'work' | 'life' = 'work'
 ): Promise<RolloverPreview | null> {
   const allDates = await listDailyNotes(config);
   const previousDates = allDates.filter(date => date < toDate).sort();
@@ -24,11 +28,12 @@ export async function previewRollover(
     const fromNote = await readDailyNote(fromDate, config);
     if (!fromNote) continue;
 
-    // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签）
+    // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签、非当前 context）
     const tasksToMigrate = fromNote.tasks.filter(task => {
       if (task.status === 'done') return false;
       if (task.status === 'migrated') return false;
       if (task.tags?.some(tag => config.rolloverSkipTags.includes(tag))) return false;
+      if (!taskMatchesContext(task, context)) return false;
       return true;
     });
 
@@ -40,7 +45,7 @@ export async function previewRollover(
           : (task.tags || []);
         return {
           ...task,
-          id: `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: `t_${randomUUID()}`,
           source_date: task.source_date || fromDate,
           tags
         };
@@ -74,9 +79,14 @@ export async function previewRollover(
  *  3. **按 (id) 去重**：目标文件中已有同 ID 任务则跳过
  *  4. **按 (source_date + 标题) 二次去重**：防御 ID 漂移（早期版本可能用不同 ID 写入了同一任务）
  */
+/**
+ * 执行任务迁移
+ * @param context - 只迁移匹配该 context 的任务（work/life）
+ */
 export async function applyRollover(
   toDate: string,
-  config: Config
+  config: Config,
+  context: 'work' | 'life' = 'work'
 ): Promise<{ success: boolean; migratedCount: number }> {
   return withDateLock(`rollover:${toDate}`, async () => {
     const allDates = await listDailyNotes(config);
@@ -104,11 +114,12 @@ export async function applyRollover(
       const fromNote = await readDailyNote(fromDate, config);
       if (!fromNote) continue;
 
-      // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签）
+      // 过滤未完成任务（排除已完成、已迁移、no-rollover 标签、非当前 context）
       const tasksToMigrate = fromNote.tasks.filter(task => {
         if (task.status === 'done') return false;
         if (task.status === 'migrated') return false;
         if (task.tags?.some(tag => config.rolloverSkipTags.includes(tag))) return false;
+        if (!taskMatchesContext(task, context)) return false;
         return true;
       });
 

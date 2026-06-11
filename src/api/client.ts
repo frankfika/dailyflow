@@ -55,6 +55,7 @@ export interface ConfigData {
   ipfsProvider?: 'pinata';
   ipfsApiKey?: string;
   ipfsGateway?: string;
+  providerConfigs?: string;
 }
 
 export interface Workspace {
@@ -175,21 +176,21 @@ export const tasksApi = {
  * 任务迁移 API
  */
 export const rolloverApi = {
-  async preview(toDate: string): Promise<RolloverPreviewData | null> {
+  async preview(toDate: string, context: 'work' | 'life' = 'work'): Promise<RolloverPreviewData | null> {
     const res = await fetch(`${API_BASE}/rollover/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toDate }),
+      body: JSON.stringify({ toDate, context }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to preview rollover');
     return res.json();
   },
 
-  async apply(toDate: string): Promise<{ success: boolean; migratedCount: number }> {
+  async apply(toDate: string, context: 'work' | 'life' = 'work'): Promise<{ success: boolean; migratedCount: number }> {
     const res = await fetch(`${API_BASE}/rollover/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toDate }),
+      body: JSON.stringify({ toDate, context }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to apply rollover');
     return res.json();

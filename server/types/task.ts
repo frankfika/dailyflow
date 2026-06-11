@@ -48,6 +48,8 @@ export interface Config {
   ipfsProvider?: 'pinata';
   ipfsApiKey?: string; // Pinata JWT token
   ipfsGateway?: string; // e.g. https://gateway.pinata.cloud or https://ipfs.io
+  // AI Provider Configs (JSON string for durability across updates)
+  providerConfigs?: string;
 }
 
 export interface IpfsBackupRecord {

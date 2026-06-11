@@ -9,9 +9,9 @@ const router = Router();
  */
 router.post('/preview', async (req, res) => {
   try {
-    const { toDate } = req.body;
+    const { toDate, context } = req.body;
     const config = await loadConfig();
-    const preview = await previewRollover(toDate, config);
+    const preview = await previewRollover(toDate, config, context);
 
     if (!preview) {
       return res.json({ tasksToMigrate: [] });
@@ -29,9 +29,9 @@ router.post('/preview', async (req, res) => {
  */
 router.post('/apply', async (req, res) => {
   try {
-    const { toDate } = req.body;
+    const { toDate, context } = req.body;
     const config = await loadConfig();
-    const result = await applyRollover(toDate, config);
+    const result = await applyRollover(toDate, config, context);
 
     res.json(result);
   } catch (error: any) {

@@ -15,8 +15,44 @@ interface SummarizeBody {
 // baseUrl is the provider's base (e.g. "https://api.openai.com/v1",
 // "https://api.minimaxi.com/v1", "https://api.anthropic.com/v1"). Append the
 // path tail if the user didn't include one.
+const BLOCKED_HOSTS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^::1$/,
+  /^fc00:/i,
+  /^fe80:/i,
+];
+
+function isBlockedHost(url: URL): boolean {
+  const hostname = url.hostname;
+  return BLOCKED_HOSTS.some(re => re.test(hostname));
+}
+
 function resolveUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
+
+  // Protocol check
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new Error('Invalid URL: must start with http:// or https://');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Invalid URL format');
+  }
+
+  // SSRF prevention: block internal / metadata endpoints
+  if (isBlockedHost(parsed)) {
+    throw new Error('Invalid URL: internal addresses are not allowed');
+  }
+
   if (/\/chat\/completions$/.test(trimmed)) return trimmed;
   return /\/v\d+$/.test(trimmed) ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
 }

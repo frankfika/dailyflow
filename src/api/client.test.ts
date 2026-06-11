@@ -80,7 +80,7 @@ describe('API Client', () => {
         '/api/rollover/preview',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ toDate: '2026-05-05' }),
+          body: JSON.stringify({ toDate: '2026-05-05', context: 'work' }),
         })
       );
     });

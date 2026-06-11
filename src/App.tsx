@@ -94,6 +94,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
+  const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
@@ -208,12 +209,24 @@ export default function App() {
         setIpfsApiKey(config.ipfsApiKey || '');
         setIpfsGateway(config.ipfsGateway || '');
 
-        // AI: read from ModelLibrary store first; fall back to legacy config fields
+        // AI: read from ModelLibrary store first; fall back to providerConfigs in backend config
         const active = getActiveAiConfig();
         if (active) {
           setAiApiKey(active.apiKey);
           setAiModel(active.model);
           setAiBaseUrl(active.baseUrl);
+        } else if (config.providerConfigs) {
+          try {
+            const store = JSON.parse(config.providerConfigs);
+            localStorage.setItem('df_provider_configs', JSON.stringify(store));
+            const activeCfg = store.configs?.find((c: any) => c.id === store.activeId);
+            if (activeCfg) {
+              setAiApiKey(activeCfg.apiKey || '');
+              setAiModel(activeCfg.model || '');
+              setAiBaseUrl(activeCfg.baseUrl || '');
+            }
+            window.dispatchEvent(new CustomEvent('df:provider-changed'));
+          } catch { /* ignore */ }
         } else {
           setAiApiKey('');
           setAiModel('');
@@ -239,6 +252,33 @@ export default function App() {
     };
     checkFirstRun();
     loadConfigData();
+  }, []);
+
+  // Restore display settings (font size, weight, family) from localStorage
+  useEffect(() => {
+    try {
+      const textScale = localStorage.getItem('df_text_scale');
+      if (textScale !== null) {
+        const val = parseInt(textScale, 10);
+        document.documentElement.style.setProperty('--text-scale', (0.8 + val * 0.04).toString());
+      }
+      const fontWeight = localStorage.getItem('df_font_weight');
+      if (fontWeight !== null) {
+        const weights = [400, 500, 600];
+        document.documentElement.style.setProperty('--font-weight-base', weights[parseInt(fontWeight, 10)].toString());
+      }
+      const selectedFont = localStorage.getItem('df_selected_font');
+      if (selectedFont) {
+        const fonts: Record<string, string> = {
+          system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          inter: '"Inter", "Noto Sans SC", -apple-system, sans-serif',
+          serif: '"Georgia", "Noto Serif SC", serif',
+        };
+        if (fonts[selectedFont]) {
+          document.documentElement.style.setProperty('--font-sans', fonts[selectedFont]);
+        }
+      }
+    } catch { /* ignore */ }
   }, []);
 
   // Sync AI state with ModelLibrary's active provider whenever it changes
@@ -371,7 +411,7 @@ export default function App() {
           console.error('Recurring instantiation failed', e);
         }
         try {
-          const rolloverResult = await rolloverApi.apply(date);
+          const rolloverResult = await rolloverApi.apply(date, activeContext);
           if (rolloverResult.migratedCount > 0) {
             setRolloverBanner({ count: rolloverResult.migratedCount, fromDate: date });
           }
@@ -769,7 +809,7 @@ export default function App() {
 
   const handleManualRollover = async () => {
     try {
-      const preview = await rolloverApi.preview(currentFileDate);
+      const preview = await rolloverApi.preview(currentFileDate, activeContext);
       if (!preview || preview.tasksToMigrate.length === 0) {
         showToast(language === 'zh' ? '没有需要迁移的任务' : 'No tasks to migrate', 'info');
         return;
@@ -785,7 +825,7 @@ export default function App() {
   const handleConfirmRollover = async () => {
     setIsRollingOver(true);
     try {
-      const result = await rolloverApi.apply(currentFileDate);
+      const result = await rolloverApi.apply(currentFileDate, activeContext);
       setShowRolloverPreview(false);
       setRolloverPreview(null);
       if (result.migratedCount > 0) {
@@ -991,8 +1031,9 @@ export default function App() {
           isOpen={isAIPanelOpen}
           onClose={() => setIsAIPanelOpen(false)}
           language={language}
-          tasks={tasks}
-          notes={dailyNotes}
+          activeContext={activeContext}
+          tasks={contextFilteredTasks}
+          notes={filterNotesByContext(dailyNotes, activeContext)}
           filesMap={filesMap}
           showToast={showToast}
           initialDraft={chatDraft}
@@ -1340,19 +1381,16 @@ export default function App() {
                   {/* 已迁移任务区域 */}
                   {(() => {
                     if (hideDoneTasks) return null;
-                    // A task is "migrated" if its source_date differs from the day we
-                    // are viewing, OR its status is literally "migrated".
-                    const migratedTasks = contextFilteredTasks.filter(t =>
-                      t.status === 'migrated' ||
-                      (t.source_date && t.source_date !== currentFileDate)
-                    );
+                    // 只显示状态 literally 为 migrated 的任务
+                    // source_date 在源文件里存储的是迁移目标日期（由 parser 从 ↗ migrated:date 提取）
+                    const migratedTasks = contextFilteredTasks.filter(t => t.status === 'migrated');
                     if (migratedTasks.length === 0) return null;
                     const showMigrated = showDoneByCategory['__migrated__'] ?? false;
                     return (
                       <div className="space-y-3 mt-8">
                         <button
                           onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__migrated__': !prev['__migrated__'] }))}
-                          className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
+                          className="flex items-center gap-1.5 text-xs font-bold text-text-muted hover:text-text-main transition-colors"
                         >
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showMigrated ? 'rotate-180' : ''}`} />
                           <CornerUpRight className="w-3 h-3" />
@@ -1365,17 +1403,26 @@ export default function App() {
                         )}
                         <AnimatePresence>
                           {showMigrated && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-3 overflow-hidden">
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2 overflow-hidden">
                               {migratedTasks.map(task => (
-                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-md bg-background border border-border/30 opacity-50">
-                                  <CornerUpRight className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                                  <span className="text-sm text-text-muted line-through flex-1 truncate">{task.title}</span>
+                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-md bg-surface border border-border/30">
+                                  <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                                    <CornerUpRight className="w-3.5 h-3.5 text-accent" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm text-text-muted line-through truncate block">{task.title}</span>
+                                    {task.source_date && (
+                                      <span className="text-[11px] text-text-muted/60">
+                                        {language === 'zh' ? '迁移到' : 'Migrated to'} {task.source_date}
+                                      </span>
+                                    )}
+                                  </div>
                                   {task.source_date && (
                                     <button
                                       onClick={() => setCurrentFileDate(task.source_date!)}
-                                      className="text-xs text-accent hover:underline shrink-0"
+                                      className="px-2.5 py-1 text-[11px] font-medium text-accent bg-accent/10 hover:bg-accent/20 rounded-md transition-colors shrink-0"
                                     >
-                                      {language === 'zh' ? `查看 ${task.source_date}` : `View ${task.source_date}`}
+                                      {language === 'zh' ? '前往' : 'Go'}
                                     </button>
                                   )}
                                 </div>
@@ -1408,8 +1455,8 @@ export default function App() {
                 >
                   <AIChat
                     language={language}
-                    tasks={tasks}
-                    notes={dailyNotes}
+                    tasks={contextFilteredTasks}
+                    notes={filterNotesByContext(dailyNotes, activeContext)}
                     filesMap={filesMap}
                     showToast={showToast}
                     initialDraft={chatDraft}
@@ -1542,7 +1589,7 @@ export default function App() {
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
          <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-[8px] flex items-center justify-center p-4 sm:p-8">
-           <div className="w-full max-w-5xl h-[85vh] floating-card overflow-hidden flex flex-col">
+           <div className={`w-full ${isNoteEditorMaximized ? 'max-w-none h-screen' : 'max-w-5xl h-[85vh]'} floating-card overflow-hidden flex flex-col transition-all duration-200`}>
              <NoteEditor
              language={language}
              activeContext={activeContext}
@@ -1555,6 +1602,8 @@ export default function App() {
              aiApiKey={aiApiKey}
              aiModel={aiModel}
              aiBaseUrl={aiBaseUrl}
+             isMaximized={isNoteEditorMaximized}
+             onToggleMaximize={() => setIsNoteEditorMaximized(v => !v)}
              onSendToChat={({ title, body, type }) => {
                const header = type === 'meeting_note'
                  ? (language === 'zh' ? '帮我基于这份会议笔记继续讨论或回答我的问题：' : 'Continue from this meeting note:')

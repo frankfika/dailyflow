@@ -8,9 +8,10 @@ import {
   Send, Plus, Sparkles, Loader2, Settings, Trash2, MessageSquare, Paperclip,
   X, ChevronDown, Zap, Calendar, FileText, Folder, Bot, User,
   StopCircle, Copy, PanelLeftClose, PanelLeftOpen, Bookmark,
+  PlusCircle, RotateCcw,
 } from 'lucide-react';
-import { aiApi, promptsApi, notesApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { loadProviderConfigs, type ProviderConfig } from '../types/models';
+import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
+import { loadProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
   saveChatStore,
@@ -20,6 +21,11 @@ import {
   type ChatMessage,
   type ContextItem,
 } from '../types/chat';
+import { buildToolInstructions, parseToolCalls } from '../types/ai-tools';
+import { executeToolCall } from '../utils/aiToolExecutor';
+import { getTodayStr } from '../utils/tagColors';
+import { generateTaskId, generateShortId } from '../utils/idGenerator';
+import { createTasksFromMessage, copyMessageContent } from '../utils/chatActions';
 import { ChatSettingsPanel } from './ChatSettingsPanel';
 import { ContextPicker } from './ContextPicker';
 
@@ -72,6 +78,7 @@ function getFriendlyErrorMessage(rawError: string, language: 'en' | 'zh', provid
 
 interface AIChatProps {
   language: 'en' | 'zh';
+  activeContext?: 'work' | 'life';
   tasks: any[];
   notes: any[];
   filesMap: Record<string, string>;
@@ -80,7 +87,7 @@ interface AIChatProps {
   onDraftConsumed?: () => void;
 }
 
-export function AIChat({ language, tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed }: AIChatProps) {
+export function AIChat({ language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed }: AIChatProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [skills, setSkills] = useState<PromptTemplateData[]>([]);
@@ -111,6 +118,9 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     type: 'note' | 'meeting_note' | 'summary';
   }>({ open: false, title: '', content: '', type: 'note' });
 
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -133,6 +143,17 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     promptsApi.getAll()
       .then(loaded => setSkills(sortSkillsByUsage(loaded, loadSkillUsage())))
       .catch(err => console.error('Load skills failed:', err));
+  }, []);
+
+  // Listen for provider config changes from other components (e.g. FloatingAIPanel)
+  useEffect(() => {
+    const handleProviderChange = () => {
+      const ps = loadProviderConfigs();
+      setProviders(ps.configs);
+      setActiveProviderId(ps.activeId);
+    };
+    window.addEventListener('df:provider-changed', handleProviderChange);
+    return () => window.removeEventListener('df:provider-changed', handleProviderChange);
   }, []);
 
   useEffect(() => {
@@ -214,6 +235,22 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     });
   };
 
+  const startRenameSession = (session: ChatSession) => {
+    setEditingSessionId(session.id);
+    setEditTitle(session.title);
+  };
+
+  const commitRename = () => {
+    if (!editingSessionId) return;
+    const trimmed = editTitle.trim();
+    if (!trimmed) {
+      setEditingSessionId(null);
+      return;
+    }
+    setSessions(prev => prev.map(s => s.id === editingSessionId ? { ...s, title: trimmed } : s));
+    setEditingSessionId(null);
+  };
+
   const handleAddContext = (item: ContextItem) => {
     updateActiveSession(s => ({
       ...s,
@@ -272,8 +309,9 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     return parts.join('\n\n');
   };
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isStreaming || !activeSession) return;
+  const handleSend = async (overrideContent?: string) => {
+    const contentToSend = (overrideContent || inputValue).trim();
+    if (!contentToSend || isStreaming || !activeSession) return;
     if (!activeProvider) {
       showToast(
         language === 'zh' ? '请先添加一个模型供应商' : 'Please add a model provider first',
@@ -284,14 +322,14 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     }
 
     const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: generateShortId('msg'),
       role: 'user',
-      content: inputValue.trim(),
+      content: contentToSend,
       timestamp: new Date().toISOString(),
     };
 
     const contextSnapshot = [...activeSession.contextItems];
-    const userInputCopy = inputValue.trim();
+    const userInputCopy = contentToSend;
     const skillForThisMessage = activeSkill;
 
     updateActiveSession(s => {
@@ -324,11 +362,12 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
       userPrompt = `${userPrompt}\n\n---\n${language === 'zh' ? '参考以下上下文：' : 'Reference context:'}\n\n${contextText}`;
     }
 
-    const systemPrompt = skillForThisMessage
+    const baseSystemPrompt = skillForThisMessage
       ? (skillForThisMessage.systemPrompt || skillForThisMessage.prompt || '')
       : (language === 'zh'
         ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
         : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.');
+    const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
 
     abortRef.current = new AbortController();
 
@@ -341,10 +380,36 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
         userPrompt,
       });
 
+      // Parse and execute any tool calls in the response
+      const { text: cleanedText, calls } = parseToolCalls(summary);
+      const toolResults: { call: any; result: any }[] = [];
+      for (const call of calls) {
+        const result = await executeToolCall(call, {
+          currentDate: getTodayStr(),
+          activeContext,
+          language,
+          tasks,
+          showToast,
+        });
+        toolResults.push({ call, result });
+      }
+
+      // Build AI message — if there were tool calls, show cleaned text + tool results
+      let finalContent = cleanedText;
+      if (toolResults.length > 0) {
+        const toolSummary = toolResults.map(({ call, result }) => {
+          const icon = result.success ? '✓' : '✗';
+          return `${icon} **${call.name}**: ${result.message}`;
+        }).join('\n');
+        finalContent = cleanedText
+          ? `${cleanedText}\n\n---\n${toolSummary}`
+          : toolSummary;
+      }
+
       const aiMessage: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: generateShortId('msg'),
         role: 'assistant',
-        content: summary,
+        content: finalContent,
         timestamp: new Date().toISOString(),
         modelName: activeProvider.name,
         skillName: skillForThisMessage?.name,
@@ -361,7 +426,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
       const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
 
       const errorMessage: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: generateShortId('msg'),
         role: 'assistant',
         content: '',
         timestamp: new Date().toISOString(),
@@ -385,9 +450,19 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
     setIsStreaming(false);
   };
 
-  const handleCopyMessage = (content: string) => {
-    navigator.clipboard.writeText(content);
-    showToast(language === 'zh' ? '已复制' : 'Copied', 'success');
+  const handleRetryMessage = (msgIndex: number) => {
+    const session = activeSession;
+    if (!session || msgIndex < 1) return;
+    let userIdx = msgIndex - 1;
+    while (userIdx >= 0 && session.messages[userIdx].role !== 'user') userIdx--;
+    if (userIdx < 0) return;
+    const userMsg = session.messages[userIdx];
+    updateActiveSession(s => ({
+      ...s,
+      messages: s.messages.slice(0, userIdx),
+      updatedAt: new Date().toISOString(),
+    }));
+    handleSend(userMsg.content);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -464,7 +539,28 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
                   }`}
                 >
                   <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="flex-1 text-xs truncate">{session.title}</span>
+                  {editingSessionId === session.id ? (
+                    <input
+                      autoFocus
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onBlur={commitRename}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitRename();
+                        if (e.key === 'Escape') setEditingSessionId(null);
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 text-xs bg-white border border-accent/40 rounded px-1.5 py-0.5 outline-none"
+                    />
+                  ) : (
+                    <span
+                      className="flex-1 text-xs truncate"
+                      onDoubleClick={(e) => { e.stopPropagation(); startRenameSession(session); }}
+                      title={language === 'zh' ? '双击重命名' : 'Double-click to rename'}
+                    >
+                      {session.title}
+                    </span>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }}
                     className="opacity-0 group-hover:opacity-100 p-0.5 text-text-muted hover:text-red-500 transition-all"
@@ -617,7 +713,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
           ) : (
             <div className="w-full px-4 md:px-8 lg:px-12 py-6 md:py-8 space-y-6 md:space-y-8">
               <AnimatePresence initial={false}>
-                {activeSession.messages.map(msg => (
+                {activeSession.messages.map((msg, i) => (
                   <motion.div
                     key={msg.id}
                     initial={{ opacity: 0, y: 8 }}
@@ -646,25 +742,6 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
                               {msg.skillName}
                             </span>
                           )}
-                          {msg.role === 'assistant' && !msg.error && (
-                            <button
-                              onClick={() => {
-                                const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
-                                setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-text-muted hover:text-accent transition-all"
-                              title={language === 'zh' ? '保存为笔记' : 'Save as note'}
-                            >
-                              <Bookmark className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleCopyMessage(msg.content)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-text-muted hover:text-accent transition-all"
-                            title={language === 'zh' ? '复制' : 'Copy'}
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                         {msg.error ? (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 leading-relaxed">
@@ -693,6 +770,46 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
                         ) : (
                           <div className="text-[15px] text-text-heading whitespace-pre-wrap leading-[1.7]">
                             {msg.content}
+                          </div>
+                        )}
+                        {/* Message action bar */}
+                        {msg.role === 'assistant' && !msg.error && (
+                          <div className="flex items-center gap-1 mt-2">
+                            <button
+                              onClick={() => copyMessageContent(msg.content, { language, showToast })}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                              title={language === 'zh' ? '复制' : 'Copy'}
+                            >
+                              <Copy className="w-3 h-3" />
+                              {language === 'zh' ? '复制' : 'Copy'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
+                                setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                              title={language === 'zh' ? '保存为笔记' : 'Save as note'}
+                            >
+                              <Bookmark className="w-3 h-3" />
+                              {language === 'zh' ? '保存为笔记' : 'Save as note'}
+                            </button>
+                            <button
+                              onClick={() => createTasksFromMessage(msg.content, { activeContext, language, showToast })}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                              title={language === 'zh' ? '创建任务' : 'Create tasks'}
+                            >
+                              <PlusCircle className="w-3 h-3" />
+                              {language === 'zh' ? '创建任务' : 'Create tasks'}
+                            </button>
+                            <button
+                              onClick={() => handleRetryMessage(i)}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                              title={language === 'zh' ? '重复提问' : 'Retry'}
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              {language === 'zh' ? '重复提问' : 'Retry'}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -923,7 +1040,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
 
                 {/* Send */}
                 <button
-                  onClick={isStreaming ? handleStop : handleSend}
+                  onClick={isStreaming ? handleStop : () => handleSend()}
                   disabled={!isStreaming && !inputValue.trim()}
                   className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     isStreaming
@@ -954,6 +1071,7 @@ export function AIChat({ language, tasks, notes, filesMap, showToast, initialDra
             onClose={() => {
               setShowSettings(false);
               reloadProvidersAndSkills();
+              persistProviderConfigsToBackend();
             }}
           />
         )}

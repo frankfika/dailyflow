@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Send, Plus, Sparkles, Loader2, Settings, Trash2, MessageSquare, Paperclip,
   X, ChevronDown, Zap, Calendar, FileText, Folder, Bot, User,
   StopCircle, Copy, PanelLeftClose, PanelLeftOpen, Bookmark,
+  PlusCircle, RotateCcw,
 } from 'lucide-react';
-import { aiApi, promptsApi, notesApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { loadProviderConfigs, type ProviderConfig } from '../types/models';
+import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
+import { loadProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
   saveChatStore,
@@ -20,6 +22,11 @@ import {
   type ChatMessage,
   type ContextItem,
 } from '../types/chat';
+import { buildToolInstructions, parseToolCalls } from '../types/ai-tools';
+import { executeToolCall } from '../utils/aiToolExecutor';
+import { getTodayStr } from '../utils/tagColors';
+import { generateTaskId, generateShortId } from '../utils/idGenerator';
+import { createTasksFromMessage, copyMessageContent } from '../utils/chatActions';
 import { ChatSettingsPanel } from './ChatSettingsPanel';
 import { ContextPicker } from './ContextPicker';
 
@@ -74,6 +81,7 @@ export interface FloatingAIPanelProps {
   isOpen: boolean;
   onClose: () => void;
   language: 'en' | 'zh';
+  activeContext?: 'work' | 'life';
   tasks: any[];
   notes: any[];
   filesMap: Record<string, string>;
@@ -87,6 +95,7 @@ export function FloatingAIPanel({
   isOpen,
   onClose,
   language,
+  activeContext = 'work',
   tasks,
   notes,
   filesMap,
@@ -147,6 +156,17 @@ export function FloatingAIPanel({
     promptsApi.getAll()
       .then(loaded => setSkills(sortSkillsByUsage(loaded, loadSkillUsage())))
       .catch(err => console.error('Load skills failed:', err));
+  }, []);
+
+  // Listen for provider config changes from other components (e.g. AIChat tab)
+  useEffect(() => {
+    const handleProviderChange = () => {
+      const ps = loadProviderConfigs();
+      setProviders(ps.configs);
+      setActiveProviderId(ps.activeId);
+    };
+    window.addEventListener('df:provider-changed', handleProviderChange);
+    return () => window.removeEventListener('df:provider-changed', handleProviderChange);
   }, []);
 
   useEffect(() => {
@@ -327,8 +347,9 @@ export function FloatingAIPanel({
     return language === 'zh' ? '问点什么…' : 'Ask anything…';
   }, [focusedContext, language]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isStreaming || !activeSession) return;
+  const handleSend = async (overrideContent?: string) => {
+    const contentToSend = (overrideContent || inputValue).trim();
+    if (!contentToSend || isStreaming || !activeSession) return;
     if (!activeProvider) {
       showToast(
         language === 'zh' ? '请先添加一个模型供应商' : 'Please add a model provider first',
@@ -339,14 +360,14 @@ export function FloatingAIPanel({
     }
 
     const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: generateShortId('msg'),
       role: 'user',
-      content: inputValue.trim(),
+      content: contentToSend,
       timestamp: new Date().toISOString(),
     };
 
     const contextSnapshot = [...activeSession.contextItems];
-    const userInputCopy = inputValue.trim();
+    const userInputCopy = contentToSend;
     const skillForThisMessage = activeSkill;
 
     updateActiveSession(s => {
@@ -385,11 +406,12 @@ export function FloatingAIPanel({
       userPrompt = `${userPrompt}\n\n---\n${language === 'zh' ? '参考以下上下文：' : 'Reference context:'}\n\n${contexts.join('\n\n---\n')}`;
     }
 
-    const systemPrompt = skillForThisMessage
+    const baseSystemPrompt = skillForThisMessage
       ? (skillForThisMessage.systemPrompt || skillForThisMessage.prompt || '')
       : (language === 'zh'
         ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
         : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.');
+    const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
 
     abortRef.current = new AbortController();
 
@@ -402,10 +424,36 @@ export function FloatingAIPanel({
         userPrompt,
       });
 
+      // Parse and execute any tool calls in the response
+      const { text: cleanedText, calls } = parseToolCalls(summary);
+      const toolResults: { call: any; result: any }[] = [];
+      for (const call of calls) {
+        const result = await executeToolCall(call, {
+          currentDate: getTodayStr(),
+          activeContext,
+          language,
+          tasks,
+          showToast,
+        });
+        toolResults.push({ call, result });
+      }
+
+      // Build AI message — if there were tool calls, show cleaned text + tool results
+      let finalContent = cleanedText;
+      if (toolResults.length > 0) {
+        const toolSummary = toolResults.map(({ call, result }) => {
+          const icon = result.success ? '✓' : '✗';
+          return `${icon} **${call.name}**: ${result.message}`;
+        }).join('\n');
+        finalContent = cleanedText
+          ? `${cleanedText}\n\n---\n${toolSummary}`
+          : toolSummary;
+      }
+
       const aiMessage: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: generateShortId('msg'),
         role: 'assistant',
-        content: summary,
+        content: finalContent,
         timestamp: new Date().toISOString(),
         modelName: activeProvider.name,
         skillName: skillForThisMessage?.name,
@@ -422,7 +470,7 @@ export function FloatingAIPanel({
       const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
 
       const errorMessage: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: generateShortId('msg'),
         role: 'assistant',
         content: '',
         timestamp: new Date().toISOString(),
@@ -446,9 +494,19 @@ export function FloatingAIPanel({
     setIsStreaming(false);
   };
 
-  const handleCopyMessage = (content: string) => {
-    navigator.clipboard.writeText(content);
-    showToast(language === 'zh' ? '已复制' : 'Copied', 'success');
+  const handleRetryMessage = (msgIndex: number) => {
+    const session = activeSession;
+    if (!session || msgIndex < 1) return;
+    let userIdx = msgIndex - 1;
+    while (userIdx >= 0 && session.messages[userIdx].role !== 'user') userIdx--;
+    if (userIdx < 0) return;
+    const userMsg = session.messages[userIdx];
+    updateActiveSession(s => ({
+      ...s,
+      messages: s.messages.slice(0, userIdx),
+      updatedAt: new Date().toISOString(),
+    }));
+    handleSend(userMsg.content);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -478,6 +536,7 @@ export function FloatingAIPanel({
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -567,7 +626,7 @@ export function FloatingAIPanel({
             ) : (
               <div className="px-4 py-4 space-y-4">
                 <AnimatePresence initial={false}>
-                  {activeSession.messages.map(msg => (
+                  {activeSession.messages.map((msg, i) => (
                     <motion.div
                       key={msg.id}
                       initial={{ opacity: 0, y: 8 }}
@@ -587,29 +646,8 @@ export function FloatingAIPanel({
                             {msg.skillName}
                           </span>
                         )}
-                        <div className="ml-auto opacity-0 group-hover:opacity-100 flex items-center transition-all">
-                          {msg.role === 'assistant' && !msg.error && (
-                            <button
-                              onClick={() => {
-                                const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
-                                setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
-                              }}
-                              className="p-1 text-text-muted hover:text-accent"
-                              title={language === 'zh' ? '保存为笔记' : 'Save as note'}
-                            >
-                              <Bookmark className="w-3 h-3" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleCopyMessage(msg.content)}
-                            className="p-1 text-text-muted hover:text-accent"
-                            title={language === 'zh' ? '复制' : 'Copy'}
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </div>
                       </div>
-                      
+
                       <div className={`p-2.5 rounded-xl text-sm leading-relaxed ${
                         msg.role === 'user'
                           ? 'bg-accent/5 border border-accent/10 text-text-heading'
@@ -621,6 +659,47 @@ export function FloatingAIPanel({
                           <div className="whitespace-pre-wrap">{msg.content}</div>
                         )}
                       </div>
+
+                      {/* Message action bar */}
+                      {msg.role === 'assistant' && !msg.error && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <button
+                            onClick={() => copyMessageContent(msg.content, { language, showToast })}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                            title={language === 'zh' ? '复制' : 'Copy'}
+                          >
+                            <Copy className="w-3 h-3" />
+                            {language === 'zh' ? '复制' : 'Copy'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
+                              setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                            title={language === 'zh' ? '保存为笔记' : 'Save as note'}
+                          >
+                            <Bookmark className="w-3 h-3" />
+                            {language === 'zh' ? '保存为笔记' : 'Save as note'}
+                          </button>
+                          <button
+                            onClick={() => createTasksFromMessage(msg.content, { activeContext, language, showToast })}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                            title={language === 'zh' ? '创建任务' : 'Create tasks'}
+                          >
+                            <PlusCircle className="w-3 h-3" />
+                            {language === 'zh' ? '创建任务' : 'Create tasks'}
+                          </button>
+                          <button
+                            onClick={() => handleRetryMessage(i)}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                            title={language === 'zh' ? '重复提问' : 'Retry'}
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {language === 'zh' ? '重复提问' : 'Retry'}
+                          </button>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -726,7 +805,7 @@ export function FloatingAIPanel({
                   </div>
                 </div>
                 <button
-                  onClick={isStreaming ? handleStop : handleSend}
+                  onClick={isStreaming ? handleStop : () => handleSend()}
                   disabled={!isStreaming && !inputValue.trim()}
                   className={`p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     isStreaming
@@ -742,5 +821,18 @@ export function FloatingAIPanel({
         </motion.div>
       )}
     </AnimatePresence>
+    {showSettings &&
+      createPortal(
+        <ChatSettingsPanel
+          language={language}
+          onClose={() => {
+            setShowSettings(false);
+            reloadProvidersAndSkills();
+            persistProviderConfigsToBackend();
+          }}
+        />,
+        document.body
+      )}
+  </>
   );
 }
