@@ -14,7 +14,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { loadProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
+import { loadProviderConfigs, saveProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
   saveChatStore,
@@ -88,7 +88,7 @@ export interface FloatingAIPanelProps {
   notes: any[];
   filesMap: Record<string, string>;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
-  initialDraft?: { text: string; key: string; sourceTitle?: string } | null;
+  initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null;
   onDraftConsumed?: () => void;
   focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
 }
@@ -224,6 +224,16 @@ export function FloatingAIPanel({
     if (consumedDraftKeyRef.current === initialDraft.key) return;
     consumedDraftKeyRef.current = initialDraft.key;
     const newSession = createNewSession();
+    // Bind the note as an attached context item rather than dumping its full
+    // body into the input — the user types their question, the note rides along.
+    if (initialDraft.contextText) {
+      newSession.contextItems = [{
+        id: `ctx_note_${initialDraft.key}`,
+        type: 'custom-text',
+        label: initialDraft.contextLabel || initialDraft.sourceTitle || (language === 'zh' ? '笔记' : 'Note'),
+        data: { text: initialDraft.contextText },
+      }];
+    }
     setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
     setInputValue(initialDraft.text);
@@ -587,7 +597,7 @@ export function FloatingAIPanel({
     setActiveProviderId(id);
     const store = loadProviderConfigs();
     store.activeId = id;
-    localStorage.setItem('df_provider_configs', JSON.stringify(store));
+    saveProviderConfigs(store); // persists + dispatches df:provider-changed so Notes/NoteEditor stay in sync
     setShowModelMenu(false);
     const p = providers.find(pr => pr.id === id);
     if (p) showToast(language === 'zh' ? `已切换到 ${p.name}` : `Switched to ${p.name}`, 'success');

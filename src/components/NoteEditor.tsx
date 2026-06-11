@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { NoteData, PromptTemplateData } from '../api/client';
 import { promptsApi, aiApi } from '../api/client';
+import { getActiveAiConfig } from '../types/models';
 import { getTagColor } from '../utils/tagColors';
 import { TagInput } from './TagInput';
 
@@ -30,6 +31,7 @@ interface NoteEditorProps {
   defaultDate?: string;
   defaultLinkedTaskIds?: string[];
   defaultTitle?: string;
+  initialPreview?: boolean;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   onSave: (data: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>) => void;
@@ -56,6 +58,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   defaultDate,
   defaultLinkedTaskIds,
   defaultTitle,
+  initialPreview,
   isMaximized,
   onToggleMaximize,
   onSave,
@@ -65,6 +68,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 }) => {
   const today = new Date().toISOString().slice(0, 10);
   const nowTime = new Date().toTimeString().slice(0, 5);
+
+  // Resolve AI config live from the active provider store; fall back to props.
+  // Props can go stale because they only refresh on mount / provider-changed events.
+  const resolveAiConfig = () => {
+    const active = getActiveAiConfig();
+    return {
+      apiKey: active?.apiKey || aiApiKey || '',
+      model: active?.model || aiModel || undefined,
+      baseUrl: active?.baseUrl || aiBaseUrl || '',
+    };
+  };
 
   const [type, setType] = useState<NoteData['type']>(note?.type || 'note');
   const [title, setTitle] = useState(note?.title || defaultTitle || '');
@@ -77,7 +91,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [participants, setParticipants] = useState<string[]>(note?.participants || []);
   const [participantInput, setParticipantInput] = useState('');
   const [linkedTaskIds, setLinkedTaskIds] = useState<string[]>(note?.linkedTaskIds || defaultLinkedTaskIds || []);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(initialPreview ?? false);
   const [showMeta, setShowMeta] = useState(true);
 
   // AI Format state
@@ -136,7 +150,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFormat = async (promptId: string) => {
-    if (!aiApiKey || !aiBaseUrl) {
+    const { apiKey, model, baseUrl } = resolveAiConfig();
+    if (!apiKey || !baseUrl) {
       setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -155,9 +170,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const userPrompt = `${promptTemplate.prompt}\n\n---\n\n${body}`;
 
       const { summary } = await aiApi.summarize({
-        apiKey: aiApiKey,
-        model: aiModel,
-        baseUrl: aiBaseUrl,
+        apiKey,
+        model,
+        baseUrl,
         systemPrompt,
         userPrompt,
       });
@@ -174,7 +189,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Built-in smart AI actions — independent of user Skills library.
   // Each action runs the AI and may also reshape note metadata (type, etc.).
   const handleInlineAiEdit = async (action: 'polish' | 'continue' | 'summarize' | 'todos') => {
-    if (!aiApiKey || !aiBaseUrl) {
+    const { apiKey, model, baseUrl } = resolveAiConfig();
+    if (!apiKey || !baseUrl) {
       setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -213,9 +229,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const userPrompt = `${language === 'zh' ? zh : en}\n\n---\n\n${body}`;
 
       const { summary } = await aiApi.summarize({
-        apiKey: aiApiKey,
-        model: aiModel,
-        baseUrl: aiBaseUrl,
+        apiKey,
+        model,
+        baseUrl,
         systemPrompt,
         userPrompt,
       });
@@ -230,7 +246,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const runSmartAction = async (action: 'meeting' | 'todos' | 'summary' | 'polish') => {
-    if (!aiApiKey || !aiBaseUrl) {
+    const { apiKey, model, baseUrl } = resolveAiConfig();
+    if (!apiKey || !baseUrl) {
       setFormatError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -273,9 +290,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const userPrompt = `${language === 'zh' ? zh : en}\n\n---\n\n${body}`;
 
       const { summary } = await aiApi.summarize({
-        apiKey: aiApiKey,
-        model: aiModel,
-        baseUrl: aiBaseUrl,
+        apiKey,
+        model,
+        baseUrl,
         systemPrompt,
         userPrompt,
       });

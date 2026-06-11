@@ -98,7 +98,7 @@ export default function App() {
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
-  const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string } | null>(null);
+  const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
@@ -1484,13 +1484,19 @@ export default function App() {
                   filterByTaskId={notesFilterByTaskId}
                   onClearTaskFilter={() => setNotesFilterByTaskId(null)}
                   onSendToChat={({ title, body, type }) => {
-                    const header = type === 'meeting_note'
-                      ? (language === 'zh' ? '帮我基于这份会议笔记继续讨论或回答我的问题：' : 'Continue from this meeting note:')
+                    const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
+                    const prompt = type === 'meeting_note'
+                      ? (language === 'zh' ? '基于这份会议笔记继续讨论：' : 'Continue from this meeting note:')
                       : type === 'summary'
                       ? (language === 'zh' ? '基于这份总结继续讨论：' : 'Continue from this summary:')
                       : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
-                    const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
-                    setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
+                    setChatDraft({
+                      text: prompt,
+                      key: `${Date.now()}`,
+                      sourceTitle: title,
+                      contextText: `# ${noteTitle}\n\n${body}`,
+                      contextLabel: noteTitle,
+                    });
                     setActiveTab('ai-chat');
                   }}
                 />
@@ -1616,13 +1622,19 @@ export default function App() {
              isMaximized={isNoteEditorMaximized}
              onToggleMaximize={() => setIsNoteEditorMaximized(v => !v)}
              onSendToChat={({ title, body, type }) => {
-               const header = type === 'meeting_note'
-                 ? (language === 'zh' ? '帮我基于这份会议笔记继续讨论或回答我的问题：' : 'Continue from this meeting note:')
+               const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
+               const prompt = type === 'meeting_note'
+                 ? (language === 'zh' ? '基于这份会议笔记继续讨论：' : 'Continue from this meeting note:')
                  : type === 'summary'
                  ? (language === 'zh' ? '基于这份总结继续讨论：' : 'Continue from this summary:')
                  : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
-               const text = `${header}\n\n# ${title || (language === 'zh' ? '（无标题）' : '(untitled)')}\n\n${body}`;
-               setChatDraft({ text, key: `${Date.now()}`, sourceTitle: title });
+               setChatDraft({
+                 text: prompt,
+                 key: `${Date.now()}`,
+                 sourceTitle: title,
+                 contextText: `# ${noteTitle}\n\n${body}`,
+                 contextLabel: noteTitle,
+               });
                setShowQuickNoteEditor(false);
                setEditingDailyNote(null);
                setPrefillLinkedTaskId(null);

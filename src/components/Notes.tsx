@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, FileText, Mic, Sparkles, X, ChevronDown, Loader2, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { notesApi, tasksApi, promptsApi, aiApi, type NoteData, type PromptTemplateData } from '../api/client';
+import { getActiveAiConfig } from '../types/models';
 import { NoteCard } from './NoteCard';
 import { NoteEditor } from './NoteEditor';
 
@@ -24,6 +25,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [editingNote, setEditingNote] = useState<NoteData | null>(null);
+  const [openAsPreview, setOpenAsPreview] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [mentionFilter, setMentionFilter] = useState<string | null>(null);
@@ -119,7 +121,11 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
   };
 
   const generateSummary = async () => {
-    if (!aiApiKey || !aiBaseUrl) {
+    const active = getActiveAiConfig();
+    const apiKey = active?.apiKey || aiApiKey || '';
+    const baseUrl = active?.baseUrl || aiBaseUrl || '';
+    const model = active?.model || aiModel || undefined;
+    if (!apiKey || !baseUrl) {
       setSummaryError(language === 'zh' ? 'AI 未配置，请在设置中配置 AI 提供商和 API Key' : 'AI not configured. Please set up AI provider and API Key in Settings.');
       return;
     }
@@ -170,9 +176,9 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       const userPrompt = `${promptTemplate.prompt}\n\nHere are the notes:\n\n${contextStr}`;
 
       const { summary } = await aiApi.summarize({
-        apiKey: aiApiKey,
-        model: aiModel,
-        baseUrl: aiBaseUrl,
+        apiKey,
+        model,
+        baseUrl,
         systemPrompt,
         userPrompt,
       });
@@ -271,9 +277,10 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
             aiModel={aiModel}
             aiBaseUrl={aiBaseUrl}
             isMaximized={isNoteMaximized}
+            initialPreview={openAsPreview}
             onToggleMaximize={() => setIsNoteMaximized(v => !v)}
             onSave={handleSave}
-            onClose={() => { setViewMode('list'); setEditingNote(null); setIsNoteMaximized(false); }}
+            onClose={() => { setViewMode('list'); setEditingNote(null); setIsNoteMaximized(false); setOpenAsPreview(false); }}
             onDelete={editingNote ? () => handleDelete(editingNote.id) : undefined}
             onSendToChat={onSendToChat}
           />
@@ -286,7 +293,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
               {language === 'zh' ? '笔记' : 'Notes'}
             </h1>
             <button
-              onClick={() => { setEditingNote(null); setViewMode('edit'); }}
+              onClick={() => { setEditingNote(null); setOpenAsPreview(false); setViewMode('edit'); }}
               className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -580,7 +587,8 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
                           note={note}
                           language={language}
                           activeContext={activeContext}
-                          onEdit={() => { setEditingNote(note); setViewMode('edit'); }}
+                          onClick={() => { setEditingNote(note); setOpenAsPreview(true); setViewMode('edit'); }}
+                          onEdit={() => { setEditingNote(note); setOpenAsPreview(false); setViewMode('edit'); }}
                           onDelete={() => handleDelete(note.id)}
                           onMentionClick={(m) => setMentionFilter(m)}
                         />

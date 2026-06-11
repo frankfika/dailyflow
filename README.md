@@ -8,7 +8,7 @@
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-0.7.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.9.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -80,6 +80,9 @@ DailyFlow 是一个**本地优先**的智能任务管理桌面应用。以 Markd
 ### 📝 笔记系统
 
 - **多类型**：普通笔记、会议记录、AI 总结
+- **只读预览**：点击卡片进入只读预览，点编辑按钮再改，避免误编辑
+- **AI 助手**：润色、续写、提取待办、整理会议纪要，实时跟随当前 AI 模型
+- **发到对话**：把笔记作为上下文绑定到 AI 对话，输入框只留你的提问
 - **@提及**：`@人名` 自动解析，支持按人员筛选
 - **多维筛选**：按类型、人员、项目、标签、时间范围过滤
 - **任务关联**：笔记与任务双向关联
@@ -232,6 +235,9 @@ One-click configuration for 15+ AI providers:
 ### 📝 Notes
 
 - **Multi-type**: Regular notes, meeting notes, AI summaries
+- **Read-only Preview**: Click a card to open in read-only view, hit Edit to modify — no accidental edits
+- **AI Assist**: Polish, continue, extract todos, format meeting notes — always uses your current AI model
+- **Send to Chat**: Bind a note as context in AI chat; the input box keeps only your question
 - **@Mentions**: Auto-parsed, filterable by person
 - **Multi-dimensional Filters**: By type, person, project, tag, date range
 - **Task Linking**: Bidirectional linking between notes and tasks
