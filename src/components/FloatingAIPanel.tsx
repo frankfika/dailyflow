@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -120,6 +120,45 @@ export function FloatingAIPanel({
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
   const [pendingSkillId, setPendingSkillId] = useState<string | null>(null);
+
+  // Resizable panel dimensions
+  const [panelSize, setPanelSize] = useState(() => {
+    try {
+      const stored = localStorage.getItem('df_ai_panel_size');
+      if (stored) return JSON.parse(stored) as { w: number; h: number };
+    } catch {}
+    return { w: 380, h: 600 };
+  });
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number; edge: string } | null>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent, edge: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: panelSize.w, startH: panelSize.h, edge };
+    const handleMove = (ev: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const { startX, startY, startW, startH, edge: edg } = resizeRef.current;
+      let newW = startW, newH = startH;
+      if (edg.includes('l')) newW = Math.max(320, Math.min(800, startW - (ev.clientX - startX)));
+      if (edg.includes('b')) newH = Math.max(400, Math.min(window.innerHeight - 100, startH + (ev.clientY - startY)));
+      setPanelSize({ w: newW, h: newH });
+    };
+    const handleUp = () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      if (resizeRef.current) {
+        const finalSize = { w: panelSize.w, h: panelSize.h };
+        // Read latest from DOM via setState callback
+        setPanelSize(prev => {
+          try { localStorage.setItem('df_ai_panel_size', JSON.stringify(prev)); } catch {}
+          return prev;
+        });
+      }
+      resizeRef.current = null;
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  }, [panelSize]);
   const [draftSourceTitle, setDraftSourceTitle] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -572,8 +611,22 @@ export function FloatingAIPanel({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 10, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="fixed top-16 sm:top-16 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[380px] h-[500px] sm:h-[600px] max-h-[calc(100vh-120px)] z-[60] flex flex-col bg-white/85 backdrop-blur-2xl border border-white/50 shadow-2xl shadow-black/5 rounded-2xl overflow-hidden"
+          style={{ width: panelSize.w, height: panelSize.h, maxHeight: 'calc(100vh - 120px)', maxWidth: 'calc(100vw - 2rem)' }}
+          className="fixed top-16 sm:top-16 right-4 sm:right-6 z-[60] flex flex-col bg-white/85 backdrop-blur-2xl border border-white/50 shadow-2xl shadow-black/5 rounded-2xl overflow-hidden"
         >
+          {/* Resize handles */}
+          <div
+            onMouseDown={e => handleResizeStart(e, 'l')}
+            className="absolute left-0 top-2 bottom-2 w-1.5 cursor-col-resize hover:bg-accent/20 rounded-full transition-colors z-10"
+          />
+          <div
+            onMouseDown={e => handleResizeStart(e, 'b')}
+            className="absolute bottom-0 left-2 right-2 h-1.5 cursor-row-resize hover:bg-accent/20 rounded-full transition-colors z-10"
+          />
+          <div
+            onMouseDown={e => handleResizeStart(e, 'lb')}
+            className="absolute left-0 bottom-0 w-3 h-3 cursor-nesw-resize z-10"
+          />
           {/* Top bar */}
           <header className="px-4 py-3 border-b border-border/30 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">

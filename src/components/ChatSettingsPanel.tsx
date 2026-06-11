@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, Bot, Zap } from 'lucide-react';
+import { X, Bot, Zap, ArrowLeft } from 'lucide-react';
 import { ModelLibrary } from './ModelLibrary';
 import { SkillManager } from './SkillManager';
 
@@ -41,9 +41,18 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
         className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-background border-l border-border shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header: tabs + close */}
+        {/* Header: back + tabs + close */}
         <div className="px-5 py-3 border-b border-border bg-surface-white flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs text-text-muted hover:text-accent transition-colors rounded-md hover:bg-surface"
+              title={language === 'zh' ? '返回对话' : 'Back to chat'}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{language === 'zh' ? '返回' : 'Back'}</span>
+            </button>
+            <div className="w-px h-4 bg-border/50" />
             <button
               onClick={() => setTab('providers')}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-md transition-colors ${
