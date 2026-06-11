@@ -36,6 +36,8 @@ export function SkillManager({ language }: SkillManagerProps) {
     version: string;
     author: string;
     tags: string[];
+    type: 'prompt' | 'agent';
+    commands: string;
   }>({
     name: '',
     description: '',
@@ -45,6 +47,8 @@ export function SkillManager({ language }: SkillManagerProps) {
     version: '',
     author: '',
     tags: [],
+    type: 'prompt',
+    commands: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -69,12 +73,13 @@ export function SkillManager({ language }: SkillManagerProps) {
     let tags: string[] | undefined;
     let body = trimmed;
 
+    let getLine = (_key: string): string => '';
     const fmMatch = trimmed.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
     if (fmMatch) {
       const fm = fmMatch[1];
       body = fmMatch[2] || '';
 
-      const getLine = (key: string) => {
+      getLine = (key: string) => {
         const m = fm.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
         return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
       };
@@ -97,11 +102,32 @@ export function SkillManager({ language }: SkillManagerProps) {
       }
     }
 
+    // Agent skill detection: frontmatter type=agent or no-frontmatter + markdown headings
+    const skillType: 'prompt' | 'agent' =
+      fmMatch && getLine('type') === 'agent' ? 'agent' : 'prompt';
+
+    // Parse commands (e.g. commands: ["/weekly", "/wr"])
+    let commands: string[] | undefined;
+    if (fmMatch) {
+      const cmdLine = getLine('commands');
+      if (cmdLine) {
+        try {
+          commands = JSON.parse(cmdLine.replace(/'/g, '"')) as string[];
+        } catch {
+          commands = cmdLine.split(/,\s*/).map(t => t.trim()).filter(Boolean);
+        }
+      }
+    }
+
     if (!name) {
       const heading = body.match(/^#{1,3}\s+(.+)$/m);
       if (heading) {
         name = heading[1].trim();
-        body = body.replace(heading[0], '').trim();
+        if (!fmMatch) {
+          // For agent skills without frontmatter, keep the heading in body as knowledge
+        } else {
+          body = body.replace(heading[0], '').trim();
+        }
       }
     }
     if (!name) name = fallbackName.replace(/\.(md|markdown|txt)$/i, '').trim();
@@ -117,6 +143,8 @@ export function SkillManager({ language }: SkillManagerProps) {
       version: version || undefined,
       author: author || undefined,
       tags: tags && tags.length > 0 ? tags : undefined,
+      type: skillType,
+      commands: commands && commands.length > 0 ? commands : undefined,
     };
   };
 
@@ -183,7 +211,9 @@ export function SkillManager({ language }: SkillManagerProps) {
 
   const handleExport = (skill: PromptTemplateData) => {
     const tagsStr = skill.tags && skill.tags.length > 0 ? `\ntags: [${skill.tags.map(t => `"${t}"`).join(', ')}]` : '';
-    const md = `---\nname: ${skill.name}\ndescription: ${skill.description || ''}\nscope: ${skill.scope}${skill.icon ? `\nicon: ${skill.icon}` : ''}${skill.version ? `\nversion: ${skill.version}` : ''}${skill.author ? `\nauthor: ${skill.author}` : ''}${tagsStr}\ncreated: ${skill.createdAt}${skill.updatedAt ? `\nupdatedAt: ${skill.updatedAt}` : ''}\n---\n\n${skill.systemPrompt || skill.prompt || ''}\n`;
+    const typeStr = skill.type === 'agent' ? `\ntype: agent` : '';
+    const commandsStr = skill.commands && skill.commands.length > 0 ? `\ncommands: [${skill.commands.map(c => `"${c}"`).join(', ')}]` : '';
+    const md = `---\nname: ${skill.name}\ndescription: ${skill.description || ''}\nscope: ${skill.scope}${skill.icon ? `\nicon: ${skill.icon}` : ''}${skill.version ? `\nversion: ${skill.version}` : ''}${skill.author ? `\nauthor: ${skill.author}` : ''}${tagsStr}${typeStr}${commandsStr}\ncreated: ${skill.createdAt}${skill.updatedAt ? `\nupdatedAt: ${skill.updatedAt}` : ''}\n---\n\n${skill.systemPrompt || skill.prompt || ''}\n`;
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -208,7 +238,7 @@ export function SkillManager({ language }: SkillManagerProps) {
   };
 
   const startAdd = () => {
-    setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [] });
+    setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [], type: 'prompt', commands: '' });
     setIsAdding(true);
     setEditingId(null);
   };
@@ -223,6 +253,8 @@ export function SkillManager({ language }: SkillManagerProps) {
       version: skill.version || '',
       author: skill.author || '',
       tags: skill.tags || [],
+      type: skill.type || 'prompt',
+      commands: skill.commands ? skill.commands.join(', ') : '',
     });
     setEditingId(skill.id);
     setIsAdding(true);
@@ -232,6 +264,7 @@ export function SkillManager({ language }: SkillManagerProps) {
     if (!form.name.trim() || !form.systemPrompt.trim()) return;
     setSaving(true);
     try {
+      const commandsArr = form.commands.split(/,\s*/).map(s => s.trim()).filter(Boolean);
       const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
@@ -241,6 +274,8 @@ export function SkillManager({ language }: SkillManagerProps) {
         version: form.version.trim() || undefined,
         author: form.author.trim() || undefined,
         tags: form.tags.length > 0 ? form.tags : undefined,
+        type: form.type,
+        commands: commandsArr.length > 0 ? commandsArr : undefined,
       };
       if (editingId) {
         await promptsApi.update(editingId, payload);
@@ -250,7 +285,7 @@ export function SkillManager({ language }: SkillManagerProps) {
       await load();
       setIsAdding(false);
       setEditingId(null);
-      setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [] });
+      setForm({ name: '', description: '', systemPrompt: '', scope: 'chat', icon: '', version: '', author: '', tags: [], type: 'prompt', commands: '' });
     } catch (err) {
       console.error('Save failed:', err);
     } finally {
@@ -479,14 +514,47 @@ export function SkillManager({ language }: SkillManagerProps) {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    {language === 'zh' ? '类型' : 'Type'}
+                  </label>
+                  <select
+                    value={form.type}
+                    onChange={e => setForm({ ...form, type: e.target.value as 'prompt' | 'agent' })}
+                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                  >
+                    <option value="prompt">{language === 'zh' ? 'Prompt (角色/指令)' : 'Prompt (Role/Instruction)'}</option>
+                    <option value="agent">{language === 'zh' ? 'Agent (知识库/上下文)' : 'Agent (Knowledge/Context)'}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    {language === 'zh' ? '快捷命令 (用逗号分隔)' : 'Commands (comma separated)'}
+                  </label>
+                  <input
+                    value={form.commands}
+                    onChange={e => setForm({ ...form, commands: e.target.value })}
+                    placeholder={language === 'zh' ? '/weekly, /wr' : '/weekly, /wr'}
+                    className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-text-muted mb-1">
-                  {language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt'} *
+                  {form.type === 'agent'
+                    ? (language === 'zh' ? '知识库内容 (Knowledge Base)' : 'Knowledge Base')
+                    : (language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt')} *
                 </label>
                 <textarea
                   value={form.systemPrompt}
                   onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
-                  placeholder={language === 'zh' ? '请按以下要求处理...' : 'Process the content as follows...'}
+                  placeholder={form.type === 'agent'
+                    ? (language === 'zh'
+                      ? '## Overview\n项目概述...\n\n## Common Commands\n常用命令...'
+                      : '## Overview\nProject overview...\n\n## Common Commands\nCommands...')
+                    : (language === 'zh' ? '请按以下要求处理...' : 'Process the content as follows...')}
                   rows={5}
                   className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent resize-none font-mono"
                 />
@@ -550,6 +618,9 @@ export function SkillManager({ language }: SkillManagerProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="text-sm font-bold text-text-heading">{skill.name}</h4>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${skill.type === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-accent/10 text-accent'}`}>
+                      {skill.type === 'agent' ? 'Agent' : 'Prompt'}
+                    </span>
                     <span className="px-1.5 py-0.5 text-[10px] font-bold bg-accent/10 text-accent rounded">
                       {getScopeLabel(skill.scope)}
                     </span>

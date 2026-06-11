@@ -433,6 +433,12 @@ export interface PromptTemplateData {
   tags?: string[];
   createdAt: string;
   updatedAt?: string;
+  // Skill type: 'prompt' = system-prompt based (legacy), 'agent' = knowledge-base / Codex-style
+  type?: 'prompt' | 'agent';
+  // Slash commands that trigger this skill (e.g. ['/weekly', '/wr'])
+  commands?: string[];
+  // File patterns that auto-trigger this skill (e.g. ['*.test.ts'])
+  filePatterns?: string[];
 }
 
 /**

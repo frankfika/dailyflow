@@ -349,9 +349,27 @@ export function FloatingAIPanel({
     return language === 'zh' ? '问点什么…' : 'Ask anything…';
   }, [focusedContext, language]);
 
+  const resolveSlashCommand = (text: string): { content: string; matchedSkill: PromptTemplateData | null } => {
+    if (!text.startsWith('/')) return { content: text, matchedSkill: null };
+    const cmd = text.split(/\s/)[0];
+    const matched = skills.find(s => s.commands?.some(c => c === cmd));
+    if (matched) {
+      return { content: text.slice(cmd.length).trim(), matchedSkill: matched };
+    }
+    return { content: text, matchedSkill: null };
+  };
+
   const handleSend = async (overrideContent?: string) => {
-    const contentToSend = (overrideContent || inputValue).trim();
+    let contentToSend = (overrideContent || inputValue).trim();
     if (!contentToSend || isStreaming || !activeSession) return;
+
+    // Slash command resolution
+    const { content: cleanedContent, matchedSkill } = resolveSlashCommand(contentToSend);
+    if (matchedSkill) {
+      contentToSend = cleanedContent;
+      setPendingSkillId(matchedSkill.id);
+    }
+
     if (!activeProvider) {
       showToast(
         language === 'zh' ? '请先添加一个模型供应商' : 'Please add a model provider first',
@@ -404,15 +422,21 @@ export function FloatingAIPanel({
     if (autoContextText) contexts.push(autoContextText);
     if (contextText) contexts.push(contextText);
 
+    // Agent skill injection: append knowledge base to user prompt instead of replacing system prompt
+    if (skillForThisMessage && skillForThisMessage.type === 'agent') {
+      contexts.push(`${language === 'zh' ? '参考以下知识库：' : 'Reference knowledge base:'}\n\n${skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''}`);
+    }
+
     if (contexts.length > 0) {
       userPrompt = `${userPrompt}\n\n---\n${language === 'zh' ? '参考以下上下文：' : 'Reference context:'}\n\n${contexts.join('\n\n---\n')}`;
     }
 
-    const baseSystemPrompt = skillForThisMessage
+    const defaultSystemPrompt = language === 'zh'
+      ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
+      : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.';
+    const baseSystemPrompt = (skillForThisMessage && skillForThisMessage.type !== 'agent')
       ? (skillForThisMessage.systemPrompt || skillForThisMessage.prompt || '')
-      : (language === 'zh'
-        ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
-        : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.');
+      : defaultSystemPrompt;
     const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
 
     abortRef.current = new AbortController();
