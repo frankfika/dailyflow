@@ -130,6 +130,14 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
 
   // —— Aggregators ——
   {
+    name: 'B.AI',
+    baseUrl: 'https://api.b.ai/v1',
+    model: 'claude-opus-4.8',
+    region: 'aggregator',
+    apiKeyUrl: 'https://chat.b.ai/key',
+    hint: 'AI 聚合平台，一个 Key 可用 Claude / GPT / Gemini / MiniMax 等多模型。需充值后使用。',
+  },
+  {
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     model: 'anthropic/claude-sonnet-4',
