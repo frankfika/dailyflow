@@ -16,42 +16,14 @@ import {
   type ProviderTemplate,
 } from '../types/models';
 import { aiApi } from '../api/client';
+import { ProviderIcon } from './ProviderIcon';
 
 interface ModelLibraryProps {
   language: 'en' | 'zh';
   onProviderActivate?: (config: ProviderConfig) => void;
 }
 
-const PROVIDER_BRAND: Record<string, { bg: string; fg: string; abbr: string }> = {
-  'DeepSeek':                  { bg: 'bg-blue-50',     fg: 'text-blue-700',    abbr: 'DS' },
-  'Kimi (Moonshot)':           { bg: 'bg-violet-50',   fg: 'text-violet-700',  abbr: 'KM' },
-  'MiniMax':                   { bg: 'bg-rose-50',     fg: 'text-rose-700',    abbr: 'MM' },
-  'MiniMax (海外)':            { bg: 'bg-rose-50',     fg: 'text-rose-700',    abbr: 'MM' },
-  '智谱 GLM':                  { bg: 'bg-cyan-50',     fg: 'text-cyan-700',    abbr: '智谱' },
-  '豆包 (火山方舟)':           { bg: 'bg-orange-50',   fg: 'text-orange-700',  abbr: '豆包' },
-  '阿里云 Qwen':               { bg: 'bg-amber-50',    fg: 'text-amber-700',   abbr: 'Qw' },
-  '硅基流动 SiliconFlow':      { bg: 'bg-emerald-50',  fg: 'text-emerald-700', abbr: 'SF' },
-  'Anthropic Claude':          { bg: 'bg-orange-50',   fg: 'text-orange-700',  abbr: 'A' },
-  'OpenAI':                    { bg: 'bg-stone-100',   fg: 'text-stone-700',   abbr: 'AI' },
-  'Google Gemini':             { bg: 'bg-sky-50',      fg: 'text-sky-700',     abbr: 'GG' },
-  'Groq':                      { bg: 'bg-red-50',      fg: 'text-red-700',     abbr: 'Gq' },
-  'OpenRouter':                { bg: 'bg-purple-50',   fg: 'text-purple-700',  abbr: 'OR' },
-  'Custom':                    { bg: 'bg-stone-50',    fg: 'text-stone-600',   abbr: '+' },
-};
-
-function ProviderAvatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
-  const brand = PROVIDER_BRAND[name] || {
-    bg: 'bg-stone-100',
-    fg: 'text-stone-700',
-    abbr: name.slice(0, 2).toUpperCase(),
-  };
-  const dim = size === 'sm' ? 'w-7 h-7 text-[11px]' : 'w-9 h-9 text-[13px]';
-  return (
-    <div className={`${dim} ${brand.bg} ${brand.fg} rounded-md flex items-center justify-center font-bold flex-shrink-0 border border-current/10`}>
-      {brand.abbr}
-    </div>
-  );
-}
+type CategoryFilter = 'all' | 'official' | 'aggregator' | 'custom';
 
 export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps) {
   const [configs, setConfigs] = useState<ProviderConfig[]>([]);
@@ -60,7 +32,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<ProviderConfig>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [filterRegion, setFilterRegion] = useState<'all' | 'cn' | 'global' | 'aggregator' | 'custom'>('all');
+  const [filterCategory, setFilterCategory] = useState<CategoryFilter>('all');
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; status: 'success' | 'error'; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -89,7 +61,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   const openAddDrawer = () => {
     setForm({ name: '', apiKey: '', baseUrl: '', model: '' });
     setSelectedTemplate('');
-    setFilterRegion('all');
+    setFilterCategory('all');
     setEditingId(null);
     setShowApiKey(false);
     setTouched({});
@@ -204,9 +176,9 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   };
 
   const filteredTemplates = useMemo(() => {
-    if (filterRegion === 'all') return PROVIDER_TEMPLATES;
-    return PROVIDER_TEMPLATES.filter(t => t.region === filterRegion);
-  }, [filterRegion]);
+    if (filterCategory === 'all') return PROVIDER_TEMPLATES;
+    return PROVIDER_TEMPLATES.filter(t => t.category === filterCategory);
+  }, [filterCategory]);
 
   const activeTemplate = useMemo(
     () => PROVIDER_TEMPLATES.find(t => t.name === selectedTemplate),
@@ -274,7 +246,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                 )}
 
                 <div className="flex items-start gap-3">
-                  <ProviderAvatar name={config.name} />
+                  <ProviderIcon name={config.name} size="md" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-sm text-text-heading">{config.name}</h3>
@@ -363,7 +335,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
         <div className="flex-1 flex flex-col overflow-hidden bg-surface-white">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              {selectedTemplate && <ProviderAvatar name={selectedTemplate} size="sm" />}
+              {selectedTemplate && <ProviderIcon name={selectedTemplate} size="sm" />}
               <div>
                 <h3 className="text-sm font-bold text-text-heading">
                   {editingId
@@ -396,43 +368,42 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                 </div>
 
                 <div className="flex items-center gap-1 flex-wrap">
-                  {(['all', 'cn', 'global', 'aggregator', 'custom'] as const).map(r => (
+                  {([
+                    { key: 'all',        label: language === 'zh' ? '全部'   : 'All' },
+                    { key: 'official',   label: language === 'zh' ? '官方'   : 'Official' },
+                    { key: 'aggregator', label: language === 'zh' ? '聚合'   : 'Aggregator' },
+                    { key: 'custom',     label: language === 'zh' ? '自定义' : 'Custom' },
+                  ] as const).map(({ key, label }) => (
                     <button
-                      key={r}
-                      onClick={() => setFilterRegion(r)}
+                      key={key}
+                      onClick={() => setFilterCategory(key)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
-                        filterRegion === r
+                        filterCategory === key
                           ? 'bg-accent text-white border-accent'
                           : 'bg-surface text-text-muted border-border hover:border-accent/30 hover:text-text-heading'
                       }`}
                     >
-                      {r === 'all' ? (language === 'zh' ? '全部' : 'All') :
-                       r === 'cn' ? (language === 'zh' ? '国内' : 'China') :
-                       r === 'global' ? (language === 'zh' ? '海外' : 'Global') :
-                       r === 'aggregator' ? (language === 'zh' ? '聚合' : 'Aggregator') :
-                       (language === 'zh' ? '自定义' : 'Custom')}
+                      {label}
                     </button>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
                   {filteredTemplates.map(t => {
                     const isSelected = selectedTemplate === t.name;
-                    const isCustom = t.region === 'custom';
+                    const isCustom = t.category === 'custom';
                     return (
                       <button
                         key={t.name}
                         onClick={() => applyTemplate(t)}
                         title={isCustom ? (language === 'zh' ? '手动填写' : 'Manual') : `${t.name} · ${t.model || ''}`}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
-                          isCustom ? 'border-dashed' : ''
-                        } ${
+                        className={`relative flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all ${
                           isSelected
                             ? 'bg-accent/10 border-accent/40'
                             : 'bg-surface border-border hover:border-accent/30 hover:bg-surface-white'
                         }`}
                       >
-                        <ProviderAvatar name={t.name} size="sm" />
+                        <ProviderIcon name={t.name} size="sm" />
                         <div className="flex-1 min-w-0">
                           <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-accent' : 'text-text-heading'}`}>
                             {isCustom ? (language === 'zh' ? '自定义' : 'Custom') : t.name}
@@ -444,6 +415,13 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                           )}
                         </div>
                         {isSelected && <Check className="w-3 h-3 text-accent flex-shrink-0" />}
+                        {!isCustom && t.region && (
+                          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[9px] font-bold bg-surface-white/90 border border-border rounded text-text-muted">
+                            {t.region === 'cn'
+                              ? (language === 'zh' ? '国' : 'CN')
+                              : (language === 'zh' ? '海外' : 'Global')}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

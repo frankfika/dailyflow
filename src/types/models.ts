@@ -23,7 +23,10 @@ export interface ProviderTemplate {
   name: string;
   baseUrl: string;
   model: string;
-  region: 'cn' | 'global' | 'aggregator' | 'custom';
+  /** Role-based taxonomy: drives the filter tab in the picker. */
+  category: 'official' | 'aggregator' | 'custom';
+  /** Where the vendor is hosted/regulated. Shown as a small badge on each card. */
+  region?: 'cn' | 'global';
   apiKeyUrl?: string;
   hint?: string;
 }
@@ -36,11 +39,12 @@ export interface ProviderTemplate {
 // https://api.deepseek.com/  https://api.siliconflow.cn/  https://openrouter.ai/
 // https://docs.anthropic.com/en/api/openai-sdk
 export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
-  // —— China ——
+  // —— Official (first-party vendor endpoints) ——
   {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
     model: 'deepseek-chat',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://platform.deepseek.com/api_keys',
   },
@@ -48,6 +52,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'Kimi (Moonshot)',
     baseUrl: 'https://api.moonshot.cn/v1',
     model: 'kimi-k2-0905-preview',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
   },
@@ -55,6 +60,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'MiniMax',
     baseUrl: 'https://api.minimaxi.com/v1',
     model: 'MiniMax-M2',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     hint: '国内站（sk-cp-* / sk-* key）。海外用户请改用「MiniMax (海外)」',
@@ -63,6 +69,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'MiniMax (海外)',
     baseUrl: 'https://api.minimax.io/v1',
     model: 'MiniMax-M2',
+    category: 'official',
     region: 'global',
     apiKeyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
     hint: '海外站。国内 sk-cp-* key 请用「MiniMax」（minimaxi.com）',
@@ -71,6 +78,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: '智谱 GLM',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-plus',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
   },
@@ -78,6 +86,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: '豆包 (火山方舟)',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     model: 'doubao-1-5-pro-32k',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
     hint: 'model 字段需填写"模型推理点 ID"（ep-xxx），不是模型名',
@@ -86,22 +95,15 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: '阿里云 Qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen-max',
+    category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://bailian.console.aliyun.com/?apiKey=1',
   },
   {
-    name: '硅基流动 SiliconFlow',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    model: 'deepseek-ai/DeepSeek-V3',
-    region: 'cn',
-    apiKeyUrl: 'https://cloud.siliconflow.cn/account/ak',
-  },
-
-  // —— Global ——
-  {
     name: 'Anthropic Claude',
     baseUrl: 'https://api.anthropic.com/v1',
     model: 'claude-sonnet-4-5-20250929',
+    category: 'official',
     region: 'global',
     apiKeyUrl: 'https://console.anthropic.com/settings/keys',
     hint: '使用 Anthropic 的 OpenAI 兼容接口',
@@ -110,6 +112,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
+    category: 'official',
     region: 'global',
     apiKeyUrl: 'https://platform.openai.com/api-keys',
   },
@@ -117,6 +120,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     model: 'gemini-2.0-flash-exp',
+    category: 'official',
     region: 'global',
     apiKeyUrl: 'https://aistudio.google.com/apikey',
   },
@@ -124,16 +128,26 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'Groq',
     baseUrl: 'https://api.groq.com/openai/v1',
     model: 'llama-3.3-70b-versatile',
+    category: 'official',
     region: 'global',
     apiKeyUrl: 'https://console.groq.com/keys',
   },
 
-  // —— Aggregators ——
+  // —— Aggregators (multi-model 3rd-party platforms) ——
+  {
+    name: '硅基流动 SiliconFlow',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    model: 'deepseek-ai/DeepSeek-V3',
+    category: 'aggregator',
+    region: 'cn',
+    apiKeyUrl: 'https://cloud.siliconflow.cn/account/ak',
+  },
   {
     name: 'B.AI',
     baseUrl: 'https://api.b.ai/v1',
     model: 'claude-opus-4.8',
-    region: 'aggregator',
+    category: 'aggregator',
+    region: 'global',
     apiKeyUrl: 'https://chat.b.ai/key',
     hint: 'AI 聚合平台，一个 Key 可用 Claude / GPT / Gemini / MiniMax 等多模型。需充值后使用。',
   },
@@ -141,7 +155,8 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     model: 'anthropic/claude-sonnet-4',
-    region: 'aggregator',
+    category: 'aggregator',
+    region: 'global',
     apiKeyUrl: 'https://openrouter.ai/keys',
   },
 
@@ -150,7 +165,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     name: 'Custom',
     baseUrl: '',
     model: '',
-    region: 'custom',
+    category: 'custom',
   },
 ];
 
