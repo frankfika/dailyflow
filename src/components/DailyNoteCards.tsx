@@ -63,14 +63,19 @@ export const DailyNoteCards: React.FC<DailyNoteCardsProps> = ({
       </div>
 
       {isEmpty ? (
-        <div
+        <button
           onClick={onAddNote}
-          className="border border-dashed border-border/60 rounded-lg py-6 text-center cursor-pointer hover:border-accent/50 hover:bg-accent/5 transition-colors"
+          className="w-full border border-dashed border-border/80 rounded-xl py-5 text-center hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent transition-all group"
         >
-          <p className="text-xs text-text-muted opacity-70">
-            {language === 'zh' ? '今天还没有笔记，点此新建' : 'No notes yet — click to add'}
-          </p>
-        </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-surface border border-border/60 flex items-center justify-center group-hover:border-accent/30 group-hover:bg-accent/10 transition-colors">
+              <Plus className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
+            </div>
+            <p className="text-xs text-text-muted">
+              {language === 'zh' ? '今天还没有笔记' : 'No notes yet'}
+            </p>
+          </div>
+        </button>
       ) : (
         <div className="space-y-2">
           <AnimatePresence>

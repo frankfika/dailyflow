@@ -14,30 +14,32 @@
   --text-scale: 1;
   --font-weight-base: 400;
 
-  /* Modern Desktop Light Mode — crisp, airy, native-app feel */
-  --color-background: #F5F5F7;
-  --color-surface: #FFFFFF;
+  /* Native Minimal — translucent, chill surfaces */
+  --color-background: #F3F3F5;
+  --color-surface: rgba(255, 255, 255, 0.78);
   --color-surface-white: #FFFFFF;
-  --color-border: #E5E5E7;
+  --color-surface-elevated: rgba(255, 255, 255, 0.92);
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-strong: rgba(0, 0, 0, 0.10);
 
   --color-text-main: #2C2C2E;
   --color-text-heading: #1D1D1F;
   --color-text-muted: #8E8E93;
 
   --color-accent: #007AFF;
-  --color-accent-light: #E5F1FF;
+  --color-accent-light: rgba(0, 122, 255, 0.08);
   --color-accent-warm: #5856D6;
-  --color-accent-highlight: #F2F2F7;
+  --color-accent-highlight: rgba(0, 122, 255, 0.06);
 
   /* Status palette — used for state indicators (done / warning / migrated) */
   --color-success: #34C759;
-  --color-success-light: #E8F8EC;
+  --color-success-light: rgba(52, 199, 89, 0.10);
   --color-warning: #FF9F0A;
-  --color-warning-light: #FFF4E0;
+  --color-warning-light: rgba(255, 159, 10, 0.10);
   --color-danger: #FF3B30;
-  --color-danger-light: #FFE9E7;
+  --color-danger-light: rgba(255, 59, 48, 0.10);
   --color-info: #5AC8FA;
-  --color-info-light: #E1F6FE;
+  --color-info-light: rgba(90, 200, 250, 0.10);
 
   /* Accent gradient — used for hero elements, primary buttons on hover */
   --gradient-accent: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
@@ -46,40 +48,45 @@
   --gradient-muted: linear-gradient(135deg, #8E8E93 0%, #636366 100%);
 
   /* Glow shadows — depth and "alive" feel for interactive surfaces */
-  --shadow-accent-glow: 0 4px 16px rgba(0, 122, 255, 0.18), 0 1px 2px rgba(0, 122, 255, 0.12);
-  --shadow-warm-glow: 0 4px 16px rgba(255, 159, 10, 0.18), 0 1px 2px rgba(255, 159, 10, 0.12);
-  --shadow-success-glow: 0 4px 16px rgba(52, 199, 89, 0.18), 0 1px 2px rgba(52, 199, 89, 0.12);
+  --shadow-accent-glow: 0 4px 16px rgba(0, 122, 255, 0.16), 0 1px 2px rgba(0, 122, 255, 0.10);
+  --shadow-warm-glow: 0 4px 16px rgba(255, 159, 10, 0.16), 0 1px 2px rgba(255, 159, 10, 0.10);
+  --shadow-success-glow: 0 4px 16px rgba(52, 199, 89, 0.16), 0 1px 2px rgba(52, 199, 89, 0.10);
+
+  /* Native minimal easing */
+  --ease-native: cubic-bezier(0.25, 0.1, 0.25, 1.0);
 }
 
 :root[data-context="life"] {
   /* Warm life variant */
   --color-background: #F2F0ED;
-  --color-surface: #FAF9F7;
+  --color-surface: rgba(250, 249, 247, 0.80);
   --color-surface-white: #FAF9F7;
-  --color-border: #E5E2DD;
+  --color-surface-elevated: rgba(250, 249, 247, 0.94);
+  --color-border: rgba(0, 0, 0, 0.05);
+  --color-border-strong: rgba(0, 0, 0, 0.09);
 
   --color-text-main: #3D3A36;
   --color-text-heading: #2C2A26;
   --color-text-muted: #9A9590;
 
   --color-accent: #D46A3E;
-  --color-accent-light: #FCECE5;
+  --color-accent-light: rgba(212, 106, 62, 0.08);
   --color-accent-warm: #C75B32;
-  --color-accent-highlight: #F5F0EB;
+  --color-accent-highlight: rgba(212, 106, 62, 0.06);
 
   --color-success: #4FA866;
-  --color-success-light: #E9F3EC;
+  --color-success-light: rgba(79, 168, 102, 0.10);
   --color-warning: #D89043;
-  --color-warning-light: #FAEEE0;
+  --color-warning-light: rgba(216, 144, 67, 0.10);
   --color-danger: #C75B4A;
-  --color-danger-light: #F8E7E5;
+  --color-danger-light: rgba(199, 91, 74, 0.10);
 
   --gradient-accent: linear-gradient(135deg, #D46A3E 0%, #C75B32 100%);
   --gradient-warm: linear-gradient(135deg, #D89043 0%, #C75B4A 100%);
   --gradient-success: linear-gradient(135deg, #4FA866 0%, #3D8855 100%);
 
-  --shadow-accent-glow: 0 4px 16px rgba(212, 106, 62, 0.20), 0 1px 2px rgba(212, 106, 62, 0.12);
-  --shadow-warm-glow: 0 4px 16px rgba(216, 144, 67, 0.20), 0 1px 2px rgba(216, 144, 67, 0.12);
+  --shadow-accent-glow: 0 4px 16px rgba(212, 106, 62, 0.16), 0 1px 2px rgba(212, 106, 62, 0.10);
+  --shadow-warm-glow: 0 4px 16px rgba(216, 144, 67, 0.16), 0 1px 2px rgba(216, 144, 67, 0.10);
 
   --life-brightness: 1;
 }
@@ -121,36 +128,74 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 
 /* Glass Panels — subtle depth for native feel */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.50);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.1);
+  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+}
+
+:root[data-context="life"] .glass-panel {
+  background: rgba(250, 249, 247, 0.66);
 }
 
 /* Elevated Cards — soft native shadow */
 .floating-card {
   background: var(--color-surface);
-  border: 1px solid rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.03), 0 0 1px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), 0 0 0 1px rgba(0, 0, 0, 0.01);
+  transition: all 0.3s var(--ease-native);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .floating-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.08);
-  border-color: rgba(0,0,0,0.05);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  border-color: var(--color-border-strong);
+}
+
+/* Native Minimal card variant — more translucent, less shadow */
+.native-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  transition: all 0.25s var(--ease-native);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.native-card:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.05);
+}
+.native-card:active {
+  transform: translateY(0);
 }
 
 /* Command Pill — native macOS button feel */
 .command-pill {
   background: var(--gradient-accent);
   color: #FFFFFF;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 500;
   box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.08);
   border: none;
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: all 0.2s var(--ease-native);
+  position: relative;
+  overflow: hidden;
+}
+.command-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-native);
+}
+.command-pill:hover::before {
+  opacity: 1;
 }
 .command-pill:hover {
   transform: translateY(-1px) scale(1.02);
@@ -178,12 +223,20 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .surface-accent {
   background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-accent-light) 200%);
   border: 1px solid var(--color-border);
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: all 0.2s var(--ease-native);
 }
 .surface-accent:hover {
   box-shadow: var(--shadow-accent-glow);
   border-color: var(--color-accent);
   transform: translateY(-1px);
+}
+
+/* Native minimal button resets */
+.native-button {
+  transition: all 0.2s var(--ease-native);
+}
+.native-button:active {
+  transform: scale(0.97);
 }
 
 /* Custom Scrollbar */
@@ -196,19 +249,21 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 
 ::-webkit-scrollbar {
-  width: 6px; /* Slightly wider for easier grabbing */
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--color-border) 0%, color-mix(in srgb, var(--color-border) 60%, transparent) 100%);
+  background: transparent;
   border-radius: 3px;
 }
+:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+}
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent);
-  opacity: 0.6;
+  background: var(--color-text-muted);
 }
 
 /* Subtle entrance animation for newly added tasks */
@@ -217,5 +272,135 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .task-enter {
-  animation: task-enter 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  animation: task-enter 0.25s var(--ease-native);
+}
+
+/* Shimmer effect for premium feel */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Empty state icon container */
+.empty-state-icon {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Category chip */
+.category-chip {
+  transition: all 0.2s var(--ease-native);
+}
+.category-chip:active {
+  transform: scale(0.96);
+}
+
+/* Sidebar nav item */
+.nav-item {
+  transition: all 0.2s var(--ease-native);
+}
+.nav-item[data-active="true"] {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+.nav-item[data-active="true"] .nav-icon {
+  color: var(--color-accent);
+}
+
+/* Checkbox native style */
+.native-checkbox {
+  transition: all 0.2s var(--ease-native);
+}
+.native-checkbox:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Toast */
+.native-toast {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Focus ring */
+.native-focus:focus-visible {
+  outline: none;
+  ring: 2px;
+  ring-color: var(--color-accent-light);
+}
+
+/* Divider with label */
+.divider-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.divider-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* Ambient background — very subtle aurora for chill vibe */
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+.ambient-bg::before,
+.ambient-bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  animation: ambient-drift 20s ease-in-out infinite alternate;
+}
+.ambient-bg::before {
+  width: 60vw;
+  height: 60vw;
+  top: -20vw;
+  right: -15vw;
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
+}
+.ambient-bg::after {
+  width: 50vw;
+  height: 50vw;
+  bottom: -15vw;
+  left: -10vw;
+  background: radial-gradient(circle, var(--color-accent-warm) 0%, transparent 70%);
+  animation-delay: -10s;
+  opacity: 0.25;
+}
+
+:root[data-context="life"] .ambient-bg::before {
+  opacity: 0.3;
+}
+:root[data-context="life"] .ambient-bg::after {
+  opacity: 0.2;
+}
+
+@keyframes ambient-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(2vw, 2vh) scale(1.05); }
 }

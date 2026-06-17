@@ -923,22 +923,25 @@ export default function App() {
     <div
       className="h-screen w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-background"
     >
+      <div className="ambient-bg" aria-hidden="true" />
+
       {/* Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: -30, scale: 0.9 }}
+            initial={{ opacity: 0, y: -20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -30, scale: 0.9 }}
-            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3.5 rounded-md text-sm font-sans font-bold shadow-sm pointer-events-none flex items-center gap-2.5 ${
-              toast.type === 'error' ? 'bg-stone-50 text-stone-600 border border-stone-200 shadow-sm' :
-              toast.type === 'info' ? 'bg-surface border border-border text-text-main shadow-sm' :
-              'bg-stone-50 text-stone-600 border border-stone-200 shadow-sm'
+            exit={{ opacity: 0, y: -12, scale: 0.96 }}
+            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1.0] }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl text-[13px] font-medium pointer-events-none flex items-center gap-2.5 native-toast ${
+              toast.type === 'error' ? 'text-[var(--color-danger)]' :
+              toast.type === 'info' ? 'text-[var(--color-info)]' :
+              'text-[var(--color-success)]'
             }`}
           >
-            {toast.type === 'success' && <Check className="w-5 h-5" />}
-            {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
-            {toast.message}
+            {toast.type === 'success' && <Check className="w-4 h-4" />}
+            {toast.type === 'error' && <AlertCircle className="w-4 h-4" />}
+            <span className="text-text-main">{toast.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1006,7 +1009,7 @@ export default function App() {
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-3 left-3 z-20 p-2 rounded-md text-text-muted hover:text-text-heading hover:bg-black/5 transition-colors"
+            className="absolute top-3.5 left-3.5 z-20 p-2 rounded-lg text-text-muted hover:text-text-heading hover:bg-black/5 transition-all active:scale-95"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
           >
             <Menu className="w-5 h-5" />
@@ -1016,15 +1019,15 @@ export default function App() {
         {/* Floating AI Panel Toggle */}
         <button
           onClick={() => setIsAIPanelOpen(prev => !prev)}
-          className={`fixed top-4 right-6 z-[60] flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md shadow-sm border transition-all ${
+          className={`fixed top-4 right-6 z-[60] flex items-center gap-2 px-3.5 py-1.5 rounded-full border transition-all duration-300 active:scale-95 backdrop-blur-2xl ${
             isAIPanelOpen
-              ? 'bg-accent/10 border-accent/20 text-accent'
-              : 'bg-white/70 border-border/50 text-text-muted hover:text-accent hover:border-accent/30'
+              ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_4px_20px_rgba(0,122,255,0.15)]'
+              : 'bg-white/40 border-white/60 text-text-heading hover:text-accent hover:border-accent/30 hover:bg-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.05)]'
           }`}
           title={language === 'zh' ? 'AI 助手' : 'AI Assistant'}
         >
-          <Sparkles className="w-4 h-4" />
-          <span className="text-xs font-bold">{language === 'zh' ? 'AI 助手' : 'AI Assist'}</span>
+          <Sparkles className="w-3.5 h-3.5" />
+          <span className="text-xs font-semibold">{language === 'zh' ? 'AI 助手' : 'AI Assist'}</span>
         </button>
 
         <FloatingAIPanel
@@ -1050,18 +1053,22 @@ export default function App() {
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                <div className="empty-state-icon p-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
+                </div>
                 <span className="font-sans text-sm text-text-muted">{language === 'zh' ? '加载中...' : 'Loading...'}</span>
               </div>
             )}
             {/* Error state */}
             {!isLoading && loadError && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <AlertCircle className="w-10 h-10 text-stone-500" />
-                <p className="font-sans text-sm text-stone-500">{loadError}</p>
+              <div className="flex flex-col items-center justify-center py-32 gap-4 text-center">
+                <div className="empty-state-icon p-4">
+                  <AlertCircle className="w-7 h-7 text-text-muted/60" />
+                </div>
+                <p className="font-sans text-sm text-text-muted">{loadError}</p>
                 <button
                   onClick={() => loadTasksForDate(currentFileDate)}
-                  className="mt-2 px-4 py-2 bg-accent text-white rounded text-xs font-bold "
+                  className="mt-2 px-4 py-2 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors shadow-sm"
                 >
                   {language === 'zh' ? '重试' : 'Retry'}
                 </button>
@@ -1069,11 +1076,29 @@ export default function App() {
             )}
             {/* Empty state */}
             {!isLoading && !loadError && tasks.length === 0 && activeTab === 'today' && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <Calendar className="w-12 h-12 text-text-muted opacity-30" />
-                <p className="font-sans italic text-xl text-text-muted">{language === 'zh' ? '今天还没有任务' : 'No tasks for today'}</p>
-                <p className="font-sans text-sm text-text-muted opacity-60">{language === 'zh' ? '使用下方的输入框添加您的第一个任务' : 'Add your first task using the input below'}</p>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1.0] }}
+                className="flex flex-col items-center justify-center py-32 gap-4 text-center"
+              >
+                <div className="empty-state-icon p-4 mb-2">
+                  <Calendar className="w-8 h-8 text-text-muted/50" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-lg font-semibold text-text-heading">
+                  {language === 'zh' ? '今天还没有任务' : 'No tasks for today'}
+                </h3>
+                <p className="text-sm text-text-muted max-w-xs leading-relaxed">
+                  {language === 'zh' ? '开始记录今天要做的事吧' : 'Start tracking what you want to do today'}
+                </p>
+                <button
+                  onClick={() => setShowTaskInput(true)}
+                  className="mt-2 px-4 py-2 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  {language === 'zh' ? '添加第一个任务' : 'Add your first task'}
+                </button>
+              </motion.div>
             )}
             {!isLoading && !loadError && (
               activeTab === 'today' ? (
@@ -1084,19 +1109,19 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="space-y-10"
                 >
-                  <div className="mb-8 border-b border-border/50 pb-6 space-y-4">
+                  <div className="mb-8 border-b border-border/60 pb-6 space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1 mr-2">
+                      <div className="flex items-center gap-0.5 mr-2 p-0.5 rounded-lg bg-surface/60 border border-border/60">
                         <button
                           onClick={() => {
                             const d = new Date(`${currentFileDate}T00:00:00Z`);
                             d.setUTCDate(d.getUTCDate() - 1);
                             setCurrentFileDate(d.toISOString().split('T')[0]);
                           }}
-                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface rounded-md transition-colors"
+                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95"
                           title={language === 'zh' ? '前一天' : 'Previous Day'}
                         >
-                          <ChevronLeft className="w-5 h-5" />
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => {
@@ -1110,15 +1135,15 @@ export default function App() {
                             }
                           }}
                           disabled={currentFileDate >= getTodayStr()}
-                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                           title={language === 'zh' ? '后一天' : 'Next Day'}
                         >
-                          <ChevronRight className="w-5 h-5" />
+                          <ChevronRight className="w-4 h-4" />
                         </button>
                       </div>
-                      <h1 className="text-xl font-sans font-medium text-text-heading tracking-tight flex items-baseline gap-2">
+                      <h1 className="text-xl font-sans font-semibold text-text-heading tracking-tight flex items-baseline gap-2">
                         <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
-                        <span className="text-text-muted">
+                        <span className="text-text-muted font-normal">
                           {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
                         </span>
                       </h1>
@@ -1126,10 +1151,20 @@ export default function App() {
                       <button
                         onClick={handleManualRollover}
                         title={language === 'zh' ? '手动迁移历史未完成任务' : 'Migrate unfinished tasks from past'}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs  font-bold text-text-muted hover:text-accent hover:bg-accent/10 border border-border/50 hover:border-accent/30 transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-accent hover:bg-accent/10 border border-border/60 hover:border-accent/20 transition-all active:scale-95"
                       >
                         <RefreshCw className="w-3 h-3" />
                         {language === 'zh' ? '迁移' : 'Rollover'}
+                      </button>
+                      )}
+                      {currentFileDate !== getTodayStr() && (
+                      <button
+                        onClick={() => setCurrentFileDate(getTodayStr())}
+                        title={language === 'zh' ? '回到今天' : 'Go to today'}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-accent hover:text-accent hover:bg-accent/10 border border-accent/20 transition-all active:scale-95"
+                      >
+                        <Calendar className="w-3 h-3" />
+                        {language === 'zh' ? '今天' : 'Today'}
                       </button>
                       )}
                     </div>
@@ -1137,10 +1172,10 @@ export default function App() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setSelectedCategory(null)}
-                          className={`px-3 py-1.5 rounded text-xs  font-bold transition-all ${
+                          className={`category-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                             selectedCategory === null
                               ? 'bg-text-heading text-white shadow-sm'
-                              : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
+                              : 'bg-surface text-text-muted hover:text-text-heading border border-border/60'
                           }`}
                         >
                           {language === 'zh' ? '全部' : 'All'}
@@ -1149,10 +1184,10 @@ export default function App() {
                           <button
                             key={c}
                             onClick={() => setSelectedCategory(selectedCategory === c ? null : c)}
-                            className={`px-3 py-1.5 rounded text-xs  font-bold transition-all ${
+                            className={`category-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                               selectedCategory === c
                                 ? 'bg-accent text-white shadow-sm'
-                                : 'bg-surface text-text-muted hover:bg-surface-white hover:text-text-main border border-border/50'
+                                : 'bg-surface text-text-muted hover:text-text-heading border border-border/60'
                             }`}
                           >
                             {c}
@@ -1167,10 +1202,12 @@ export default function App() {
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-md bg-stone-50 border border-stone-200 text-stone-700 text-sm"
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border text-text-main text-sm shadow-sm"
                     >
                       <div className="flex items-center gap-2">
-                        <CornerUpRight className="w-4 h-4 shrink-0" />
+                        <div className="w-6 h-6 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                          <CornerUpRight className="w-3.5 h-3.5 text-accent" />
+                        </div>
                         <span className="font-medium">
                           {language === 'zh'
                             ? `已从 ${rolloverBanner.fromDate} 迁移 ${rolloverBanner.count} 个未完成任务`
@@ -1180,11 +1217,11 @@ export default function App() {
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => { setRolloverBanner(null); handleManualRollover(); }}
-                          className="text-xs  font-bold text-stone-600 hover:text-stone-800 hover:underline"
+                          className="text-xs font-medium text-text-muted hover:text-text-heading hover:bg-black/5 px-2 py-1 rounded-md transition-colors"
                         >
                           {language === 'zh' ? '查看详情' : 'Details'}
                         </button>
-                        <button onClick={() => setRolloverBanner(null)} className="text-stone-400 hover:text-stone-700">
+                        <button onClick={() => setRolloverBanner(null)} className="p-1 rounded-md text-text-muted hover:text-text-heading hover:bg-black/5 transition-colors">
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1225,9 +1262,8 @@ export default function App() {
 
                     return (
                       <div key={category} className="space-y-5">
-                        <h2 className="font-sans text-xs  text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
+                        <h2 className="divider-label font-sans text-[11px] text-text-muted font-semibold mt-8 mb-4">
                           <span>{category}</span>
-                          <span className="h-px bg-border flex-1 block w-full"></span>
                         </h2>
 
                         {pendingCatTasks.length > 0 && (
@@ -1258,7 +1294,7 @@ export default function App() {
                           <div className="mt-2">
                             <button
                               onClick={() => setShowDoneByCategory(prev => ({ ...prev, [category]: !prev[category] }))}
-                              className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
+                              className="group flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-heading transition-colors px-2 py-1.5 -ml-2 rounded-lg hover:bg-black/[0.03]"
                             >
                               <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
                               {language === 'zh' ? `已完成 (${doneCatTasks.length})` : `Done (${doneCatTasks.length})`}
@@ -1390,7 +1426,7 @@ export default function App() {
                       <div className="space-y-3 mt-8">
                         <button
                           onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__migrated__': !prev['__migrated__'] }))}
-                          className="flex items-center gap-1.5 text-xs font-bold text-text-muted hover:text-text-main transition-colors"
+                          className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-heading transition-colors px-2 py-1 rounded-md hover:bg-black/5"
                         >
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showMigrated ? 'rotate-180' : ''}`} />
                           <CornerUpRight className="w-3 h-3" />
@@ -1405,8 +1441,8 @@ export default function App() {
                           {showMigrated && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2 overflow-hidden">
                               {migratedTasks.map(task => (
-                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-md bg-surface border border-border/30">
-                                  <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border border-border/60 hover:border-border-strong transition-colors">
+                                  <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
                                     <CornerUpRight className="w-3.5 h-3.5 text-accent" />
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -1510,10 +1546,10 @@ export default function App() {
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            whileHover={{ scale: 1.08 }}
+            whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.92 }}
             onClick={() => setShowTaskInput(true)}
-            className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded bg-accent text-white shadow-sm hover:shadow-sm flex items-center justify-center transition-shadow"
+            className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl bg-accent text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow active:shadow-md"
             title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
           >
             <Plus className="w-6 h-6" />
@@ -1605,7 +1641,7 @@ export default function App() {
 
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
-         <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-[8px] flex items-center justify-center p-4 sm:p-8">
+         <div className="fixed inset-0 z-50 bg-black/15 backdrop-blur-md flex items-center justify-center p-4 sm:p-8">
            <div className={`w-full ${isNoteEditorMaximized ? 'max-w-none h-screen' : 'max-w-5xl h-[85vh]'} floating-card overflow-hidden flex flex-col transition-all duration-200`}>
              <NoteEditor
              language={language}

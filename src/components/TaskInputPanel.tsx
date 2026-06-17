@@ -4,7 +4,7 @@
  */
 import { motion } from 'motion/react';
 import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2, Repeat } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TagInput } from './TagInput';
 import { tasksApi, filesApi, recurringApi, type RecurrenceRule } from '../api/client';
 
@@ -81,6 +81,7 @@ export function TaskInputPanel({
 }: TaskInputPanelProps) {
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
+  const recurrenceRef = useRef<HTMLDivElement>(null);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [isComposing, setIsComposing] = useState(false);
 
@@ -95,6 +96,17 @@ export function TaskInputPanel({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showTaskInput]);
+
+  useEffect(() => {
+    if (!showRecurrenceMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (recurrenceRef.current && !recurrenceRef.current.contains(e.target as Node)) {
+        setShowRecurrenceMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showRecurrenceMenu]);
 
   if (!showTaskInput) return null;
 
@@ -112,10 +124,13 @@ export function TaskInputPanel({
       >
         <div className="max-w-3xl mx-auto space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-text-muted">{language === 'zh' ? '⌘/Ctrl + Enter 添加 · Esc 关闭' : '⌘/Ctrl + Enter to add · Esc to close'}</span>
+            <span className="text-[11px] font-medium text-text-muted flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-black/[0.03] border border-border/60 text-[10px] font-mono">⌘ Enter</span>
+              {language === 'zh' ? '添加 · Esc 关闭' : 'to add · Esc to close'}
+            </span>
             <button
               onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
-              className="text-text-muted hover:text-text-heading p-1"
+              className="text-text-muted hover:text-text-heading hover:bg-black/[0.03] p-1.5 rounded-lg transition-colors active:scale-95"
             >
               <X className="w-4 h-4" />
             </button>
@@ -130,14 +145,16 @@ export function TaskInputPanel({
           >
              <div className="flex justify-between items-center mb-4">
                <div className="flex items-center gap-2">
-                 <Sparkles className="w-4 h-4 text-accent" />
-                 <span className="font-sans text-xs font-bold  text-accent">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
+                 <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
+                   <Sparkles className="w-4 h-4 text-accent" />
+                 </div>
+                 <span className="font-sans text-[13px] font-semibold text-text-heading">{language === 'zh' ? 'AI 脑暴' : 'AI Brain Dump'}</span>
                </div>
-               <button onClick={() => setShowBrainDump(false)} className="text-text-muted hover:text-text-heading"><Trash2 className="w-4 h-4" /></button>
+               <button onClick={() => setShowBrainDump(false)} className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/[0.03] rounded-lg transition-colors active:scale-95"><Trash2 className="w-4 h-4" /></button>
              </div>
              <textarea
                autoFocus
-               className="w-full bg-background border border-border/50 rounded-md p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px]"
+               className="w-full bg-background border border-border/60 rounded-xl p-4 text-sm font-sans outline-none focus:border-accent resize-none min-h-[120px] transition-colors"
                placeholder={language === 'zh' ? "在这里写下您的想法。AI 将提取任务，分类，并设置截止日期/项目...（例如 周五给妈妈打电话，并审查第三季度融资幻灯片）" : "Dump your scatterbrained thoughts here. The AI will extract tasks, categorize them, and set deadlines/projects... (e.g. Need to call mom on Friday, also review Q3 deck for Fundraising)"}
                value={brainDumpText}
                onChange={e => setBrainDumpText(e.target.value)}
@@ -146,7 +163,7 @@ export function TaskInputPanel({
                <button
                  onClick={processBrainDump}
                  disabled={isProcessingBrainDump || !brainDumpText.trim()}
-                 className="bg-accent text-white px-6 py-2 rounded font-sans text-xs font-bold  shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                 className="bg-accent text-white px-5 py-2 rounded-lg font-sans text-xs font-semibold shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent/90 transition-colors active:scale-95"
                >
                  {isProcessingBrainDump ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                  <span>{isProcessingBrainDump ? (language === 'zh' ? '处理中...' : 'Processing...') : (language === 'zh' ? '提取任务' : 'Extract Tasks')}</span>
@@ -155,8 +172,8 @@ export function TaskInputPanel({
           </motion.div>
         )}
 
-        <div className="relative floating-card flex flex-col p-3 sm:p-4 focus-within:border-accent/40 focus-within:shadow-md shadow-sm transition-all duration-300 gap-3">
-          <div className="flex flex-1 items-start bg-surface/50 rounded-md p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
+        <div className="relative floating-card flex flex-col p-3 sm:p-4 focus-within:border-accent/40 focus-within:shadow-md transition-all duration-300 gap-3">
+          <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
             <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
               <Plus className="w-5 h-5" />
             </div>
@@ -195,7 +212,7 @@ export function TaskInputPanel({
 
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                 {/* Deadline Button */}
-                <label className={`relative flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-md border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-stone-50 text-stone-600 border-stone-200 pr-8' : 'bg-surface text-text-muted border-border/80 hover:bg-surface-white'} focus-within:ring-2 ring-accent/20`}>
+                <label className={`relative flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-lg border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-accent/10 text-accent border-accent/20 pr-9' : 'bg-surface text-text-muted border-border/60 hover:bg-black/[0.03]'} focus-within:ring-2 ring-accent/20`}>
                   <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
                   <input
                     type="date"
@@ -220,26 +237,26 @@ export function TaskInputPanel({
                 </label>
 
                 {/* Repeat Button */}
-                <div className="relative">
+                <div className="relative" ref={recurrenceRef}>
                   <button
                     onClick={() => setShowRecurrenceMenu(!showRecurrenceMenu)}
-                    className={`flex items-center justify-center rounded-md transition-colors h-[42px] w-[42px] shrink-0 shadow-sm border ${recurrence ? 'bg-accent/10 text-accent border-accent/30' : 'bg-surface hover:bg-border/50 text-text-muted border-transparent'}`}
+                    className={`flex items-center justify-center rounded-lg transition-all h-[42px] w-[42px] shrink-0 border active:scale-95 ${recurrence ? 'bg-accent/10 text-accent border-accent/30 shadow-sm' : 'bg-surface hover:bg-black/[0.03] text-text-muted border-border/60'}`}
                     title={language === 'zh' ? '重复任务' : 'Repeat'}
                   >
                     <Repeat className="w-4 h-4" />
                   </button>
                   {showRecurrenceMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-surface-white border border-border rounded-md shadow-md p-3 z-50 w-56 space-y-2">
-                      <p className="text-xs font-bold text-text-muted mb-2">{language === 'zh' ? '重复频率' : 'Repeat'}</p>
+                    <div className="absolute bottom-full mb-2 right-0 bg-surface border border-border/80 rounded-xl shadow-xl p-3 z-50 w-56 space-y-1.5 backdrop-blur-xl">
+                      <p className="text-[11px] font-semibold text-text-muted px-1 mb-1">{language === 'zh' ? '重复频率' : 'Repeat'}</p>
                       <button
                         onClick={() => { setRecurrence({ type: 'daily' }); setShowRecurrenceMenu(false); }}
-                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'daily' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${recurrence?.type === 'daily' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main hover:bg-black/[0.03]'}`}
                       >
                         {language === 'zh' ? '每天' : 'Daily'}
                       </button>
                       <button
                         onClick={() => { setRecurrence({ type: 'weekly', weekdays }); setShowRecurrenceMenu(false); }}
-                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'weekly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${recurrence?.type === 'weekly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main hover:bg-black/[0.03]'}`}
                       >
                         {language === 'zh' ? '每周' : 'Weekly'}
                       </button>
@@ -261,7 +278,7 @@ export function TaskInputPanel({
                                 setWeekdays(next);
                                 setRecurrence({ type: 'weekly', weekdays: next });
                               }}
-                              className={`w-6 h-6 rounded text-[10px] font-bold ${weekdays.includes(d) ? 'bg-accent text-white' : 'bg-surface text-text-muted'}`}
+                              className={`w-6 h-6 rounded-md text-[10px] font-semibold transition-colors ${weekdays.includes(d) ? 'bg-accent text-white shadow-sm' : 'bg-black/[0.03] text-text-muted hover:bg-black/[0.06]'}`}
                             >
                               {l}
                             </button>
@@ -274,14 +291,14 @@ export function TaskInputPanel({
                           setRecurrence({ type: 'monthly', dayOfMonth: today.getDate() });
                           setShowRecurrenceMenu(false);
                         }}
-                        className={`w-full text-left px-3 py-1.5 rounded text-xs hover:bg-surface transition-colors ${recurrence?.type === 'monthly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main'}`}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${recurrence?.type === 'monthly' ? 'bg-accent/10 text-accent font-medium' : 'text-text-main hover:bg-black/[0.03]'}`}
                       >
                         {language === 'zh' ? '每月' : 'Monthly'}
                       </button>
                       {recurrence && (
                         <button
                           onClick={() => { setRecurrence(null); setShowRecurrenceMenu(false); }}
-                          className="w-full text-left px-3 py-1.5 rounded text-xs text-stone-500 hover:bg-stone-50 transition-colors"
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-text-muted hover:text-text-heading hover:bg-black/[0.03] transition-colors"
                         >
                           {language === 'zh' ? '取消重复' : 'No repeat'}
                         </button>
@@ -293,7 +310,7 @@ export function TaskInputPanel({
                 {/* AI Button */}
                 <button
                   onClick={() => setShowBrainDump(!showBrainDump)}
-                  className="bg-surface hover:bg-border/50 text-accent border border-transparent flex items-center justify-center rounded-md transition-colors h-[42px] w-[42px] shrink-0 shadow-sm"
+                  className={`flex items-center justify-center rounded-lg transition-all h-[42px] w-[42px] shrink-0 border active:scale-95 ${showBrainDump ? 'bg-accent/10 text-accent border-accent/30 shadow-sm' : 'bg-surface hover:bg-black/[0.03] text-accent border-border/60'}`}
                   title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
                 >
                   <Sparkles className="w-4 h-4" />
@@ -372,8 +389,8 @@ export function TaskInputPanel({
                       setShowTaskInput(false);
                     }
                   }}
-                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-md text-[12px] font-sans  font-black flex items-center justify-center gap-2 transition-all duration-200 shrink-0 ${
-                    newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px] active:translate-y-0" : "bg-surface-white text-text-muted/50 border border-border/80 cursor-not-allowed"
+                  className={`px-4 sm:px-6 h-[42px] w-full sm:w-auto rounded-lg text-[12px] font-sans font-semibold flex items-center justify-center gap-2 transition-all duration-200 shrink-0 active:scale-95 ${
+                    newTaskTitle.trim() ? "bg-accent text-white hover:bg-accent/90 shadow-md hover:-translate-y-[1px]" : "bg-surface text-text-muted/50 border border-border/80 cursor-not-allowed"
                   } flex-1 sm:flex-none`}
                 >
                   <span>{language === 'zh' ? '添加任务' : 'Add Task'}</span>

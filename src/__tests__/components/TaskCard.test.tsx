@@ -260,8 +260,8 @@ describe('TaskCard delete', () => {
     const deleteBtn = screen.getByTestId('icon-trash').parentElement;
     fireEvent.click(deleteBtn!);
 
-    // Confirm state shows "Confirm?" button
-    const confirmBtn = screen.getByText(/Confirm/i);
+    // Confirm state shows "Delete" and "Cancel" buttons
+    const confirmBtn = screen.getByText(/Delete/i);
     fireEvent.click(confirmBtn!);
 
     await waitFor(() => {
@@ -278,9 +278,9 @@ describe('TaskCard delete', () => {
     const deleteBtn = screen.getByTestId('icon-trash').parentElement;
     fireEvent.click(deleteBtn!);
 
-    // Blur the confirm button to cancel
-    const confirmBtn = screen.getByText(/Confirm/i);
-    fireEvent.blur(confirmBtn!);
+    // Click cancel to abort
+    const cancelBtn = screen.getByText(/Cancel/i);
+    fireEvent.click(cancelBtn!);
 
     await waitFor(() => {
       expect(onDelete).not.toHaveBeenCalled();

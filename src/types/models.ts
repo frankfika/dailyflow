@@ -51,10 +51,11 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
   {
     name: 'Kimi (Moonshot)',
     baseUrl: 'https://api.moonshot.cn/v1',
-    model: 'kimi-k2-0905-preview',
+    model: 'kimi-k2.7-code',
     category: 'official',
     region: 'cn',
     apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    hint: '当前 Kimi 最强模型，代码/推理能力优于 k2.6',
   },
   {
     name: 'MiniMax',
