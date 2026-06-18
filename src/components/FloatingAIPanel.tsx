@@ -90,7 +90,7 @@ export interface FloatingAIPanelProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null;
   onDraftConsumed?: () => void;
-  focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
+  focusedContext?: { type: 'note' | 'today' | 'workspace'; id?: string; title?: string; content?: string } | null;
 }
 
 export function FloatingAIPanel({
@@ -377,6 +377,10 @@ export function FloatingAIPanel({
       }
     }
 
+    if (focusedContext.type === 'workspace') {
+      return `## ${language === 'zh' ? '思考空间' : 'Workspace'}${focusedContext.title ? ': ' + focusedContext.title : ''}`;
+    }
+
     return '';
   };
 
@@ -388,6 +392,9 @@ export function FloatingAIPanel({
     }
     if (focusedContext.type === 'note') {
       return focusedContext.title || (language === 'zh' ? '当前笔记' : 'Current Note');
+    }
+    if (focusedContext.type === 'workspace') {
+      return focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace');
     }
     return null;
   }, [focusedContext, tasks, language]);
@@ -678,7 +685,11 @@ export function FloatingAIPanel({
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
               <span className="text-[10px] font-bold text-accent">
                 {language === 'zh' ? '当前范围: ' : 'Scoped to: '}
-                {focusedContext.type === 'note' ? focusedContext.title : (language === 'zh' ? '今日任务' : 'Today')}
+                {focusedContext.type === 'note'
+                  ? focusedContext.title
+                  : focusedContext.type === 'workspace'
+                  ? (focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace'))
+                  : (language === 'zh' ? '今日任务' : 'Today')}
               </span>
             </div>
           )}
@@ -833,7 +844,7 @@ export function FloatingAIPanel({
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {focusedContext && autoContextLabel && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[10px] font-medium border border-accent/20">
-                    {focusedContext.type === 'today' ? '📋' : '📄'}
+                    {focusedContext.type === 'today' ? '📋' : focusedContext.type === 'workspace' ? '🧠' : '📄'}
                     <span className="opacity-70">{language === 'zh' ? '自动' : 'Auto'}</span>
                     <span className="opacity-50">·</span>
                     <span>{autoContextLabel}</span>

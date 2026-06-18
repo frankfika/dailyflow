@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2, PanelLeftClose } from 'lucide-react';
+import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2, PanelLeftClose, BrainCircuit } from 'lucide-react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -11,8 +11,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes' | 'ai-chat';
-  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat') => void;
+  activeTab: 'today' | 'workspaces' | 'notes' | 'ai-chat';
+  setActiveTab: (tab: 'today' | 'workspaces' | 'notes' | 'ai-chat') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -198,8 +198,17 @@ export function Sidebar({
               )}
             </div>
 
-            {/* Notes — top-level navigation */}
+            {/* Workspaces / Notes — top-level navigation */}
             <ul className="space-y-0.5 text-[12px]">
+              <li
+                onClick={() => { setActiveTab('workspaces'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                className={`nav-item group flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-lg transition-all ${activeTab === 'workspaces' ? 'bg-accent/10 text-accent font-medium' : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'}`}
+                data-testid="nav-workspaces"
+                data-active={activeTab === 'workspaces'}
+              >
+                <BrainCircuit className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'workspaces' ? 'text-accent' : 'opacity-70 group-hover:opacity-100'}`} />
+                <span>{language === 'zh' ? '思考空间' : 'Workspaces'}</span>
+              </li>
               <li
                 onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
                 className={`nav-item group flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-lg transition-all ${activeTab === 'notes' ? 'bg-accent/10 text-accent font-medium' : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'}`}

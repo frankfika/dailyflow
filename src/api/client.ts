@@ -283,6 +283,78 @@ export const workspacesApi = {
   },
 };
 
+
+export interface WorkspaceTimelineEntryData {
+  id: string;
+  date: string;
+  body: string;
+  type: 'log' | 'decision' | 'blocker' | 'ai_review';
+}
+
+export interface ThinkingWorkspaceData {
+  id: string;
+  title: string;
+  kind: 'workspace';
+  type?: 'goal' | 'problem' | 'research' | 'product_design' | 'project_phase' | 'general';
+  status: 'active' | 'paused' | 'completed' | 'archived';
+  projectId?: string;
+  tags?: string[];
+  intent: string;
+  scratchpad: string;
+  brief?: string;
+  journey?: string;
+  tasksMarkdown?: string;
+  mindmapMarkdown?: string;
+  taskIds: string[];
+  linkedNoteIds: string[];
+  timeline: WorkspaceTimelineEntryData[];
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+}
+
+export const thinkingWorkspacesApi = {
+  async getAll(filters?: { status?: string; projectId?: string; tag?: string; query?: string }): Promise<ThinkingWorkspaceData[]> {
+    const params = new URLSearchParams();
+    if (filters) Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/thinking-workspaces${query}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch workspaces');
+    return res.json();
+  },
+
+  async getById(id: string): Promise<ThinkingWorkspaceData> {
+    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch workspace');
+    return res.json();
+  },
+
+  async create(data: Partial<ThinkingWorkspaceData> & { title: string }): Promise<ThinkingWorkspaceData> {
+    const res = await fetch(`${API_BASE}/thinking-workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create workspace');
+    return res.json();
+  },
+
+  async update(id: string, updates: Partial<Omit<ThinkingWorkspaceData, 'id' | 'createdAt' | 'filePath'>>): Promise<ThinkingWorkspaceData> {
+    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to update workspace');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw await httpError(res, 'Failed to delete workspace');
+  },
+};
+
 export interface ProjectData {
   id: string;
   name: string;

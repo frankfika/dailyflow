@@ -127,6 +127,45 @@ workspace/
 
 > **关键**：AI 只生成内容，**保存**永远走 Notes 模块（type: summary | note），保留人工 review/edit 的机会。
 
+### 5.4 Workspaces：✨ 独立思考空间
+
+用户提出的新需求不是「给 task 加一个更大的详情页」，而是：复杂事项应该先有独立思考空间，再从里面拆出 task。DailyFlow 应增加 **Thinking Workspace** 顶级对象，用于承载目标、问题、方案、研究、项目阶段等需要持续思考和推进的事项。
+
+**入口：**
+- 顶部导航增加 `Workspaces / 思考空间`。
+- Cmd+K 捕获一段想法时，可以选择「创建思考空间」。
+- Project 页可以新建 workspace，用于承载某个阶段或问题。
+- Note 选中文本可以「从这段内容创建思考空间」。
+- Task 可以「升级为思考空间」，但这只是入口之一，不是唯一入口。
+
+**工作台结构：**
+
+```text
+Thinking Workspace
+├── Intent：目标 / 问题 / 范围 / 成功标准
+├── Scratchpad：零散想法、链接、疑问、聊天结论
+├── Brief：AI 整理后的结构化摘要
+├── Journey：推进路径、阶段、风险和下一步
+├── Tasks：从 Journey 生成并投放到 Today 的行动项
+├── Mind Map：围绕目标、路径、资料、风险的脑图
+├── Timeline：推进记录、阻塞和复盘
+└── Linked Material：会议、资料、总结、文件和 URL
+```
+
+**AI 动作：**
+
+| 动作 | 输入 | 输出 |
+|---|---|---|
+| 帮我理清这件事 | intent + scratchpad + linked notes | brief、成功标准、缺失信息 |
+| 规划推进路径 | brief + project context + deadline | 阶段计划、风险、下一步 |
+| 生成下一步任务 | journey / plan | 可投放到 Today 或未来日期的 task preview |
+| 生成脑图 | intent + brief + journey | mindmap 节点和关系 |
+| 复盘并调整下一步 | timeline + task 完成情况 | 阻塞、调整建议、next action |
+
+**关键原则：** Workspace 是思考中心，Today 是执行中心；AI 只生成 preview，不自动覆盖用户内容。
+
+详见：`docs/THINKING_WORKSPACE.md`。
+
 ---
 
 ## 6. Work / Life Context 统一规则

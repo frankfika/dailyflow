@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { filesApi, tasksApi, rolloverApi, configApi, projectsApi, gitApi, type ConfigData } from './client';
+import { filesApi, tasksApi, rolloverApi, configApi, projectsApi, gitApi, thinkingWorkspacesApi, type ConfigData } from './client';
 
 describe('API Client', () => {
   beforeEach(() => {
@@ -114,6 +114,40 @@ describe('API Client', () => {
       });
       const result = await projectsApi.create({ name: 'Test Project', status: 'active' });
       expect(result.name).toBe('Test Project');
+    });
+  });
+
+
+  describe('thinkingWorkspacesApi', () => {
+    it('create calls POST with workspace data', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'ws1', title: 'Think clearly', kind: 'workspace', status: 'active', intent: '', scratchpad: '', taskIds: [], linkedNoteIds: [], timeline: [], createdAt: 'now', updatedAt: 'now' }),
+      });
+      const result = await thinkingWorkspacesApi.create({ title: 'Think clearly', intent: 'Plan before tasks' });
+      expect(result.id).toBe('ws1');
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/thinking-workspaces',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ title: 'Think clearly', intent: 'Plan before tasks' }),
+        })
+      );
+    });
+
+    it('update calls PUT with workspace updates', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'ws1', title: 'Updated' }),
+      });
+      await thinkingWorkspacesApi.update('ws1', { title: 'Updated' });
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/thinking-workspaces/ws1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ title: 'Updated' }),
+        })
+      );
     });
   });
 

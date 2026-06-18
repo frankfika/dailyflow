@@ -22,6 +22,7 @@ import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
 import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
+import { ThinkingWorkspaces } from './components/ThinkingWorkspaces';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
@@ -99,7 +100,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'workspaces' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
   const taskLinkedNotesCount = useMemo(() => {
@@ -1044,6 +1045,8 @@ export default function App() {
           focusedContext={
             activeTab === 'notes'
               ? { type: 'note', title: language === 'zh' ? '笔记库' : 'Notes' }
+              : activeTab === 'workspaces'
+              ? { type: 'workspace', title: language === 'zh' ? '思考空间' : 'Workspaces' }
               : { type: 'today', title: language === 'zh' ? '今日任务' : 'Today' }
           }
         />
@@ -1481,6 +1484,17 @@ export default function App() {
                   />
 
                 </motion.div>
+              ) : activeTab === 'workspaces' ? (
+                <ThinkingWorkspaces
+                  language={language}
+                  activeContext={activeContext}
+                  aiApiKey={aiApiKey}
+                  aiModel={aiModel}
+                  aiBaseUrl={aiBaseUrl}
+                  currentFileDate={currentFileDate}
+                  showToast={showToast}
+                  onTasksCreated={() => loadTasksForDate(currentFileDate)}
+                />
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
                   key="ai-chat"
@@ -1705,4 +1719,3 @@ export default function App() {
      </div>
   );
 }
-

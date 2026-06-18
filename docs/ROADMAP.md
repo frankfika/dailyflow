@@ -51,7 +51,26 @@
 - 页面可在桌面浏览器稳定使用。
 - 每次写入前有 hash 检查。
 
-## Phase 3：项目追踪
+## Phase 3：思考工作台
+
+时间：1-2 周
+
+- 新增 Workspaces 顶级入口。
+- 为目标、问题、note 片段或复杂 task 创建独立 `Workspaces/` Markdown 文件。
+- 支持 Intent、Scratchpad、Brief、Journey、Tasks、Timeline 六个区块。
+- 支持从 workspace 生成下一步 task，并投放到 Today、未来日期或项目。
+- AI 整理思路、规划推进路径、生成下一步任务，全部先进入 preview。
+- 先用 Markdown outline / Mermaid mindmap 表达脑图。
+
+验收：
+
+- 用户可以不依赖 task，直接创建一个思考空间。
+- 用户可以从 task / note / project / Cmd+K 创建 workspace。
+- 零散想法可以被 AI 整理为 brief、journey 和下一步任务。
+- Today task 能显示来源 workspace，并在完成后回写 workspace timeline。
+- 迁移 daily task 时保留 workspace 回链。
+
+## Phase 4：项目追踪
 
 时间：1-2 周
 
@@ -67,7 +86,7 @@
 - 日视图可以只显示项目入口或当天推进项。
 - 项目文件仍然是可读 Markdown。
 
-## Phase 4：Git 同步与私有化部署
+## Phase 5：Git 同步与私有化部署
 
 时间：1 周
 
@@ -83,11 +102,11 @@
 - 可推送到 GitHub repo 做多设备同步。
 - 冲突不自动覆盖。
 
-## Phase 5：思维导图
+## Phase 6：思维导图增强
 
 时间：2 周
 
-- React Flow 导图编辑器。
+- 在 Thinking Workspace 的 Mermaid/outline 基础上升级 React Flow 导图编辑器。
 - 节点类型：想法、任务、风险、资料。
 - 节点转任务预览。
 - 任务回链到导图节点。
@@ -99,7 +118,7 @@
 - 生成任务前可预览和取消。
 - 导图数据可导出，不被 App 锁定。
 
-## Phase 6：开源发布
+## Phase 7：开源发布
 
 时间：1 周
 

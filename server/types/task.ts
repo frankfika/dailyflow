@@ -68,6 +68,39 @@ export interface RolloverPreview {
   targetContent: string;
 }
 
+
+export type ThinkingWorkspaceType = 'goal' | 'problem' | 'research' | 'product_design' | 'project_phase' | 'general';
+export type ThinkingWorkspaceStatus = 'active' | 'paused' | 'completed' | 'archived';
+
+export interface WorkspaceTimelineEntry {
+  id: string;
+  date: string;
+  body: string;
+  type: 'log' | 'decision' | 'blocker' | 'ai_review';
+}
+
+export interface ThinkingWorkspace {
+  id: string;
+  title: string;
+  kind: 'workspace';
+  type?: ThinkingWorkspaceType;
+  status: ThinkingWorkspaceStatus;
+  projectId?: string;
+  tags?: string[];
+  intent: string;
+  scratchpad: string;
+  brief?: string;
+  journey?: string;
+  tasksMarkdown?: string;
+  mindmapMarkdown?: string;
+  taskIds: string[];
+  linkedNoteIds: string[];
+  timeline: WorkspaceTimelineEntry[];
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
