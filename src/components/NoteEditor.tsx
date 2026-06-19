@@ -37,7 +37,7 @@ interface NoteEditorProps {
   onSave: (data: Omit<NoteData, 'id' | 'createdAt' | 'updatedAt' | 'filePath' | 'mentions'>) => void;
   onClose: () => void;
   onDelete?: () => void;
-  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type'] }) => void;
+  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type']; noteId?: string }) => void;
 }
 
 const typeOptions = [
@@ -333,7 +333,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       );
       if (!ok) return;
     }
-    onSendToChat({ title, body, type });
+    onSendToChat({ title, body, type, noteId: note?.id });
   };
 
   const addTag = (value: string) => {

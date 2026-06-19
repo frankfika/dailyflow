@@ -85,7 +85,7 @@ interface AIChatProps {
   notes: any[];
   filesMap: Record<string, string>;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
-  initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null;
+  initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null;
   onDraftConsumed?: () => void;
   onNoteCreated?: () => void;
 }
@@ -122,7 +122,9 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
     type: 'note' | 'meeting_note' | 'summary';
     tags: string[];
     savedNoteId: string | null;
-  }>({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
+    linkedTaskIds: string[];
+    linkedProjectIds: string[];
+  }>({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -178,7 +180,14 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
     const newSession = createNewSession();
     // Bind the note as an attached context item rather than dumping its full
     // body into the input — the user types their question, the note rides along.
-    if (initialDraft.contextText) {
+    if (initialDraft.noteId) {
+      newSession.contextItems = [{
+        id: `ctx_note_${initialDraft.key}`,
+        type: 'note',
+        label: initialDraft.contextLabel || initialDraft.sourceTitle || (language === 'zh' ? '笔记' : 'Note'),
+        data: { noteId: initialDraft.noteId },
+      }];
+    } else if (initialDraft.contextText) {
       newSession.contextItems = [{
         id: `ctx_note_${initialDraft.key}`,
         type: 'custom-text',
@@ -296,12 +305,20 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
     for (const item of items) {
       switch (item.type) {
         case 'today-tasks': {
-          const todayTasks = tasks.filter(t => t.status !== 'done');
-          parts.push(`## ${language === 'zh' ? '今日任务' : "Today's Tasks"}\n${
-            todayTasks.length > 0
-              ? todayTasks.map((t: any) => `- ${t.title}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}`).join('\n')
-              : (language === 'zh' ? '（无）' : '(none)')
-          }`);
+          const taskId = item.data.taskId;
+          if (taskId) {
+            const task = tasks.find((t: any) => t.id === taskId);
+            if (task) {
+              parts.push(`## ${language === 'zh' ? '任务' : 'Task'}\n- ${task.title}${task.tags?.length ? ` [${task.tags.join(', ')}]` : ''}`);
+            }
+          } else {
+            const todayTasks = tasks.filter(t => t.status !== 'done');
+            parts.push(`## ${language === 'zh' ? '今日任务' : "Today's Tasks"}\n${
+              todayTasks.length > 0
+                ? todayTasks.map((t: any) => `- ${t.title}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}`).join('\n')
+                : (language === 'zh' ? '（无）' : '(none)')
+            }`);
+          }
           break;
         }
         case 'date-tasks': {
@@ -425,7 +442,15 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
         baseUrl: activeProvider.baseUrl,
         systemPrompt,
         userPrompt,
+        signal: abortRef.current?.signal,
       });
+
+      // If the user aborted while the request was in flight, don't append the response.
+      if (abortRef.current?.signal.aborted) {
+        setIsStreaming(false);
+        abortRef.current = null;
+        return;
+      }
 
       // Parse and execute any tool calls in the response
       const { text: cleanedText, calls } = parseToolCalls(summary);
@@ -470,22 +495,25 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
       }));
     } catch (err: any) {
       const rawError = err.message || String(err);
-      const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
-
-      const errorMessage: ChatMessage = {
-        id: generateShortId('msg'),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString(),
-        modelName: activeProvider.name,
-        error: friendlyError,
-      };
-      updateActiveSession(s => ({
-        ...s,
-        messages: [...s.messages, errorMessage],
-        updatedAt: new Date().toISOString(),
-      }));
-      showToast(friendlyError, 'error');
+      if (rawError.toLowerCase().includes('abort') || err.name === 'AbortError') {
+        // User-initiated stop; don't show an error message.
+      } else {
+        const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
+        const errorMessage: ChatMessage = {
+          id: generateShortId('msg'),
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+          modelName: activeProvider.name,
+          error: friendlyError,
+        };
+        updateActiveSession(s => ({
+          ...s,
+          messages: [...s.messages, errorMessage],
+          updatedAt: new Date().toISOString(),
+        }));
+        showToast(friendlyError, 'error');
+      }
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
@@ -858,8 +886,16 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                                   const firstLine = msg.content.split('\n')[0].trim();
                                   if (firstLine && firstLine.length <= 80) title = firstLine;
                                 }
-                                // Check for duplicate: same content already saved as a note
-                                const duplicate = notes.find((n: any) => n.body === msg.content);
+                                // Extract links from the context snapshot that produced this reply.
+                                const linkedTaskIds = msg.contextSnapshot
+                                  ?.filter(c => c.type === 'today-tasks' && c.data.taskId)
+                                  .map(c => c.data.taskId as string) || [];
+                                const linkedProjectIds = msg.contextSnapshot
+                                  ?.filter(c => c.type === 'project' && c.data.projectName)
+                                  .map(c => c.data.projectName as string) || [];
+                                // Check for duplicate: same content already saved as a note (normalized).
+                                const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+                                const duplicate = notes.find((n: any) => normalize(n.body) === normalize(msg.content));
                                 setSaveNoteModal({
                                   open: true,
                                   title,
@@ -867,6 +903,8 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                                   type: 'note',
                                   tags: ['ai-generated'],
                                   savedNoteId: duplicate?.id || null,
+                                  linkedTaskIds,
+                                  linkedProjectIds,
                                 });
                               }}
                               className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
@@ -1201,7 +1239,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                   {language === 'zh' ? '保存为笔记' : 'Save as Note'}
                 </h3>
                 <button
-                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null })}
+                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] })}
                   className="p-1 text-text-muted hover:text-red-500 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -1286,7 +1324,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
               <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2"
               >
                 <button
-                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null })}
+                  onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] })}
                   className="px-3 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading transition-colors"
                 >
                   {language === 'zh' ? '取消' : 'Cancel'}
@@ -1296,7 +1334,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                     onClick={() => {
                       // Open the existing note in Notes tab (best-effort via URL or parent callback)
                       showToast(language === 'zh' ? '请前往「笔记」页查看' : 'Go to Notes tab to view', 'info');
-                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
+                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
                     }}
                     className="px-4 py-1.5 text-xs font-bold border border-accent text-accent rounded hover:bg-accent/10 transition-colors"
                   >
@@ -1306,19 +1344,30 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                 <button
                   onClick={async () => {
                     try {
-                      const created = await notesApi.create({
-                        title: saveNoteModal.title.trim(),
-                        body: saveNoteModal.content,
-                        type: saveNoteModal.type as any,
-                        date: new Date().toISOString().slice(0, 10),
-                        context: activeContext,
-                        tags: saveNoteModal.tags,
-                        linkedTaskIds: [],
-                        linkedProjectIds: [],
-                      });
+                      if (saveNoteModal.savedNoteId) {
+                        await notesApi.update(saveNoteModal.savedNoteId, {
+                          title: saveNoteModal.title.trim(),
+                          body: saveNoteModal.content,
+                          type: saveNoteModal.type as any,
+                          tags: saveNoteModal.tags,
+                          linkedTaskIds: saveNoteModal.linkedTaskIds,
+                          linkedProjectIds: saveNoteModal.linkedProjectIds,
+                        });
+                      } else {
+                        await notesApi.create({
+                          title: saveNoteModal.title.trim(),
+                          body: saveNoteModal.content,
+                          type: saveNoteModal.type as any,
+                          date: new Date().toISOString().slice(0, 10),
+                          context: activeContext,
+                          tags: saveNoteModal.tags,
+                          linkedTaskIds: saveNoteModal.linkedTaskIds,
+                          linkedProjectIds: saveNoteModal.linkedProjectIds,
+                        });
+                      }
                       showToast(language === 'zh' ? '已保存到笔记' : 'Saved to notes', 'success');
                       onNoteCreated?.();
-                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null });
+                      setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
                     } catch (e) {
                       showToast(language === 'zh' ? '保存失败' : 'Save failed', 'error');
                     }

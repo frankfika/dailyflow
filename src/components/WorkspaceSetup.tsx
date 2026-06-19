@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { Folder, Check, AlertCircle, Loader2, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
-import { configApi } from '../api/client';
+import { workspacesApi } from '../api/client';
 
 interface WorkspaceSetupProps {
   onComplete: () => void;
@@ -14,6 +14,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isValid, setIsValid] = useState(false);
 
   const t = {
     title: language === 'zh' ? '欢迎使用 DailyFlow' : 'Welcome to DailyFlow',
@@ -42,16 +43,10 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setIsPickingFolder(true);
     setError('');
     try {
-      const res = await fetch('/api/config/choose-folder');
-      // 400 = user cancelled the dialog. Silently dismiss; not an error.
-      if (res.status === 400) return;
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to pick folder');
-      }
-      const data = await res.json();
-      if (data.path) {
-        setWorkspacePath(data.path);
+      const picked = await workspacesApi.pickFolder();
+      if (picked) {
+        setWorkspacePath(picked);
+        setIsValid(false);
       }
     } catch (e: any) {
       setError(e.message || t.invalidPath);
@@ -80,9 +75,14 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
 
       const result = await response.json();
       if (!result.valid) {
+        setIsValid(false);
         setError(t.invalidPath);
+      } else {
+        setIsValid(true);
+        setError('');
       }
     } catch (e) {
+      setIsValid(false);
       setError(t.invalidPath);
     } finally {
       setIsValidating(false);
@@ -95,19 +95,21 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       return;
     }
 
+    if (!isValid) {
+      await handleValidate();
+      // Re-check after validation; if still invalid, abort.
+      if (!isValid) return;
+    }
+
     setIsSaving(true);
     setError('');
 
     try {
-      await configApi.update({
-        workspaceRoot: workspacePath,
-        dailyPathTemplate: 'Daily/{year}/{month}/{date}.md',
-        rolloverTrigger: 'manual',
-        rolloverSkipTags: ['no-rollover'],
-      });
+      const name = workspacePath.split('/').filter(Boolean).pop() || 'Workspace';
+      await workspacesApi.create(name, workspacePath);
       onComplete();
-    } catch (e) {
-      setError(language === 'zh' ? '保存失败，请重试' : 'Failed to save, please try again');
+    } catch (e: any) {
+      setError(e.message || (language === 'zh' ? '保存失败，请重试' : 'Failed to save, please try again'));
     } finally {
       setIsSaving(false);
     }
@@ -158,7 +160,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
               <input
                 type="text"
                 value={workspacePath}
-                onChange={e => setWorkspacePath(e.target.value)}
+                onChange={e => { setWorkspacePath(e.target.value); setIsValid(false); }}
                 placeholder={t.noFolderPicked}
                 className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:border-accent transition-colors font-mono text-text-muted"
               />
@@ -193,7 +195,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           {/* Continue Button */}
           <button
             onClick={handleContinue}
-            disabled={isSaving || !workspacePath.trim()}
+            disabled={isSaving || !workspacePath.trim() || !isValid}
             className="w-full py-3 rounded-md bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving ? (

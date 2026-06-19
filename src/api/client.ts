@@ -745,6 +745,7 @@ export interface AISummarizeRequest {
   systemPrompt?: string;
   userPrompt: string;
   maxTokens?: number;
+  signal?: AbortSignal;
 }
 
 export interface AISummarizeResponse {
@@ -761,6 +762,7 @@ export const aiApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
+      signal: req.signal,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "npm run dev:all",
-    "beforeBuildCommand": "npm run build && npm run build:server"
+    "beforeBuildCommand": "npm run build && npm run build:server && npm run build:sea"
   },
   "app": {
     "windows": [

@@ -8,7 +8,7 @@
     "server": "tsx server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "vite build",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist-server/index.cjs --external:fsevents",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist-server/index.cjs --external:fsevents && node scripts/bundle-node.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",

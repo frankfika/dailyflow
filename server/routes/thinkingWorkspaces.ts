@@ -38,6 +38,8 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     if (!req.body?.title) return res.status(400).json({ error: 'title is required' });
+    // Never allow the client to dictate the workspace ID.
+    delete req.body.id;
     const workspace = await createThinkingWorkspace(req.body);
     res.status(201).json(workspace);
   } catch (error: any) {

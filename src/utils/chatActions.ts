@@ -26,7 +26,12 @@ export async function createTasksFromMessage(
   const todoLines = lines.filter(l => /^\s*[-*]\s*\[\s*\]\s+/.test(l));
   const titles = todoLines.length > 0
     ? todoLines.map(l => l.replace(/^\s*[-*]\s*\[\s*\]\s+/, '').trim())
-    : [content.trim().slice(0, 120)];
+    : [];
+
+  if (titles.length === 0) {
+    showToast(language === 'zh' ? '未找到可创建的任务（需要 - [ ] 格式）' : 'No tasks found to create (need - [ ] format)', 'info');
+    return;
+  }
 
   const today = getTodayStr();
   let created = 0;

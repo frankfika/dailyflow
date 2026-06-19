@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
+import { aiApi, promptsApi, notesApi, tasksApi, thinkingWorkspacesApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
+import { buildWorkspaceContext } from './ThinkingWorkspaces';
 import { loadProviderConfigs, saveProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
@@ -88,8 +89,9 @@ export interface FloatingAIPanelProps {
   notes: any[];
   filesMap: Record<string, string>;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
-  initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null;
+  initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null;
   onDraftConsumed?: () => void;
+  onNoteCreated?: () => void;
   focusedContext?: { type: 'note' | 'today' | 'workspace'; id?: string; title?: string; content?: string } | null;
 }
 
@@ -104,6 +106,7 @@ export function FloatingAIPanel({
   showToast,
   initialDraft,
   onDraftConsumed,
+  onNoteCreated,
   focusedContext
 }: FloatingAIPanelProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -121,6 +124,7 @@ export function FloatingAIPanel({
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
   const [pendingSkillId, setPendingSkillId] = useState<string | null>(null);
+  const [workspaceContext, setWorkspaceContext] = useState<string>('');
 
   // Resizable panel dimensions
   const [panelSize, setPanelSize] = useState(() => {
@@ -174,7 +178,11 @@ export function FloatingAIPanel({
     title: string;
     content: string;
     type: 'note' | 'meeting_note' | 'summary';
-  }>({ open: false, title: '', content: '', type: 'note' });
+    tags: string[];
+    savedNoteId: string | null;
+    linkedTaskIds: string[];
+    linkedProjectIds: string[];
+  }>({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -227,7 +235,14 @@ export function FloatingAIPanel({
     const newSession = createNewSession();
     // Bind the note as an attached context item rather than dumping its full
     // body into the input — the user types their question, the note rides along.
-    if (initialDraft.contextText) {
+    if (initialDraft.noteId) {
+      newSession.contextItems = [{
+        id: `ctx_note_${initialDraft.key}`,
+        type: 'note',
+        label: initialDraft.contextLabel || initialDraft.sourceTitle || (language === 'zh' ? '笔记' : 'Note'),
+        data: { noteId: initialDraft.noteId },
+      }];
+    } else if (initialDraft.contextText) {
       newSession.contextItems = [{
         id: `ctx_note_${initialDraft.key}`,
         type: 'custom-text',
@@ -249,6 +264,25 @@ export function FloatingAIPanel({
     }, 50);
     onDraftConsumed?.();
   }, [initialDraft, onDraftConsumed]);
+
+  useEffect(() => {
+    if (focusedContext?.type === 'workspace' && focusedContext.id) {
+      let cancelled = false;
+      thinkingWorkspacesApi.getById(focusedContext.id)
+        .then(ws => {
+          if (cancelled) return;
+          setWorkspaceContext(buildWorkspaceContext(ws));
+        })
+        .catch(err => {
+          if (cancelled) return;
+          console.error('Failed to load workspace context:', err);
+          setWorkspaceContext('');
+        });
+      return () => { cancelled = true; };
+    }
+    setWorkspaceContext('');
+    return undefined;
+  }, [focusedContext?.type, focusedContext?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -323,12 +357,20 @@ export function FloatingAIPanel({
     for (const item of items) {
       switch (item.type) {
         case 'today-tasks': {
-          const todayTasks = tasks.filter(t => t.status !== 'done');
-          parts.push(`## ${language === 'zh' ? '今日任务' : "Today's Tasks"}\n${
-            todayTasks.length > 0
-              ? todayTasks.map((t: any) => `- ${t.title}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}`).join('\n')
-              : (language === 'zh' ? '（无）' : '(none)')
-          }`);
+          const taskId = item.data.taskId;
+          if (taskId) {
+            const task = tasks.find((t: any) => t.id === taskId);
+            if (task) {
+              parts.push(`## ${language === 'zh' ? '任务' : 'Task'}\n- ${task.title}${task.tags?.length ? ` [${task.tags.join(', ')}]` : ''}`);
+            }
+          } else {
+            const todayTasks = tasks.filter(t => t.status !== 'done');
+            parts.push(`## ${language === 'zh' ? '今日任务' : "Today's Tasks"}\n${
+              todayTasks.length > 0
+                ? todayTasks.map((t: any) => `- ${t.title}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}`).join('\n')
+                : (language === 'zh' ? '（无）' : '(none)')
+            }`);
+          }
           break;
         }
         case 'date-tasks': {
@@ -378,7 +420,11 @@ export function FloatingAIPanel({
     }
 
     if (focusedContext.type === 'workspace') {
-      return `## ${language === 'zh' ? '思考空间' : 'Workspace'}${focusedContext.title ? ': ' + focusedContext.title : ''}`;
+      const title = focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace');
+      if (workspaceContext) {
+        return `## ${language === 'zh' ? '思考空间' : 'Workspace'}: ${title}\n\n${workspaceContext}`;
+      }
+      return `## ${language === 'zh' ? '思考空间' : 'Workspace'}: ${title}`;
     }
 
     return '';
@@ -507,7 +553,15 @@ export function FloatingAIPanel({
         baseUrl: activeProvider.baseUrl,
         systemPrompt,
         userPrompt,
+        signal: abortRef.current?.signal,
       });
+
+      // If the user aborted while the request was in flight, don't append the response.
+      if (abortRef.current?.signal.aborted) {
+        setIsStreaming(false);
+        abortRef.current = null;
+        return;
+      }
 
       // Parse and execute any tool calls in the response
       const { text: cleanedText, calls } = parseToolCalls(summary);
@@ -552,22 +606,26 @@ export function FloatingAIPanel({
       }));
     } catch (err: any) {
       const rawError = err.message || String(err);
-      const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
+      if (rawError.toLowerCase().includes('abort') || err.name === 'AbortError') {
+        // User-initiated stop; don't show an error message.
+      } else {
+        const friendlyError = getFriendlyErrorMessage(rawError, language, activeProvider.name);
 
-      const errorMessage: ChatMessage = {
-        id: generateShortId('msg'),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString(),
-        modelName: activeProvider.name,
-        error: friendlyError,
-      };
-      updateActiveSession(s => ({
-        ...s,
-        messages: [...s.messages, errorMessage],
-        updatedAt: new Date().toISOString(),
-      }));
-      showToast(friendlyError, 'error');
+        const errorMessage: ChatMessage = {
+          id: generateShortId('msg'),
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+          modelName: activeProvider.name,
+          error: friendlyError,
+        };
+        updateActiveSession(s => ({
+          ...s,
+          messages: [...s.messages, errorMessage],
+          updatedAt: new Date().toISOString(),
+        }));
+        showToast(friendlyError, 'error');
+      }
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
@@ -795,8 +853,35 @@ export function FloatingAIPanel({
                           </button>
                           <button
                             onClick={() => {
-                              const title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
-                              setSaveNoteModal({ open: true, title, content: msg.content, type: 'note' });
+                              // Auto-extract title from first H1 or first line
+                              let title = activeSession?.title || (language === 'zh' ? 'AI 笔记' : 'AI Note');
+                              const h1Match = msg.content.match(/^#\s+(.+)$/m);
+                              if (h1Match) {
+                                title = h1Match[1].trim();
+                              } else {
+                                const firstLine = msg.content.split('\n')[0].trim();
+                                if (firstLine && firstLine.length <= 80) title = firstLine;
+                              }
+                              // Extract links from the context snapshot that produced this reply.
+                              const linkedTaskIds = msg.contextSnapshot
+                                ?.filter(c => c.type === 'today-tasks' && c.data.taskId)
+                                .map(c => c.data.taskId as string) || [];
+                              const linkedProjectIds = msg.contextSnapshot
+                                ?.filter(c => c.type === 'project' && c.data.projectName)
+                                .map(c => c.data.projectName as string) || [];
+                              // Check for duplicate: same content already saved as a note (normalized).
+                              const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+                              const duplicate = notes.find((n: any) => normalize(n.body) === normalize(msg.content));
+                              setSaveNoteModal({
+                                open: true,
+                                title,
+                                content: msg.content,
+                                type: 'note',
+                                tags: ['ai-generated'],
+                                savedNoteId: duplicate?.id || null,
+                                linkedTaskIds,
+                                linkedProjectIds,
+                              });
                             }}
                             className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
                             title={language === 'zh' ? '保存为笔记' : 'Save as note'}
@@ -955,6 +1040,172 @@ export function FloatingAIPanel({
             persistProviderConfigsToBackend();
           }}
         />,
+        document.body
+      )}
+    {saveNoteModal.open &&
+      createPortal(
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center"
+          onClick={() => setSaveNoteModal(prev => ({ ...prev, open: false }))}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.15 }}
+            className="bg-surface-white border border-border rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between"
+            >
+              <h3 className="text-sm font-bold text-text-heading"
+              >
+                {language === 'zh' ? '保存为笔记' : 'Save as Note'}
+              </h3>
+              <button
+                onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] })}
+                className="p-1 text-text-muted hover:text-red-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3"
+            >
+              {saveNoteModal.savedNoteId && (
+                <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                  {language === 'zh'
+                    ? '⚠️ 这条内容已经保存过笔记，继续保存将创建重复条目。'
+                    : '⚠️ This content has already been saved as a note. Continuing will create a duplicate.'}
+                </div>
+              )}
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1"
+                >{language === 'zh' ? '标题' : 'Title'}</label>
+                <input
+                  type="text"
+                  value={saveNoteModal.title}
+                  onChange={e => setSaveNoteModal(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1"
+                >{language === 'zh' ? '类型' : 'Type'}</label>
+                <select
+                  value={saveNoteModal.type}
+                  onChange={e => setSaveNoteModal(prev => ({ ...prev, type: e.target.value as any }))}
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                >
+                  <option value="note"
+                  >{language === 'zh' ? '笔记' : 'Note'}</option>
+                  <option value="meeting_note"
+                  >{language === 'zh' ? '会议' : 'Meeting'}</option>
+                  <option value="summary"
+                  >{language === 'zh' ? '总结' : 'Summary'}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1"
+                >{language === 'zh' ? '标签' : 'Tags'}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {saveNoteModal.tags.map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
+                      #{tag}
+                      <button
+                        onClick={() => setSaveNoteModal(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }))}
+                        className="hover:text-red-500"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    placeholder={language === 'zh' ? '+ 添加标签' : '+ Add tag'}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                        const v = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                        if (v && !saveNoteModal.tags.includes(v)) {
+                          setSaveNoteModal(prev => ({ ...prev, tags: [...prev.tags, v] }));
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }
+                    }}
+                    className="w-24 px-2 py-0.5 text-[11px] border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted mb-1"
+                >{language === 'zh' ? '内容' : 'Content'}</label>
+                <textarea
+                  value={saveNoteModal.content}
+                  onChange={e => setSaveNoteModal(prev => ({ ...prev, content: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent max-h-60 min-h-[120px] resize-y"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2"
+            >
+              <button
+                onClick={() => setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] })}
+                className="px-3 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading transition-colors"
+              >
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              {saveNoteModal.savedNoteId ? (
+                <button
+                  onClick={() => {
+                    showToast(language === 'zh' ? '请前往「笔记」页查看' : 'Go to Notes tab to view', 'info');
+                    setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
+                  }}
+                  className="px-4 py-1.5 text-xs font-bold border border-accent text-accent rounded hover:bg-accent/10 transition-colors"
+                >
+                  {language === 'zh' ? '查看笔记' : 'View Note'}
+                </button>
+              ) : null}
+              <button
+                onClick={async () => {
+                  try {
+                    if (saveNoteModal.savedNoteId) {
+                      await notesApi.update(saveNoteModal.savedNoteId, {
+                        title: saveNoteModal.title.trim(),
+                        body: saveNoteModal.content,
+                        type: saveNoteModal.type as any,
+                        tags: saveNoteModal.tags,
+                        linkedTaskIds: saveNoteModal.linkedTaskIds,
+                        linkedProjectIds: saveNoteModal.linkedProjectIds,
+                      });
+                    } else {
+                      await notesApi.create({
+                        title: saveNoteModal.title.trim(),
+                        body: saveNoteModal.content,
+                        type: saveNoteModal.type as any,
+                        date: new Date().toISOString().slice(0, 10),
+                        context: activeContext,
+                        tags: saveNoteModal.tags,
+                        linkedTaskIds: saveNoteModal.linkedTaskIds,
+                        linkedProjectIds: saveNoteModal.linkedProjectIds,
+                      });
+                    }
+                    showToast(language === 'zh' ? '已保存到笔记' : 'Saved to notes', 'success');
+                    onNoteCreated?.();
+                    setSaveNoteModal({ open: false, title: '', content: '', type: 'note', tags: ['ai-generated'], savedNoteId: null, linkedTaskIds: [], linkedProjectIds: [] });
+                  } catch (e) {
+                    showToast(language === 'zh' ? '保存失败' : 'Save failed', 'error');
+                  }
+                }}
+                disabled={!saveNoteModal.title.trim()}
+                className="px-4 py-1.5 text-xs font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+              >
+                {language === 'zh' ? '保存' : 'Save'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>,
         document.body
       )}
   </>

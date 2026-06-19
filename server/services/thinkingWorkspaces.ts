@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 import { loadConfig } from './config.js';
 import type { ThinkingWorkspace, WorkspaceTimelineEntry } from '../types/task.js';
 
@@ -219,8 +220,12 @@ export async function getAllThinkingWorkspaces(filters?: WorkspaceFilters): Prom
   const files = await scanMarkdownFiles(dir);
   let workspaces: ThinkingWorkspace[] = [];
   for (const filePath of files) {
-    const content = await fs.readFile(filePath, 'utf-8');
-    workspaces.push(parseWorkspaceFile(content, filePath));
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      workspaces.push(parseWorkspaceFile(content, filePath));
+    } catch (err) {
+      console.error(`Skipping unreadable workspace file ${filePath}:`, err);
+    }
   }
   if (filters) {
     if (filters.status) workspaces = workspaces.filter(w => w.status === filters.status);
@@ -240,9 +245,13 @@ export async function getThinkingWorkspaceById(id: string): Promise<ThinkingWork
 }
 
 export async function createThinkingWorkspace(data: Partial<ThinkingWorkspace> & { title: string; intent?: string }): Promise<ThinkingWorkspace> {
+  // Ignore any client-supplied ID to prevent ID takeover / path traversal.
+  const title = data.title.trim();
+  if (!title) throw new Error('Title is required');
+
   const dir = await getWorkspacesDir();
   const now = new Date().toISOString();
-  const id = data.id || `ws_${now.slice(0, 10).replace(/-/g, '')}_${slugify(data.title)}`;
+  const id = `tw_${now.slice(0, 10).replace(/-/g, '')}_${slugify(title)}_${crypto.randomBytes(3).toString('hex')}`;
   const [year, month] = now.slice(0, 10).split('-');
   const targetDir = path.join(dir, year, month);
   await fs.mkdir(targetDir, { recursive: true });

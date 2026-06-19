@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BrainCircuit, CalendarPlus, CheckCircle2, Compass, GitBranch, Lightbulb, Loader2, Map, Plus, Save, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { aiApi, tasksApi, thinkingWorkspacesApi, type ThinkingWorkspaceData } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
+import { generateTaskId, generateShortId } from '../utils/idGenerator';
 
 type Language = 'en' | 'zh';
 
@@ -14,6 +15,7 @@ type Props = {
   aiBaseUrl: string;
   currentFileDate: string;
   onTasksCreated?: () => void;
+  onSelectedChange?: (id: string) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
 };
 
@@ -40,10 +42,10 @@ function statusLabel(status: ThinkingWorkspaceData['status'], language: Language
 }
 
 function todayTimelineEntry(body: string) {
-  return { id: `tl_${Date.now()}`, date: getTodayStr(), type: 'log' as const, body };
+  return { id: generateShortId('tl'), date: getTodayStr(), type: 'log' as const, body };
 }
 
-function buildWorkspaceContext(workspace: ThinkingWorkspaceData): string {
+export function buildWorkspaceContext(workspace: ThinkingWorkspaceData): string {
   return [
     `# ${workspace.title}`,
     `Status: ${workspace.status}`,
@@ -55,7 +57,7 @@ function buildWorkspaceContext(workspace: ThinkingWorkspaceData): string {
   ].filter(Boolean).join('\n\n');
 }
 
-function extractTaskTitles(markdown: string): string[] {
+export function extractTaskTitles(markdown: string): string[] {
   return markdown
     .split('\n')
     .map(line => line.trim())
@@ -64,7 +66,7 @@ function extractTaskTitles(markdown: string): string[] {
     .filter(Boolean);
 }
 
-export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel, aiBaseUrl, currentFileDate, onTasksCreated, showToast }: Props) {
+export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel, aiBaseUrl, currentFileDate, onTasksCreated, onSelectedChange, showToast }: Props) {
   const [workspaces, setWorkspaces] = useState<ThinkingWorkspaceData[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [query, setQuery] = useState('');
@@ -97,6 +99,11 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    setTaskPreview([]);
+    onSelectedChange?.(selectedId);
+  }, [selectedId, onSelectedChange]);
 
   const createWorkspace = async () => {
     if (!draft.title.trim()) return;
@@ -137,14 +144,15 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
   };
 
   const runAi = async (kind: 'brief' | 'journey' | 'mindmap' | 'tasks') => {
-    if (!selected) return;
+    const target = workspaces.find(w => w.id === selectedId) || null;
+    if (!target) return;
     if (!aiApiKey || !aiBaseUrl) {
       showToast(localize(language, '请先配置 AI Provider', 'Configure an AI provider first'), 'error');
       return;
     }
     setAiBusy(kind);
     try {
-      const context = buildWorkspaceContext(selected);
+      const context = buildWorkspaceContext(target);
       const prompts = {
         brief: {
           system: 'You organize messy thinking into a concise structured brief. Return Markdown only. Sections: Goal, Context, Success Criteria, Constraints, Missing Information, Next Clarifying Question.',
@@ -164,9 +172,9 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
         },
       }[kind];
       const { summary } = await aiApi.summarize({ apiKey: aiApiKey, model: aiModel || undefined, baseUrl: aiBaseUrl, systemPrompt: prompts.system, userPrompt: prompts.user });
-      if (kind === 'brief') await updateSelected({ brief: summary, timeline: [...(selected.timeline || []), todayTimelineEntry(localize(language, 'AI 整理了 Brief。', 'AI drafted the brief.'))] });
-      if (kind === 'journey') await updateSelected({ journey: summary, timeline: [...(selected.timeline || []), todayTimelineEntry(localize(language, 'AI 规划了推进路径。', 'AI drafted the journey.'))] });
-      if (kind === 'mindmap') await updateSelected({ mindmapMarkdown: summary.replace(/^```mermaid\s*/i, '').replace(/```$/i, '').trim(), timeline: [...(selected.timeline || []), todayTimelineEntry(localize(language, 'AI 生成了脑图。', 'AI generated a mind map.'))] });
+      if (kind === 'brief') await updateSelected({ brief: summary, timeline: [...(target.timeline || []), todayTimelineEntry(localize(language, 'AI 整理了 Brief。', 'AI drafted the brief.'))] });
+      if (kind === 'journey') await updateSelected({ journey: summary, timeline: [...(target.timeline || []), todayTimelineEntry(localize(language, 'AI 规划了推进路径。', 'AI drafted the journey.'))] });
+      if (kind === 'mindmap') await updateSelected({ mindmapMarkdown: summary.replace(/^```mermaid\s*/i, '').replace(/```$/i, '').trim(), timeline: [...(target.timeline || []), todayTimelineEntry(localize(language, 'AI 生成了脑图。', 'AI generated a mind map.'))] });
       if (kind === 'tasks') setTaskPreview(extractTaskTitles(summary));
     } catch (e: any) {
       showToast(e.message || localize(language, 'AI 处理失败', 'AI failed'), 'error');
@@ -180,7 +188,7 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
     try {
       for (let i = 0; i < taskPreview.length; i++) {
         await tasksApi.create(currentFileDate, {
-          id: `t_${Date.now()}_${i}`,
+          id: generateTaskId(),
           title: `${taskPreview[i]} #workspace:${selected.id}`,
           status: 'todo',
           tags: [activeContext],

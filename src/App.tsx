@@ -99,7 +99,8 @@ export default function App() {
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
-  const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string } | null>(null);
+  const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
+  const [thinkingWorkspaceId, setThinkingWorkspaceId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'today' | 'workspaces' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
@@ -1042,11 +1043,21 @@ export default function App() {
           showToast={showToast}
           initialDraft={chatDraft}
           onDraftConsumed={() => setChatDraft(null)}
+          onNoteCreated={() => {
+            // Refresh daily notes for today so the new note appears immediately
+            const today = new Date().toISOString().slice(0, 10);
+            notesApi.getByDate(today).then(dateNotes => {
+              setDailyNotes(prev => {
+                const others = prev.filter(n => n.date !== today);
+                return [...others, ...dateNotes];
+              });
+            }).catch(err => console.error('Failed to refresh daily notes:', err));
+          }}
           focusedContext={
             activeTab === 'notes'
               ? { type: 'note', title: language === 'zh' ? '笔记库' : 'Notes' }
               : activeTab === 'workspaces'
-              ? { type: 'workspace', title: language === 'zh' ? '思考空间' : 'Workspaces' }
+              ? { type: 'workspace', id: thinkingWorkspaceId, title: language === 'zh' ? '思考空间' : 'Workspaces' }
               : { type: 'today', title: language === 'zh' ? '今日任务' : 'Today' }
           }
         />
@@ -1494,6 +1505,7 @@ export default function App() {
                   currentFileDate={currentFileDate}
                   showToast={showToast}
                   onTasksCreated={() => loadTasksForDate(currentFileDate)}
+                  onSelectedChange={setThinkingWorkspaceId}
                 />
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
@@ -1533,7 +1545,7 @@ export default function App() {
                   aiBaseUrl={aiBaseUrl}
                   filterByTaskId={notesFilterByTaskId}
                   onClearTaskFilter={() => setNotesFilterByTaskId(null)}
-                  onSendToChat={({ title, body, type }) => {
+                  onSendToChat={({ title, body, type, noteId }) => {
                     const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
                     const prompt = type === 'meeting_note'
                       ? (language === 'zh' ? '基于这份会议笔记继续讨论：' : 'Continue from this meeting note:')
@@ -1544,8 +1556,9 @@ export default function App() {
                       text: prompt,
                       key: `${Date.now()}`,
                       sourceTitle: title,
-                      contextText: `# ${noteTitle}\n\n${body}`,
+                      contextText: noteId ? undefined : `# ${noteTitle}\n\n${body}`,
                       contextLabel: noteTitle,
+                      noteId,
                     });
                     setActiveTab('ai-chat');
                   }}
@@ -1671,7 +1684,7 @@ export default function App() {
              aiBaseUrl={aiBaseUrl}
              isMaximized={isNoteEditorMaximized}
              onToggleMaximize={() => setIsNoteEditorMaximized(v => !v)}
-             onSendToChat={({ title, body, type }) => {
+             onSendToChat={({ title, body, type, noteId }) => {
                const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
                const prompt = type === 'meeting_note'
                  ? (language === 'zh' ? '基于这份会议笔记继续讨论：' : 'Continue from this meeting note:')
@@ -1682,8 +1695,9 @@ export default function App() {
                  text: prompt,
                  key: `${Date.now()}`,
                  sourceTitle: title,
-                 contextText: `# ${noteTitle}\n\n${body}`,
+                 contextText: noteId ? undefined : `# ${noteTitle}\n\n${body}`,
                  contextLabel: noteTitle,
+                 noteId,
                });
                setShowQuickNoteEditor(false);
                setEditingDailyNote(null);

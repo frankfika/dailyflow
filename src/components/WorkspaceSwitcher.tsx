@@ -40,6 +40,11 @@ export function WorkspaceSwitcher({
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const workspacesRef = useRef(workspaces);
+
+  useEffect(() => {
+    workspacesRef.current = workspaces;
+  }, [workspaces]);
 
   const active = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
 
@@ -92,17 +97,19 @@ export function WorkspaceSwitcher({
   const addAndActivate = async (folderPath: string, name?: string) => {
     setBusyId('__new__');
     try {
-      const existed = workspaces.some(w => w.path === folderPath);
       const ws = await workspacesApi.create(name || '', folderPath);
-      const wasDuplicate = existed || workspaces.some(w => w.id === ws.id);
-      if (!wasDuplicate) onAdded?.(ws);
-      await onActivate(ws.id);
-      if (wasDuplicate) {
+      const alreadyInList = workspacesRef.current.some(
+        w => w.id === ws.id || w.path === folderPath
+      );
+      if (!alreadyInList) {
+        onAdded?.(ws);
+      } else {
         showToast(
           language === 'zh' ? `已切换到现有 Notebook「${ws.name}」` : `Switched to existing notebook "${ws.name}"`,
           'success'
         );
       }
+      await onActivate(ws.id);
       setOpen(false);
     } catch (e: any) {
       showToast(e.message || (language === 'zh' ? '添加失败' : 'Failed to add'), 'error');
@@ -205,7 +212,7 @@ export function WorkspaceSwitcher({
                           if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleRename(ws.id);
                           if (e.key === 'Escape' && !e.nativeEvent.isComposing) setRenamingId(null);
                         }}
-                        onBlur={() => handleRename(ws.id)}
+                        onBlur={() => setRenamingId(null)}
                         className="w-full bg-surface border border-accent/40 rounded px-1.5 py-0.5 text-xs outline-none"
                       />
                     ) : (

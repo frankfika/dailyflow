@@ -15,7 +15,7 @@ interface NotesProps {
   aiBaseUrl?: string;
   filterByTaskId?: string | null;
   onClearTaskFilter?: () => void;
-  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type'] }) => void;
+  onSendToChat?: (payload: { title: string; body: string; type: NoteData['type']; noteId?: string }) => void;
 }
 
 type TypeFilter = 'all' | 'note' | 'meeting_note' | 'summary';
