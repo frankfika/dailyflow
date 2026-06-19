@@ -77,7 +77,9 @@ async function main() {
   const archivePath = join(distServerDir, archiveName);
   const extractDir = join(distServerDir, 'node-download');
   const binName = platform === 'win32' ? 'node.exe' : 'node';
-  const extractedBinPath = join(extractDir, extractedDir, 'bin', binName);
+  const extractedBinPath = platform === 'win32'
+    ? join(extractDir, extractedDir, binName)
+    : join(extractDir, extractedDir, 'bin', binName);
   const outputPath = join(distServerDir, binName);
 
   console.log(`Downloading Node ${NODE_VERSION} for ${platformId()}...`);
