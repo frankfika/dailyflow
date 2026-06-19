@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrainCircuit, CalendarPlus, CheckCircle2, Compass, GitBranch, Lightbulb, Loader2, Map, Plus, Save, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
-import { aiApi, tasksApi, thinkingWorkspacesApi, type ThinkingWorkspaceData } from '../api/client';
+import { aiApi, projectsApi, tasksApi, thinkingWorkspacesApi, type ProjectData, type ThinkingWorkspaceData } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 import { generateTaskId, generateShortId } from '../utils/idGenerator';
-
-type Language = 'en' | 'zh';
+import { localize, type Language } from '../utils/localize';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type Props = {
   language: Language;
@@ -24,12 +24,9 @@ const blankDraft = {
   intent: '',
   scratchpad: '',
   type: 'general' as ThinkingWorkspaceData['type'],
+  projectId: '',
   tagsText: '',
 };
-
-function localize(language: Language, zh: string, en: string): string {
-  return language === 'zh' ? zh : en;
-}
 
 function statusLabel(status: ThinkingWorkspaceData['status'], language: Language): string {
   const labels = {
@@ -39,6 +36,28 @@ function statusLabel(status: ThinkingWorkspaceData['status'], language: Language
     archived: ['归档', 'Archived'],
   } as const;
   return language === 'zh' ? labels[status][0] : labels[status][1];
+}
+
+const workspaceTypeOptions = [
+  { value: 'goal' },
+  { value: 'problem' },
+  { value: 'research' },
+  { value: 'product_design' },
+  { value: 'project_phase' },
+  { value: 'general' },
+] as const;
+
+function typeLabel(type: ThinkingWorkspaceData['type'], language: Language): string {
+  const labels: Record<NonNullable<ThinkingWorkspaceData['type']>, [string, string]> = {
+    goal: ['目标', 'Goal'],
+    problem: ['问题', 'Problem'],
+    research: ['研究', 'Research'],
+    product_design: ['产品设计', 'Product Design'],
+    project_phase: ['项目阶段', 'Project Phase'],
+    general: ['通用', 'General'],
+  };
+  const [zh, en] = labels[type || 'general'];
+  return language === 'zh' ? zh : en;
 }
 
 function todayTimelineEntry(body: string) {
@@ -76,6 +95,9 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
   const [draft, setDraft] = useState(blankDraft);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
   const [taskPreview, setTaskPreview] = useState<string[]>([]);
+  const [projects, setProjects] = useState<ProjectData[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<ThinkingWorkspaceData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const selected = useMemo(() => workspaces.find(w => w.id === selectedId) || workspaces[0] || null, [workspaces, selectedId]);
 
@@ -101,6 +123,10 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
+    projectsApi.getAll().then(setProjects).catch(() => setProjects([]));
+  }, []);
+
+  useEffect(() => {
     setTaskPreview([]);
     onSelectedChange?.(selectedId);
   }, [selectedId, onSelectedChange]);
@@ -109,7 +135,7 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
     if (!draft.title.trim()) return;
     setIsCreating(true);
     try {
-      const created = await thinkingWorkspacesApi.create({
+      const payload: Partial<ThinkingWorkspaceData> & { title: string } = {
         title: draft.title.trim(),
         intent: draft.intent.trim(),
         scratchpad: draft.scratchpad.trim(),
@@ -117,7 +143,9 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
         status: 'active',
         tags: draft.tagsText.split(',').map(t => t.trim()).filter(Boolean),
         timeline: [todayTimelineEntry(localize(language, '创建思考空间。', 'Workspace created.'))],
-      });
+      };
+      if (draft.projectId) payload.projectId = draft.projectId;
+      const created = await thinkingWorkspacesApi.create(payload);
       setWorkspaces(prev => [created, ...prev]);
       setSelectedId(created.id);
       setDraft(blankDraft);
@@ -211,14 +239,22 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
 
   const deleteSelected = async () => {
     if (!selected) return;
-    if (!confirm(localize(language, '确定删除这个思考空间吗？Markdown 文件也会删除。', 'Delete this workspace and its Markdown file?'))) return;
+    setConfirmDelete(selected);
+  };
+
+  const confirmAndDelete = async () => {
+    if (!confirmDelete) return;
+    setIsDeleting(true);
     try {
-      await thinkingWorkspacesApi.delete(selected.id);
-      setWorkspaces(prev => prev.filter(w => w.id !== selected.id));
+      await thinkingWorkspacesApi.delete(confirmDelete.id);
+      setWorkspaces(prev => prev.filter(w => w.id !== confirmDelete.id));
       setSelectedId('');
+      setConfirmDelete(null);
       showToast(localize(language, '已删除', 'Deleted'), 'success');
     } catch (e: any) {
       showToast(e.message || localize(language, '删除失败', 'Delete failed'), 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -243,6 +279,15 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
               <h2 className="text-sm font-semibold text-text-heading mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-accent" />{localize(language, '捕获一个事项', 'Capture an item')}</h2>
               <div className="space-y-3">
                 <input id="new-workspace-title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder={localize(language, '例如：规划客户 PoC 方案', 'e.g. Plan customer PoC proposal')} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm focus:border-accent" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value as ThinkingWorkspaceData['type'] })} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm focus:border-accent">
+                    {workspaceTypeOptions.map(t => <option key={t.value} value={t.value}>{typeLabel(t.value, language)}</option>)}
+                  </select>
+                  <select value={draft.projectId} onChange={e => setDraft({ ...draft, projectId: e.target.value })} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm focus:border-accent">
+                    <option value="">{localize(language, '无项目', 'No Project')}</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
                 <textarea value={draft.intent} onChange={e => setDraft({ ...draft, intent: e.target.value })} placeholder={localize(language, '这件事想解决什么？', 'What should this solve?')} rows={3} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm resize-none focus:border-accent" />
                 <textarea value={draft.scratchpad} onChange={e => setDraft({ ...draft, scratchpad: e.target.value })} placeholder={localize(language, '先把零散想法丢进来...', 'Drop loose thoughts here...')} rows={4} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm resize-none focus:border-accent" />
                 <input value={draft.tagsText} onChange={e => setDraft({ ...draft, tagsText: e.target.value })} placeholder={localize(language, '标签，用逗号分隔', 'Tags, comma separated')} className="w-full px-3 py-2 rounded-xl bg-surface border border-border/70 outline-none text-sm focus:border-accent" />
@@ -285,6 +330,7 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
               <WorkspaceDetail
                 workspace={selected}
                 language={language}
+                projects={projects}
                 isSaving={isSaving}
                 aiBusy={aiBusy}
                 taskPreview={taskPreview}
@@ -298,13 +344,26 @@ export function ThinkingWorkspaces({ language, activeContext, aiApiKey, aiModel,
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        show={!!confirmDelete}
+        title={localize(language, '删除思考空间', 'Delete Workspace')}
+        message={localize(language, '确定删除这个思考空间吗？Markdown 文件也会删除。', 'Delete this workspace and its Markdown file?')}
+        confirmText={localize(language, '删除', 'Delete')}
+        cancelText={localize(language, '取消', 'Cancel')}
+        isLoading={isDeleting}
+        variant="danger"
+        onConfirm={confirmAndDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
 
-function WorkspaceDetail({ workspace, language, isSaving, aiBusy, taskPreview, setTaskPreview, onUpdate, onDelete, onAi, onCreateTasks }: {
+function WorkspaceDetail({ workspace, language, projects, isSaving, aiBusy, taskPreview, setTaskPreview, onUpdate, onDelete, onAi, onCreateTasks }: {
   workspace: ThinkingWorkspaceData;
   language: Language;
+  projects: ProjectData[];
   isSaving: boolean;
   aiBusy: string | null;
   taskPreview: string[];
@@ -315,10 +374,28 @@ function WorkspaceDetail({ workspace, language, isSaving, aiBusy, taskPreview, s
   onCreateTasks: () => void;
 }) {
   const [local, setLocal] = useState(workspace);
+  const [dirty, setDirty] = useState(false);
+  const localRef = useRef(local);
+  useEffect(() => { localRef.current = local; }, [local]);
   useEffect(() => setLocal(workspace), [workspace.id, workspace.updatedAt]);
 
-  const save = () => onUpdate(local, true);
-  const setField = <K extends keyof ThinkingWorkspaceData>(key: K, value: ThinkingWorkspaceData[K]) => setLocal(prev => ({ ...prev, [key]: value }));
+  const save = () => {
+    onUpdate(local, true);
+    setDirty(false);
+  };
+  const setField = <K extends keyof ThinkingWorkspaceData>(key: K, value: ThinkingWorkspaceData[K]) => {
+    setLocal(prev => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => {
+      onUpdate(localRef.current, false);
+      setDirty(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [dirty, onUpdate]);
 
   const aiButton = (kind: 'brief' | 'journey' | 'mindmap' | 'tasks', icon: React.ReactNode, zh: string, en: string) => (
     <button onClick={() => onAi(kind)} disabled={!!aiBusy} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/15 disabled:opacity-50 active:scale-95 transition-all">
@@ -333,8 +410,15 @@ function WorkspaceDetail({ workspace, language, isSaving, aiBusy, taskPreview, s
           <div className="flex-1 min-w-0">
             <input value={local.title} onChange={e => setField('title', e.target.value)} className="w-full bg-transparent outline-none text-2xl md:text-3xl font-serif text-text-heading tracking-tight" />
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <select value={local.type || 'general'} onChange={e => setField('type', e.target.value as ThinkingWorkspaceData['type'])} className="px-3 py-1.5 rounded-full bg-white border border-border text-xs font-medium outline-none">
+                {workspaceTypeOptions.map(t => <option key={t.value} value={t.value}>{typeLabel(t.value, language)}</option>)}
+              </select>
               <select value={local.status} onChange={e => setField('status', e.target.value as ThinkingWorkspaceData['status'])} className="px-3 py-1.5 rounded-full bg-white border border-border text-xs font-medium outline-none">
                 {(['active','paused','completed','archived'] as const).map(s => <option key={s} value={s}>{statusLabel(s, language)}</option>)}
+              </select>
+              <select value={local.projectId || ''} onChange={e => setField('projectId', e.target.value || undefined)} className="px-3 py-1.5 rounded-full bg-white border border-border text-xs font-medium outline-none">
+                <option value="">{localize(language, '无项目', 'No Project')}</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <input value={(local.tags || []).join(', ')} onChange={e => setField('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))} placeholder={localize(language, '标签', 'Tags')} className="px-3 py-1.5 rounded-full bg-white border border-border text-xs outline-none min-w-[180px]" />
             </div>

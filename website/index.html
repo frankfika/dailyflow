@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DailyFlow · 先想清楚，再拆成任务 — 本地优先思考工作台</title>
+  <meta name="description" content="DailyFlow 是一个本地优先的思考工作台与任务管理桌面应用。Thinking Workspaces 让目标、想法、项目成为一等对象，AI 帮你整理 Brief、规划 Journey、生成脑图、拆解下一步。" />
+  <meta property="og:title" content="DailyFlow · Think first. Then make tasks." />
+  <meta property="og:description" content="本地优先的思考工作台与任务系统。v1.0.0 全新发布：Thinking Workspaces。" />
+  <meta property="og:image" content="./assets/home.png" />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <link rel="icon" type="image/svg+xml" href="./assets/logo.svg" />
+  <link rel="preconnect" href="https://api.github.com" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Aurora background -->
+  <div class="aurora" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <!-- Top nav -->
+  <header class="nav glass">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="DailyFlow home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="28" height="28">
+            <rect width="64" height="64" rx="14" fill="#0A0A0A"/>
+            <circle cx="22" cy="24" r="5" fill="#fff"/>
+            <circle cx="42" cy="24" r="5" fill="#fff"/>
+            <circle cx="32" cy="40" r="5" fill="#fff"/>
+            <path d="M26 26C32 35 36 35 40 26" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M32 35V27" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand-text">DailyFlow</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">功能</a>
+        <a href="#compare">对比</a>
+        <a href="#screens">界面</a>
+        <a href="#download">下载</a>
+        <a href="https://github.com/frankfika/dailyflow" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.74.54 1.48v2.2c0 .22.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </nav>
+
+      <a class="nav-cta" href="#download">
+        <span>下载 v<span class="nav-version" id="navVersion">…</span></span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 6h6m0 0L6.5 3.5M9 6L6.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-badge reveal">
+          <span class="dot"></span>
+          <span>v1.0.0 · Thinking Workspaces 正式发布</span>
+        </div>
+
+        <h1 class="hero-title reveal">
+          <span class="serif">Think first.</span><br />
+          <span class="serif">Then make tasks.</span>
+        </h1>
+
+        <p class="hero-sub reveal">
+          本地优先的<strong>思考工作台</strong>与任务管理桌面应用。<br />
+          把目标、想法、项目变成一等对象，让 AI 帮你整理 Brief、规划路径、生成脑图，再把下一步投放到 Today。
+        </p>
+
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary" href="#download">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 1.5v8m0 0L4.5 7M7 9.5L9.5 7M2 11.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            立即下载
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/frankfika/dailyflow" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.74.54 1.48v2.2c0 .22.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+
+        <div class="hero-platforms reveal">
+          <span>支持</span>
+          <span class="plat">macOS · Apple Silicon</span>
+          <span class="dot-sep">/</span>
+          <span class="plat">macOS · Intel</span>
+          <span class="dot-sep">/</span>
+          <span class="plat">Windows x64</span>
+          <span class="dot-sep">/</span>
+          <span class="plat">Linux AppImage / deb / rpm</span>
+        </div>
+
+        <!-- Hero visual -->
+        <div class="hero-visual reveal">
+          <div class="hero-visual-frame glass">
+            <div class="hero-visual-bar">
+              <span class="mac-dot r"></span>
+              <span class="mac-dot y"></span>
+              <span class="mac-dot g"></span>
+              <span class="hero-visual-title">DailyFlow · Thinking Workspace</span>
+            </div>
+            <img src="./assets/workspaces.png" alt="DailyFlow Thinking Workspace 主界面" loading="eager" />
+            <div class="hero-glow"></div>
+          </div>
+          <div class="hero-floater hf-1 glass">
+            <span class="hf-tag">AI · Clarify</span>
+            <span class="hf-text">自动整理 Brief…</span>
+          </div>
+          <div class="hero-floater hf-2 glass">
+            <span class="hf-tag">AI · Plan Journey</span>
+            <span class="hf-text">生成 5 个阶段路径</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">核心功能</span>
+          <h2 class="serif">围绕「想清楚」与「做下去」<br/>构建一个完整链路</h2>
+          <p class="section-sub">DailyFlow 不是又一个 todo 列表，它是一个把思考工作台与行动任务整合在一起的本地桌面应用。</p>
+        </div>
+
+        <div class="features-grid">
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v1a3 3 0 0 0-3 3v.5A2.5 2.5 0 0 0 3 13v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2.5 2.5 0 0 0-2-2.5V10a3 3 0 0 0-3-3V6a4 4 0 0 0-4-4z"/><path d="M9 6h6"/></svg>
+            </div>
+            <h3>Thinking Workspaces</h3>
+            <p>目标、想法、项目的一等对象。多入口创建（Today / note / project / <kbd>⌘K</kbd>），围绕一段零散想法搭建空间。</p>
+            <span class="fc-tag">v1.0.0 · 全新</span>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.39 0 4.68.94 6.36 2.64"/><path d="M21 4v5h-5"/></svg>
+            </div>
+            <h3>AI 整理 Brief · 规划 Journey</h3>
+            <p>从 scratchpad 自动生成结构化摘要：目标、背景、成功标准、约束、缺失信息。再生成阶段、里程碑、风险、本周重点。</p>
+            <span class="fc-tag">v1.0.0 · 全新</span>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
+            </div>
+            <h3>AI 生成脑图</h3>
+            <p>Mermaid 格式，自动覆盖目标、输入、风险、资料、决策和下一步。可视化思考路径。</p>
+            <span class="fc-tag">v1.0.0 · 全新</span>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <h3>AI 拆解任务 · 一键投放</h3>
+            <p>从 journey 生成 3-7 个 15-60 分钟可完成的下一步，预览后一键投放到 Today。</p>
+            <span class="fc-tag">v1.0.0 · 全新</span>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </div>
+            <h3>Timeline 推进记录</h3>
+            <p>每次 AI 输出、任务完成、决策都会留下痕迹。让思考过程可回溯、可审计。</p>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+            </div>
+            <h3>Markdown 为唯一数据源</h3>
+            <p>本地文件 + YAML frontmatter。你始终拥有自己的数据 — 可用 Git 同步，可读可写。</p>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
+            </div>
+            <h3>15+ AI 供应商</h3>
+            <p>B.AI · DeepSeek · Kimi · GLM · Qwen · Claude · GPT · Gemini · Groq · 自定义 OpenAI 兼容 API。配一个 Key 即可。</p>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-12V4l-8-2-8 2v6c0 8 8 12 8 12z"/></svg>
+            </div>
+            <h3>本地优先 · 离线可用</h3>
+            <p>数据存于本地 Markdown，<strong>内置 Node.js 运行时</strong>，零外部依赖，下载即可使用。</p>
+          </article>
+
+          <article class="feature-card glass reveal">
+            <div class="fc-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            </div>
+            <h3>Git 同步 · IPFS 备份</h3>
+            <p>一键提交到 GitHub，侧边栏显示同步状态。通过 Pinata 上传去中心化备份，获得永久 CID。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare -->
+    <section id="compare" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">为什么选 DailyFlow</span>
+          <h2 class="serif">传统方式 vs DailyFlow</h2>
+          <p class="section-sub">不是更花哨的工具，而是把「想清楚」与「做下去」连成一条完整的链路。</p>
+        </div>
+
+        <div class="compare-wrap reveal">
+          <div class="compare-table glass">
+            <div class="compare-row compare-head">
+              <div></div>
+              <div>传统方式</div>
+              <div class="hi">DailyFlow</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">每天管理任务</div>
+              <div>手动复制未完成任务</div>
+              <div class="hi"><strong>自动迁移</strong>，打开即用</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">数据归属</div>
+              <div>锁在 SaaS 平台</div>
+              <div class="hi"><strong>本地 Markdown</strong>，完全可控</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">网络依赖</div>
+              <div>需要联网</div>
+              <div class="hi">离线优先，<strong>内置 Node.js 运行时</strong></div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">复杂项目管理</div>
+              <div>工具上手难</div>
+              <div class="hi">极简设计，专注当日</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">AI 助手</div>
+              <div>额外付费</div>
+              <div class="hi">内置 AI，<strong>15+ 模型供应商</strong></div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">大目标承载</div>
+              <div>只有 todo 列表</div>
+              <div class="hi"><strong>Thinking Workspaces</strong>，独立承载</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">推进过程</div>
+              <div>勾选即结束</div>
+              <div class="hi"><strong>Timeline</strong> 记录每次 AI 输出与决策</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screens -->
+    <section id="screens" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">界面预览</span>
+          <h2 class="serif">为「想清楚」而生的桌面体验</h2>
+          <p class="section-sub">原生桌面应用，玻璃质感、毛玻璃层级、Apple 风格动效。</p>
+        </div>
+
+        <div class="screens-grid">
+          <figure class="screen glass reveal">
+            <div class="screen-tag">Today</div>
+            <img src="./assets/home.png" alt="DailyFlow Today 主界面" loading="lazy" />
+          </figure>
+          <figure class="screen screen-lg glass reveal">
+            <div class="screen-tag">Thinking Workspace · v1.0.0 新</div>
+            <img src="./assets/workspaces.png" alt="DailyFlow Thinking Workspace 思考工作台" loading="lazy" />
+          </figure>
+          <figure class="screen glass reveal">
+            <div class="screen-tag">AI Chat</div>
+            <img src="./assets/ai-chat.png" alt="DailyFlow AI Chat 聊天界面" loading="lazy" />
+          </figure>
+          <figure class="screen glass reveal">
+            <div class="screen-tag">Notes</div>
+            <img src="./assets/notes.png" alt="DailyFlow Notes 笔记系统" loading="lazy" />
+          </figure>
+          <figure class="screen glass reveal">
+            <div class="screen-tag">Projects</div>
+            <img src="./assets/projects.png" alt="DailyFlow Projects 项目概览" loading="lazy" />
+          </figure>
+          <figure class="screen glass reveal">
+            <div class="screen-tag">Prompts</div>
+            <img src="./assets/ai-prompts.png" alt="DailyFlow Prompts 提示词库" loading="lazy" />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture -->
+    <section class="section arch">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">架构</span>
+          <h2 class="serif">一个完整的桌面系统</h2>
+          <p class="section-sub">Tauri 桌面壳 + 内置 Node.js 运行时 + 本地 Markdown 文件 — 零外部依赖。</p>
+        </div>
+
+        <div class="arch-grid reveal">
+          <div class="arch-card glass">
+            <span class="arch-layer">Shell</span>
+            <h3>Tauri Desktop</h3>
+            <p>原生窗口、菜单、文件系统、自动更新。</p>
+          </div>
+          <div class="arch-card glass">
+            <span class="arch-layer">Runtime</span>
+            <h3>Bundled Node.js 20+</h3>
+            <p>下载即用 — 用户机器<strong>无需安装 Node</strong>。</p>
+          </div>
+          <div class="arch-card glass">
+            <span class="arch-layer">Backend</span>
+            <h3>Express · :3003</h3>
+            <p>本地 HTTP API，操作 Markdown 文件、AI 调用、同步。</p>
+          </div>
+          <div class="arch-card glass">
+            <span class="arch-layer">Frontend</span>
+            <h3>React 19 + TS + Tailwind 4</h3>
+            <p>Vite 构建、Framer Motion 动效、玻璃质感 UI。</p>
+          </div>
+          <div class="arch-card glass">
+            <span class="arch-layer">Data</span>
+            <h3>Markdown + YAML</h3>
+            <p><code>Daily/</code> · <code>Workspaces/</code> · <code>Notes/</code> · <code>Projects/</code></p>
+          </div>
+          <div class="arch-card glass">
+            <span class="arch-layer">Sync</span>
+            <h3>Git · IPFS · AI</h3>
+            <p>一键推 GitHub，IPFS 永久备份，15+ AI 供应商。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section id="download" class="section dl">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">下载</span>
+          <h2 class="serif">下载并开始使用</h2>
+          <p class="section-sub">数据存于本地，应用<strong>完全离线</strong>可用。<span id="versionLine">最新版本：<strong id="latestVersion">v…</strong></span> · <span id="releaseDate"></span></p>
+        </div>
+
+        <div class="dl-grid" id="downloadGrid">
+          <!-- Cards injected by JS -->
+          <div class="dl-skeleton glass" aria-hidden="true">
+            <div class="sk-bar w-30"></div>
+            <div class="sk-bar w-60"></div>
+            <div class="sk-bar w-40"></div>
+          </div>
+        </div>
+
+        <div class="dl-foot reveal">
+          <details class="dl-tip">
+            <summary>macOS 提示：遇到 “damaged” / “cannot be opened” 怎么办？</summary>
+            <div class="dl-tip-body">
+              <p>下载后执行一次（需 sudo）：</p>
+              <pre><code>sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app</code></pre>
+              <p>这是 Apple 给未签名应用加的隔离属性。DailyFlow 暂时未做 Apple 公证，本地应用请放心解除。</p>
+            </div>
+          </details>
+
+          <details class="dl-tip">
+            <summary>从源码构建</summary>
+            <div class="dl-tip-body">
+              <p>需要 Node.js ≥ 20（仅开发）。</p>
+              <pre><code>git clone https://github.com/frankfika/dailyflow.git
+cd dailyflow
+npm install
+npm run dev:all      # 开发模式（前端 + 后端）
+npm run tauri build  # 完整桌面构建</code></pre>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="section cta-sec">
+      <div class="container">
+        <div class="cta glass reveal">
+          <h2 class="serif">先想清楚，再拆成任务。</h2>
+          <p>DailyFlow 是 Apache 2.0 开源项目，欢迎贡献、Star、或反馈。</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="https://github.com/frankfika/dailyflow" target="_blank" rel="noopener">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.74.54 1.48v2.2c0 .22.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+              访问 GitHub 仓库
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/frankfika/dailyflow/releases" target="_blank" rel="noopener">
+              查看所有版本
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="22" height="22">
+            <rect width="64" height="64" rx="14" fill="#0A0A0A"/>
+            <circle cx="22" cy="24" r="5" fill="#fff"/>
+            <circle cx="42" cy="24" r="5" fill="#fff"/>
+            <circle cx="32" cy="40" r="5" fill="#fff"/>
+            <path d="M26 26C32 35 36 35 40 26" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M32 35V27" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>DailyFlow</span>
+      </div>
+      <div class="footer-meta">
+        <span>Apache License 2.0</span>
+        <span class="dot-sep">·</span>
+        <span>本地优先 · 离线可用</span>
+        <span class="dot-sep">·</span>
+        <a href="https://github.com/frankfika/dailyflow" target="_blank" rel="noopener">GitHub</a>
+        <span class="dot-sep">·</span>
+        <a href="https://github.com/frankfika/dailyflow/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./script.js"></script>
+</body>
+</html>

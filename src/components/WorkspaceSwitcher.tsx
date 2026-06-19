@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronsUpDown, Check, FolderOpen, FolderPlus, Loader2, Pencil, Trash2, Sparkles } from 'lucide-react';
 import { workspacesApi, type Workspace } from '../api/client';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface WorkspaceSwitcherProps {
   language: 'en' | 'zh';
@@ -39,6 +40,8 @@ export function WorkspaceSwitcher({
   const [renameValue, setRenameValue] = useState('');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<Workspace | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const workspacesRef = useRef(workspaces);
 
@@ -145,15 +148,21 @@ export function WorkspaceSwitcher({
 
   const handleRemove = async (id: string) => {
     const ws = workspaces.find(w => w.id === id);
-    const confirmMsg = language === 'zh'
-      ? `从列表移除「${ws?.name}」？磁盘上的文件不会被删除。`
-      : `Remove "${ws?.name}" from the list? Files on disk are not deleted.`;
-    if (!confirm(confirmMsg)) return;
+    if (!ws) return;
+    setConfirmRemove(ws);
+  };
+
+  const confirmAndRemove = async () => {
+    if (!confirmRemove) return;
+    setIsRemoving(true);
     try {
-      const { activeWorkspaceId: nextActive } = await workspacesApi.remove(id);
-      onRemoved?.(id, nextActive);
+      const { activeWorkspaceId: nextActive } = await workspacesApi.remove(confirmRemove.id);
+      onRemoved?.(confirmRemove.id, nextActive);
+      setConfirmRemove(null);
     } catch (e: any) {
       showToast(e.message || (language === 'zh' ? '删除失败' : 'Failed to remove'), 'error');
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -210,9 +219,15 @@ export function WorkspaceSwitcher({
                         onChange={e => setRenameValue(e.target.value)}
                         onKeyDown={e => {
                           if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleRename(ws.id);
-                          if (e.key === 'Escape' && !e.nativeEvent.isComposing) setRenamingId(null);
+                          if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+                            e.stopPropagation();
+                            setRenamingId(null);
+                          }
                         }}
-                        onBlur={() => setRenamingId(null)}
+                        onBlur={() => {
+                          if (renamingId) handleRename(renamingId);
+                          setRenamingId(null);
+                        }}
                         className="w-full bg-surface border border-accent/40 rounded px-1.5 py-0.5 text-xs outline-none"
                       />
                     ) : (
@@ -302,6 +317,22 @@ export function WorkspaceSwitcher({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        show={!!confirmRemove}
+        title={language === 'zh' ? '移除工作区' : 'Remove Workspace'}
+        message={
+          language === 'zh'
+            ? `从列表移除「${confirmRemove?.name}」？磁盘上的文件不会被删除。`
+            : `Remove "${confirmRemove?.name}" from the list? Files on disk are not deleted.`
+        }
+        confirmText={language === 'zh' ? '移除' : 'Remove'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={isRemoving}
+        variant="danger"
+        onConfirm={confirmAndRemove}
+        onCancel={() => setConfirmRemove(null)}
+      />
     </div>
   );
 }

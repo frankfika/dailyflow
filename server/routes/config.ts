@@ -245,7 +245,9 @@ async function ensureDirectory(targetPath: string): Promise<{ ok: boolean; error
 router.get('/workspaces/discover', async (_req, res) => {
   try {
     const config = await loadConfig();
-    const existingPaths = new Set((config.workspaces || []).map(w => w.path));
+    const existingCanons = new Set(
+      await Promise.all((config.workspaces || []).map(w => canonicalizeWorkspacePath(w.path)))
+    );
     const home = process.env.HOME || '';
     const active = (config.workspaces || []).find(w => w.id === config.activeWorkspaceId);
     const roots = new Set<string>();
@@ -259,6 +261,7 @@ router.get('/workspaces/discover', async (_req, res) => {
     }
 
     const candidates: { path: string; name: string }[] = [];
+    const candidateCanons = new Set<string>();
     for (const root of roots) {
       let entries: string[] = [];
       try {
@@ -269,8 +272,10 @@ router.get('/workspaces/discover', async (_req, res) => {
       for (const entry of entries) {
         if (entry.startsWith('.')) continue;
         const full = path.join(root, entry);
-        if (existingPaths.has(full)) continue;
         try {
+          const fullCanon = await canonicalizeWorkspacePath(full);
+          if (existingCanons.has(fullCanon)) continue;
+          if (candidateCanons.has(fullCanon)) continue;
           const stat = await fs.stat(full);
           if (!stat.isDirectory()) continue;
           let isCandidate = false;
@@ -284,8 +289,9 @@ router.get('/workspaces/discover', async (_req, res) => {
               if (inner.some(f => f.toLowerCase().endsWith('.md'))) isCandidate = true;
             } catch { /* skip */ }
           }
-          if (isCandidate && !candidates.some(c => c.path === full)) {
+          if (isCandidate) {
             candidates.push({ path: full, name: entry });
+            candidateCanons.add(fullCanon);
           }
         } catch { /* skip */ }
       }

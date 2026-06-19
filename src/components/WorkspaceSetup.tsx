@@ -55,10 +55,10 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     }
   };
 
-  const handleValidate = async () => {
+  const handleValidate = async (): Promise<boolean> => {
     if (!workspacePath.trim()) {
       setError(t.missingPath);
-      return;
+      return false;
     }
 
     setIsValidating(true);
@@ -77,13 +77,15 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       if (!result.valid) {
         setIsValid(false);
         setError(t.invalidPath);
-      } else {
-        setIsValid(true);
-        setError('');
+        return false;
       }
+      setIsValid(true);
+      setError('');
+      return true;
     } catch (e) {
       setIsValid(false);
       setError(t.invalidPath);
+      return false;
     } finally {
       setIsValidating(false);
     }
@@ -95,11 +97,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       return;
     }
 
-    if (!isValid) {
-      await handleValidate();
-      // Re-check after validation; if still invalid, abort.
-      if (!isValid) return;
-    }
+    const valid = isValid || (await handleValidate());
+    if (!valid) return;
 
     setIsSaving(true);
     setError('');

@@ -33,8 +33,8 @@ describe.sequential('WorkspaceSwitcher', () => {
     vi.spyOn(workspacesApi, 'discover').mockResolvedValue({ candidates: [] });
   });
 
-  it('does not save rename on blur', async () => {
-    vi.spyOn(workspacesApi, 'rename');
+  it('saves rename on blur', async () => {
+    vi.spyOn(workspacesApi, 'rename').mockResolvedValue(undefined);
 
     render(
       <WorkspaceSwitcher
@@ -56,8 +56,63 @@ describe.sequential('WorkspaceSwitcher', () => {
     fireEvent.blur(input);
 
     await waitFor(() => {
-      expect(workspacesApi.rename).not.toHaveBeenCalled();
+      expect(workspacesApi.rename).toHaveBeenCalledWith('ws_a', 'Alpha Edited');
     });
+  });
+
+  it('stops Escape propagation during rename', async () => {
+    vi.spyOn(workspacesApi, 'rename').mockResolvedValue(undefined);
+    const onActivate = vi.fn();
+
+    render(
+      <WorkspaceSwitcher
+        language="en"
+        workspaces={workspaces}
+        activeWorkspaceId="ws_a"
+        onActivate={onActivate}
+        onRenamed={vi.fn()}
+        showToast={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Alpha'));
+    fireEvent.click(screen.getAllByTestId('icon-pencil')[0].parentElement!);
+
+    const input = screen.getByDisplayValue('Alpha');
+    const keyDown = fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+
+    // The dropdown should stay open and no activation should happen.
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(keyDown).toBe(true);
+  });
+
+  it('shows confirm dialog on remove click', async () => {
+    vi.spyOn(workspacesApi, 'remove').mockResolvedValue({ activeWorkspaceId: 'ws_b' });
+    const onRemoved = vi.fn();
+
+    render(
+      <WorkspaceSwitcher
+        language="en"
+        workspaces={workspaces}
+        activeWorkspaceId="ws_a"
+        onActivate={vi.fn()}
+        onRemoved={onRemoved}
+        showToast={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Alpha'));
+    fireEvent.click(screen.getAllByTestId('icon-trash')[0].parentElement!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Remove Workspace/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove$/i }));
+    await waitFor(() => {
+      expect(workspacesApi.remove).toHaveBeenCalledWith('ws_a');
+    });
+    expect(onRemoved).toHaveBeenCalledWith('ws_a', 'ws_b');
   });
 
   it('saves rename on Enter', async () => {
