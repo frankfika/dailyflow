@@ -15,7 +15,7 @@ const rootDir = join(__dirname, '..');
 const assetsDir = join(rootDir, 'docs', 'assets');
 
 const VIEWPORT = { width: 1280, height: 800 };
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -48,36 +48,63 @@ async function captureScreenshots() {
   try {
     // 1. Main/Home page - Daily view with tasks
     console.log('\n📷 Capturing main daily view...');
-    await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 });
-    // Wait for content to load (either task list or empty state)
-    await page.waitForSelector('text=Daily Tasks', { timeout: 10000 });
-    await sleep(2000);
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForSelector('[data-testid="nav-workspaces"]', { timeout: 15000 });
+    await sleep(3000);
     await captureScreenshot(page, 'home', { wait: 2000 });
 
-    // 2. Notes view - click Notes in sidebar
+    // 2. Workspaces view (new v1.0.0 Thinking Workspaces)
+    console.log('📷 Capturing Thinking Workspaces view...');
+    const workspacesLink = await page.$('[data-testid="nav-workspaces"]');
+    if (workspacesLink) {
+      await workspacesLink.click();
+      await sleep(2000);
+      await captureScreenshot(page, 'workspaces', { wait: 2000 });
+    } else {
+      console.log('  ⚠️ Workspaces nav not found');
+    }
+
+    // 3. Notes view
     console.log('📷 Capturing notes view...');
     const notesLink = await page.$('text=Notes');
-    if (notesLink) await notesLink.click();
-    await sleep(1500);
-    await captureScreenshot(page, 'notes', { wait: 1500 });
+    if (notesLink) {
+      await notesLink.click();
+      await sleep(1500);
+      await captureScreenshot(page, 'notes', { wait: 1500 });
+    }
 
-    // 3. Prompt Library - click in sidebar
+    // 4. Prompt Library
     console.log('📷 Capturing prompt library...');
     const promptLib = await page.$('text=Prompt Library');
-    if (promptLib) await promptLib.click();
-    await sleep(1500);
-    await captureScreenshot(page, 'ai-prompts', { wait: 1500 });
+    if (promptLib) {
+      await promptLib.click();
+      await sleep(1500);
+      await captureScreenshot(page, 'ai-prompts', { wait: 1500 });
+    }
 
-    // 4. Settings modal - click settings icon
+    // 5. AI Chat panel
+    console.log('📷 Capturing AI Chat...');
+    const aiChatLink = await page.$('text=AI Chat');
+    if (!aiChatLink) {
+      const aiChatLink2 = await page.$('text=Chat');
+      if (aiChatLink2) await aiChatLink2.click();
+    } else {
+      await aiChatLink.click();
+    }
+    await sleep(1500);
+    await captureScreenshot(page, 'ai-chat', { wait: 1500 });
+
+    // 6. Settings/About
     console.log('📷 Capturing settings/about...');
     const settingsBtn = await page.$('[data-testid="settings-button"]');
-    if (settingsBtn) await settingsBtn.click();
-    await sleep(1000);
-    // Switch to About tab
-    const aboutTab = await page.$('text=About');
-    if (aboutTab) await aboutTab.click();
-    await sleep(500);
-    await captureScreenshot(page, 'settings', { wait: 1500 });
+    if (settingsBtn) {
+      await settingsBtn.click();
+      await sleep(1000);
+      const aboutTab = await page.$('text=About');
+      if (aboutTab) await aboutTab.click();
+      await sleep(500);
+      await captureScreenshot(page, 'settings', { wait: 1500 });
+    }
 
     console.log('\n✨ All screenshots captured!');
     console.log(`📁 Location: ${assetsDir}`);
