@@ -10,7 +10,7 @@ import { AIChat } from '../../components/AIChat';
 // Mock motion/react
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
+    div: ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, ...props }: any) =>
       React.createElement('div', props, children),
   },
   AnimatePresence: ({ children }: any) =>
@@ -50,6 +50,9 @@ vi.mock('../../api/client', () => ({
   promptsApi: {
     getAll: vi.fn().mockResolvedValue([]),
   },
+  loadSkillUsage: vi.fn().mockReturnValue({}),
+  recordSkillUse: vi.fn(),
+  sortSkillsByUsage: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock('../../types/models', () => ({

@@ -10,7 +10,7 @@ import { NoteCard, highlightMentions, renderMarkdownPreview } from '../../compon
 // Mock motion/react
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
+    div: ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, ...props }: any) =>
       React.createElement('div', props, children),
   },
 }));
