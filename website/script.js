@@ -105,7 +105,7 @@
     const grid = document.getElementById('downloadGrid');
     if (!grid) return;
 
-    const version = (data?.tag_name || data?.name || 'v1.0.0').replace(/^v/, '');
+    const version = (data?.tag_name || data?.name || 'v1.0.1').replace(/^v/, '');
     const displayVersion = data?.tag_name || `v${version}`;
     const date = data?.published_at ? fmtDate(data.published_at) : '';
     const assets = Array.isArray(data?.assets) ? data.assets : [];
@@ -201,10 +201,10 @@
       renderDownload(data);
     } catch (err) {
       console.warn('[DailyFlow] release fetch failed:', err);
-      // Fallback to README-known v1.0.0
+      // Fallback to README-known v1.0.1
       renderDownload({
-        tag_name: 'v1.0.0',
-        published_at: '2026-06-01',
+        tag_name: 'v1.0.1',
+        published_at: '2026-06-19',
         assets: []
       });
       const grid = document.getElementById('downloadGrid');

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DailyFlow · 先想清楚，再拆成任务 — 本地优先思考工作台</title>
-  <meta name="description" content="DailyFlow 是一个本地优先的思考工作台。给每个目标一个 Thinking Workspace，让 AI 陪你把模糊想法变成可执行的下一步任务。" />
-  <meta property="og:title" content="DailyFlow · Think first. Then make tasks." />
-  <meta property="og:description" content="本地优先的思考工作台。v1.0.0 全新发布：Thinking Workspaces。" />
+  <title>DailyFlow · 本地优先的任务与笔记系统</title>
+  <meta name="description" content="DailyFlow 是一个本地优先的任务与笔记系统。以 Markdown 为唯一数据源，内置 AI 助手，自动迁移未完成任务，让你专注今天。" />
+  <meta property="og:title" content="DailyFlow · 本地优先的任务与笔记系统" />
+  <meta property="og:description" content="本地优先的任务与笔记系统。v1.0.1 精简上线：专注任务 + 笔记 + AI 对话。" />
   <meta property="og:image" content="./assets/home.png" />
   <meta property="og:type" content="website" />
   <meta name="theme-color" content="#0A0A0A" />
@@ -37,7 +37,7 @@
       </a>
 
       <nav class="nav-links" aria-label="Primary">
-        <a href="#what-is-it">Workspace</a>
+        <a href="#what-is-it">产品</a>
         <a href="#journey">工作流</a>
         <a href="#compare">对比</a>
         <a href="#screens">界面</a>
@@ -62,17 +62,17 @@
       <div class="container">
         <div class="hero-badge reveal">
           <span class="dot"></span>
-          <span>v1.0.0 · Thinking Workspaces 正式发布</span>
+          <span>v1.0.1 · 精简上线：任务 + 笔记 + AI 对话</span>
         </div>
 
         <h1 class="hero-title reveal">
-          <span class="serif">Think first.</span><br />
-          <span class="serif">Then make tasks.</span>
+          <span class="serif">专注今天。</span><br />
+          <span class="serif">让 AI 处理其余。</span>
         </h1>
 
         <p class="hero-sub reveal">
-          <strong>本地优先的思考工作台。</strong><br />
-          给每个目标一个 Thinking Workspace，让 AI 陪你把模糊想法变成可执行的下一步。
+          <strong>本地优先的任务与笔记系统。</strong><br />
+          Markdown 为唯一数据源，自动迁移未完成任务，AI Chat 可挂载任意笔记与项目上下文。
         </p>
 
         <div class="hero-cta reveal">
@@ -91,8 +91,6 @@
           <span>支持</span>
           <span class="plat">macOS · Apple Silicon</span>
           <span class="dot-sep">/</span>
-          <span class="plat">macOS · Intel</span>
-          <span class="dot-sep">/</span>
           <span class="plat">Windows x64</span>
           <span class="dot-sep">/</span>
           <span class="plat">Linux AppImage / deb / rpm</span>
@@ -105,18 +103,18 @@
               <span class="mac-dot r"></span>
               <span class="mac-dot y"></span>
               <span class="mac-dot g"></span>
-              <span class="hero-visual-title">DailyFlow · Thinking Workspace</span>
+              <span class="hero-visual-title">DailyFlow · Today</span>
             </div>
-            <img src="./assets/workspaces.png" alt="DailyFlow Thinking Workspace 主界面" loading="eager" />
+            <img src="./assets/home.png" alt="DailyFlow Today 主界面" loading="eager" />
             <div class="hero-glow"></div>
           </div>
           <div class="hero-floater hf-1 glass">
-            <span class="hf-tag">AI · Clarify</span>
-            <span class="hf-text">把零散想法整理成 Brief…</span>
+            <span class="hf-tag">Auto Rollover</span>
+            <span class="hf-text">未完成任务自动滚动到今天…</span>
           </div>
           <div class="hero-floater hf-2 glass">
-            <span class="hf-tag">AI · Plan Journey</span>
-            <span class="hf-text">生成阶段路径与下一步</span>
+            <span class="hf-tag">AI Chat</span>
+            <span class="hf-text">挂载笔记与项目上下文提问…</span>
           </div>
         </div>
       </div>
@@ -126,26 +124,26 @@
     <section id="what-is-it" class="section whatis">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow">什么是 Thinking Workspace</span>
-          <h2 class="serif">不是 todo 列表的替代品，<br/>而是目标在变成任务之前的房间</h2>
-          <p class="section-sub">DailyFlow 相信：大多数任务没完成，是因为我们还没想清楚。Workspace 给你一个专门的空间，把「想清楚」这件事做完。</p>
+          <span class="eyebrow">DailyFlow 是什么</span>
+          <h2 class="serif">不是更复杂的工具，<br/>而是任务 + 笔记 + AI 对话的一体化桌面体验</h2>
+          <p class="section-sub">DailyFlow 相信：大多数任务没完成，是因为信息散落在各处。我们把 Today、Notes 和 AI Chat 连成一条链路，让你始终专注下一步。</p>
         </div>
 
         <div class="whatis-grid">
           <article class="whatis-card glass reveal">
             <div class="wi-number">01</div>
-            <h3>一个目标，一个空间</h3>
-            <p>不是把大目标塞进某个任务标题里。每个 workspace 独立承载一个目标、问题或想法，不会被今日琐事淹没。</p>
+            <h3>今日任务自动迁移</h3>
+            <p>未完成的任务次日自动滚动，保留来源日期。打开 Today 就能继续，不需要手动复制。</p>
           </article>
           <article class="whatis-card glass reveal">
             <div class="wi-number">02</div>
-            <h3>AI 陪你思考</h3>
-            <p>在 scratchpad 里倾倒想法，AI 帮你整理 Brief、规划 Journey、生成脑图，把混乱变清晰。</p>
+            <h3>笔记即上下文</h3>
+            <p>任意笔记都能挂载到 AI Chat。提问时带上会议记录、项目资料或灵感片段，AI 的回答更贴合你的实际上下文。</p>
           </article>
           <article class="whatis-card glass reveal">
             <div class="wi-number">03</div>
-            <h3>任务自然涌现</h3>
-            <p>当思考足够清晰时，一键把 15-60 分钟的下一步投放到 Today。你知道自己为什么做这件事。</p>
+            <h3>AI 驱动执行</h3>
+            <p>Brain Dump 自动提取待办，AI Chat 直接创建任务和笔记。让 AI 处理整理，你只做决策。</p>
           </article>
         </div>
       </div>
@@ -156,8 +154,8 @@
       <div class="container">
         <div class="section-head reveal">
           <span class="eyebrow">工作流</span>
-          <h2 class="serif">Capture → Clarify → Visualize → Act</h2>
-          <p class="section-sub">从模糊想法到可执行任务，DailyFlow 给你一条完整的链路。不再让大目标死在备忘录里。</p>
+          <h2 class="serif">Capture → Note → Ask AI → Act</h2>
+          <p class="section-sub">从灵感到执行，DailyFlow 给你一条最短路径。不再让想法死在备忘录里。</p>
         </div>
 
         <div class="journey-steps reveal">
@@ -167,25 +165,25 @@
             </div>
             <span class="step-label">Capture</span>
             <h3>捕获</h3>
-            <p>用 <kbd>⌘K</kbd>、Today、note 或 project 快速创建一个 workspace，把零散想法丢进 scratchpad。</p>
+            <p>在 Today 快速添加任务，或在 Notes 里记录会议、灵感。Brain Dump 把零散想法自动归类。</p>
           </div>
           <div class="step-connector" aria-hidden="true"></div>
           <div class="step glass">
             <div class="step-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.39 0 4.68.94 6.36 2.64"/><path d="M21 4v5h-5"/></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
             </div>
-            <span class="step-label">Clarify</span>
-            <h3>澄清</h3>
-            <p>AI 整理 Brief：目标、背景、成功标准、约束、缺失信息。再规划 Journey：阶段、里程碑、风险、本周重点。</p>
+            <span class="step-label">Note</span>
+            <h3>记录</h3>
+            <p>用 Markdown + YAML 记录笔记，支持 `#project:名称`、标签、@提及。笔记与任务双向关联。</p>
           </div>
           <div class="step-connector" aria-hidden="true"></div>
           <div class="step glass">
             <div class="step-icon">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
             </div>
-            <span class="step-label">Visualize</span>
-            <h3>可视化</h3>
-            <p>AI 生成 Mermaid 脑图，把目标、输入、风险、资料、决策和下一步用图展现出来，一眼看清全局。</p>
+            <span class="step-label">Ask AI</span>
+            <h3>提问</h3>
+            <p>在 AI Chat 中挂载今日任务、任意笔记或项目上下文。AI 帮你拆解、总结、生成下一步。</p>
           </div>
           <div class="step-connector" aria-hidden="true"></div>
           <div class="step glass">
@@ -194,7 +192,7 @@
             </div>
             <span class="step-label">Act</span>
             <h3>执行</h3>
-            <p>从 journey 生成 3-7 个可执行的下一步，预览后一键投放到 Today。完成任务后，Timeline 留下痕迹。</p>
+            <p>AI 可直接创建任务、保存笔记。你在 Today 里完成它们，未完成的会自动滚动到明天。</p>
           </div>
         </div>
       </div>
@@ -205,31 +203,31 @@
       <div class="container">
         <div class="section-head reveal">
           <span class="eyebrow">为什么选 DailyFlow</span>
-          <h2 class="serif">你的目标，需要自己的空间</h2>
-          <p class="section-sub">不是更花哨的工具，而是把「想清楚」与「做下去」连成一条完整链路。</p>
+          <h2 class="serif">把「记录」与「执行」连成一条链路</h2>
+          <p class="section-sub">不是更花哨的工具，而是让任务、笔记和 AI 对话在同一个本地桌面里协同工作。</p>
         </div>
 
         <div class="compare-wrap reveal">
           <div class="compare-table glass">
             <div class="compare-row compare-head">
               <div></div>
-              <div>没有 workspace 的世界</div>
+              <div>传统方式</div>
               <div class="hi">用 DailyFlow</div>
             </div>
             <div class="compare-row">
-              <div class="compare-label">大目标 / 想法</div>
-              <div>被挤成一行任务标题，很快沉没</div>
-              <div class="hi"><strong>有独立的 Thinking Workspace</strong>，长期存活</div>
+              <div class="compare-label">任务与笔记</div>
+              <div>分散在 todo 和备忘录之间，缺少关联</div>
+              <div class="hi"><strong>Today + Notes + AI Chat</strong> 一体化</div>
             </div>
             <div class="compare-row">
               <div class="compare-label">思考过程</div>
-              <div>散落在备忘录、聊天、脑图工具之间</div>
-              <div class="hi"><strong>Timeline 自动记录</strong>每次 AI 输出与决策</div>
+              <div>散落在聊天、文档、脑图工具之间</div>
+              <div class="hi"><strong>AI Chat 挂载笔记上下文</strong>，可追溯</div>
             </div>
             <div class="compare-row">
               <div class="compare-label">任务来源</div>
               <div>经常忘记「为什么今天要干这个」</div>
-              <div class="hi">任务从 workspace <strong>自然涌现</strong></div>
+              <div class="hi">笔记与项目标签 <strong>自然关联</strong> 到任务</div>
             </div>
             <div class="compare-row">
               <div class="compare-label">数据归属</div>
@@ -261,28 +259,28 @@
       <div class="container">
         <div class="section-head reveal">
           <span class="eyebrow">界面预览</span>
-          <h2 class="serif">为「想清楚」而生的桌面体验</h2>
+          <h2 class="serif">为专注今天而生的桌面体验</h2>
           <p class="section-sub">原生桌面应用，玻璃质感、毛玻璃层级、Apple 风格动效。</p>
         </div>
 
         <div class="annotated-screen reveal">
           <div class="anno-frame glass">
-            <img src="./assets/workspaces.png" alt="DailyFlow Thinking Workspace 主界面" loading="lazy" />
+            <img src="./assets/ai-chat.png" alt="DailyFlow AI Chat 聊天界面" loading="lazy" />
             <div class="anno-callout ac-1">
               <span class="anno-dot"></span>
-              <span class="anno-text">Scratchpad：先倾倒所有想法</span>
+              <span class="anno-text">挂载今日任务作为上下文</span>
             </div>
             <div class="anno-callout ac-2">
               <span class="anno-dot"></span>
-              <span class="anno-text">AI 动作：Clarify / Journey / Mind Map / Tasks</span>
+              <span class="anno-text">挂载任意笔记或项目</span>
             </div>
             <div class="anno-callout ac-3">
               <span class="anno-dot"></span>
-              <span class="anno-text">Journey：阶段、里程碑、风险</span>
+              <span class="anno-text">AI 可直接创建任务和笔记</span>
             </div>
             <div class="anno-callout ac-4">
               <span class="anno-dot"></span>
-              <span class="anno-text">下一步 → 一键 Send to Today</span>
+              <span class="anno-text">15+ 模型供应商一键切换</span>
             </div>
           </div>
         </div>
@@ -345,7 +343,7 @@
           <div class="arch-card glass">
             <span class="arch-layer">Data</span>
             <h3>Markdown + YAML</h3>
-            <p><code>Daily/</code> · <code>Workspaces/</code> · <code>Notes/</code> · <code>Projects/</code></p>
+            <p><code>Daily/</code> · <code>Notes/</code> · <code>Projects/</code></p>
           </div>
           <div class="arch-card glass">
             <span class="arch-layer">Sync</span>
@@ -361,7 +359,7 @@
       <div class="container">
         <div class="section-head reveal">
           <span class="eyebrow">能力细节</span>
-          <h2 class="serif">除了 workspace，DailyFlow 还提供什么</h2>
+          <h2 class="serif">DailyFlow 还提供什么</h2>
         </div>
         <div class="features-grid">
           <article class="feature-card glass reveal">
@@ -457,7 +455,7 @@ npm run tauri build  # 完整桌面构建</code></pre>
     <section class="section cta-sec">
       <div class="container">
         <div class="cta glass reveal">
-          <h2 class="serif">先想清楚，再拆成任务。</h2>
+          <h2 class="serif">本地优先，专注今天。</h2>
           <p>DailyFlow 是 Apache 2.0 开源项目，欢迎贡献、Star、或反馈。</p>
           <div class="hero-cta">
             <a class="btn btn-primary" href="https://github.com/frankfika/dailyflow" target="_blank" rel="noopener">
