@@ -36,6 +36,19 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            motion: ['motion'],
+            markdown: ['react-markdown', 'remark-gfm'],
+            lucide: ['lucide-react'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 600,
+    },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
