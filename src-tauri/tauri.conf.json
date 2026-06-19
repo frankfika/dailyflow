@@ -37,7 +37,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../dist-server/**"
+      "../dist-server/index.cjs",
+      "../dist-server/node"
     ]
   },
   "plugins": {

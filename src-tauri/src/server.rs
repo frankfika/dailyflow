@@ -12,13 +12,18 @@ pub struct ServerProcess(pub Mutex<Option<Child>>);
 /// Locate the bundled Node runtime in the app resources directory.
 /// On Windows the binary has a `.exe` extension; on other platforms it has none.
 fn bundled_node_path(resource_dir: &Path) -> Option<PathBuf> {
-    let exe_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
-    let path = resource_dir.join(exe_name);
-    if path.exists() {
-        Some(path)
+    let candidates = if cfg!(target_os = "windows") {
+        vec!["node", "node.exe"]
     } else {
-        None
+        vec!["node"]
+    };
+    for name in candidates {
+        let path = resource_dir.join(name);
+        if path.exists() {
+            return Some(path);
+        }
     }
+    None
 }
 
 /// Locate the bundled server script (used as a development fallback).
