@@ -22,7 +22,6 @@ import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
 import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
-import { ThinkingWorkspaces } from './components/ThinkingWorkspaces';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
@@ -94,14 +93,16 @@ export default function App() {
   const [markdown, setMarkdown] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
+  // All notes for the current context, used by AI chat/floating panel so they
+  // can find and reference notes beyond just the currently selected date.
+  const [contextNotes, setContextNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
   const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [thinkingWorkspaceId, setThinkingWorkspaceId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'today' | 'workspaces' | 'notes' | 'ai-chat'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
   const taskLinkedNotesCount = useMemo(() => {
@@ -476,6 +477,27 @@ export default function App() {
       console.error('Failed to reload file list', e);
     }
   }, []);
+
+  const loadContextNotes = useCallback(async () => {
+    try {
+      const data = await notesApi.getAll({ context: activeContext });
+      setContextNotes(data);
+    } catch (e) {
+      console.error('Failed to load context notes:', e);
+    }
+  }, [activeContext]);
+
+  // Load all notes for the current context whenever the context changes or the
+  // user opens the AI chat tab, so the chat can reference any note.
+  useEffect(() => {
+    loadContextNotes();
+  }, [activeContext, loadContextNotes]);
+
+  useEffect(() => {
+    if (activeTab === 'ai-chat') {
+      loadContextNotes();
+    }
+  }, [activeTab, loadContextNotes]);
 
   const handleSwitchWorkspace = useCallback(async (id: string) => {
     if (id === activeWorkspaceId) return;
@@ -1038,7 +1060,7 @@ export default function App() {
           language={language}
           activeContext={activeContext}
           tasks={contextFilteredTasks}
-          notes={filterNotesByContext(dailyNotes, activeContext)}
+          notes={contextNotes}
           filesMap={filesMap}
           showToast={showToast}
           initialDraft={chatDraft}
@@ -1052,12 +1074,11 @@ export default function App() {
                 return [...others, ...dateNotes];
               });
             }).catch(err => console.error('Failed to refresh daily notes:', err));
+            loadContextNotes();
           }}
           focusedContext={
             activeTab === 'notes'
               ? { type: 'note', title: language === 'zh' ? '笔记库' : 'Notes' }
-              : activeTab === 'workspaces'
-              ? { type: 'workspace', id: thinkingWorkspaceId, title: language === 'zh' ? '思考空间' : 'Workspaces' }
               : { type: 'today', title: language === 'zh' ? '今日任务' : 'Today' }
           }
         />
@@ -1495,18 +1516,6 @@ export default function App() {
                   />
 
                 </motion.div>
-              ) : activeTab === 'workspaces' ? (
-                <ThinkingWorkspaces
-                  language={language}
-                  activeContext={activeContext}
-                  aiApiKey={aiApiKey}
-                  aiModel={aiModel}
-                  aiBaseUrl={aiBaseUrl}
-                  currentFileDate={currentFileDate}
-                  showToast={showToast}
-                  onTasksCreated={() => loadTasksForDate(currentFileDate)}
-                  onSelectedChange={setThinkingWorkspaceId}
-                />
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
                   key="ai-chat"
@@ -1519,7 +1528,7 @@ export default function App() {
                     language={language}
                     activeContext={activeContext}
                     tasks={contextFilteredTasks}
-                    notes={filterNotesByContext(dailyNotes, activeContext)}
+                    notes={contextNotes}
                     filesMap={filesMap}
                     showToast={showToast}
                     initialDraft={chatDraft}
@@ -1533,6 +1542,7 @@ export default function App() {
                           return [...others, ...dateNotes];
                         });
                       }).catch(err => console.error('Failed to refresh daily notes:', err));
+                      loadContextNotes();
                     }}
                   />
                 </motion.div>
@@ -1545,6 +1555,7 @@ export default function App() {
                   aiBaseUrl={aiBaseUrl}
                   filterByTaskId={notesFilterByTaskId}
                   onClearTaskFilter={() => setNotesFilterByTaskId(null)}
+                  onNotesChanged={loadContextNotes}
                   onSendToChat={({ title, body, type, noteId }) => {
                     const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
                     const prompt = type === 'meeting_note'
@@ -1719,6 +1730,7 @@ export default function App() {
                    const dateNotes = await notesApi.getByDate(currentFileDate);
                    setDailyNotes(dateNotes);
                  }
+                 loadContextNotes();
                  showToast(language === 'zh' ? '笔记已保存' : 'Note saved', 'success');
                } catch (err) {
                  console.error('Failed to save note:', err);

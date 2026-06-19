@@ -16,11 +16,12 @@ interface NotesProps {
   filterByTaskId?: string | null;
   onClearTaskFilter?: () => void;
   onSendToChat?: (payload: { title: string; body: string; type: NoteData['type']; noteId?: string }) => void;
+  onNotesChanged?: () => void;
 }
 
 type TypeFilter = 'all' | 'note' | 'meeting_note' | 'summary';
 
-export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey, aiModel, aiBaseUrl, filterByTaskId, onClearTaskFilter, onSendToChat }) => {
+export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey, aiModel, aiBaseUrl, filterByTaskId, onClearTaskFilter, onSendToChat, onNotesChanged }) => {
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
@@ -104,6 +105,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       setEditingNote(null);
       loadNotes();
       loadMentions();
+      onNotesChanged?.();
     } catch (err) {
       console.error('Failed to save note:', err);
     }
@@ -115,6 +117,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       setViewMode('list');
       setEditingNote(null);
       loadNotes();
+      onNotesChanged?.();
     } catch (err) {
       console.error('Failed to delete note:', err);
     }

@@ -4,13 +4,13 @@
 
 # DailyFlow
 
-> **Local-first thinking workspaces & task system**
+> **Local-first tasks & notes system**
 >
-> Think first. Then make tasks.
+> Keep it simple. Focus on today.
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.0.1-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -24,22 +24,22 @@
 
 </div>
 
-## 🎉 v1.0.0 Major Release
+## 🎉 v1.0.1 Update
 
-**Thinking Workspaces are now generally available.** DailyFlow is no longer just a todo list — it's an integrated **thinking + execution** system: capture a goal, question, or scattered thought into a workspace, let AI draft a brief, plan a journey, generate a mind map, and push the next actions straight into Today.
+This update tightens the product scope by removing the over-designed **Thinking Workspaces** and returning DailyFlow to its core loop of **tasks + notes + AI chat**. It also fixes AI Chat so notes from any date can be found and attached as context.
 
-| You want to... | Before | v1.0.0 |
+| You want to... | v1.0.0 | v1.0.1 |
 |---------------|--------|--------|
-| Tackle a complex project | Squeeze thinking into task titles | Dedicated **Thinking Workspace**, lasting weeks |
-| Organize your thoughts | Hand-write briefs and roadmaps | One-click **AI Brief / Journey** |
-| Break down a goal | Manually split into tasks | **AI Next Tasks**, preview then push |
-| Track progress | Just checkboxes | **Timeline** auto-logs every step |
+| Tackle a complex project | Dedicated Thinking Workspace | Back to simple "projects / tags + notes" |
+| Organize your thoughts | AI Brief / Journey | Attach notes/projects as context in AI Chat |
+| Break down a goal | AI Next Tasks pushed to Today | Brain Dump + AI Chat |
+| Find notes in chat | Only today's notes appeared | **All notes** in the current context are searchable |
 
 ---
 
 ## 📖 Introduction
 
-DailyFlow is a **local-first** intelligent task and thinking management desktop app. Markdown files are the single source of truth, a built-in AI assistant supports **15+ model providers**, and unfinished tasks automatically roll over to the next day. **v1.0.0** introduces Thinking Workspaces — bridging "thinking it through" and "getting it done."
+DailyFlow is a **local-first** intelligent task and notes management desktop app. Markdown files are the single source of truth, a built-in AI assistant supports **15+ model providers**, and unfinished tasks automatically roll over to the next day.
 
 ### Why DailyFlow?
 
@@ -50,40 +50,23 @@ DailyFlow is a **local-first** intelligent task and thinking management desktop 
 | Requires internet and Node.js installed | Offline-first, **bundled Node.js runtime** |
 | Complex project tools are hard to learn | Minimal design, focused on today |
 | AI features cost extra | Built-in AI, 15+ providers |
-| Big goals have nowhere to live | **Thinking Workspaces** own goals & roadmaps |
 
 ---
 
 ## ✨ Features
 
-### 🧠 Thinking Workspaces (new in v1.0.0)
-
-A workspace is a **first-class object** in DailyFlow — it can be a big goal, a fuzzy idea, a project phase, or a meeting topic. Tasks are just the smallest actions it produces.
-
-- **Multiple creation paths**: from a goal, question, note, task, or `Cmd+K` capture
-- **AI Clarify (Brief)**: auto-generates structured brief from scratchpad (goal, context, success criteria, constraints, missing info)
-- **AI Plan Journey**: generates phases, milestones, risks, this week focus, and today's smallest action
-- **AI Mind Map**: Mermaid format covering goals, inputs, risks, resources, decisions, and next actions
-- **AI Next Tasks**: 3-7 tiny tasks (15-60 min each) generated from journey, preview then push to Today
-- **Timeline tracking**: every AI output, task completion, and decision leaves a trace
-- **Status management**: `active` / `paused` / `completed` / `archived`
-- **Crypto-random IDs**: server ignores client-supplied IDs, uses `tw_` prefix + crypto random suffix to prevent ID takeover
-- **Graceful degradation**: one corrupted workspace file won't break the whole list
-
-![Thinking Workspaces](./docs/assets/workspaces.png)
-
 ### 📋 Task Management
 
 - **Auto Migration**: unfinished tasks auto-roll to next day with source date tracking
-- **Card-based UI**: tasks grouped by tags, with comments, linked notes, and linked workspaces
+- **Card-based UI**: tasks grouped by tags, with comments and linked notes
 - **Work/Life Switch**: one-click context switching, tasks auto-filtered
 - **Project Overview**: cross-date aggregation by category
-- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`, `#workspace:tw_xxx`
+- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
 
 ### 🤖 AI Assistant
 
-- **AI Chat**: full chat interface with multi-session, context injection (today's tasks/notes/projects/workspace)
-- **AI Tool Use**: AI can directly create tasks, save notes, and operate workspaces
+- **AI Chat**: full chat interface with multi-session, context injection (today's tasks/notes/projects)
+- **AI Tool Use**: AI can directly create tasks and save notes
 - **Brain Dump**: pour in scattered thoughts, AI extracts and categorizes
 - **AI Summary**: generate structured daily/weekly reports
 - **Skill Marketplace**: slash commands and Agent Skills
@@ -109,7 +92,7 @@ One-click configuration for 15+ AI providers:
 - **AI Assist**: polish, continue, extract todos, format meeting notes
 - **Send to Chat**: bind a note as context in AI chat
 - **@Mentions**: auto-parsed, filterable by person
-- **Task Linking**: bidirectional linking; notes can also spawn workspaces
+- **Task Linking**: bidirectional linking between notes and tasks
 
 ![Notes](./docs/assets/notes.png)
 
@@ -130,17 +113,13 @@ One-click configuration for 15+ AI providers:
 
 ## 📸 Screenshots
 
-| Today (home) | Thinking Workspaces (new v1.0.0) |
+| Today (home) | Projects |
 |:---:|:---:|
-| ![Today](./docs/assets/home.png) | ![Workspaces](./docs/assets/workspaces.png) |
+| ![Today](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) |
 
 | AI Chat | Notes |
 |:---:|:---:|
 | ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
-
-| Projects | Prompt Library |
-|:---:|:---:|
-| ![Projects](./docs/assets/projects.png) | ![Prompts](./docs/assets/ai-prompts.png) |
 
 ---
 
@@ -162,7 +141,7 @@ Grab the installer from [Releases](https://github.com/frankfika/dailyflow/releas
 > sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
 > ```
 >
-> **Truly self-contained**: v1.0.0 dmg bundles the Node.js runtime — **no system Node required**, just download and run.
+> **Truly self-contained**: v1.0.1 dmg bundles the Node.js runtime — **no system Node required**, just download and run.
 
 ### Run from Source
 
@@ -210,16 +189,16 @@ npm run tauri build
 │                       ┌──────────────────┼──────────────────┐│
 │                       │                  │                  │ │
 │                  ┌────▼────┐       ┌─────▼─────┐      ┌─────▼────┐
-│                  │  Today  │       │Workspaces │      │  Notes   │
-│                  │  Tasks  │       │  (v1.0.0) │      │          │
+│                  │  Today  │       │  AI Chat  │      │  Notes   │
+│                  │  Tasks  │       │           │      │          │
 │                  └────┬────┘       └─────┬─────┘      └─────┬────┘
 │                       │                  │                  │ │
 │                       └──────────────────┼──────────────────┘│
 │                                          │                    │
 │                          ┌───────────────▼────────────────┐  │
 │                          │    Markdown Files (Source of    │  │
-│                          │   Truth: Daily/, Workspaces/,   │  │
-│                          │   Notes/, Projects/)            │  │
+│                          │   Truth: Daily/, Notes/,       │  │
+│                          │   Projects/)                    │  │
 │                          └───────────────┬────────────────┘  │
 │                                          │                    │
 │              ┌───────────────────────────┼───────────────────┐│
@@ -230,11 +209,10 @@ npm run tauri build
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Architectural Changes in v1.0.0
+### Key Architectural Changes in v1.0.1
 
 - **Bundled Node.js runtime**: Tauri downloads and embeds the matching Node binary at build time — users don't need Node installed
-- **Thinking Workspaces as first-class objects**: stored under `Workspaces/`, parallel to `Tasks/`
-- **Crypto-random IDs**: all workspace IDs are server-generated via `crypto.randomBytes`; client-supplied IDs are never trusted
+- **Simplified product scope**: Thinking Workspaces removed; tasks, notes, and AI chat remain as the core surface area
 - **Rust launcher hardened**: `src-tauri/src/server.rs` auto-locates the bundled runtime, sets executable permissions, and provides multiple fallback paths for dev and prod
 
 ---
@@ -252,7 +230,7 @@ npm run tauri build
 | AI | 15+ providers (B.AI / Claude / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen etc.) |
 | Sync | Git + GitHub API |
 | Backup | IPFS + Pinata |
-| Tests | Vitest + Testing Library (**149 tests, all passing**) |
+| Tests | Vitest + Testing Library (**145 tests, all passing**) |
 
 ---
 
@@ -295,6 +273,20 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 ---
 
 ## 📜 Changelog
+
+### v1.0.1 (2026-06-19)
+
+**🧹 Tightened scope and fixed AI Chat note linking**
+
+#### ✨ Improvements
+
+- 🗑️ **Removed Thinking Workspaces**: rolled back the over-designed workspace feature to keep the app focused on tasks + notes + AI chat
+- 🔗 **AI Chat can attach any note**: the context picker now searches all notes in the current context, not just today's notes
+- 🧭 **Simplified sidebar**: removed the Workspaces nav item, leaving Today / Notes / AI Chat
+
+#### 🧪 Quality
+
+- 145 tests passing, TypeScript strict mode, 0 errors
 
 ### v1.0.0 (2026-06)
 
@@ -341,12 +333,12 @@ See the [full changelog](https://github.com/frankfika/dailyflow/releases).
 
 ## 🙏 Acknowledgments
 
-Thanks to all contributors and users for their feedback. DailyFlow started as a small wish — "I don't want to manually organize my todos every day" — and has grown into a complete thinking + execution system.
+Thanks to all contributors and users for their feedback. DailyFlow started as a small wish — "I don't want to manually organize my todos every day" — and has grown into a complete task and notes system.
 
 <div align="center">
 
 If this project helps you, a ⭐ would be appreciated!
 
-[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 Download v1.0.0](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 Report a Bug](https://github.com/frankfika/dailyflow/issues)
+[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 Download v1.0.1](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 Report a Bug](https://github.com/frankfika/dailyflow/issues)
 
 </div>

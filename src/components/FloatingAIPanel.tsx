@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { aiApi, promptsApi, notesApi, tasksApi, thinkingWorkspacesApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { buildWorkspaceContext } from './ThinkingWorkspaces';
+import { aiApi, promptsApi, notesApi, tasksApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
 import { loadProviderConfigs, saveProviderConfigs, persistProviderConfigsToBackend, type ProviderConfig } from '../types/models';
 import {
   loadChatStore,
@@ -92,7 +91,7 @@ export interface FloatingAIPanelProps {
   initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null;
   onDraftConsumed?: () => void;
   onNoteCreated?: () => void;
-  focusedContext?: { type: 'note' | 'today' | 'workspace'; id?: string; title?: string; content?: string } | null;
+  focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
 }
 
 export function FloatingAIPanel({
@@ -124,7 +123,6 @@ export function FloatingAIPanel({
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
   const [pendingSkillId, setPendingSkillId] = useState<string | null>(null);
-  const [workspaceContext, setWorkspaceContext] = useState<string>('');
 
   // Resizable panel dimensions
   const [panelSize, setPanelSize] = useState(() => {
@@ -266,25 +264,6 @@ export function FloatingAIPanel({
   }, [initialDraft, onDraftConsumed]);
 
   useEffect(() => {
-    if (focusedContext?.type === 'workspace' && focusedContext.id) {
-      let cancelled = false;
-      thinkingWorkspacesApi.getById(focusedContext.id)
-        .then(ws => {
-          if (cancelled) return;
-          setWorkspaceContext(buildWorkspaceContext(ws));
-        })
-        .catch(err => {
-          if (cancelled) return;
-          console.error('Failed to load workspace context:', err);
-          setWorkspaceContext('');
-        });
-      return () => { cancelled = true; };
-    }
-    setWorkspaceContext('');
-    return undefined;
-  }, [focusedContext?.type, focusedContext?.id]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSessionId, isStreaming]);
 
@@ -419,14 +398,6 @@ export function FloatingAIPanel({
       }
     }
 
-    if (focusedContext.type === 'workspace') {
-      const title = focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace');
-      if (workspaceContext) {
-        return `## ${language === 'zh' ? '思考空间' : 'Workspace'}: ${title}\n\n${workspaceContext}`;
-      }
-      return `## ${language === 'zh' ? '思考空间' : 'Workspace'}: ${title}`;
-    }
-
     return '';
   };
 
@@ -438,9 +409,6 @@ export function FloatingAIPanel({
     }
     if (focusedContext.type === 'note') {
       return focusedContext.title || (language === 'zh' ? '当前笔记' : 'Current Note');
-    }
-    if (focusedContext.type === 'workspace') {
-      return focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace');
     }
     return null;
   }, [focusedContext, tasks, language]);
@@ -745,9 +713,7 @@ export function FloatingAIPanel({
                 {language === 'zh' ? '当前范围: ' : 'Scoped to: '}
                 {focusedContext.type === 'note'
                   ? focusedContext.title
-                  : focusedContext.type === 'workspace'
-                  ? (focusedContext.title || (language === 'zh' ? '思考空间' : 'Workspace'))
-                  : (language === 'zh' ? '今日任务' : 'Today')}
+                  : (language === 'zh' ? '今日任务' : "Today")}
               </span>
             </div>
           )}
@@ -929,7 +895,7 @@ export function FloatingAIPanel({
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {focusedContext && autoContextLabel && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[10px] font-medium border border-accent/20">
-                    {focusedContext.type === 'today' ? '📋' : focusedContext.type === 'workspace' ? '🧠' : '📄'}
+                    {focusedContext.type === 'today' ? '📋' : '📄'}
                     <span className="opacity-70">{language === 'zh' ? '自动' : 'Auto'}</span>
                     <span className="opacity-50">·</span>
                     <span>{autoContextLabel}</span>

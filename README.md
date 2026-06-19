@@ -4,13 +4,13 @@
 
 # DailyFlow
 
-> **本地优先的思考空间与任务系统** · Local-first thinking workspaces & task system
+> **本地优先的任务与笔记系统** · Local-first tasks & notes system
 >
-> 先想清楚，再拆成任务。 · Think first. Then make tasks.
+> 简单记录，专注今天。 · Keep it simple. Focus on today.
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.0.1-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
@@ -24,22 +24,22 @@ __简体中文__ | [English](./README_EN.md)
 
 </div>
 
-## 🎉 v1.0.0 大版本发布
+## 🎉 v1.0.1 更新
 
-**Thinking Workspaces（思考工作台）正式上线。** DailyFlow 不再只是 todo 列表，而是「思考空间 + 行动任务」一体化系统——围绕目标、问题或一段零散想法搭建空间，让 AI 帮你整理 brief、规划路径、生成脑图，再把下一步投放到 Today。
+本次更新精简了产品边界，移除了过度设计的 **Thinking Workspaces（思考工作台）**，让 DailyFlow 回归「任务 + 笔记 + AI 对话」的核心体验；同时修复了 AI Chat 中无法找到/关联非当日笔记的问题。
 
-| 你要做的事 | 旧版本 | v1.0.0 |
+| 你要做的事 | v1.0.0 | v1.0.1 |
 |-----------|-------|--------|
-| 复杂项目 | 只能建多个 task，思考被迫塞进标题 | 独立的 **思考工作台**，长期推进 |
-| 整理思路 | 自己手写 brief、列路径 | 一键 **AI 整理 Brief / 规划 Journey** |
-| 任务拆解 | 自己从大目标拆任务 | **AI 生成下一步任务**，预览后投放 |
-| 推进记录 | 只有任务勾选 | **Timeline** 自动记录每次推进和 AI 决策 |
+| 复杂项目 | 独立的思考工作台 | 回到「项目 / 标签 + 笔记」的简洁方式 |
+| 整理思路 | AI 整理 Brief / Journey | 直接在 AI Chat 中挂载笔记/项目上下文提问 |
+| 任务拆解 | AI 生成任务后投放 | Brain Dump + AI Chat 拆解 |
+| 笔记关联 | 仅当日笔记可挂载 | **全部笔记**都可挂载到 AI Chat |
 
 ---
 
 ## 📖 项目简介
 
-DailyFlow 是一个 **本地优先（local-first）** 的智能任务与思考管理桌面应用。以 Markdown 文件作为唯一数据源，内置 AI 助手（支持 15+ 模型供应商），自动处理跨日任务迁移。**v1.0.0** 新增的 Thinking Workspaces 把「想清楚」和「做下去」连成一条完整的链路。
+DailyFlow 是一个 **本地优先（local-first）** 的智能任务与笔记管理桌面应用。以 Markdown 文件作为唯一数据源，内置 AI 助手（支持 15+ 模型供应商），自动处理跨日任务迁移。
 
 ### 为什么选择 DailyFlow？
 
@@ -50,40 +50,23 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与思考�
 | 需要网络才能使用 | 离线优先，**内置 Node.js 运行时** |
 | 复杂项目管理工具上手难 | 极简设计，专注当日 |
 | AI 功能要额外付费 | 内置 AI，支持 15+ 模型供应商 |
-| 大目标没有思考空间 | **Thinking Workspaces** 独立承载目标与路径 |
 
 ---
 
 ## ✨ 核心功能
 
-### 🧠 思考工作台（v1.0.0 全新）
-
-工作台是 DailyFlow 里的**一等对象**——可以是大目标、模糊想法、项目阶段或会议议题，task 只是它产出的最小行动颗粒。
-
-- **多种入口创建**：从目标、问题、note、task 或 `Cmd+K` 捕获入口都能创建
-- **AI 整理 Brief**：从 scratchpad 自动生成结构化摘要（目标、背景、成功标准、约束、缺失信息）
-- **AI 规划 Journey**：生成阶段、里程碑、风险、本周重点和今天最小行动
-- **AI 生成脑图**：Mermaid 格式，自动覆盖目标、输入、风险、资料、决策和下一步
-- **AI 拆解任务**：从 journey 生成 3-7 个 15-60 分钟可完成的下一步，预览后一键投放到 Today
-- **Timeline 推进记录**：每次 AI 输出、任务完成、决策都会留下痕迹
-- **状态管理**：`active` / `paused` / `completed` / `archived` 四种状态
-- **加密随机 ID**：服务端强制忽略客户端 ID，使用 `tw_` 前缀 + crypto 随机后缀，防止 ID 劫持
-- **优雅降级**：单个 workspace 文件损坏不会拖垮整个列表
-
-![思考工作台](./docs/assets/workspaces.png)
-
 ### 📋 任务管理
 
 - **自动迁移**：未完成任务在次日自动迁移，保留来源日期标记
-- **卡片式界面**：任务按标签分类，支持评论、关联笔记、关联 workspace
+- **卡片式界面**：任务按标签分类，支持评论、关联笔记
 - **Work/Life 切换**：一键切换工作/生活上下文，任务自动过滤
 - **项目概览**：跨日期聚合待办，按分类查看全局进度
-- **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`、`#workspace:tw_xxx`
+- **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`
 
 ### 🤖 AI 助手
 
-- **AI Chat**：完整聊天界面，多会话上下文注入（今日任务/笔记/项目/workspace）
-- **AI Tool Use**：AI 可直接创建任务、保存笔记、操作 workspace
+- **AI Chat**：完整聊天界面，多会话上下文注入（今日任务/笔记/项目）
+- **AI Tool Use**：AI 可直接创建任务、保存笔记
 - **Brain Dump**：把零散想法倒进去，AI 自动提取和分类
 - **AI 总结**：选择范围和提示词，生成结构化日报/周报
 - **Skill Marketplace**：技能市场，支持 Slash Command 和 Agent Skill
@@ -109,7 +92,7 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与思考�
 - **AI 助手**：润色、续写、提取待办、整理会议纪要
 - **发到对话**：把笔记作为上下文绑定到 AI 对话，输入框只留你的提问
 - **@提及**：`@人名` 自动解析，支持按人员筛选
-- **任务关联**：笔记与任务双向关联，笔记也可一键创建工作台
+- **任务关联**：笔记与任务双向关联
 
 ![笔记列表](./docs/assets/notes.png)
 
@@ -130,17 +113,13 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与思考�
 
 ## 📸 界面预览
 
-| 主界面 (Today) | 思考工作台（v1.0.0 新） |
+| 主界面 (Today) | 项目概览 |
 |:---:|:---:|
-| ![Today](./docs/assets/home.png) | ![Workspaces](./docs/assets/workspaces.png) |
+| ![Today](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) |
 
 | AI Chat | 笔记 |
 |:---:|:---:|
 | ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
-
-| 项目概览 | 提示词库 |
-|:---:|:---:|
-| ![Projects](./docs/assets/projects.png) | ![Prompts](./docs/assets/ai-prompts.png) |
 
 ---
 
@@ -162,7 +141,7 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与思考�
 > sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
 > ```
 >
-> **完全独立运行**：v1.0.0 的 dmg 内置了 Node.js 运行时，无需用户机器上预装 Node——下载即可直接使用。
+> **完全独立运行**：v1.0.1 的 dmg 内置了 Node.js 运行时，无需用户机器上预装 Node——下载即可直接使用。
 
 ### 从源码运行
 
@@ -296,6 +275,20 @@ npm run dev:all
 
 ## 📜 更新日志
 
+### v1.0.1 (2026-06-19)
+
+**🧹 精简产品边界，修复 AI Chat 笔记关联**
+
+#### ✨ 改进
+
+- 🗑️ **移除 Thinking Workspaces**：回退过度设计的思考工作台，回归任务 + 笔记 + AI 对话的核心体验
+- 🔗 **AI Chat 全量笔记关联**：上下文选择器现在能搜索并挂载当前 context 下的全部笔记，不再只显示当日笔记
+- 🧭 **简化侧边栏导航**：移除「思考空间」入口，保留 Today / 笔记 / AI 对话
+
+#### 🧪 质量
+
+- 145 个测试全部通过，TypeScript 严格模式 0 错误
+
 ### v1.0.0 (2026-06)
 
 **🎉 重大里程碑：Thinking Workspaces 正式发布**
@@ -341,12 +334,12 @@ npm run dev:all
 
 ## 🙏 致谢
 
-感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为一个完整的思考与执行系统。
+感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为一个简洁的任务与笔记系统。
 
 <div align="center">
 
 如果这个项目对你有帮助，欢迎点 ⭐ Star 支持！
 
-[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 下载 v1.0.0](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 报告问题](https://github.com/frankfika/dailyflow/issues)
+[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 下载 v1.0.1](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 报告问题](https://github.com/frankfika/dailyflow/issues)
 
 </div>

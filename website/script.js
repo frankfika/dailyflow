@@ -5,7 +5,9 @@
 
   const REPO = 'frankfika/dailyflow';
   const RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
+  const REPO_API = `https://api.github.com/repos/${REPO}`;
   const RELEASE_PAGE = `https://github.com/${REPO}/releases`;
+  const REPO_PAGE = `https://github.com/${REPO}`;
 
   // ---- Platform detection ----
   const ua = navigator.userAgent.toLowerCase();
@@ -157,6 +159,37 @@
     });
   }
 
+  // ---- Format star count ----
+  function fmtStars(n) {
+    if (n === undefined || n === null) return '…';
+    if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k';
+    return String(n);
+  }
+
+  // ---- Render star count ----
+  function renderStars(count) {
+    const navStar = document.getElementById('navStar');
+    const heroStar = document.getElementById('heroStar');
+    const text = fmtStars(count);
+    if (navStar) navStar.innerHTML = `★ ${text}`;
+    if (heroStar) heroStar.innerHTML = `★ ${text}`;
+  }
+
+  // ---- Fetch stars ----
+  async function loadStars() {
+    try {
+      const res = await fetch(REPO_API, {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderStars(data.stargazers_count);
+    } catch (err) {
+      console.warn('[DailyFlow] stars fetch failed:', err);
+      renderStars(null);
+    }
+  }
+
   // ---- Fetch release ----
   async function loadRelease() {
     try {
@@ -233,6 +266,7 @@
     initTheme();
     initReveal();
     initAnchors();
+    loadStars();
     loadRelease();
   });
 })();
