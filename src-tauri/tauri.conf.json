@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "npm run dev:all",
-    "beforeBuildCommand": "npm run build && npm run build:server && npm run build:sea"
+    "beforeBuildCommand": "npm run build && npm run build:server"
   },
   "app": {
     "windows": [
@@ -37,7 +37,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../dist-server/*"
+      "../dist-server/index.cjs",
+      "../dist-server/node"
     ]
   },
   "plugins": {
