@@ -168,9 +168,9 @@ npm run tauri build
 
 1. Launch the app and set your **workspace directory** (where Markdown files will be stored)
 2. App auto-creates today's journal file
-3. Click **Workspaces** in the sidebar and create your first workspace with one sentence
-4. Inside the workspace, hit **Clarify** → AI drafts a Brief; hit **Plan Journey** for a roadmap
-5. Hit **Next Tasks** → AI generates next actions, preview, then push to Today
+3. Write today's tasks on the Today page and tag projects with `#project:name`
+4. Switch to the **Notes** tab to create meeting notes or capture ideas
+5. Open **AI Chat** and attach today's tasks or any note as context for your questions
 
 ---
 
