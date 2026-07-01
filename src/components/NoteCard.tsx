@@ -84,7 +84,24 @@ export function renderMarkdownPreview(body: string, onMentionClick?: (m: string)
           h4: ({ children }) => <h4 className="text-[13px] font-bold text-text-heading my-1">{transformText(children)}</h4>,
           code: ({ children }) => <code className="px-1 py-0.5 rounded bg-surface font-mono text-[12px]">{children}</code>,
           pre: ({ children }) => <pre className="my-1 p-2 rounded bg-surface font-mono text-[12px] overflow-x-auto">{children}</pre>,
-          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>{children}</a>,
+          a: ({ children, href }) => {
+            // Defense in depth: reject javascript:/data:/vbscript: schemes that
+            // could execute script when clicked. react-markdown already drops
+            // most unsafe URLs, but if upstream ever changes we don't want a
+            // user-supplied note to be able to run script in the webview.
+            const safe = typeof href === 'string' && /^(https?:|mailto:|\/|#)/i.test(href);
+            return (
+              <a
+                href={safe ? href : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {children}
+              </a>
+            );
+          },
           strong: ({ children }) => <strong className="font-semibold text-text-heading">{transformText(children)}</strong>,
           em: ({ children }) => <em className="italic">{transformText(children)}</em>,
           blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-2 my-1 text-text-muted/70">{children}</blockquote>,

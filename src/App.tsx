@@ -46,6 +46,46 @@ type Task = {
 
 // Data is now loaded from backend API
 
+// #region debug-point A:task-duplicate-reporting
+const DEBUG_TASK_DUPLICATE_URL = 'http://127.0.0.1:7777/event';
+const DEBUG_TASK_DUPLICATE_SESSION = 'task-duplicate-complete';
+
+function collectTaskDuplicateSummary(taskList: Task[]) {
+  const byId = new Map<string, number>();
+  const byTitleStatus = new Map<string, number>();
+  for (const task of taskList) {
+    byId.set(task.id, (byId.get(task.id) || 0) + 1);
+    const titleStatusKey = `${task.title}::${task.status}::${task.source_date || ''}`;
+    byTitleStatus.set(titleStatusKey, (byTitleStatus.get(titleStatusKey) || 0) + 1);
+  }
+  return {
+    total: taskList.length,
+    duplicateIds: Array.from(byId.entries()).filter(([, count]) => count > 1).map(([id, count]) => ({ id, count })),
+    duplicateTitleStatuses: Array.from(byTitleStatus.entries()).filter(([, count]) => count > 1).map(([key, count]) => ({ key, count })),
+    statuses: taskList.reduce<Record<string, number>>((acc, task) => {
+      acc[task.status] = (acc[task.status] || 0) + 1;
+      return acc;
+    }, {}),
+  };
+}
+
+function reportTaskDuplicateDebug(hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) {
+  fetch(DEBUG_TASK_DUPLICATE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: DEBUG_TASK_DUPLICATE_SESSION,
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
   if (!repoUrl || !token) return false;
   try {
@@ -654,11 +694,31 @@ export default function App() {
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
+        reportTaskDuplicateDebug('A', 'App.tsx:toggle-before-update', 'About to toggle task status', {
+          currentFileDate,
+          attempt,
+          taskId: id,
+          fromStatus: task.status,
+          toStatus: newStatus,
+          taskSummary: collectTaskDuplicateSummary(tasks),
+        });
         await tasksApi.updateStatus(id, currentFileDate, newStatus);
         setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
         // Refresh markdown after task change
         const data = await filesApi.get(currentFileDate);
         if (data) {
+          reportTaskDuplicateDebug('A', 'App.tsx:toggle-after-refresh', 'Reloaded tasks after toggle', {
+            currentFileDate,
+            taskId: id,
+            refreshedSummary: collectTaskDuplicateSummary(data.tasks as Task[]),
+            refreshedTasks: (data.tasks as Task[]).map(t => ({
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              source_date: t.source_date,
+              tags: t.tags || [],
+            })),
+          });
           setMarkdown(data.content);
           setTasks(data.tasks as Task[]);
           setLastSyncedMD(data.content);
@@ -905,6 +965,44 @@ export default function App() {
   const toggleArchiveMonth = (month: string) => {
     setExpandedArchiveMonths(prev => ({ ...prev, [month]: !prev[month] }));
   };
+
+  useEffect(() => {
+    const sectionMembership = new Map<string, string[]>();
+    const addSection = (taskId: string, section: string) => {
+      const sections = sectionMembership.get(taskId) || [];
+      sections.push(section);
+      sectionMembership.set(taskId, sections);
+    };
+
+    for (const category of categories) {
+      const catTasks = todayTasks.filter(t => {
+        const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
+        return taskCategories[0] === category;
+      });
+      for (const task of catTasks.filter(t => t.status !== 'done')) addSection(task.id, `category:${category}:pending`);
+      for (const task of catTasks.filter(t => t.status === 'done')) addSection(task.id, `category:${category}:done`);
+    }
+
+    const uncategorized = todayTasks.filter(t => {
+      const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
+      return taskCategories.length === 0;
+    });
+    for (const task of uncategorized.filter(t => t.status !== 'done')) addSection(task.id, 'uncategorized:pending');
+    for (const task of uncategorized.filter(t => t.status === 'done')) addSection(task.id, 'uncategorized:done');
+    for (const task of contextFilteredTasks.filter(t => t.status === 'migrated')) addSection(task.id, 'migrated');
+
+    const duplicateSections = Array.from(sectionMembership.entries())
+      .filter(([, sections]) => new Set(sections).size > 1)
+      .map(([taskId, sections]) => ({ taskId, sections }));
+
+    reportTaskDuplicateDebug('B', 'App.tsx:section-membership', 'Computed task section membership', {
+      currentFileDate,
+      activeContext,
+      taskSummary: collectTaskDuplicateSummary(tasks),
+      duplicateSections,
+      sectionMembership: Array.from(sectionMembership.entries()),
+    });
+  }, [activeContext, categories, contextFilteredTasks, currentFileDate, systemTags, tasks, todayTasks]);
 
   // Handle workspace setup completion
   const handleWorkspaceSetupComplete = () => {

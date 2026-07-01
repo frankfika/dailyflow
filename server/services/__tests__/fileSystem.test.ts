@@ -51,6 +51,29 @@ describe('validatePath', () => {
   it('rejects completely different path', () => {
     expect(validatePath('/tmp/other/file.md', TEST_DIR)).toBe(false);
   });
+
+  // Regression for the startsWith prefix-collision bug.
+  // If workspaceRoot is '/tmp/dailyflow-test-XXX' and a sibling directory
+  // exists at '/tmp/dailyflow-test-XXX-other', the old implementation let
+  // paths inside the sibling through because '/tmp/dailyflow-test-XXX'
+  // is a string prefix of '/tmp/dailyflow-test-XXX-other/secret'.
+  it('rejects sibling directory that shares a name prefix (prefix collision)', () => {
+    const sibling = TEST_DIR + '-other';
+    try {
+      const evil = path.join(sibling, 'secret.md');
+      expect(validatePath(evil, TEST_DIR)).toBe(false);
+    } finally {
+      // Nothing to clean up; sibling is virtual here (path.resolve only).
+    }
+  });
+
+  it('rejects ../ traversal escape', () => {
+    expect(validatePath(path.join(TEST_DIR, 'a', '..', '..', 'etc', 'passwd'), TEST_DIR)).toBe(false);
+  });
+
+  it('accepts nested paths under workspace', () => {
+    expect(validatePath(path.join(TEST_DIR, 'a', 'b', 'c', 'd.md'), TEST_DIR)).toBe(true);
+  });
 });
 
 describe('writeDailyNote + readDailyNote', () => {
@@ -84,6 +107,27 @@ describe('writeDailyNote + readDailyNote', () => {
   it('returns null for non-existent file', async () => {
     const note = await readDailyNote('1999-01-01', TEST_CONFIG);
     expect(note).toBeNull();
+  });
+
+  it('deduplicates migrated task lines that only differ by id', async () => {
+    const content = [
+      '## Tasks',
+      '',
+      '- [>] 准备推特kol #work #delayed #deadline:2026-05-30 ↗ migrated:2026-05-30 ^id-t_old_1',
+      '- [>] 准备推特kol #work #delayed #deadline:2026-05-30 ↗ migrated:2026-05-30 ^id-t_old_2',
+      '',
+    ].join('\n');
+
+    await writeDailyNote('2026-06-01', content, TEST_CONFIG);
+
+    const note = await readDailyNote('2026-06-01', TEST_CONFIG);
+    expect(note).not.toBeNull();
+    expect(note!.tasks).toHaveLength(1);
+    expect(note!.tasks[0].title).toBe('准备推特kol');
+
+    const filePath = getDailyNotePath('2026-06-01', TEST_CONFIG);
+    const cleaned = await fs.readFile(filePath, 'utf-8');
+    expect(cleaned.match(/准备推特kol/g)?.length).toBe(1);
   });
 
   it('creates nested directories automatically', async () => {

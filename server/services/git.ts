@@ -1,8 +1,9 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { loadConfig } from './config.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface GitStatus {
   hasChanges: boolean;
@@ -131,8 +132,9 @@ export async function commitChanges(message: string): Promise<GitCommitResult> {
     }
 
     // 提交
-    const { stdout: commitOutput } = await execAsync(
-      `git commit -m "${message.replace(/"/g, '\\"')}"`,
+    const { stdout: commitOutput } = await execFileAsync(
+      'git',
+      ['commit', '-m', message],
       { cwd: workspaceRoot }
     );
 
@@ -171,8 +173,9 @@ export async function pushToRemote(): Promise<GitPushResult> {
     }
 
     // 推送到远程（使用 -u 设置上游追踪）
-    const { stdout: pushOutput } = await execAsync(
-      `git push -u origin ${branch}`,
+    const { stdout: pushOutput } = await execFileAsync(
+      'git',
+      ['push', '-u', 'origin', branch],
       { cwd: workspaceRoot }
     );
 
@@ -214,21 +217,48 @@ export async function initGitRepo(): Promise<{ success: boolean; error?: string 
 }
 
 /**
+ * 校验远程仓库 URL 是否为合法的 git 远端格式
+ *
+ * execFile 已经让 shell 不参与解析，但 repoUrl 仍然会作为参数被 git 接受，
+ * 写入 .git/config 并参与后续 push/pull。先校验协议和形态，避免：
+ *   - file:// 指向本地敏感路径（git 会读取 /etc/passwd 等）
+ *   - ext:: 协议触发 git 的外部传输机制执行任意命令
+ *   - ssh://user@host 中嵌入 shell 元字符
+ */
+export function isValidGitRemoteUrl(repoUrl: string): boolean {
+  if (typeof repoUrl !== 'string' || repoUrl.length === 0 || repoUrl.length > 2048) {
+    return false;
+  }
+  // 只允许 https://、http://、ssh://、git@ 三种形态
+  if (/^https?:\/\/[^\s]+$/i.test(repoUrl)) return true;
+  if (/^ssh:\/\/[^\s]+$/i.test(repoUrl)) return true;
+  if (/^git@[^\s]+:[^\s]+\.git$/i.test(repoUrl)) return true;
+  return false;
+}
+
+/**
  * 设置远程仓库
  */
 export async function setRemoteRepo(repoUrl: string): Promise<{ success: boolean; error?: string }> {
   const config = await loadConfig();
   const workspaceRoot = config.workspaceRoot;
 
+  if (!isValidGitRemoteUrl(repoUrl)) {
+    return {
+      success: false,
+      error: 'Invalid remote URL. Use https://, http://, ssh:// or git@host:owner/repo.git',
+    };
+  }
+
   try {
     // 检查是否已有 origin
     try {
-      await execAsync('git remote get-url origin', { cwd: workspaceRoot });
+      await execFileAsync('git', ['remote', 'get-url', 'origin'], { cwd: workspaceRoot });
       // 已有 origin，更新它
-      await execAsync(`git remote set-url origin ${repoUrl}`, { cwd: workspaceRoot });
+      await execFileAsync('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: workspaceRoot });
     } catch {
       // 没有 origin，添加它
-      await execAsync(`git remote add origin ${repoUrl}`, { cwd: workspaceRoot });
+      await execFileAsync('git', ['remote', 'add', 'origin', repoUrl], { cwd: workspaceRoot });
     }
 
     return { success: true };

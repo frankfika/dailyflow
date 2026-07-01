@@ -4,6 +4,47 @@ import type { Dirent } from 'node:fs';
 import { parseMarkdown } from './parser.js';
 import type { DailyNote, Config } from '../types/task.js';
 
+// #region debug-point C:file-read-reporting
+const DEBUG_TASK_DUPLICATE_URL = 'http://127.0.0.1:7777/event';
+const DEBUG_TASK_DUPLICATE_SESSION = 'task-duplicate-complete';
+
+function reportTaskDuplicateDebug(hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) {
+  fetch(DEBUG_TASK_DUPLICATE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: DEBUG_TASK_DUPLICATE_SESSION,
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+}
+
+function summarizeTasks(tasks: Array<{ id: string; title: string; status: string; source_date?: string }>) {
+  const idCounts = new Map<string, number>();
+  const titleStatusCounts = new Map<string, number>();
+  for (const task of tasks) {
+    idCounts.set(task.id, (idCounts.get(task.id) || 0) + 1);
+    const key = `${task.title}::${task.status}::${task.source_date || ''}`;
+    titleStatusCounts.set(key, (titleStatusCounts.get(key) || 0) + 1);
+  }
+  return {
+    total: tasks.length,
+    duplicateIds: Array.from(idCounts.entries()).filter(([, count]) => count > 1),
+    duplicateTitleStatuses: Array.from(titleStatusCounts.entries()).filter(([, count]) => count > 1),
+  };
+}
+// #endregion
+
+function dedupeTaskLineKey(rawLine: string): string {
+  const normalized = rawLine.replace(/\s+\^id-[^\s]+/g, '').replace(/\s+/g, ' ').trim();
+  return rawLine.includes('↗ migrated:') ? normalized : rawLine;
+}
+
 /**
  * 获取日记文件的完整路径
  */
@@ -19,11 +60,16 @@ export function getDailyNotePath(date: string, config: Config): string {
 
 /**
  * 验证路径安全性（防止路径遍历攻击）
+ *
+ * 使用 path.relative 替代简单的 startsWith 检查，
+ * 避免类似 resolvedRoot='/home/user' 与 resolvedPath='/home/user-other/x'
+ * 这类前缀碰撞误判通过。
  */
 export function validatePath(filePath: string, workspaceRoot: string): boolean {
   const resolvedPath = path.resolve(filePath);
   const resolvedRoot = path.resolve(workspaceRoot);
-  return resolvedPath.startsWith(resolvedRoot);
+  const rel = path.relative(resolvedRoot, resolvedPath);
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 /**
@@ -52,13 +98,27 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
         continue;
       }
       const rawLine = lines[task.line];
-      if (seen.has(rawLine)) {
+      const dedupeKey = dedupeTaskLineKey(rawLine);
+      if (seen.has(dedupeKey)) {
         duplicateLines.push(task.line);
       } else {
-        seen.add(rawLine);
+        seen.add(dedupeKey);
         uniqueTasks.push(task);
       }
     }
+
+    reportTaskDuplicateDebug('C', 'fileSystem.ts:readDailyNote', 'Parsed tasks from daily note', {
+      date,
+      summary: summarizeTasks(tasks),
+      duplicateLines,
+      tasks: tasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        source_date: task.source_date,
+        line: task.line,
+      })),
+    });
 
     // If duplicates found, remove them from the file
     if (duplicateLines.length > 0) {
