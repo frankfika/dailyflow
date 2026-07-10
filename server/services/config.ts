@@ -22,28 +22,28 @@ function newWorkspaceId(): string {
   return 'ws_' + crypto.randomBytes(6).toString('hex');
 }
 
+/**
+ * Normalize workspaces[] and activeWorkspaceId.
+ *
+ * Important: we never silently seed a default workspace when workspaces[] is empty.
+ * Doing so would cause the app to "snap back" to ~/Desktop/DailyFlow on every
+ * cold start whenever the array got lost, masking real data the user picked.
+ * Instead we leave workspaces empty and let the frontend show the first-run
+ * setup screen.
+ */
 function ensureWorkspaces(config: Config): Config {
-  let workspaces = Array.isArray(config.workspaces) ? [...config.workspaces] : [];
+  const workspaces = Array.isArray(config.workspaces) ? [...config.workspaces] : [];
 
   if (workspaces.length === 0) {
-    const seedPath = config.workspaceRoot || DEFAULT_WORKSPACE_PATH;
-    const seed: Workspace = {
-      id: newWorkspaceId(),
-      name: path.basename(seedPath) || 'DailyFlow',
-      path: seedPath,
-      createdAt: new Date().toISOString(),
-    };
-    workspaces = [seed];
-    config.activeWorkspaceId = seed.id;
+    config.workspaces = [];
+    config.activeWorkspaceId = '';
+    config.workspaceRoot = '';
+    return config;
   }
 
-  let active = workspaces.find(w => w.id === config.activeWorkspaceId);
-  if (!active) {
-    active = workspaces[0];
-    config.activeWorkspaceId = active.id;
-  }
-
+  const active = workspaces.find(w => w.id === config.activeWorkspaceId) || workspaces[0];
   config.workspaces = workspaces;
+  config.activeWorkspaceId = active.id;
   config.workspaceRoot = active.path;
   return config;
 }

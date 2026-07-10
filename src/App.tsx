@@ -1104,7 +1104,13 @@ export default function App() {
               onRenamed={(id, name) => setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w))}
               onRemoved={(id, nextActive) => {
                 setWorkspaces(prev => prev.filter(w => w.id !== id));
-                if (id === activeWorkspaceId && nextActive) {
+                if (!nextActive) {
+                  // Last workspace removed — fall back to first-run setup.
+                  setActiveWorkspaceId('');
+                  setWorkspaceRoot('');
+                  setIsFirstRun(true);
+                  setShowWorkspaceSetup(true);
+                } else if (id === activeWorkspaceId) {
                   handleSwitchWorkspace(nextActive);
                 }
               }}

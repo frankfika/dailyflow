@@ -356,7 +356,14 @@ router.post('/workspaces', async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     workspaces.push(ws);
-    await saveConfig({ ...config, workspaces, activeWorkspaceId: config.activeWorkspaceId || ws.id });
+    // Keep the legacy workspaceRoot field in sync so older code paths and the
+    // first-run check still resolve correctly.
+    await saveConfig({
+      ...config,
+      workspaces,
+      activeWorkspaceId: config.activeWorkspaceId || ws.id,
+      workspaceRoot: trimmedPath,
+    });
     res.json({ workspace: ws });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -387,20 +394,32 @@ router.patch('/workspaces/:id', async (req, res) => {
 });
 
 /**
- * DELETE /api/config/workspaces/:id - 删除笔记本（不删磁盘文件）
+ * DELETE /api/config/workspaces/:id - 从列表移除（不删磁盘文件）
+ *
+ * 允许删除最后一个 workspace —— 此时清空 activeWorkspaceId/workspaceRoot，
+ * 前端下次启动会再次进入 first-run 引导，避免出现"永远卡在默认 workspace"的局面。
  */
 router.delete('/workspaces/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const config = await loadConfig();
     const workspaces = config.workspaces || [];
-    if (workspaces.length <= 1) {
-      return res.status(400).json({ error: 'Cannot delete the last workspace' });
-    }
     if (!workspaces.some(w => w.id === id)) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
     const remaining = workspaces.filter(w => w.id !== id);
+
+    if (remaining.length === 0) {
+      // Last workspace removed — clear active state so first-run screen appears.
+      await saveConfig({
+        ...config,
+        workspaces: [],
+        activeWorkspaceId: '',
+        workspaceRoot: '',
+      });
+      return res.json({ success: true, cleared: true, activeWorkspaceId: '' });
+    }
+
     const nextActive = config.activeWorkspaceId === id ? remaining[0].id : config.activeWorkspaceId;
     await saveConfig({ ...config, workspaces: remaining, activeWorkspaceId: nextActive });
     res.json({ success: true, activeWorkspaceId: nextActive });
@@ -422,7 +441,7 @@ router.post('/workspaces/:id/activate', async (req, res) => {
     const result = await ensureDirectory(target.path);
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    await saveConfig({ ...config, activeWorkspaceId: id });
+    await saveConfig({ ...config, activeWorkspaceId: id, workspaceRoot: target.path });
     res.json({ success: true, workspace: target });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

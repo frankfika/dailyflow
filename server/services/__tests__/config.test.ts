@@ -35,7 +35,11 @@ describe('loadConfig', () => {
 
   it('returns default config when file does not exist', async () => {
     const config = await loadConfig();
-    expect(config.workspaceRoot).toBe(path.join(os.homedir(), 'Desktop', 'DailyFlow'));
+    // When no config file exists, defaults are populated but no synthetic
+    // workspace is seeded — the frontend should drive the first-run setup.
+    expect(config.workspaceRoot).toBe('');
+    expect(config.workspaces).toEqual([]);
+    expect(config.activeWorkspaceId).toBe('');
     expect(config.dailyPathTemplate).toBe('Daily/{year}/{month}/{date}.md');
     expect(config.rolloverTrigger).toBe('manual');
     expect(config.rolloverSkipTags).toEqual(['no-rollover']);
@@ -44,6 +48,15 @@ describe('loadConfig', () => {
   it('merges saved config with defaults', async () => {
     const partial: Config = {
       workspaceRoot: '/tmp/custom-workspace',
+      workspaces: [
+        {
+          id: 'ws_partial',
+          name: 'Partial',
+          path: '/tmp/custom-workspace',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      activeWorkspaceId: 'ws_partial',
       dailyPathTemplate: '{date}.md',
       rolloverTrigger: 'manual',
       rolloverSkipTags: ['no-rollover'],
@@ -62,6 +75,15 @@ describe('loadConfig', () => {
   it('saves and loads full config', async () => {
     const full: Config = {
       workspaceRoot: '/tmp/test',
+      workspaces: [
+        {
+          id: 'ws_test',
+          name: 'Test',
+          path: '/tmp/test',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      activeWorkspaceId: 'ws_test',
       dailyPathTemplate: 'Notes/{date}.md',
       rolloverTrigger: 'on_app_open',
       rolloverSkipTags: ['no-rollover', 'hold'],

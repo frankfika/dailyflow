@@ -251,7 +251,7 @@ export const workspacesApi = {
     }
   },
 
-  async remove(id: string): Promise<{ activeWorkspaceId: string }> {
+  async remove(id: string): Promise<{ activeWorkspaceId: string; cleared?: boolean }> {
     const res = await fetch(`${API_BASE}/config/workspaces/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw await httpError(res, 'Failed to delete workspace');

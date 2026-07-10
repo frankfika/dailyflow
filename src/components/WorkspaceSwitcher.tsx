@@ -156,9 +156,17 @@ export function WorkspaceSwitcher({
     if (!confirmRemove) return;
     setIsRemoving(true);
     try {
-      const { activeWorkspaceId: nextActive } = await workspacesApi.remove(confirmRemove.id);
+      const { activeWorkspaceId: nextActive, cleared } = await workspacesApi.remove(confirmRemove.id);
       onRemoved?.(confirmRemove.id, nextActive);
       setConfirmRemove(null);
+      if (cleared) {
+        // Last workspace removed — close the menu and let App.tsx pick up the
+        // empty state via onRemoved, which triggers a re-check of first-run.
+        showToast(
+          language === 'zh' ? '已移除，请重新选择一个工作区' : 'Removed. Pick a workspace to continue.',
+          'info'
+        );
+      }
     } catch (e: any) {
       showToast(e.message || (language === 'zh' ? '删除失败' : 'Failed to remove'), 'error');
     } finally {
@@ -249,18 +257,16 @@ export function WorkspaceSwitcher({
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
-                    {workspaces.length > 1 && (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleRemove(ws.id);
-                        }}
-                        className="p-1 rounded hover:bg-surface-white text-text-muted hover:text-red-500"
-                        title={language === 'zh' ? '从列表移除' : 'Remove from list'}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleRemove(ws.id);
+                      }}
+                      className="p-1 rounded hover:bg-surface-white text-text-muted hover:text-red-500"
+                      title={language === 'zh' ? '从列表移除' : 'Remove from list'}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -322,9 +328,13 @@ export function WorkspaceSwitcher({
         show={!!confirmRemove}
         title={language === 'zh' ? '移除工作区' : 'Remove Workspace'}
         message={
-          language === 'zh'
-            ? `从列表移除「${confirmRemove?.name}」？磁盘上的文件不会被删除。`
-            : `Remove "${confirmRemove?.name}" from the list? Files on disk are not deleted.`
+          workspaces.length <= 1
+            ? (language === 'zh'
+                ? `「${confirmRemove?.name}」是当前唯一的工作区。从列表移除后，DailyFlow 会回到首次运行引导。磁盘上的文件不会被删除。`
+                : `"${confirmRemove?.name}" is your only workspace. After removing it, DailyFlow will return to the first-run setup. Files on disk are not deleted.`)
+            : (language === 'zh'
+                ? `从列表移除「${confirmRemove?.name}」？磁盘上的文件不会被删除。`
+                : `Remove "${confirmRemove?.name}" from the list? Files on disk are not deleted.`)
         }
         confirmText={language === 'zh' ? '移除' : 'Remove'}
         cancelText={language === 'zh' ? '取消' : 'Cancel'}
