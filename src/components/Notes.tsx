@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, FileText, Mic, Sparkles, X, ChevronDown, Loader2, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { notesApi, tasksApi, promptsApi, aiApi, type NoteData, type PromptTemplateData } from '../api/client';
-import { getActiveAiConfig } from '../types/models';
+import { getActiveAiConfig, loadProviderConfigs } from '../types/models';
+import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
 import { NoteCard } from './NoteCard';
 import { NoteEditor } from './NoteEditor';
 
@@ -189,7 +190,10 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       setGeneratedSummary(summary);
     } catch (err: any) {
       console.error('Summary generation failed:', err);
-      setSummaryError(err.message || String(err));
+      const raw = err?.message || String(err);
+      const providerStore = loadProviderConfigs();
+      const active = providerStore.configs.find(c => c.id === providerStore.activeId);
+      setSummaryError(getFriendlyAiErrorMessage(raw, language, active?.name || 'AI'));
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -234,7 +238,10 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
       result = result.filter(n =>
         n.title.toLowerCase().includes(q) ||
         n.body.toLowerCase().includes(q) ||
-        n.mentions.some(m => m.toLowerCase().includes(q))
+        n.mentions.some(m => m.toLowerCase().includes(q)) ||
+        (n.time || '').toLowerCase().includes(q) ||
+        (n.endTime || '').toLowerCase().includes(q) ||
+        (n.participants || []).some(p => p.toLowerCase().includes(q))
       );
     }
     if (tagFilter) {

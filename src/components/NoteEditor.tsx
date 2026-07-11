@@ -31,6 +31,7 @@ interface NoteEditorProps {
   defaultDate?: string;
   defaultLinkedTaskIds?: string[];
   defaultTitle?: string;
+  defaultType?: NoteData['type'];
   initialPreview?: boolean;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
@@ -58,6 +59,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   defaultDate,
   defaultLinkedTaskIds,
   defaultTitle,
+  defaultType,
   initialPreview,
   isMaximized,
   onToggleMaximize,
@@ -80,7 +82,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     };
   };
 
-  const [type, setType] = useState<NoteData['type']>(note?.type || 'note');
+  const [type, setType] = useState<NoteData['type']>(note?.type || defaultType || 'note');
   const [title, setTitle] = useState(note?.title || defaultTitle || '');
   const [body, setBody] = useState(note?.body || '');
   const [date, setDate] = useState(note?.date || defaultDate || today);

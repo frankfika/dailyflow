@@ -30,9 +30,11 @@ const typeConfigLife = {
 };
 
 // Highlight @mentions inside a text node — used as ReactMarkdown text renderer.
+// Matches CJK names, ASCII letters, digits, underscore, hyphen, dot, and middle dot —
+// e.g. @jean-luc.picard, @张三, @李四-王五, @sam_altman.
 export function highlightMentions(text: string, onMentionClick?: (m: string) => void): React.ReactNode {
   if (!text.includes('@')) return text;
-  const parts = text.split(/(@[\w一-龥-]+)/g);
+  const parts = text.split(/(@[\w一-龥.\-·]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('@')) {
       const name = part.slice(1);

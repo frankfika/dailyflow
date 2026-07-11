@@ -137,6 +137,7 @@ export default function App() {
   // can find and reference notes beyond just the currently selected date.
   const [contextNotes, setContextNotes] = useState<NoteData[]>([]);
   const [showQuickNoteEditor, setShowQuickNoteEditor] = useState(false);
+  const [quickNoteDefaultType, setQuickNoteDefaultType] = useState<NoteData['type'] | undefined>(undefined);
   const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
@@ -1615,8 +1616,9 @@ export default function App() {
                     language={language}
                     activeContext={activeContext}
                     onViewAll={() => setActiveTab('notes')}
-                    onAddNote={() => { setEditingDailyNote(null); setShowQuickNoteEditor(true); }}
-                    onNoteClick={(n) => { setEditingDailyNote(n); setShowQuickNoteEditor(true); }}
+                    onAddNote={() => { setEditingDailyNote(null); setQuickNoteDefaultType(undefined); setShowQuickNoteEditor(true); }}
+                    onAddMeetingNote={() => { setEditingDailyNote(null); setQuickNoteDefaultType('meeting_note'); setShowQuickNoteEditor(true); }}
+                    onNoteClick={(n) => { setEditingDailyNote(n); setQuickNoteDefaultType(undefined); setShowQuickNoteEditor(true); }}
                   />
 
                 </motion.div>
@@ -1792,6 +1794,7 @@ export default function App() {
              defaultDate={currentFileDate}
              defaultLinkedTaskIds={prefillLinkedTaskId ? [prefillLinkedTaskId] : undefined}
              defaultTitle={prefillLinkedTaskId ? tasks.find(t => t.id === prefillLinkedTaskId)?.title : undefined}
+             defaultType={quickNoteDefaultType}
              availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
              availableTags={[]}
              aiApiKey={aiApiKey}
@@ -1814,21 +1817,23 @@ export default function App() {
                  contextLabel: noteTitle,
                  noteId,
                });
-               setShowQuickNoteEditor(false);
-               setEditingDailyNote(null);
-               setPrefillLinkedTaskId(null);
-               setActiveTab('ai-chat');
-             }}
-             onSave={async (data) => {
-               try {
-                 if (editingDailyNote) {
-                   await notesApi.update(editingDailyNote.id, data);
-                 } else {
-                   await notesApi.create(data);
-                 }
-                 setShowQuickNoteEditor(false);
-                 setEditingDailyNote(null);
-                 setPrefillLinkedTaskId(null);
+                setShowQuickNoteEditor(false);
+                setEditingDailyNote(null);
+                setPrefillLinkedTaskId(null);
+                setQuickNoteDefaultType(undefined);
+                setActiveTab('ai-chat');
+              }}
+              onSave={async (data) => {
+                try {
+                  if (editingDailyNote) {
+                    await notesApi.update(editingDailyNote.id, data);
+                  } else {
+                    await notesApi.create(data);
+                  }
+                  setShowQuickNoteEditor(false);
+                  setEditingDailyNote(null);
+                  setPrefillLinkedTaskId(null);
+                  setQuickNoteDefaultType(undefined);
                  // Refresh daily notes if the note is for today
                  if (data.date === currentFileDate) {
                    const dateNotes = await notesApi.getByDate(currentFileDate);
@@ -1841,7 +1846,7 @@ export default function App() {
                  showToast(language === 'zh' ? '保存失败' : 'Failed to save note', 'error');
                }
              }}
-             onClose={() => { setShowQuickNoteEditor(false); setEditingDailyNote(null); setPrefillLinkedTaskId(null); }}
+              onClose={() => { setShowQuickNoteEditor(false); setEditingDailyNote(null); setPrefillLinkedTaskId(null); setQuickNoteDefaultType(undefined); }}
            />
            </div>
          </div>

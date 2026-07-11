@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, Plus } from 'lucide-react';
+import { FileText, Plus, Mic } from 'lucide-react';
 import type { NoteData } from '../api/client';
 import { NoteCard } from './NoteCard';
 
@@ -11,6 +11,7 @@ interface DailyNoteCardsProps {
   onViewAll?: () => void;
   onMentionClick?: (mention: string) => void;
   onAddNote?: () => void;
+  onAddMeetingNote?: () => void;
   onNoteClick?: (note: NoteData) => void;
 }
 
@@ -21,6 +22,7 @@ export const DailyNoteCards: React.FC<DailyNoteCardsProps> = ({
   onViewAll,
   onMentionClick,
   onAddNote,
+  onAddMeetingNote,
   onNoteClick,
 }) => {
   const displayNotes = notes.slice(0, 5);
@@ -59,23 +61,52 @@ export const DailyNoteCards: React.FC<DailyNoteCardsProps> = ({
               {language === 'zh' ? '笔记' : 'Note'}
             </button>
           )}
+          {onAddMeetingNote && (
+            <button
+              onClick={onAddMeetingNote}
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-xs font-bold"
+              title={language === 'zh' ? '新建会议笔记' : 'New meeting note'}
+            >
+              <Mic className="w-3 h-3" />
+              {language === 'zh' ? '会议' : 'Meeting'}
+            </button>
+          )}
         </div>
       </div>
 
       {isEmpty ? (
-        <button
-          onClick={onAddNote}
-          className="w-full border border-dashed border-border/80 rounded-xl py-5 text-center hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent transition-all group"
-        >
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-surface border border-border/60 flex items-center justify-center group-hover:border-accent/30 group-hover:bg-accent/10 transition-colors">
-              <Plus className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
+        <div className="w-full border border-dashed border-border/80 rounded-xl py-5 text-center hover:border-accent/40 transition-all group">
+          <div className="flex flex-col items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-surface border border-border/60 flex items-center justify-center">
+              <Plus className="w-4 h-4 text-text-muted" />
             </div>
             <p className="text-xs text-text-muted">
               {language === 'zh' ? '今天还没有笔记' : 'No notes yet'}
             </p>
           </div>
-        </button>
+          {(onAddNote || onAddMeetingNote) && (
+            <div className="flex items-center justify-center gap-2">
+              {onAddNote && (
+                <button
+                  onClick={onAddNote}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-[11px] font-bold"
+                >
+                  <Plus className="w-3 h-3" />
+                  {language === 'zh' ? '笔记' : 'Note'}
+                </button>
+              )}
+              {onAddMeetingNote && (
+                <button
+                  onClick={onAddMeetingNote}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-[11px] font-bold"
+                >
+                  <Mic className="w-3 h-3" />
+                  {language === 'zh' ? '会议' : 'Meeting'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           <AnimatePresence>
