@@ -772,6 +772,90 @@ export const aiApi = {
   },
 };
 
+/**
+ * Meetings API (Granola Phase 1).
+ *
+ * Transcribe takes raw text (Phase 1 mock) or audio (Phase 2 whisper.cpp)
+ * and returns timestamped segments. Summarize takes the transcript plus the
+ * user's provider config and returns a structured Markdown note + action
+ * items, both proxied through the backend so the API key never reaches the
+ * browser.
+ */
+export interface MeetingSegment {
+  start: number;
+  end: number;
+  speaker?: string;
+  text: string;
+}
+
+export interface MeetingTranscribeRequest {
+  text: string;
+  date?: string;
+  participants?: string[];
+}
+
+export interface MeetingTranscribeResponse {
+  segments: MeetingSegment[];
+  text: string;
+  date: string;
+  participants: string[];
+}
+
+export interface MeetingActionItem {
+  title: string;
+  owner?: string;
+  due?: string;
+  priority?: 'high' | 'medium' | 'low';
+}
+
+export interface MeetingSummarizeRequest {
+  apiKey: string;
+  model?: string;
+  baseUrl: string;
+  transcript?: string;
+  segments?: MeetingSegment[];
+  title: string;
+  participants?: string[];
+  date?: string;
+  time?: string;
+  endTime?: string;
+  maxTokens?: number;
+  language?: 'zh' | 'en';
+}
+
+export interface MeetingSummarizeResponse {
+  markdown: string;
+  actionItems: MeetingActionItem[];
+  model: string;
+}
+
+export const meetingsApi = {
+  async transcribe(req: MeetingTranscribeRequest): Promise<MeetingTranscribeResponse> {
+    const res = await fetch(`${API_BASE}/meetings/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `Meeting transcribe failed (${res.status})`);
+    }
+    return res.json();
+  },
+  async summarize(req: MeetingSummarizeRequest): Promise<MeetingSummarizeResponse> {
+    const res = await fetch(`${API_BASE}/meetings/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `Meeting summarize failed (${res.status})`);
+    }
+    return res.json();
+  },
+};
+
 export interface IpfsBackupRecord {
   cid: string;
   pinName: string;

@@ -4,7 +4,7 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, Calendar, FileText, Folder, Search, Type, Check, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, FileText, Folder, Search, Type, Check, CheckCircle2, Mic } from 'lucide-react';
 import type { ContextItem } from '../types/chat';
 
 interface ContextPickerProps {
@@ -28,7 +28,7 @@ export function ContextPicker({
   onDeselect,
   onClose,
 }: ContextPickerProps) {
-  const [tab, setTab] = useState<'tasks' | 'notes' | 'projects' | 'custom'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'notes' | 'meetings' | 'projects' | 'custom'>('tasks');
   const [search, setSearch] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [customText, setCustomText] = useState('');
@@ -171,6 +171,7 @@ export function ContextPicker({
           {[
             { value: 'tasks', label: language === 'zh' ? '任务' : 'Tasks', icon: Calendar },
             { value: 'notes', label: language === 'zh' ? '笔记' : 'Notes', icon: FileText },
+            { value: 'meetings', label: language === 'zh' ? '会议' : 'Meetings', icon: Mic },
             { value: 'projects', label: language === 'zh' ? '项目' : 'Projects', icon: Folder },
             { value: 'custom', label: language === 'zh' ? '自定义' : 'Custom', icon: Type },
           ].map(t => {
@@ -397,6 +398,63 @@ export function ContextPicker({
               );
             })
           )}
+
+          {tab === 'meetings' && (() => {
+            const meetingNotes = notes
+              .filter((n: any) => n.type === 'meeting_note')
+              .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+            const filtered = !search
+              ? meetingNotes.slice(0, 30)
+              : meetingNotes.filter((n: any) => {
+                  const q = search.toLowerCase();
+                  return n.title?.toLowerCase().includes(q) ||
+                    (n.body || '').toLowerCase().includes(q) ||
+                    (n.participants || []).some((p: string) => p.toLowerCase().includes(q));
+                }).slice(0, 30);
+            if (filtered.length === 0) {
+              return (
+                <div className="py-8 text-center text-text-muted text-xs">
+                  {language === 'zh' ? '暂无会议笔记' : 'No meeting notes yet'}
+                </div>
+              );
+            }
+            return filtered.map((note: any) => {
+              const item: ContextItem = {
+                id: `ctx_note_${note.id}`,
+                type: 'note',
+                label: note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting'),
+                data: { noteId: note.id },
+              };
+              const sel = selectedIds.has(item.id);
+              return (
+                <button
+                  key={note.id}
+                  onClick={() => toggleItem(item)}
+                  className={`w-full flex items-start gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
+                    sel
+                      ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                      : 'border-border hover:border-accent/40 hover:bg-surface-white'
+                  }`}
+                >
+                  <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                    sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
+                  }`}>
+                    {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                  </div>
+                  <Mic className="w-3.5 h-3.5 text-text-muted mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-text-heading truncate">
+                      {note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting')}
+                    </div>
+                    <div className="text-[10px] text-text-muted truncate">
+                      {note.date}{note.time ? ` · ${note.time}` : ''}
+                      {note.participants?.length ? ` · ${note.participants.join(', ')}` : ''}
+                    </div>
+                  </div>
+                </button>
+              );
+            });
+          })()}
 
           {tab === 'projects' && (
             filteredProjects.length === 0 ? (

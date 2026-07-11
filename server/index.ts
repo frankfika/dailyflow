@@ -12,6 +12,7 @@ import aiRouter from './routes/ai.js';
 import recurringRouter from './routes/recurring.js';
 import ipfsRouter from './routes/ipfs.js';
 import thinkingWorkspacesRouter from './routes/thinkingWorkspaces.js';
+import meetingsRouter from './routes/meetings.js';
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -60,6 +61,7 @@ app.use('/api/ai', aiRouter);
 app.use('/api/recurring', recurringRouter);
 app.use('/api/ipfs', ipfsRouter);
 app.use('/api/thinking-workspaces', thinkingWorkspacesRouter);
+app.use('/api/meetings', meetingsRouter);
 
 // 健康检查
 app.get('/health', (req, res) => {
