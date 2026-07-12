@@ -106,6 +106,17 @@ export default function App() {
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
+  const [aiButtonOffset, setAiButtonOffset] = useState<{ x: number; y: number }>(() => {
+    if (typeof window === 'undefined') return { x: 0, y: 0 };
+    try {
+      const raw = localStorage.getItem('df_ai_button_offset');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { x: 0, y: 0 };
+  });
+  const isDraggingAiButtonRef = useRef(false);
+  const aiButtonDragStartRef = useRef({ clientX: 0, clientY: 0, x: 0, y: 0 });
+  const aiButtonDidDragRef = useRef(false);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
   // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
@@ -1081,16 +1092,71 @@ export default function App() {
 
         {/* Floating AI Panel Toggle */}
         <button
-          onClick={() => setIsAIPanelOpen(prev => !prev)}
-          className={`fixed top-4 right-6 z-[60] flex items-center gap-2 px-3.5 py-1.5 rounded-full border transition-all duration-300 active:scale-95 backdrop-blur-2xl ${
+          onClick={() => {
+            if (aiButtonDidDragRef.current) {
+              aiButtonDidDragRef.current = false;
+              return;
+            }
+            setIsAIPanelOpen(prev => !prev);
+          }}
+          onPointerDown={(e) => {
+            aiButtonDidDragRef.current = false;
+            isDraggingAiButtonRef.current = true;
+            try {
+              (e.currentTarget as Element).setPointerCapture(e.pointerId);
+            } catch {}
+            aiButtonDragStartRef.current = {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              x: aiButtonOffset.x,
+              y: aiButtonOffset.y,
+            };
+          }}
+          onPointerMove={(e) => {
+            if (!isDraggingAiButtonRef.current) return;
+            const dx = e.clientX - aiButtonDragStartRef.current.clientX;
+            const dy = e.clientY - aiButtonDragStartRef.current.clientY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+              aiButtonDidDragRef.current = true;
+            }
+            setAiButtonOffset({
+              x: aiButtonDragStartRef.current.x + dx,
+              y: aiButtonDragStartRef.current.y + dy,
+            });
+          }}
+          onPointerUp={(e) => {
+            if (!isDraggingAiButtonRef.current) return;
+            isDraggingAiButtonRef.current = false;
+            try {
+              (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+            } catch {}
+            try {
+              localStorage.setItem('df_ai_button_offset', JSON.stringify(aiButtonOffset));
+            } catch {}
+          }}
+          onPointerCancel={(e) => {
+            isDraggingAiButtonRef.current = false;
+            try {
+              (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+            } catch {}
+          }}
+          className={`fixed bottom-20 right-6 z-[60] flex items-center justify-center w-12 h-12 rounded-full border shadow-lg backdrop-blur-2xl cursor-grab active:cursor-grabbing active:scale-95 transition-colors duration-300 ${
             isAIPanelOpen
               ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_4px_20px_rgba(0,122,255,0.15)]'
-              : 'bg-white/40 border-white/60 text-text-heading hover:text-accent hover:border-accent/30 hover:bg-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.05)]'
+              : 'bg-white/50 border-white/70 text-text-heading hover:text-accent hover:border-accent/30 hover:bg-white/70 shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
           }`}
+          style={{
+            transform: `translate3d(${aiButtonOffset.x}px, ${aiButtonOffset.y}px, 0)`,
+          }}
           title={language === 'zh' ? 'AI 助手' : 'AI Assistant'}
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="text-xs font-semibold">{language === 'zh' ? 'AI 助手' : 'AI Assist'}</span>
+          <motion.span
+            className="flex items-center justify-center"
+            animate={{ rotate: [0, 14, -14, 0], scale: [1, 1.15, 1] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Sparkles className="w-5 h-5" />
+          </motion.span>
         </button>
 
         <FloatingAIPanel
