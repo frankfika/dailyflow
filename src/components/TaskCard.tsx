@@ -240,13 +240,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {task.source_date && task.source_date !== currentFileDate && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-accent text-[11px] font-medium bg-accent/10 border border-accent/15">
-                <CornerUpRight className="w-3 h-3" />
-                <span>{language === 'zh' ? `从 ${task.source_date} 迁移` : `Migrated from ${task.source_date}`}</span>
+              // Demoted to a small inline annotation — was a bright accent pill
+              // that read as a system notification. Now it sits with the rest
+              // of the metadata text.
+              <span className="inline-flex items-center gap-1 text-text-muted text-[10px] font-normal">
+                <CornerUpRight className="w-2.5 h-2.5" />
+                <span>{language === 'zh' ? `从 ${task.source_date} 迁移` : `migrated from ${task.source_date}`}</span>
               </span>
             )}
             {task.tags && task.tags.filter((t: string) => !['tasks', 'work', 'life'].includes(t)).map((tag: string) => (
-              <span key={tag} className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold border backdrop-blur-sm transition-all hover:scale-105 cursor-default ${getTagColor(tag)}`}>
+              <span key={tag} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border bg-transparent transition-colors cursor-default ${getTagColor(tag)}`}>
                 <span>#{tag}</span>
               </span>
             ))}
