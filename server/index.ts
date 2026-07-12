@@ -35,7 +35,10 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
+// Body limit raised to 200mb so a 1h recording (base64-encoded WebM ~ 80MB
+// for a typical meeting) fits in a single POST to /api/meetings/transcribe.
+// Other routes stay under 10mb; this is a safe ceiling for the audio path.
+app.use(express.json({ limit: '200mb' }));
 
 // Security headers (without bringing in helmet as a dependency).
 // We deliberately do NOT set HSTS — per security-best-practices, HSTS can

@@ -40,6 +40,7 @@ vi.mock('lucide-react', () => ({
   PanelLeftClose: () => React.createElement('span', { 'data-testid': 'icon-panel-close' }),
   PanelLeftOpen: () => React.createElement('span', { 'data-testid': 'icon-panel-open' }),
   Bookmark: () => React.createElement('span', { 'data-testid': 'icon-bookmark' }),
+  Mic: () => React.createElement('span', { 'data-testid': 'icon-mic' }),
 }));
 
 vi.mock('../../api/client', () => ({

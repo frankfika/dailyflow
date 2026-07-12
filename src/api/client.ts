@@ -799,6 +799,37 @@ export interface MeetingTranscribeResponse {
   text: string;
   date: string;
   participants: string[];
+  recordingPath?: string;
+  transcriptionMode?: 'whisper' | 'mock' | 'mock-with-audio';
+  model?: string;
+}
+
+/**
+ * Phase 2 audio request: MediaRecorder produces a Blob, we read it as
+ * base64 and forward to the server. The server saves the file to
+ * `~/.dailyflow/recordings/{date}/{uuid}.{ext}` and (when `whisperConfig`
+ * is provided) forwards to an OpenAI-compatible `/audio/transcriptions`
+ * endpoint.
+ */
+export interface MeetingAudioTranscribeRequest {
+  audio: {
+    /** Base64-encoded audio bytes (with or without the data: URL prefix). */
+    data: string;
+    /** MIME type as reported by MediaRecorder, e.g. "audio/webm". */
+    mimeType: string;
+    /** Original filename (used to pick the right extension on disk). */
+    filename?: string;
+  };
+  date?: string;
+  participants?: string[];
+  /** When set, server forwards to the configured Whisper API. */
+  whisperConfig?: {
+    apiKey: string;
+    baseUrl: string;
+    model?: string;
+    language?: string;
+  };
+  language?: 'zh' | 'en';
 }
 
 export interface MeetingActionItem {
@@ -829,6 +860,20 @@ export interface MeetingSummarizeResponse {
   model: string;
 }
 
+export interface MeetingExtractActionsRequest {
+  apiKey: string;
+  baseUrl: string;
+  model?: string;
+  markdown: string;
+  language?: 'zh' | 'en';
+  maxTokens?: number;
+}
+
+export interface MeetingExtractActionsResponse {
+  actionItems: MeetingActionItem[];
+  model: string;
+}
+
 export const meetingsApi = {
   async transcribe(req: MeetingTranscribeRequest): Promise<MeetingTranscribeResponse> {
     const res = await fetch(`${API_BASE}/meetings/transcribe`, {
@@ -842,6 +887,25 @@ export const meetingsApi = {
     }
     return res.json();
   },
+  /**
+   * Phase 2: real audio transcription. Sends the MediaRecorder Blob to the
+   * server, which saves it to `~/.dailyflow/recordings/{date}/` and (when
+   * `whisperConfig` is provided) forwards to an OpenAI-compatible
+   * `/audio/transcriptions` endpoint. Without `whisperConfig` the server
+   * still saves the file and returns a mock scaffold.
+   */
+  async transcribeAudio(req: MeetingAudioTranscribeRequest): Promise<MeetingTranscribeResponse> {
+    const res = await fetch(`${API_BASE}/meetings/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `Meeting audio transcribe failed (${res.status})`);
+    }
+    return res.json();
+  },
   async summarize(req: MeetingSummarizeRequest): Promise<MeetingSummarizeResponse> {
     const res = await fetch(`${API_BASE}/meetings/summarize`, {
       method: 'POST',
@@ -851,6 +915,23 @@ export const meetingsApi = {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw await httpError(res, data.error || data.detail || `Meeting summarize failed (${res.status})`);
+    }
+    return res.json();
+  },
+  /**
+   * Phase 2: re-run the LLM on a finalized meeting note to surface action
+   * items. The frontend uses this to power the "Review N Action Items" card
+   * before tasks land in the user's daily file.
+   */
+  async extractActions(req: MeetingExtractActionsRequest): Promise<MeetingExtractActionsResponse> {
+    const res = await fetch(`${API_BASE}/meetings/extract-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `Meeting extract-actions failed (${res.status})`);
     }
     return res.json();
   },

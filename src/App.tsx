@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi, recurringApi, workspacesApi } from './api/client';
 import type { Workspace } from './api/client';
@@ -13,6 +13,7 @@ import { getTodayStr } from './utils/tagColors';
 import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
+import { MeetingCapture } from './components/MeetingCapture';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
 import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
@@ -105,6 +106,12 @@ export default function App() {
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
+  // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
+  // modal lives at the App level so it can be opened from any tab, not just
+  // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
+  // to trigger it.
+  const [showMeetingCapture, setShowMeetingCapture] = useState(false);
+  const metCmdShiftRHintRef = useRef(false);
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -565,21 +572,46 @@ export default function App() {
     }
   }, [syncInterval, currentFileDate]);
 
-  // Keyboard shortcut: Cmd/Ctrl+N to toggle task input, Escape to close
+  // Keyboard shortcuts: Cmd/Ctrl+N to toggle task input, ⌘⇧R to open
+  // Meeting Capture (Granola Phase 2), Escape to close. ⌘⇧R is normally the
+  // browser hard-reload; we intercept it so the dailyflow user can use the
+  // same muscle memory for "start a meeting capture".
+  const openMeetingCapture = useCallback(() => {
+    setShowMeetingCapture(true);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         setShowTaskInput(prev => !prev);
+        return;
+      }
+      // Phase 2 M1: ⌘⇧R / Ctrl+Shift+R -> open Meeting Capture
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
+        e.preventDefault();
+        openMeetingCapture();
+        if (!metCmdShiftRHintRef.current) {
+          metCmdShiftRHintRef.current = true;
+          showToast(
+            language === 'zh'
+              ? '提示: ⌘⇧R = 会议 Capture (dailyflow 拦截了浏览器 reload)'
+              : 'Tip: ⌘⇧R = Meeting Capture (dailyflow intercepted the browser reload)',
+            'info'
+          );
+        }
+        return;
       }
       if (e.key === 'Escape') {
         setShowTaskInput(false);
         setShowBrainDump(false);
+        // Don't auto-close the meeting modal on Escape — its own component
+        // handles Esc (and refuses to close mid-recording).
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openMeetingCapture, language, showToast]);
 
   const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
@@ -1541,6 +1573,7 @@ export default function App() {
                     showToast={showToast}
                     initialDraft={chatDraft}
                     onDraftConsumed={() => setChatDraft(null)}
+                    onOpenMeetingCapture={openMeetingCapture}
                     onNoteCreated={() => {
                       // Refresh daily notes for today so the new note appears immediately
                       const today = new Date().toISOString().slice(0, 10);
@@ -1749,10 +1782,33 @@ export default function App() {
                }
              }}
               onClose={() => { setShowQuickNoteEditor(false); setEditingDailyNote(null); setPrefillLinkedTaskId(null); setQuickNoteDefaultType(undefined); }}
-           />
-           </div>
-         </div>
-       )}
-     </div>
-  );
+            />
+            </div>
+          </div>
+        )}
+
+      {/* Phase 2 M1: Meeting Capture modal — owned by App.tsx so the ⌘⇧R
+          global shortcut works from any tab. AIChat's toolbar button calls
+          onOpenMeetingCapture to set the same state. */}
+      <MeetingCapture
+        isOpen={showMeetingCapture}
+        language={language}
+        activeContext={activeContext}
+        showToast={showToast}
+        onSaved={() => {
+          // Refresh daily notes so a meeting saved for today shows up
+          // immediately in the Today tab.
+          const today = new Date().toISOString().slice(0, 10);
+          notesApi.getByDate(today).then(dateNotes => {
+            setDailyNotes(prev => {
+              const others = prev.filter(n => n.date !== today);
+              return [...others, ...dateNotes];
+            });
+          }).catch(err => console.error('Failed to refresh daily notes:', err));
+          loadContextNotes();
+        }}
+        onClose={() => setShowMeetingCapture(false)}
+      />
+      </div>
+   );
 }

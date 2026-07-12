@@ -1,14 +1,25 @@
 /**
- * Granola × DailyFlow — Phase 1 backend (mock).
+ * Granola × DailyFlow — Phase 2 backend.
  *
- * Two endpoints, modeled after /api/ai/summarize. API keys never leave the
- * server: the frontend posts transcript + provider config, and the server
- * forwards to the user's chosen OpenAI-compatible chat-completions endpoint.
+ * Phase 1 endpoints: mock `transcribe` + AI-proxied `summarize`.
+ * Phase 2 additions:
+ *   - `transcribe` now accepts real audio (base64-encoded Blob) and forwards
+ *     to an OpenAI-compatible `/audio/transcriptions` endpoint when the user
+ *     supplies a `whisperConfig` (apiKey + baseUrl + model). When no
+ *     whisperConfig is given, the raw audio is still saved to
+ *     `~/.dailyflow/recordings/{date}/{uuid}.{ext}` and a mock segment
+ *     list is returned so the meeting flow can still progress.
+ *   - new `extract-actions` endpoint: given the meeting note Markdown,
+ *     re-runs the LLM (JSON mode) to surface action items. Frontend uses
+ *     it to power the "Review N Action Items" card before tasks land.
  *
- * Phase 2 (out of scope here) will swap the mock `transcribe` for real
- * whisper.cpp / cloud Whisper; the route shape stays stable.
+ * API keys never leave the server.
  */
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -29,7 +40,7 @@ function isBlockedHost(url: URL): boolean {
   return BLOCKED_HOSTS.some(re => re.test(url.hostname));
 }
 
-function resolveUrl(baseUrl: string): string {
+function resolveChatCompletionsUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error('Invalid URL: must start with http:// or https://');
@@ -47,13 +58,31 @@ function resolveUrl(baseUrl: string): string {
   return /\/v\d+$/.test(trimmed) ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
 }
 
-interface TranscribeBody {
-  /** Raw transcript text the user pasted (Phase 1). Phase 2 will accept audio. */
-  text: string;
-  /** Optional ISO date for the meeting; defaults to today. */
-  date?: string;
-  /** Optional list of attendee names to bias the segments. */
-  participants?: string[];
+function resolveTranscriptionsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new Error('Invalid URL: must start with http:// or https://');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Invalid URL format');
+  }
+  if (isBlockedHost(parsed)) {
+    throw new Error('Invalid URL: internal addresses are not allowed');
+  }
+  if (/\/audio\/transcriptions$/.test(trimmed)) return trimmed;
+  return /\/v\d+$/.test(trimmed)
+    ? `${trimmed}/audio/transcriptions`
+    : `${trimmed}/v1/audio/transcriptions`;
+}
+
+interface WhisperConfig {
+  apiKey: string;
+  baseUrl: string;
+  model?: string;
+  language?: string;
 }
 
 interface TranscribeSegment {
@@ -63,62 +92,257 @@ interface TranscribeSegment {
   text: string;
 }
 
+interface TranscribeAudioBody {
+  /** Base64-encoded audio bytes from MediaRecorder. */
+  audio: {
+    data: string;
+    mimeType: string;
+    filename?: string;
+  };
+  date?: string;
+  participants?: string[];
+  /** When set, server forwards audio to the configured Whisper-compatible API. */
+  whisperConfig?: WhisperConfig;
+  /** Optional language hint forwarded to the Whisper provider. */
+  language?: 'zh' | 'en';
+}
+
+interface TranscribeTextBody {
+  /** Raw transcript text (Phase 1 mock). */
+  text: string;
+  date?: string;
+  participants?: string[];
+}
+
 interface TranscribeResponse {
   segments: TranscribeSegment[];
   text: string;
-  /** Echoed back so the frontend can persist alongside the note. */
   date: string;
   participants: string[];
+  /** Where the raw audio was saved (if any). */
+  recordingPath?: string;
+  /** "whisper" = real API, "mock-with-audio" = audio saved but no Whisper call. */
+  transcriptionMode: 'whisper' | 'mock' | 'mock-with-audio';
+  /** Whisper model that was used (echoed back for debugging). */
+  model?: string;
 }
 
-/**
- * Mock transcribe: take the user's raw transcript, split on sentence
- * boundaries, fake timestamps every ~12s. Phase 2 replaces this with the
- * real whisper.cpp call (and later cloud Whisper through this same route).
- */
-function mockTranscribe(text: string, date: string, participants: string[]): TranscribeResponse {
-  const cleaned = text.replace(/\r\n/g, '\n').trim();
-  if (!cleaned) return { segments: [], text: '', date, participants };
+function pickExtension(mimeType: string, filename?: string): string {
+  if (filename && /\.[a-z0-9]+$/i.test(filename)) {
+    return filename.toLowerCase().match(/\.[a-z0-9]+$/i)![0];
+  }
+  const mt = (mimeType || '').toLowerCase();
+  if (mt.includes('webm')) return '.webm';
+  if (mt.includes('ogg')) return '.ogg';
+  if (mt.includes('wav')) return '.wav';
+  if (mt.includes('mp4') || mt.includes('m4a') || mt.includes('aac')) return '.m4a';
+  if (mt.includes('mpeg') || mt.includes('mp3')) return '.mp3';
+  return '.bin';
+}
 
-  // Split on Chinese + English sentence boundaries; keep delimiters.
-  const sentences = cleaned
+function recordingsDir(date: string): string {
+  return path.join(os.homedir(), '.dailyflow', 'recordings', date);
+}
+
+function newUuid(): string {
+  return crypto.randomUUID();
+}
+
+function splitTranscript(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .trim()
     .split(/(?<=[.!?。！？])\s+|\n+/)
     .map(s => s.trim())
     .filter(Boolean);
+}
 
-  // Crude speaker heuristic: a line that starts with "Name: " is treated as a
-  // speaker turn. Otherwise the segments stay anonymous (matches the Phase 1
-  // non-goal of "no speaker diarization").
+/**
+ * Mock transcribe: split the user's raw transcript on sentence boundaries
+ * and emit fake timestamps every ~12s. Phase 1 behaviour, kept for fallback.
+ */
+function mockTranscribeText(text: string, date: string, participants: string[]): TranscribeResponse {
+  const cleaned = text.replace(/\r\n/g, '\n').trim();
+  if (!cleaned) return { segments: [], text: '', date, participants, transcriptionMode: 'mock' };
+
+  const sentences = splitTranscript(cleaned);
   const segments: TranscribeSegment[] = [];
-  let cursor = 0; // seconds
+  let cursor = 0;
   const step = 12;
   for (const sentence of sentences) {
     const m = /^([\p{L}\p{N} _-]{1,30})[:：]\s*(.*)$/u.exec(sentence);
     const speaker = m ? m[1] : undefined;
     const body = m ? m[2] : sentence;
     const len = Math.max(3, Math.min(20, Math.round(body.length / 8)));
-    segments.push({
-      start: cursor,
-      end: cursor + len,
-      speaker,
-      text: body,
-    });
+    segments.push({ start: cursor, end: cursor + len, speaker, text: body });
     cursor += len + 2;
   }
 
-  return { segments, text: cleaned, date, participants };
+  return { segments, text: cleaned, date, participants, transcriptionMode: 'mock' };
 }
 
-router.post('/transcribe', (req, res) => {
+interface WhisperApiResponse {
+  text?: string;
+  segments?: Array<{ start: number; end: number; text: string; speaker?: string }>;
+  language?: string;
+}
+
+async function transcribeWithWhisper(
+  audioBytes: Buffer,
+  mimeType: string,
+  ext: string,
+  cfg: WhisperConfig
+): Promise<WhisperApiResponse> {
+  const url = resolveTranscriptionsUrl(cfg.baseUrl);
+  const model = cfg.model || 'whisper-1';
+  const form = new FormData();
+  // FormData in Node 18+ accepts Blob with filename + mimeType
+  const blob = new Blob([audioBytes], { type: mimeType || 'audio/webm' });
+  form.append('file', blob, `recording${ext}`);
+  form.append('model', model);
+  form.append('response_format', 'verbose_json');
+  if (cfg.language) form.append('language', cfg.language);
+
+  const upstream = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      // Do NOT set Content-Type — let fetch set the multipart boundary.
+    },
+    body: form,
+  });
+  if (!upstream.ok) {
+    const errText = await upstream.text();
+    throw new Error(`Whisper API error (${upstream.status}): ${errText.slice(0, 500)}`);
+  }
+  const data = await upstream.json() as WhisperApiResponse;
+  return data;
+}
+
+function normalizeWhisperSegments(data: WhisperApiResponse): TranscribeSegment[] {
+  if (Array.isArray(data.segments) && data.segments.length > 0) {
+    return data.segments.map(s => ({
+      start: typeof s.start === 'number' ? s.start : 0,
+      end: typeof s.end === 'number' ? s.end : 0,
+      text: String(s.text || '').trim(),
+      speaker: s.speaker,
+    })).filter(s => s.text);
+  }
+  if (typeof data.text === 'string' && data.text.trim()) {
+    return splitTranscript(data.text).map(sentence => {
+      const m = /^([\p{L}\p{N} _-]{1,30})[:：]\s*(.*)$/u.exec(sentence);
+      const speaker = m ? m[1] : undefined;
+      const body = m ? m[2] : sentence;
+      return {
+        start: 0,
+        end: 0,
+        speaker,
+        text: body,
+      };
+    });
+  }
+  return [];
+}
+
+function segmentsToText(segments: TranscribeSegment[]): string {
+  return segments.map(s => `${s.speaker ? s.speaker + ': ' : ''}${s.text}`).join('\n').trim();
+}
+
+function decodeAudioBase64(data: string): Buffer {
+  // Strip the optional `data:audio/...;base64,` prefix that MediaRecorder
+  // sometimes produces when read via FileReader.readAsDataURL.
+  const commaIdx = data.indexOf(',');
+  const payload = commaIdx >= 0 ? data.slice(commaIdx + 1) : data;
+  return Buffer.from(payload, 'base64');
+}
+
+async function persistAudio(
+  audioBytes: Buffer,
+  mimeType: string,
+  filename: string | undefined,
+  date: string
+): Promise<{ recordingPath: string; ext: string }> {
+  const ext = pickExtension(mimeType, filename);
+  const dir = recordingsDir(date);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const fileName = `${newUuid()}${ext}`;
+  const recordingPath = path.join(dir, fileName);
+  await fs.promises.writeFile(recordingPath, audioBytes);
+  return { recordingPath, ext };
+}
+
+router.post('/transcribe', async (req, res) => {
   try {
-    const body = req.body as TranscribeBody;
-    if (!body || typeof body.text !== 'string' || !body.text.trim()) {
-      return res.status(400).json({ error: 'Missing required field: text' });
-    }
+    const body = req.body as (TranscribeAudioBody & TranscribeTextBody);
+    if (!body) return res.status(400).json({ error: 'Missing request body' });
     const date = body.date || new Date().toISOString().slice(0, 10);
     const participants = Array.isArray(body.participants) ? body.participants.filter(p => typeof p === 'string') : [];
-    const result = mockTranscribe(body.text, date, participants);
-    res.json(result);
+
+    // Branch 1: real audio (Phase 2 path)
+    if (body.audio && typeof body.audio.data === 'string') {
+      const { data, mimeType, filename } = body.audio;
+      const audioBytes = decodeAudioBase64(data);
+      if (audioBytes.length === 0) {
+        return res.status(400).json({ error: 'Audio payload is empty' });
+      }
+
+      // Persist the raw audio first — even if the upstream Whisper call
+      // fails, the user can retry / re-upload from the saved file.
+      let savedPath = '';
+      try {
+        const saved = await persistAudio(audioBytes, mimeType || 'audio/webm', filename, date);
+        savedPath = saved.recordingPath;
+      } catch (persistErr) {
+        console.warn('Failed to persist audio file:', persistErr);
+        // Continue — the transcript can still be useful even without the file.
+      }
+
+      // Forward to the Whisper-compatible provider when configured.
+      if (body.whisperConfig && body.whisperConfig.apiKey && body.whisperConfig.baseUrl) {
+        const ext = pickExtension(mimeType, filename);
+        const whisperResp = await transcribeWithWhisper(
+          audioBytes,
+          mimeType || 'audio/webm',
+          ext,
+          body.whisperConfig
+        );
+        const segments = normalizeWhisperSegments(whisperResp);
+        const text = whisperResp.text?.trim() || segmentsToText(segments);
+        return res.json({
+          segments,
+          text,
+          date,
+          participants,
+          recordingPath: savedPath || undefined,
+          transcriptionMode: 'whisper',
+          model: body.whisperConfig.model || 'whisper-1',
+        });
+      }
+
+      // No whisper config: audio is saved, return a mock segment scaffold so
+      // the meeting flow can still continue. The frontend can re-call this
+      // endpoint with a `whisperConfig` later (v1.1) to get a real transcript.
+      const mock = mockTranscribeText(
+        `[Phase 2] 录了 ${audioBytes.length} 字节音频 (${mimeType || 'audio/webm'}).\n` +
+        `配置云端 Whisper API 后可获得真实转录。Audio saved to: ${savedPath}`,
+        date,
+        participants
+      );
+      return res.json({
+        ...mock,
+        recordingPath: savedPath || undefined,
+        transcriptionMode: 'mock-with-audio',
+      });
+    }
+
+    // Branch 2: Phase 1 text-only path
+    if (typeof body.text === 'string' && body.text.trim()) {
+      return res.json(mockTranscribeText(body.text, date, participants));
+    }
+
+    return res.status(400).json({
+      error: 'Missing required field: provide either `audio` (Phase 2) or `text` (Phase 1).',
+    });
   } catch (error: any) {
     console.error('Meeting transcribe failed:', error);
     res.status(500).json({ error: error.message || String(error) });
@@ -231,7 +455,7 @@ router.post('/summarize', async (req, res) => {
       return res.status(400).json({ error: 'Missing transcript or segments' });
     }
 
-    const url = resolveUrl(body.baseUrl);
+    const url = resolveChatCompletionsUrl(body.baseUrl);
     const model = body.model || 'default';
     const lang = body.language === 'en' ? 'en' : 'zh';
     const systemPrompt = lang === 'en' ? MEETING_ORGANIZER_SYSTEM_EN : MEETING_ORGANIZER_SYSTEM_ZH;
@@ -271,6 +495,46 @@ router.post('/summarize', async (req, res) => {
     res.json({ markdown, actionItems, model });
   } catch (error: any) {
     console.error('Meeting summarize failed:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+interface ExtractActionsBody {
+  apiKey: string;
+  baseUrl: string;
+  model?: string;
+  /** Markdown body of the meeting note. */
+  markdown: string;
+  language?: 'zh' | 'en';
+  maxTokens?: number;
+}
+
+interface ExtractActionsResponse {
+  actionItems: ActionItem[];
+  model: string;
+}
+
+router.post('/extract-actions', async (req, res) => {
+  try {
+    const body = req.body as ExtractActionsBody;
+    if (!body || !body.apiKey || !body.baseUrl || !body.markdown || !body.markdown.trim()) {
+      return res.status(400).json({ error: 'Missing required fields: apiKey, baseUrl, markdown' });
+    }
+    const url = resolveChatCompletionsUrl(body.baseUrl);
+    const model = body.model || 'default';
+    const maxTokens = body.maxTokens ?? 1024;
+    // Always use the bilingual-friendly action extractor (the system prompt
+    // is language-agnostic; the LLM follows the language of the note).
+    void body.language;
+
+    const raw = await callUpstreamChatCompletions(url, body.apiKey, model, [
+      { role: 'system', content: ACTION_EXTRACTOR_SYSTEM },
+      { role: 'user', content: body.markdown },
+    ], maxTokens);
+    const actionItems = safeParseActionItems(raw);
+    res.json({ actionItems, model });
+  } catch (error: any) {
+    console.error('Meeting extract-actions failed:', error);
     res.status(500).json({ error: error.message || String(error) });
   }
 });

@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { X, Calendar, FileText, Folder, Search, Type, Check, CheckCircle2, Mic } from 'lucide-react';
 import type { ContextItem } from '../types/chat';
@@ -32,6 +32,11 @@ export function ContextPicker({
   const [search, setSearch] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [customText, setCustomText] = useState('');
+  /** Phase 2 M6: when on, the meetings tab pre-selects the last 7 days of meeting_note. */
+  const [autoInclude7Days, setAutoInclude7Days] = useState(true);
+  // Track whether we've already fired the one-shot auto-include for this
+  // picker mount, so user-driven deselects aren't undone on re-render.
+  const didAutoIncludeRef = useRef(false);
 
   const dates = Object.keys(filesMap).sort().reverse();
   const selectedIds = useMemo(() => new Set(selectedItems.map(i => i.id)), [selectedItems]);
@@ -48,6 +53,37 @@ export function ContextPicker({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  /**
+   * Phase 2 M6: on first render of the meetings tab, when auto-include is
+   * on, automatically pre-select every meeting_note from the last 7 days.
+   * The user can deselect any they don't want; the effect does not re-fire.
+   */
+  useEffect(() => {
+    if (didAutoIncludeRef.current) return;
+    if (tab !== 'meetings') return;
+    if (!autoInclude7Days) return;
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recent = notes.filter((n: any) => {
+      if (n.type !== 'meeting_note') return false;
+      if (!n.date) return false;
+      const ts = new Date(n.date + 'T00:00:00').getTime();
+      if (Number.isNaN(ts)) return false;
+      return ts >= cutoff;
+    });
+    if (recent.length === 0) return;
+    didAutoIncludeRef.current = true;
+    for (const note of recent) {
+      const id = `ctx_note_${note.id}`;
+      if (selectedIds.has(id)) continue;
+      onSelect({
+        id,
+        type: 'note',
+        label: note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting'),
+        data: { noteId: note.id },
+      });
+    }
+  }, [tab, autoInclude7Days, notes, selectedIds, language, onSelect]);
 
   const projects = useMemo(() => {
     const set = new Set<string>();
@@ -400,9 +436,16 @@ export function ContextPicker({
           )}
 
           {tab === 'meetings' && (() => {
+            const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const isRecent = (n: any) => {
+              if (!n.date) return false;
+              const ts = new Date(n.date + 'T00:00:00').getTime();
+              return !Number.isNaN(ts) && ts >= cutoff;
+            };
             const meetingNotes = notes
               .filter((n: any) => n.type === 'meeting_note')
               .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+            const recentCount = meetingNotes.filter(isRecent).length;
             const filtered = !search
               ? meetingNotes.slice(0, 30)
               : meetingNotes.filter((n: any) => {
@@ -411,49 +454,77 @@ export function ContextPicker({
                     (n.body || '').toLowerCase().includes(q) ||
                     (n.participants || []).some((p: string) => p.toLowerCase().includes(q));
                 }).slice(0, 30);
-            if (filtered.length === 0) {
-              return (
-                <div className="py-8 text-center text-text-muted text-xs">
-                  {language === 'zh' ? '暂无会议笔记' : 'No meeting notes yet'}
+            return (
+              <>
+                {/* Phase 2 M6: auto-include toggle */}
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border bg-accent/5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar className="w-3.5 h-3.5 text-accent flex-shrink-0" />
+                    <div className="text-[11px] text-text-heading">
+                      {language === 'zh'
+                        ? `自动包含: 最近 7 天 (${recentCount} 场)`
+                        : `Auto-include: last 7 days (${recentCount} meeting${recentCount === 1 ? '' : 's'})`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAutoInclude7Days(v => !v)}
+                    role="switch"
+                    aria-checked={autoInclude7Days}
+                    className={`relative inline-flex h-5 w-9 rounded-full transition-colors flex-shrink-0 ${
+                      autoInclude7Days ? 'bg-accent' : 'bg-border'
+                    }`}
+                    title={language === 'zh' ? '开启后, 进入会议 tab 自动勾选最近 7 天' : 'When on, opening the Meetings tab pre-selects the last 7 days'}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        autoInclude7Days ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
                 </div>
-              );
-            }
-            return filtered.map((note: any) => {
-              const item: ContextItem = {
-                id: `ctx_note_${note.id}`,
-                type: 'note',
-                label: note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting'),
-                data: { noteId: note.id },
-              };
-              const sel = selectedIds.has(item.id);
-              return (
-                <button
-                  key={note.id}
-                  onClick={() => toggleItem(item)}
-                  className={`w-full flex items-start gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
-                    sel
-                      ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
-                      : 'border-border hover:border-accent/40 hover:bg-surface-white'
-                  }`}
-                >
-                  <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
-                    sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
-                  }`}>
-                    {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+
+                {filtered.length === 0 ? (
+                  <div className="py-8 text-center text-text-muted text-xs">
+                    {language === 'zh' ? '暂无会议笔记' : 'No meeting notes yet'}
                   </div>
-                  <Mic className="w-3.5 h-3.5 text-text-muted mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-text-heading truncate">
-                      {note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting')}
-                    </div>
-                    <div className="text-[10px] text-text-muted truncate">
-                      {note.date}{note.time ? ` · ${note.time}` : ''}
-                      {note.participants?.length ? ` · ${note.participants.join(', ')}` : ''}
-                    </div>
-                  </div>
-                </button>
-              );
-            });
+                ) : filtered.map((note: any) => {
+                  const item: ContextItem = {
+                    id: `ctx_note_${note.id}`,
+                    type: 'note',
+                    label: note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting'),
+                    data: { noteId: note.id },
+                  };
+                  const sel = selectedIds.has(item.id);
+                  return (
+                    <button
+                      key={note.id}
+                      onClick={() => toggleItem(item)}
+                      className={`w-full flex items-start gap-3 px-3 py-2 text-left border-2 rounded-lg transition-all ${
+                        sel
+                          ? 'border-accent bg-accent/10 ring-2 ring-accent/20'
+                          : 'border-border hover:border-accent/40 hover:bg-surface-white'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center transition-all flex-shrink-0 ${
+                        sel ? 'bg-accent text-white scale-110' : 'border-2 border-border bg-surface'
+                      }`}>
+                        {sel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                      </div>
+                      <Mic className="w-3.5 h-3.5 text-text-muted mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-text-heading truncate">
+                          {note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting')}
+                        </div>
+                        <div className="text-[10px] text-text-muted truncate">
+                          {note.date}{note.time ? ` · ${note.time}` : ''}
+                          {note.participants?.length ? ` · ${note.participants.join(', ')}` : ''}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            );
           })()}
 
           {tab === 'projects' && (
