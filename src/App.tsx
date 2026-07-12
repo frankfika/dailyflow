@@ -24,6 +24,7 @@ import { AIChat } from './components/AIChat';
 import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { NoteEditor } from './components/NoteEditor';
+import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
 import type { UpdateInfo } from './api/updater';
@@ -104,7 +105,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat' | 'capsules'>('today');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [aiButtonOffset, setAiButtonOffset] = useState<{ x: number; y: number }>(() => {
     if (typeof window === 'undefined') return { x: 0, y: 0 };
@@ -1188,8 +1189,8 @@ export default function App() {
           }
         />
 
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1641,7 +1642,6 @@ export default function App() {
                     onDraftConsumed={() => setChatDraft(null)}
                     onOpenMeetingCapture={openMeetingCapture}
                     onNoteCreated={() => {
-                      // Refresh daily notes for today so the new note appears immediately
                       const today = new Date().toISOString().slice(0, 10);
                       notesApi.getByDate(today).then(dateNotes => {
                         setDailyNotes(prev => {
@@ -1652,6 +1652,16 @@ export default function App() {
                       loadContextNotes();
                     }}
                   />
+                </motion.div>
+              ) : activeTab === 'capsules' ? (
+                <motion.div
+                  key="capsules"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full"
+                >
+                  <Capsules language={language} showToast={showToast} />
                 </motion.div>
               ) : (
                 <Notes

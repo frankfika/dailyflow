@@ -13,6 +13,10 @@
 export type Context = 'work' | 'life';
 
 export interface ContextualTask {
+  id: string;
+  title: string;
+  status: string;
+  source_date?: string;
   tags?: string[];
 }
 

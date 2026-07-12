@@ -16,6 +16,8 @@ vi.mock('lucide-react', () => ({
   Check: () => React.createElement('span', { 'data-testid': 'icon-check' }),
   AlertCircle: () => React.createElement('span', { 'data-testid': 'icon-alert' }),
   Loader2: () => React.createElement('span', { 'data-testid': 'icon-loader' }),
+  ShieldCheck: () => React.createElement('span', { 'data-testid': 'icon-shield' }),
+  Search: () => React.createElement('span', { 'data-testid': 'icon-search' }),
 }));
 
 describe.sequential('WorkspaceSetup', () => {
@@ -25,7 +27,7 @@ describe.sequential('WorkspaceSetup', () => {
     vi.clearAllMocks();
   });
 
-  it('blocks Continue until validation passes', async () => {
+  it('re-validates when Continue is clicked without a valid path', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ valid: false }),
@@ -37,13 +39,19 @@ describe.sequential('WorkspaceSetup', () => {
     const input = screen.getByPlaceholderText('No folder selected');
     fireEvent.change(input, { target: { value: '/tmp/workspace' } });
 
-    fireEvent.click(screen.getByText('Check'));
+    fireEvent.click(screen.getByText('Validate'));
 
     await waitFor(() => {
       expect(screen.getByText(/Path is invalid/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Get Started')).toBeDisabled();
+    fireEvent.click(screen.getByText('Get Started'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it('creates workspace and completes after validation passes', async () => {
@@ -56,7 +64,7 @@ describe.sequential('WorkspaceSetup', () => {
     const input = screen.getByPlaceholderText('No folder selected');
     fireEvent.change(input, { target: { value: '/tmp/workspace' } });
 
-    fireEvent.click(screen.getByText('Check'));
+    fireEvent.click(screen.getByText('Validate'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByText('Get Started'));
@@ -78,6 +86,7 @@ describe.sequential('WorkspaceSetup', () => {
       expect(screen.getByDisplayValue('/chosen/folder')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Get Started')).toBeDisabled();
+    expect(screen.getByText('Validate')).toBeInTheDocument();
+    expect(screen.getByText('Get Started')).not.toBeDisabled();
   });
 });

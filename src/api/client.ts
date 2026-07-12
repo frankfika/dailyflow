@@ -946,6 +946,52 @@ export interface IpfsBackupRecord {
   gateway?: string;
 }
 
+export interface Capsule {
+  id: string;
+  title: string;
+  content: string;
+  type: 'commitment' | 'secret' | 'milestone';
+  status: 'sealed' | 'revealed' | 'failed' | 'extended';
+  createdAt: string;
+  unlockAt: string;
+  revealedAt?: string;
+  reflection?: string;
+  isPublic: boolean;
+  isEncrypted: boolean;
+  tags: string[];
+  linkedTaskId?: string;
+  linkedNoteId?: string;
+  proof?: CapsuleProof;
+}
+
+export interface CapsuleProof {
+  provider: 'local' | 'arweave' | 'evm';
+  txId?: string;
+  chainId?: number;
+  contractAddress?: string;
+  onChainId?: number;
+  contentHash?: string;
+  gatewayUrl?: string;
+}
+
+export interface CapsuleInput {
+  title: string;
+  content: string;
+  type: Capsule['type'];
+  unlockAt: string;
+  isPublic?: boolean;
+  isEncrypted?: boolean;
+  tags?: string[];
+  linkedTaskId?: string;
+  linkedNoteId?: string;
+}
+
+export interface CapsuleRevealInput {
+  status: Extract<Capsule['status'], 'revealed' | 'failed' | 'extended'>;
+  reflection?: string;
+  newUnlockAt?: string;
+}
+
 export interface IpfsBackupResult {
   success: boolean;
   cid?: string;
@@ -979,6 +1025,50 @@ export const ipfsApi = {
   async list(): Promise<{ records: IpfsBackupRecord[] }> {
     const res = await fetch(`${API_BASE}/ipfs/backups`);
     if (!res.ok) throw await httpError(res, 'Failed to list IPFS backups');
+    return res.json();
+  },
+};
+
+export const capsulesApi = {
+  async list(): Promise<Capsule[]> {
+    const res = await fetch(`${API_BASE}/capsules`);
+    if (!res.ok) throw await httpError(res, 'Failed to list capsules');
+    const data = await res.json();
+    return data.capsules;
+  },
+
+  async create(input: CapsuleInput): Promise<Capsule> {
+    const res = await fetch(`${API_BASE}/capsules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create capsule');
+    return res.json();
+  },
+
+  async reveal(id: string, input: CapsuleRevealInput): Promise<Capsule> {
+    const res = await fetch(`${API_BASE}/capsules/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to reveal capsule');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/capsules/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw await httpError(res, 'Failed to delete capsule');
+  },
+
+  async seal(id: string, provider: 'arweave' | 'evm', proof?: Partial<CapsuleProof>): Promise<Capsule> {
+    const res = await fetch(`${API_BASE}/capsules/${id}/seal/${provider}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proof ?? {}),
+    });
+    if (!res.ok) throw await httpError(res, `Failed to seal capsule to ${provider}`);
     return res.json();
   },
 };

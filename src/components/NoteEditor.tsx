@@ -671,7 +671,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Editor body */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-4xl mx-auto px-6 py-6 space-y-4">
+        <div className="max-w-5xl mx-auto px-4 py-4 space-y-4">
           {/* Title */}
           <input
             autoFocus
@@ -870,7 +870,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             )}
             {previewMode ? (
               <div className="prose prose-slate max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{bodyWithoutHeading || body}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} className="text-base leading-relaxed" style={{ fontFamily: 'inherit' }}>{bodyWithoutHeading || body}</ReactMarkdown>
               </div>
             ) : (
               <textarea
@@ -879,7 +879,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 placeholder={language === 'zh'
                   ? '开始写作... 支持 Markdown 语法'
                   : 'Start writing... Markdown supported'}
-                className="w-full h-[calc(100vh-280px)] min-h-[300px] bg-transparent outline-none text-sm text-text-main resize-none font-mono leading-relaxed"
+                className="w-full h-[calc(100vh-280px)] min-h-[300px] bg-transparent outline-none text-base text-text-main resize-none leading-relaxed"
               />
             )}
           </div>

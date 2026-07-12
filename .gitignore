@@ -14,3 +14,15 @@ playwright-report/
 dist-server/
 .vercel
 .env*.local
+.screenshots/
+contracts/cache/
+contracts/artifacts/
+contracts/deployments.json
+contracts/typechain-types/
+contracts/typechain/
+test-workspace/
+webbridge-*.mjs
+scripts/verify-capsules-ui.mjs
+e2e/screenshot.spec.ts
+dailyflow-*.png
+e2e-*.png

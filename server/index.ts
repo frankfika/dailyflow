@@ -11,6 +11,7 @@ import promptsRouter from './routes/prompts.js';
 import aiRouter from './routes/ai.js';
 import recurringRouter from './routes/recurring.js';
 import ipfsRouter from './routes/ipfs.js';
+import capsuleRouter from './routes/capsule.js';
 import thinkingWorkspacesRouter from './routes/thinkingWorkspaces.js';
 import meetingsRouter from './routes/meetings.js';
 
@@ -19,7 +20,9 @@ const PORT = process.env.PORT || 3003;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // 中间件
-// CORS: restrict to Tauri frontend origins and local dev server
+// CORS: restrict to Tauri frontend origins and local dev server.
+// In development, allow any localhost origin so Vite's auto-incremented port
+// (3000, 3001, 3002, ...) doesn't break API calls.
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
@@ -27,9 +30,10 @@ const ALLOWED_ORIGINS = [
   'https://localhost:5173',
   'tauri://localhost',
 ];
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/localhost(:\d+)?$/;
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin) || LOCALHOST_ORIGIN_RE.test(origin)) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));
@@ -64,6 +68,7 @@ app.use('/api/prompts', promptsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/recurring', recurringRouter);
 app.use('/api/ipfs', ipfsRouter);
+app.use('/api/capsules', capsuleRouter);
 app.use('/api/thinking-workspaces', thinkingWorkspacesRouter);
 app.use('/api/meetings', meetingsRouter);
 

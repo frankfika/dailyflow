@@ -71,20 +71,23 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
         body: JSON.stringify({ path: workspacePath, create: true }),
       });
 
-      if (!response.ok) throw new Error('Validation failed');
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+      }
 
       const result = await response.json();
       if (!result.valid) {
         setIsValid(false);
-        setError(t.invalidPath);
+        setError(result.error || t.invalidPath);
         return false;
       }
       setIsValid(true);
       setError('');
       return true;
-    } catch (e) {
+    } catch (e: any) {
       setIsValid(false);
-      setError(t.invalidPath);
+      setError(e?.message ? `${t.invalidPath}: ${e.message}` : t.invalidPath);
       return false;
     } finally {
       setIsValidating(false);
