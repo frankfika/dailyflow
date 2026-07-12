@@ -4,19 +4,19 @@
 
 # DailyFlow
 
-> **本地优先的任务与笔记系统** · Local-first tasks & notes system
+> **本地优先的任务、笔记与时间胶囊系统** · Local-first tasks, notes & on-chain time capsules
 >
-> 简单记录，专注今天。 · Keep it simple. Focus on today.
+> 简单记录，专注今天，让未来见证你的承诺。 · Keep it simple. Focus on today. Make the future witness your promises.
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.0.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.0.6-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
-![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20TypeScript-purple?style=flat-square)
-![Runtime](https://img.shields.io/badge/Runtime-Node.js%20Bundled-success?style=flat-square)
+![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
+![Chain](https://img.shields.io/badge/Chain-EVM%20Multichain-success?style=flat-square)
 
-[核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [技术栈](#-技术栈) · [贡献](#-贡献)
+[核心功能](#-核心功能) · [界面预览](#-界面预览) · [时间胶囊](#-时间胶囊) · [快速开始](#-快速开始) · [技术栈](#-技术栈) · [贡献](#-贡献)
 
 __简体中文__ | [English](./README_EN.md)
 
@@ -24,22 +24,24 @@ __简体中文__ | [English](./README_EN.md)
 
 </div>
 
-## 🎉 v1.0.1 更新
+## 🎉 v1.0.6 更新：时间胶囊上线
 
-本次更新精简了产品边界，移除了过度设计的 **Thinking Workspaces（思考工作台）**，让 DailyFlow 回归「任务 + 笔记 + AI 对话」的核心体验；同时修复了 AI Chat 中无法找到/关联非当日笔记的问题。
+新增第三个独立标签页 **⏳ 时间胶囊（Time Capsules）**——把承诺、秘密、里程碑封进链上，由未来打开。
 
-| 你要做的事 | v1.0.0 | v1.0.1 |
-|-----------|-------|--------|
-| 复杂项目 | 独立的思考工作台 | 回到「项目 / 标签 + 笔记」的简洁方式 |
-| 整理思路 | AI 整理 Brief / Journey | 直接在 AI Chat 中挂载笔记/项目上下文提问 |
-| 任务拆解 | AI 生成任务后投放 | Brain Dump + AI Chat 拆解 |
-| 笔记关联 | 仅当日笔记可挂载 | **全部笔记**都可挂载到 AI Chat |
+| 你想做的事 | DailyFlow 怎么做 |
+|-----------|----------------|
+| 立 flag 但怕忘记 | 写进胶囊，**写入 EVM 区块链**，时间到了再来打开 |
+| 给未来的自己留一封信 | 加密落库 + 链上哈希，**不可篡改、不可删除** |
+| 记录人生的里程碑时刻 | 「Commitment / Secret / Milestone」三种胶囊类型任选 |
+| 多链体验 | 一键切换 **Base / Optimism / Arbitrum / Sepolia / Hardhat** |
+
+![Capsules](./docs/assets/capsules-list.png)
 
 ---
 
 ## 📖 项目简介
 
-DailyFlow 是一个 **本地优先（local-first）** 的智能任务与笔记管理桌面应用。以 Markdown 文件作为唯一数据源，内置 AI 助手（支持 15+ 模型供应商），自动处理跨日任务迁移。
+DailyFlow 是一个 **本地优先（local-first）** 的智能任务、笔记与时间胶囊管理桌面应用。Markdown 文件作为唯一数据源，内置 AI 助手（支持 15+ 模型供应商），未完成任务自动跨日迁移，并且现在可以把承诺 **写进 EVM 区块链** 让未来见证。
 
 ### 为什么选择 DailyFlow？
 
@@ -50,10 +52,23 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与笔记�
 | 需要网络才能使用 | 离线优先，**内置 Node.js 运行时** |
 | 复杂项目管理工具上手难 | 极简设计，专注当日 |
 | AI 功能要额外付费 | 内置 AI，支持 15+ 模型供应商 |
+| 承诺立了就忘 | **链上时间胶囊**，到点自动提醒，无法篡改 |
 
 ---
 
 ## ✨ 核心功能
+
+### ⏳ 时间胶囊（新！v1.0.6）
+
+- **三种胶囊类型**：Commitment（承诺）、Secret（秘密）、Milestone（里程碑）
+- **多链 EVM**：Base Sepolia、Optimism Sepolia、Arbitrum Sepolia、Sepolia、本地 Hardhat
+- **钱包连接**：支持 MetaMask / Rabby 等任何 injected 钱包
+- **链上哈希**：内容用 keccak256 哈希上链，原文留在本地（隐私可控）
+- **时间锁**：智能合约在 unlockAt 之前保证内容不可见
+- **可验证**：每条胶囊都带 tx hash + 区块浏览器链接
+- **趣味 UI**：SVG 插画 + 渐变背景 + 倒计时动效
+
+![Capsule Detail](./docs/assets/capsules-detail.png)
 
 ### 📋 任务管理
 
@@ -121,6 +136,81 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与笔记�
 |:---:|:---:|
 | ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
 
+| 时间胶囊列表 | 时间胶囊详情 |
+|:---:|:---:|
+| ![Capsules](./docs/assets/capsules-list.png) | ![Capsule Detail](./docs/assets/capsules-detail.png) |
+
+---
+
+## ⏳ 时间胶囊
+
+### 是什么？
+
+**时间胶囊（Time Capsule）** 是 DailyFlow 的第三个独立标签页。它让你把 **承诺、秘密、人生里程碑** 写下来，用 **真实 EVM 智能合约** 把内容哈希锁在区块链上，等到了未来的某一天再打开。
+
+> 这不是公开日记（隐私敏感），也不是普通备忘录（缺乏仪式感）—— 它是「写给未来的自己/朋友」的密封信封，由去中心化网络见证。
+
+### 怎么工作？
+
+```
+┌─────────────────┐         ┌──────────────────────┐         ┌─────────────────────┐
+│  本地：写胶囊     │  keccak256  │  EVM 链上：存哈希     │  unlockAt  │  本地：解锁打开       │
+│  title / content │ ───────▶ │  contentHash + 时间锁  │ ───────▶ │  验证 + 全文展示     │
+│  type / unlockAt │   哈希    │  capsules[id]        │   触发    │  可链上 reveal      │
+└─────────────────┘         └──────────────────────┘         └─────────────────────┘
+```
+
+- **写胶囊**：在本地存全文 + 元数据，同时调用合约 `seal(bytes32 contentHash, uint256 unlockAt, CapsuleType, bool isPublic)`
+- **存链上**：智能合约记录 `id → creator → hash → unlockAt → status`
+- **等解锁**：客户端检测 `unlockAt <= now` 后把胶囊标记为「可打开」
+- **拆胶囊**：本地展示全文；可选调用合约 `reveal(id, status)` 公开状态
+
+### 三种胶囊类型
+
+| 类型 | 含义 | 推荐场景 |
+|------|------|---------|
+| 🎯 Commitment | 承诺 | 立 flag、戒断目标、年度计划 |
+| 🤫 Secret | 秘密 | 给未来某天的自己写一封信 |
+| 🏆 Milestone | 里程碑 | 毕业、买房、升职、宝宝出生 |
+
+### 多链支持
+
+| 链 | Chain ID | 浏览器 | 状态 |
+|----|---------|--------|------|
+| Base Sepolia | 84532 | https://sepolia.basescan.org | 部署后填入 |
+| Optimism Sepolia | 11155420 | https://sepolia-optimism.etherscan.io | 部署后填入 |
+| Arbitrum Sepolia | 421614 | https://sepolia.arbiscan.io | 部署后填入 |
+| Sepolia | 11155111 | https://sepolia.etherscan.io | 部署后填入 |
+| Hardhat (本地) | 31337 | - | ✅ 内置 |
+
+### 部署合约到测试网
+
+```bash
+cd contracts
+cp .env.example .env  # 填入 PRIVATE_KEY 和 RPC URL
+
+# 编译 + 测试
+npm install --legacy-peer-deps
+npx hardhat compile
+npx hardhat test
+
+# 部署到指定链
+npx hardhat run scripts/deploy.ts --network baseSepolia
+npx hardhat run scripts/deploy.ts --network arbitrumSepolia
+
+# 部署结果保存在 contracts/deployments.json
+# 把链 ID 对应的合约地址填到 src/config/chains.ts 的 CHAIN_CONTRACTS
+```
+
+### 技术细节
+
+- **合约**：[contracts/contracts/DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol)
+- **ABI**：[src/contracts/abi.ts](./src/contracts/abi.ts)
+- **前端 hook**：[src/hooks/useCapsuleContract.ts](./src/hooks/useCapsuleContract.ts)
+- **钱包连接**：[src/components/WalletConnectButton.tsx](./src/components/WalletConnectButton.tsx)
+- **链配置**：[src/config/chains.ts](./src/config/chains.ts)
+- **后端服务**：[server/services/capsule.ts](./server/services/capsule.ts)（落库真实 tx 数据）
+
 ---
 
 ## 🚀 快速开始
@@ -141,7 +231,7 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务与笔记�
 > sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
 > ```
 >
-> **完全独立运行**：v1.0.1 的 dmg 内置了 Node.js 运行时，无需用户机器上预装 Node——下载即可直接使用。
+> **完全独立运行**：dmg 内置了 Node.js 运行时，无需用户机器上预装 Node——下载即可直接使用。
 
 ### 从源码运行
 
@@ -164,57 +254,62 @@ npm run build:server
 npm run tauri build
 ```
 
+### 合约项目（可选，仅当你要部署自己的合约时）
+
+```bash
+cd contracts
+npm install --legacy-peer-deps
+npx hardhat compile
+npx hardhat test  # 全部通过
+```
+
 ### 首次使用
 
 1. 启动应用，设置**工作区目录**（存放 Markdown 文件的位置）
 2. 应用自动创建今天的日记文件
 3. 在 Today 页面写下今天的任务，用 `#project:名称` 标记项目
 4. 切换到 **笔记** 标签，创建会议记录或想法笔记
-5. 打开 **AI Chat**，挂载今日任务或任意笔记作为上下文提问
+5. 打开 **⏳ 时间胶囊**，连接钱包，写下你给未来的承诺 → 上链
+6. 打开 **AI Chat**，挂载今日任务或任意笔记作为上下文提问
 
 ---
 
 ## 🏗 架构
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                  Tauri Desktop Shell                          │
-│           (内置 Node.js 运行时，零外部依赖)                    │
-├──────────────────────────────────────────────────────────────┤
-│  ┌────────────────┐         ┌─────────────────────────────┐  │
-│  │   React UI     │◀───────▶│   Express Backend (3003)     │  │
-│  │ (Vite/TS/TSX)  │  HTTP   │   (Bundled Node + Server)    │  │
-│  └────────────────┘         └────────────┬────────────────┘  │
-│                                          │                    │
-│                       ┌──────────────────┼──────────────────┐│
-│                       │                  │                  │ │
-│                  ┌────▼────┐       ┌─────▼─────┐      ┌─────▼────┐
-│                  │  Today  │       │  AI Chat  │      │  Notes   │
-│                  │  Tasks  │       │           │      │          │
-│                  └────┬────┘       └─────┬─────┘      └─────┬────┘
-│                       │                  │                  │ │
-│                       └──────────────────┼──────────────────┘│
-│                                          │                    │
-│                          ┌───────────────▼────────────────┐  │
-│                          │    Markdown Files (Source of    │  │
-│                          │   Truth: Daily/, Notes/,       │  │
-│                          │   Projects/)                    │  │
-│                          └───────────────┬────────────────┘  │
-│                                          │                    │
-│              ┌───────────────────────────┼───────────────────┐│
-│              ▼                           ▼                   ▼│
-│      ┌──────────────┐            ┌────────────┐        ┌────────┐│
-│      │ Git (GitHub) │            │ IPFS/Pinata│        │ AI API ││
-│      └──────────────┘            └────────────┘        └────────┘│
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Tauri Desktop Shell                                  │
+│           (内置 Node.js 运行时，零外部依赖)                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────┐         ┌─────────────────────────────┐         │
+│  │   React UI     │◀───────▶│   Express Backend (3003)     │         │
+│  │ (Vite/TS/TSX)  │  HTTP   │   (Bundled Node + Server)    │         │
+│  └───────┬────────┘         └────────────┬────────────────┘         │
+│          │                               │                          │
+│          │ wagmi / viem                  │                           │
+│          ▼                               │                          │
+│  ┌────────────────┐                      │                          │
+│  │  Time Capsules │  keccak256   ┌──────▼──────────────┐           │
+│  │  (Tab 3)       │ ─────────▶   │  Markdown + Capsule │           │
+│  │                │              │  Storage            │           │
+│  └────────────────┘              └──────┬──────────────┘           │
+│                                         │                          │
+│              ┌──────────────────────────┼───────────────────────┐ │
+│              ▼                          ▼                       ▼ │
+│      ┌──────────────┐            ┌────────────┐          ┌────────┐ │
+│      │ Git (GitHub) │            │ IPFS/Pinata│          │  EVM   │ │
+│      │              │            │            │          │ Chains │ │
+│      └──────────────┘            └────────────┘          └────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### v1.0.0 关键架构变更
+### v1.0.6 关键架构变更
 
-- **内置 Node.js 运行时**：Tauri 打包时下载并嵌入对应架构的 Node 二进制文件，运行时无需系统 Node
-- **思考工作台一等对象**：独立存储在 `Workspaces/` 目录，与 `Tasks/` 平级
-- **加密随机 ID**：所有 workspace ID 由服务端生成，使用 `crypto.randomBytes`，永不信任客户端传入
-- **Rust 启动器增强**：`src-tauri/src/server.rs` 自动定位 bundled runtime，处理可执行权限，提供开发和生产环境的多条 fallback 路径
+- **真实 EVM 多链集成**：时间胶囊的 `seal` / `reveal` 写入真实合约，支持 5 条链切换
+- **钱包抽象层**：wagmi + viem 提供钱包连接、签名、链切换的统一 API
+- **隐私优先设计**：内容用 keccak256 哈希上链，原文 100% 本地存储；不上链明文
+- **后端落库**：本地服务记录 txHash / chainId / contractAddress / onChainId，用于列表展示
+- **合约项目独立**：Hardhat 项目位于 [contracts/](./contracts/)，与前端解耦
 
 ---
 
@@ -229,9 +324,11 @@ npm run tauri build
 | 运行时 | **内置 Node.js 20+**（自动下载与权限处理） |
 | 数据 | Markdown 文件 + YAML frontmatter（单一数据源） |
 | AI | 15+ 供应商（B.AI / Claude / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen 等） |
+| 区块链 | wagmi 3 + viem 2 + Solidity 0.8.24 + Hardhat + @nomicfoundation/hardhat-toolbox-viem |
+| 多链 | Base / Optimism / Arbitrum / Sepolia / Hardhat |
 | 同步 | Git + GitHub API |
 | 备份 | IPFS + Pinata |
-| 测试 | Vitest + Testing Library（**149 个测试，全部通过**） |
+| 测试 | Vitest + Testing Library + Hardhat tests |
 
 ---
 
@@ -246,6 +343,11 @@ git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
 npm install
 npm run dev:all
+
+# 合约开发
+cd contracts
+npm install --legacy-peer-deps
+npx hardhat test
 ```
 
 ### 代码规范
@@ -275,6 +377,36 @@ npm run dev:all
 
 ## 📜 更新日志
 
+### v1.0.6 (2026-07-13)
+
+**⏳ 时间胶囊上线：真实多链 EVM 集成**
+
+#### ✨ 新功能
+
+- ⏳ **Time Capsules 标签页**：第三个独立 tab，支持 Commitment / Secret / Milestone 三种胶囊类型
+- ⛓ **真实 EVM 上链**：通过 wagmi + viem 调用智能合约 `seal(bytes32, uint256, CapsuleType, bool)`，内容用 keccak256 哈希上链
+- 🦊 **钱包连接**：支持 MetaMask / Rabby 等任何 injected 钱包，一键切换 5 条链
+- 🌐 **多链支持**：Base Sepolia / Optimism Sepolia / Arbitrum Sepolia / Sepolia / 本地 Hardhat
+- 🔐 **隐私优先**：明文 100% 留在本地，链上仅存哈希
+- 🎨 **趣味 UI**：SVG 胶囊插画 + 渐变背景 + 倒计时动效 + 区块浏览器跳转
+
+#### 📦 合约项目
+
+- 🏗 [contracts/](./contracts) 全新 Hardhat 项目（独立 package.json）
+- 📜 [DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol)：实现 `seal` / `reveal` / `getCapsule` / `getCreatorCapsules`，事件 `CapsuleSealed` / `CapsuleRevealed`
+- 🧪 8 个 Hardhat 合约测试，全部通过
+- 🚀 [deploy.ts](./contracts/scripts/deploy.ts)：自动保存部署地址到 `deployments.json`
+- 🔍 Etherscan API key 配置（支持 verify）
+
+#### 🔧 后端
+
+- [server/services/capsule.ts](./server/services/capsule.ts)：支持记录真实 txHash / chainId / contractAddress / onChainId / contentHash
+- [server/routes/capsule.ts](./server/routes/capsule.ts)：新增 `POST /capsules/:id/seal/evm` 接受前端真实链上证明
+
+### v1.0.5 (2026-07)
+
+chore: 版本号与依赖更新
+
 ### v1.0.1 (2026-06-19)
 
 **🧹 精简产品边界，修复 AI Chat 笔记关联**
@@ -282,7 +414,7 @@ npm run dev:all
 #### ✨ 改进
 
 - 🗑️ **移除 Thinking Workspaces**：回退过度设计的思考工作台，回归任务 + 笔记 + AI 对话的核心体验
-- 🔗 **AI Chat 全量笔记关联**：上下文选择器现在能搜索并挂载当前 context 下的全部笔记，不再只显示当日笔记
+- 🔗 **AI Chat 全量笔记关联**：上下文选择器现在能搜索并挂载当前 context 下的全部笔记
 - 🧭 **简化侧边栏导航**：移除「思考空间」入口，保留 Today / 笔记 / AI 对话
 
 #### 🧪 质量
@@ -291,34 +423,14 @@ npm run dev:all
 
 ### v1.0.0 (2026-06)
 
-**🎉 重大里程碑：Thinking Workspaces 正式发布**
+**🎉 重大里程碑**
 
-#### ✨ 新功能
-
-- 🧠 **Thinking Workspaces**：目标/想法/项目的一等对象，与 task 平级
-- 🤖 **AI 整理 Brief**：从 scratchpad 自动生成结构化摘要
-- 🛤️ **AI 规划 Journey**：阶段、里程碑、风险、本周重点、今天最小行动
-- 🗺️ **AI 生成脑图**：Mermaid 格式，覆盖目标/输入/风险/资料/决策/下一步
-- ✅ **AI 拆解任务**：3-7 个 15-60 分钟可完成的下一步，预览后投放到 Today
-- 📅 **Timeline 推进记录**：自动记录 AI 输出、任务完成、决策
-- 🔖 **多入口创建**：从 Today、note、project、`Cmd+K` 都能创建 workspace
-
-#### 🔒 安全增强
-
-- **加密随机 ID**：服务端强制忽略客户端 ID，使用 `tw_` 前缀 + crypto 随机后缀，防止 ID 劫持攻击
-- **优雅错误处理**：单个 workspace 文件损坏不会拖垮整个列表
-- **路径校验强化**：避免 `../` 等路径穿越
-
-#### 📦 基础设施
-
-- **内置 Node.js 运行时**：Tauri dmg 内置 91 MB 的 Node 二进制，**用户机器无需安装 Node**
-- **Rust 启动器增强**：自动定位运行时，处理可执行权限，多条 fallback 路径
-- **bundle 脚本**：`scripts/bundle-node.mjs` 自动下载并打包 Node 运行时
-
-#### 🧪 测试
-
-- 新增 6 个测试文件，覆盖 workspace 全生命周期
-- 149 个测试全部通过，TypeScript 严格模式 0 错误
+- 🧠 Thinking Workspaces（已在 v1.0.1 回退）
+- 🤖 AI Brief / Journey / Mind Map
+- ✅ AI Next Tasks 拆解
+- 📅 Timeline 推进记录
+- 🔒 加密随机 ID（防 ID 劫持）
+- 📦 内置 Node.js 运行时（dmg 自带，零外部依赖）
 
 ### v0.11.0 之前版本
 
@@ -334,12 +446,12 @@ npm run dev:all
 
 ## 🙏 致谢
 
-感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为一个简洁的任务与笔记系统。
+感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为包含任务、笔记、AI 对话、**链上时间胶囊**的完整系统。
 
 <div align="center">
 
 如果这个项目对你有帮助，欢迎点 ⭐ Star 支持！
 
-[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 下载 v1.0.1](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 报告问题](https://github.com/frankfika/dailyflow/issues)
+[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 下载最新版本](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 报告问题](https://github.com/frankfika/dailyflow/issues)
 
 </div>
