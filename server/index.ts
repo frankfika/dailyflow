@@ -22,6 +22,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // CORS: restrict to Tauri frontend origins and local dev server
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
   'https://localhost:5173',
   'tauri://localhost',

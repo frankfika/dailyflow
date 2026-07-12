@@ -343,6 +343,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (t && !tags.includes(t)) setTags([...tags, t]);
   };
 
+  // Keyboard shortcuts: ⌘/Ctrl+Enter to save, Esc to close (matches the Back button)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (isMod && e.key === 'Enter') {
+        e.preventDefault();
+        if (title.trim()) handleSave();
+      } else if (e.key === 'Escape') {
+        // Don't fight the format panel (it should close itself first) or the @mention
+        // autocomplete dropdown inside the textarea.
+        if (showFormatPanel) return;
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [title, handleSave, onClose, showFormatPanel]);
+
   const addParticipant = (value: string) => {
     const p = value.trim();
     if (p && !participants.includes(p)) setParticipants([...participants, p]);
@@ -370,7 +389,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <button
               onClick={onToggleMaximize}
               className="flex items-center gap-1 px-2 py-1.5 text-xs font-bold text-text-muted hover:text-text-heading hover:bg-surface rounded-md transition-colors"
-              title={isMaximized ? (language === 'zh' ? '还原' : 'Restore') : (language === 'zh' ? '最大化' : 'Maximize')}
+              title={isMaximized ? (language === 'zh' ? '还原 (Esc)' : 'Restore (Esc)') : (language === 'zh' ? '最大化' : 'Maximize')}
             >
               {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
@@ -627,6 +646,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <button
             onClick={handleSave}
             disabled={!title.trim()}
+            title={language === 'zh' ? '保存 (⌘ + Enter)' : 'Save (⌘ + Enter)'}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-white rounded-md text-xs font-bold  hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Check className="w-3.5 h-3.5" />
@@ -651,7 +671,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Editor body */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+        <div className="max-w-4xl mx-auto px-6 py-6 space-y-4">
           {/* Title */}
           <input
             autoFocus

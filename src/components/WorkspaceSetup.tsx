@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Folder, Check, AlertCircle, Loader2, FolderOpen } from 'lucide-react';
+import { Folder, Check, AlertCircle, Loader2, FolderOpen, ShieldCheck, Search } from 'lucide-react';
 import { useState } from 'react';
 import { workspacesApi } from '../api/client';
 
@@ -165,11 +165,28 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
               />
               <button
                 onClick={handleValidate}
-                disabled={isValidating}
-                className="px-2 py-1.5 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold "
+                disabled={isValidating || !workspacePath.trim()}
+                // Icon: idle = Search (action prompt), validating = spinner,
+                // verified = ShieldCheck (filled accent). Previously used a
+                // static Check icon at idle, which users read as "already done"
+                // and skipped — leaving Get Started permanently disabled.
+                title={isValid ? (language === 'zh' ? '路径已验证' : 'Path verified') : undefined}
+                className={`px-2 py-1.5 rounded-md flex items-center gap-1 text-xs font-bold transition-colors disabled:opacity-50 ${
+                  isValid
+                    ? 'bg-accent/15 text-accent border border-accent/30'
+                    : 'bg-accent/10 text-accent hover:bg-accent/20'
+                }`}
               >
-                {isValidating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                {language === 'zh' ? '验证' : 'Check'}
+                {isValidating ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : isValid ? (
+                  <ShieldCheck className="w-3 h-3" />
+                ) : (
+                  <Search className="w-3 h-3" />
+                )}
+                {isValid
+                  ? (language === 'zh' ? '已验证' : 'Verified')
+                  : (language === 'zh' ? '验证' : 'Validate')}
               </button>
             </div>
             <p className="mt-1.5 text-xs text-text-muted">{t.pathHint}</p>
@@ -194,7 +211,10 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           {/* Continue Button */}
           <button
             onClick={handleContinue}
-            disabled={isSaving || !workspacePath.trim() || !isValid}
+            disabled={isSaving || !workspacePath.trim()}
+            // !isValid removed: handleContinue re-validates if the user skipped
+            // the Check button, so we don't strand them on a permanently-disabled
+            // Get Started when the path is clearly filled in.
             className="w-full py-3 rounded-md bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving ? (
