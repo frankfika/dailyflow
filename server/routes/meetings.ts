@@ -344,7 +344,7 @@ router.post('/transcribe', async (req, res) => {
       error: 'Missing required field: provide either `audio` (Phase 2) or `text` (Phase 1).',
     });
   } catch (error: any) {
-    console.error('Meeting transcribe failed:', error);
+    console.error('Meeting transcribe failed:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: error.message || String(error) });
   }
 });
@@ -494,7 +494,7 @@ router.post('/summarize', async (req, res) => {
 
     res.json({ markdown, actionItems, model });
   } catch (error: any) {
-    console.error('Meeting summarize failed:', error);
+    console.error('Meeting summarize failed:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: error.message || String(error) });
   }
 });
@@ -534,7 +534,7 @@ router.post('/extract-actions', async (req, res) => {
     const actionItems = safeParseActionItems(raw);
     res.json({ actionItems, model });
   } catch (error: any) {
-    console.error('Meeting extract-actions failed:', error);
+    console.error('Meeting extract-actions failed:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: error.message || String(error) });
   }
 });

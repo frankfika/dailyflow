@@ -71,8 +71,15 @@ export async function getGitStatus(): Promise<GitStatus> {
     let ahead = 0;
     let behind = 0;
     try {
-      const { stdout: aheadBehind } = await execAsync(
-        `git rev-list --left-right --count origin/${branch}...HEAD`,
+      // Allowlist branch names — `git branch --show-current` should
+      // always be sane, but defensive regex keeps a corrupt ref from
+      // sneaking unexpected characters into the exec'd argv.
+      if (!/^[A-Za-z0-9._\-\/]+$/.test(branch)) {
+        throw new Error('Unusual branch name, skipping ahead/behind');
+      }
+      const { stdout: aheadBehind } = await execFileAsync(
+        'git',
+        ['rev-list', '--left-right', '--count', `origin/${branch}...HEAD`],
         { cwd: workspaceRoot }
       );
       const [behindStr, aheadStr] = aheadBehind.trim().split('\t');
