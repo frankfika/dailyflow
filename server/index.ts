@@ -87,7 +87,7 @@ app.use((req, res) => {
 // stack so that an attacker who can reach this server doesn't get the full
 // filesystem path / source layout for free.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[error]', err);
+  console.error('[error]', err instanceof Error ? err.message : String(err));
   const status = typeof err?.status === 'number' ? err.status : 500;
   res.status(status).json({
     error: IS_PROD ? 'Internal server error' : (err?.message || 'Internal server error'),
