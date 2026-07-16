@@ -4,42 +4,6 @@ import type { Dirent } from 'node:fs';
 import { parseMarkdown } from './parser.js';
 import type { DailyNote, Config } from '../types/task.js';
 
-// #region debug-point C:file-read-reporting
-const DEBUG_TASK_DUPLICATE_URL = 'http://127.0.0.1:7777/event';
-const DEBUG_TASK_DUPLICATE_SESSION = 'task-duplicate-complete';
-
-function reportTaskDuplicateDebug(hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) {
-  fetch(DEBUG_TASK_DUPLICATE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: DEBUG_TASK_DUPLICATE_SESSION,
-      runId: 'pre-fix',
-      hypothesisId,
-      location,
-      msg: `[DEBUG] ${msg}`,
-      data,
-      ts: Date.now(),
-    }),
-  }).catch(() => {});
-}
-
-function summarizeTasks(tasks: Array<{ id: string; title: string; status: string; source_date?: string }>) {
-  const idCounts = new Map<string, number>();
-  const titleStatusCounts = new Map<string, number>();
-  for (const task of tasks) {
-    idCounts.set(task.id, (idCounts.get(task.id) || 0) + 1);
-    const key = `${task.title}::${task.status}::${task.source_date || ''}`;
-    titleStatusCounts.set(key, (titleStatusCounts.get(key) || 0) + 1);
-  }
-  return {
-    total: tasks.length,
-    duplicateIds: Array.from(idCounts.entries()).filter(([, count]) => count > 1),
-    duplicateTitleStatuses: Array.from(titleStatusCounts.entries()).filter(([, count]) => count > 1),
-  };
-}
-// #endregion
-
 function dedupeTaskLineKey(rawLine: string): string {
   const normalized = rawLine.replace(/\s+\^id-[^\s]+/g, '').replace(/\s+/g, ' ').trim();
   return rawLine.includes('↗ migrated:') ? normalized : rawLine;
@@ -106,19 +70,6 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
         uniqueTasks.push(task);
       }
     }
-
-    reportTaskDuplicateDebug('C', 'fileSystem.ts:readDailyNote', 'Parsed tasks from daily note', {
-      date,
-      summary: summarizeTasks(tasks),
-      duplicateLines,
-      tasks: tasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        status: task.status,
-        source_date: task.source_date,
-        line: task.line,
-      })),
-    });
 
     // If duplicates found, remove them from the file
     if (duplicateLines.length > 0) {

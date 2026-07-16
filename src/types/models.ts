@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { configApi } from '../api/client';
+
 export interface ProviderConfig {
   id: string;
   name: string;
@@ -200,7 +202,6 @@ export function saveProviderConfigs(store: ProviderConfigStore): void {
  */
 export async function persistProviderConfigsToBackend(): Promise<void> {
   try {
-    const { configApi } = await import('../api/client.js');
     const store = loadProviderConfigs();
     const config = await configApi.get();
     await configApi.update({

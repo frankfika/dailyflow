@@ -39,15 +39,19 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom'],
-            motion: ['motion'],
-            markdown: ['react-markdown', 'remark-gfm'],
-            lucide: ['lucide-react'],
+          manualChunks: (id) => {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('wagmi') || id.includes('@wagmi') || id.includes('viem') || id.includes('@coinbase') || id.includes('@safe-global')) return 'chain';
+            if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
+            if (id.includes('react-markdown') || id.includes('remark') || id.includes('mdast') || id.includes('micromark')) return 'markdown';
+            if (id.includes('lucide-react')) return 'lucide';
+            if (id.includes('@tanstack')) return 'tanstack';
+            if (id.includes('react') || id.includes('scheduler')) return 'react';
+            return 'vendor';
           },
         },
       },
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 800,
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',

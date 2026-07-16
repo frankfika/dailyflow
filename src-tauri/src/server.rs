@@ -9,6 +9,19 @@ use tauri_plugin_dialog::DialogExt;
 
 pub struct ServerProcess(pub Mutex<Option<Child>>);
 
+impl ServerProcess {
+    /// Signal that the managed child should be terminated. We currently
+    /// let the OS reap the child when the parent process exits, but the
+    /// hook is kept so future builds (Windows Job Object cleanup, log
+    /// forwarding, etc.) can plug in without a state-shape change.
+    #[allow(dead_code)]
+    pub fn mark_for_shutdown(&self) {
+        if let Some(child) = self.0.lock().ok().and_then(|mut g| g.take()) {
+            drop(child);
+        }
+    }
+}
+
 /// Locate the bundled Node runtime in the app resources directory.
 /// On Windows the binary has a `.exe` extension; on other platforms it has none.
 fn bundled_node_path(resource_dir: &Path) -> Option<PathBuf> {

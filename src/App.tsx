@@ -27,7 +27,7 @@ import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
-import type { UpdateInfo } from './api/updater';
+import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 
 type Task = {
@@ -321,7 +321,6 @@ export default function App() {
   useEffect(() => {
     const autoCheckUpdate = async () => {
       try {
-        const { checkForUpdates } = await import('./api/updater');
         const info = await checkForUpdates();
         setUpdateAvailable(info.hasUpdate);
         if (info.hasUpdate) {
@@ -962,7 +961,6 @@ export default function App() {
   // Handle update actions
   const handleUpdate = async (onProgress: (downloaded: number, total: number) => void) => {
     try {
-      const { downloadUpdate, relaunchApp } = await import('./api/updater');
       await downloadUpdate(onProgress);
       await relaunchApp();
     } catch (error) {

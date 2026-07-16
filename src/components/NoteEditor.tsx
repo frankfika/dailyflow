@@ -869,8 +869,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               </div>
             )}
             {previewMode ? (
-              <div className="prose prose-slate max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} className="text-base leading-relaxed" style={{ fontFamily: 'inherit' }}>{bodyWithoutHeading || body}</ReactMarkdown>
+              <div className="prose prose-slate max-w-none text-base leading-relaxed" style={{ fontFamily: 'inherit' }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{bodyWithoutHeading || body}</ReactMarkdown>
               </div>
             ) : (
               <textarea
