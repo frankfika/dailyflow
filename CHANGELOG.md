@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 TBD.
 
+## [1.0.6] - 2026-07-16
+
+### Fixed
+- **Lint baseline 修復** — 補齊 `@types/react` / `@types/react-dom` (React 19 從 npm 拆出類型) + `NoteEditor.tsx` 將 `className/style` 從 `ReactMarkdown` 移到外層 div (新版 props 不再支持) + 移除 vitest 對 `contracts/**` 的誤匹配 (硬節點的 sync-rpc/sync-request 會把 vitest run 拉 timeout)
+- **`server/services/git.ts` ahead/behind 命令注入修復** — 對 `branch` 做白名單校驗 (`/^[A-Za-z0-9._\-\/]+$/`) + 把 `exec` 拼接字符串改為 `execFile` (即使 `git branch --show-current` 自身輸出也已防禦性加固)
+
+### Changed
+- **`vite.config.ts` manualChunks 改造為函數式** — 函數版按依賴前綴判定 → 拆出 `chain` (wagmi/viem/coinbase/safe-global) / `tanstack` / `vendor` 等 chunk; 主 `index` chunk 從 777kB → 380kB, 所有 chunk 都在 800kB 警告閾值內
+- **`server/routes/meetings.ts` console.error 統一不打印整個 error 對象** — 改打印 `error.message` 字串, 避免 API key 之類敏感字段意外寫入服務器日誌
+- `chunkSizeWarningLimit` 600 → 800 (手動 chunks 拆分後值合理)
+
+### Verified
+- `npm run lint` ✅ 0 errors
+- `npm run test` ✅ 16 files / 164 tests pass
+- `npm run build` ✅ 主 chunk gzip 97kB, 全 chunk 都在警告閾值下
+- `cargo check` ✅ 0 warnings
+
 ## [1.0.4] - 2026-07-12
 
 ### Added
