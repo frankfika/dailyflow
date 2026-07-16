@@ -29,6 +29,7 @@ import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
+import { useMeetingCapture } from './hooks/useMeetingCapture';
 
 type Task = {
   id: string;
@@ -121,9 +122,7 @@ export default function App() {
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
   // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
-  // to trigger it.
-  const [showMeetingCapture, setShowMeetingCapture] = useState(false);
-  const metCmdShiftRHintRef = useRef(false);
+  // to trigger it. (The hint state and ⌘⇧R listener live in useMeetingCapture.)
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -584,33 +583,16 @@ export default function App() {
   }, [syncInterval, currentFileDate]);
 
   // Keyboard shortcuts: Cmd/Ctrl+N to toggle task input, ⌘⇧R to open
-  // Meeting Capture (Granola Phase 2), Escape to close. ⌘⇧R is normally the
-  // browser hard-reload; we intercept it so the dailyflow user can use the
-  // same muscle memory for "start a meeting capture".
-  const openMeetingCapture = useCallback(() => {
-    setShowMeetingCapture(true);
-  }, []);
+  // Meeting Capture (Granola Phase 2), Escape to close. The ⌘⇧R handler
+  // + first-use hint live in `useMeetingCapture` so this body stays focused
+  // on the App-level shortcuts.
+  const { isOpen: showMeetingCapture, open: openMeetingCapture, close: closeMeetingCapture } = useMeetingCapture({ language, showToast });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         setShowTaskInput(prev => !prev);
-        return;
-      }
-      // Phase 2 M1: ⌘⇧R / Ctrl+Shift+R -> open Meeting Capture
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
-        e.preventDefault();
-        openMeetingCapture();
-        if (!metCmdShiftRHintRef.current) {
-          metCmdShiftRHintRef.current = true;
-          showToast(
-            language === 'zh'
-              ? '提示: ⌘⇧R = 会议 Capture (dailyflow 拦截了浏览器 reload)'
-              : 'Tip: ⌘⇧R = Meeting Capture (dailyflow intercepted the browser reload)',
-            'info'
-          );
-        }
         return;
       }
       if (e.key === 'Escape') {
@@ -622,7 +604,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openMeetingCapture, language, showToast]);
+  }, [language, showToast]);
 
   const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
@@ -1881,7 +1863,7 @@ export default function App() {
           }).catch(err => console.error('Failed to refresh daily notes:', err));
           loadContextNotes();
         }}
-        onClose={() => setShowMeetingCapture(false)}
+        onClose={closeMeetingCapture}
       />
       </div>
    );
