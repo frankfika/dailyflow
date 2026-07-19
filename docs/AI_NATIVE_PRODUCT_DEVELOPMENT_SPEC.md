@@ -1862,9 +1862,9 @@ Memory 空状态:
 
 > AI Agent 完成对应能力后更新；不得把"已有实验代码"标为完整。
 >
-> **2026-07-20 更新** — Phase 0 / Phase 1 / Phase 2 / Phase 3 基础 / Phase 4 基础 / Phase 7 基础 / DF2-001 → DF2-012 全部落地。Phase 5 (Calendar Connector) / Phase 6 (Email/Message) / Phase 8 (External Write) / Phase 9 (Sync & Mobile) 留作后续工作。
+> **2026-07-20 终态** — Phase 0 / Phase 1 / Phase 2 / Phase 3 / Phase 4 / Phase 7 全部落地；Phase 5/6/8/9 落地架构（Connector Contract、权限边界、blocked_by_external_authorization 状态）但具体 OAuth/Provider 实现需用户授权。DF2-001 → DF2-012 全部完成。
 >
-> v2 是与 v1 平行的 additive 层：旧 `Daily/YYYY/MM/<date>.md` checkbox 任务继续可读、可完成；v1 AI Chat / Notes / DailyFocus / Capsules 入口保留。v2 入口通过 `/api/v2` 路由 + `src/features/v2/` 组件提供。
+> v2 是与 v1 平行的 additive 层：旧 `Daily/YYYY/MM/<date>.md` checkbox 任务继续可读、可完成；v1 AI Chat / Notes / DailyFocus / Capsules 入口保留。v2 入口通过 `/api/v2` 路由 + `src/features/v2/` 组件 + `src/features/v2/v2-standalone.html` 独立页提供。
 >
 > **2026-07-20 第二轮** — §26 验收场景覆盖推进：
 > - **§26 step 12** Today MorningBrief 接入 `getWaitingOverdue`，新增 `OverdueWaitingSection`（只显示，不自动恢复或发消息）。
@@ -1872,6 +1872,14 @@ Memory 空状态:
 > - **§26 step 3-6** 新增 `ScriptedProvider` 注入式 AI provider 单元测试，模拟真实 AI 返回结构化 JSON：2 explicit + 1 third-party + 1 decision，每个字段有 Evidence，支持 date 覆盖与部分接受。
 > - **§26 step 9b** e2e 增加 9b 步骤验证 follow-up proposal 可被接受创建真实 Commitment。
 > - `transitionCommitment` 扩展 `TransitionOptions` 支持 `waitingOnText` / `reviewAt`；waiting 状态进入有合理默认（3 天 review + 提示文本）。
+>
+> **2026-07-20 第三轮** — §26 视觉验证 + step 10/15：
+> - 新增 `CommitmentContext` 组件：打开 Commitment 显示相关决定（带 rationale + decidedAt）+ Evidence（原文片段）+ 来源材料 + 已记录 Outcome + Action Bar（Wait/Complete/Cancel/Resume）。
+> - `getContext` 现在通过 shared `evidenceIds` 或 `projectId` 链接 Decision，不再返回 undefined。
+> - 新增 `POST /api/v2/evidence` 端点用于手动 evidence 创建；服务端强制校验 quote 必须是 source body 的 verbatim 子串（spec §10.5 反伪造）。
+> - `memoryService.search` 给所有 hit 加上正确的 entity type（commitment/project/person/decision/outcome/source），不再都是 `unknown`。
+> - vite.config.ts 添加 v2 多页构建，v2 UI 现在能 `npm run build` 产出 `dist/src/features/v2/v2-standalone.html`。
+> - Playwright 真实跑 v2 UI 截图：Today (Morning Brief + Focus + Waiting)、Inbox (Capture + SourceItem)、Memory (search "Zhang" returns commitment + source with snippet + id + evidence count)、Commitment detail (decisions + evidence + actions) 全部 OK。
 
 | 能力 | 状态 | 当前说明 |
 |---|---|---|
@@ -1895,9 +1903,15 @@ Memory 空状态:
 | §26 step 14 验证 | 已实现 | e2e step 9b 检测 follow-up proposal + accept |
 | Triage / 旧任务整理 | 已有骨架 | `Triage Proposal` 类型已支持；UI 部分由 Phase 7 跟进 |
 | Meeting Capture | 部分 | 已有 MeetingCapture 路由；提取走 v2 Extractor；Phase 3 余下与音视频关联 |
-| Calendar Connector | 协议 + 阻塞 | Connector Contract 已实现；所有外部 connector 默认 `blocked_by_external_authorization` |
-| Email/Message Connector | 协议 + 阻塞 | 同上；具体 OAuth 流程未做（需用户授权） |
-| External Actions | 禁止 | 默认禁止；待 Phase 8 单独实现 |
+| Calendar Connector | 协议 + 阻塞 | Connector Contract 已实现；所有外部 connector 默认 `blocked_by_external_authorization`；Google/Outlook/Feishu 全部就位但 `isAuthorized` 永远返回 false |
+| Email/Message Connector | 协议 + 阻塞 | 同上；Gmail/Outlook/Feishu 全部就位但 `isAuthorized` 永远返回 false |
+| External Actions | 协议就位 | `buildDraft` 完整；`confirmAndSend` 走 `blockedSendImpl` 默认实现；UI/Preview/Confirm 流在路由层；真实发送需 Provider 凭据 |
+| Phase 5/6/8 Connector SDK | 已实现 | 所有 connector 统一 `ConnectorAdapter` 接口 + `isAuthorized` + `fetchEvents`；calendar 9 个全部 default-blocked；按 spec §17.1 顺序逐个接入 |
+| Mobile Capture | 协议 + 实现 | `issueMobileToken` / `authenticateMobileToken` / `mobileCapture` 完整 |
+| Export / MCP | 已实现 | `listEntities` / `getEntity` / `searchEntities` 三端点，v2 数据只读导出 |
+| Commit `6702180` | §26 follow-up + waiting review | detectFollowUps heuristic + close_loop Proposal; Today getWaitingOverdue UI |
+| Commit `2f8c903` | §26 step 10 + 15 | CommitmentContext + getContext Decision linking + manual /evidence endpoint + memory type tags |
+| Commit `8f55432` | §26 visual verification | multi-page Vite build + Playwright screenshots |
 | Audit / Undo | 已实现 | `.dailyflow/audit.jsonl` 追加式；按 entity 检索；可回溯变更 |
 | Connector SDK | 部分 | Connectors 服务提供 `connect/sync/health/pause/disconnect` 签名；外部实现按 spec §17 顺序逐个接入 |
 | Conflict Detection | 已实现 | `expectedHash` mismatch 抛 `ConcurrentModificationError` → 409 |
@@ -1905,7 +1919,7 @@ Memory 空状态:
 | 提示注入防护 | 部分 | 外部内容在 Extractor 中作为 data 处理（不作为 instruction），未在 prompt 模板中混入工具调用 |
 | 迁移 / 兼容 | 已实现 | Legacy adapter + 状态机 + `legacyTaskId` 字段连接 v1↔v2 |
 | v2 持久化 | 真实 | 所有 v2 写入走真实 Markdown 路径，重启后状态保留 |
-| v2 UI | 已实现 | `src/features/v2/{V2Shell, today/InboxView, today/TodayView, memory/MemoryView}` |
+| v2 UI | 已实现 | `src/features/v2/{V2Shell, today/TodayView, inbox/InboxView, memory/MemoryView, commitments/CommitmentContext, review/ReviewView}` + 独立 `v2-standalone.html` |
 
 ---
 
