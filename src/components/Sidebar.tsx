@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronRight, X, Plus, FileText, Sparkles, Settings, Briefcase, Heart, Loader2, PanelLeftClose, Package } from 'lucide-react';
+import { CalendarDays, Clock3, X, FileText, Settings, Briefcase, Heart, PanelLeftClose } from 'lucide-react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -26,14 +26,6 @@ interface SidebarProps {
   activeContext?: 'work' | 'life';
   onContextChange?: (ctx: 'work' | 'life') => void;
   onOpenSettings?: () => void;
-  githubConnected?: boolean;
-  isSyncing?: boolean;
-  hasChanges?: boolean;
-  lastSyncTime?: string | null;
-  gitLastCommitTime?: string | null;
-  formatSyncTime?: (time: string, lang: 'en' | 'zh', now?: number) => string;
-  nowTime?: number;
-  onGitSync?: () => void;
 }
 
 export function Sidebar({
@@ -47,23 +39,30 @@ export function Sidebar({
   filesMap,
   setFilesMap,
   recentDates,
-  archivedMonths,
-  expandedArchiveMonths,
-  toggleArchiveMonth,
   showToast,
   workspaceSwitcher,
   activeContext,
   onContextChange,
   onOpenSettings,
-  githubConnected,
-  isSyncing,
-  hasChanges,
-  lastSyncTime,
-  gitLastCommitTime,
-  formatSyncTime,
-  nowTime,
-  onGitSync,
 }: SidebarProps) {
+  const goToToday = async () => {
+    const today = getTodayStr();
+    setActiveTab('today');
+    setCurrentFileDate(today);
+    if (!filesMap[today]) {
+      try {
+        await filesApi.create(today, '## Tasks\n');
+        setFilesMap(prev => ({ ...prev, [today]: '## Tasks\n' }));
+      } catch (error) {
+        console.error('Failed to create today', error);
+        showToast(language === 'zh' ? '创建今天失败' : 'Could not create today', 'error');
+      }
+    }
+    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+  };
+
+  const previousDays = recentDates.filter(date => date !== getTodayStr()).slice(0, 5);
+
   return (
     <>
       {/* Sidebar Overlay for Mobile */}
@@ -99,135 +98,73 @@ export function Sidebar({
             <div className="mb-3 px-1">{workspaceSwitcher}</div>
           )}
 
-          <nav className="space-y-5 flex-1 overflow-y-auto">
-            {/* Timeline */}
-            <div>
-              <h3 className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mb-2 px-1 flex items-center justify-between">
-                <span>{language === 'zh' ? '时间轴' : 'Timeline'}</span>
+          <nav className="flex-1 overflow-y-auto">
+            <ul className="space-y-1 text-[13px]">
+              <li>
                 <button
-                  onClick={async () => {
-                    const today = getTodayStr();
-                    if (filesMap[today]) {
-                      setCurrentFileDate(today);
-                      showToast(language === 'zh' ? '已是最新一天' : 'Already on latest day', 'info');
-                      return;
-                    }
-                    try {
-                      await filesApi.create(today, '## Tasks\n');
-                      setFilesMap((prev: Record<string, string>) => ({ ...prev, [today]: '## Tasks\n' }));
-                      setCurrentFileDate(today);
-                      showToast(language === 'zh' ? '已创建今日日记' : 'Created today\'s note', 'success');
-                    } catch (e) {
-                      console.error('Failed to create note', e);
-                      showToast(language === 'zh' ? '创建失败' : 'Failed to create note', 'error');
-                    }
-                  }}
-                  className="p-1 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors active:scale-95"
-                  title="New Daily Task"
+                  onClick={goToToday}
+                  data-testid="nav-today"
+                  data-active={activeTab === 'today' && currentFileDate === getTodayStr()}
+                  className={`nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left ${
+                    activeTab === 'today' && currentFileDate === getTodayStr()
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
                 >
-                  <Plus className="w-3 h-3" />
+                  <CalendarDays className="w-4 h-4" />
+                  <span>{language === 'zh' ? '今天' : 'Today'}</span>
                 </button>
-              </h3>
-              <ul className="space-y-0.5 text-[12px]">
-                {recentDates.map(date => {
-                  const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                  const isActive = currentFileDate === date;
-                  return (
-                    <li
-                      key={date}
-                      onClick={() => { setActiveTab('today'); setCurrentFileDate(date); }}
-                      className={`nav-item flex items-center gap-2.5 px-2 py-1.5 rounded-lg font-medium cursor-pointer ${
-                        isActive
-                          ? 'bg-accent/10 text-accent'
-                          : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'
-                      }`}
-                    >
-                      {isActive && <div className="w-1 h-1 rounded-full bg-accent"></div>}
-                      <span className={isActive ? '' : 'ml-2'}>
-                        {date}
-                        <span className="ml-1.5 text-[11px] opacity-50 font-normal">{weekday}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {/* Archive — nested under Timeline */}
-              {Object.keys(archivedMonths).length > 0 && (
-                <div className="mt-4 pl-3 border-l border-border/50">
-                  <h4 className="text-[10px] text-text-muted font-semibold uppercase tracking-wide mb-2 opacity-70 px-1">{language === 'zh' ? '归档' : 'Archive'}</h4>
-                  <ul className="space-y-1 font-sans">
-                    {Object.keys(archivedMonths).map(monthName => (
-                      <li key={monthName} className="space-y-1">
-                        <button
-                          onClick={() => toggleArchiveMonth(monthName)}
-                          className="flex items-center gap-1.5 w-full px-1.5 py-1 rounded-md text-[11px] font-medium text-text-muted hover:text-text-heading hover:bg-black/[0.03] transition-colors text-left"
-                        >
-                          {expandedArchiveMonths[monthName] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          <span>{monthName}</span>
-                        </button>
-                        {expandedArchiveMonths[monthName] && (
-                          <ul className="space-y-0.5 pl-4 border-l border-border/40 ml-3 pb-1">
-                            {archivedMonths[monthName].map(date => {
-                              const weekday = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-                              const isActive = currentFileDate === date;
-                              return (
-                                <li
-                                  key={date}
-                                  onClick={() => { setActiveTab('today'); setCurrentFileDate(date); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                                  className={`nav-item flex items-center gap-2.5 px-2 py-1 rounded-md font-medium cursor-pointer text-[11px] ${
-                                    isActive
-                                      ? 'bg-accent/10 text-accent'
-                                      : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'
-                                  }`}
-                                >
-                                  {isActive && <div className="w-1 h-1 rounded-full bg-accent"></div>}
-                                  <span className={isActive ? '' : 'ml-2'}>
-                                    {date}
-                                    <span className="ml-1.5 opacity-50 font-normal">{weekday}</span>
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* Notes / AI Chat — top-level navigation */}
-            <ul className="space-y-0.5 text-[12px]">
-              <li
-                onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`nav-item group flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-lg transition-all ${activeTab === 'notes' ? 'bg-accent/10 text-accent font-medium' : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'}`}
-                data-testid="nav-notes"
-                data-active={activeTab === 'notes'}
-              >
-                <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'notes' ? 'text-accent' : 'opacity-70 group-hover:opacity-100'}`} />
-                <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
               </li>
-              <li
-                onClick={() => { setActiveTab('ai-chat'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`nav-item group flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-lg transition-all ${activeTab === 'ai-chat' ? 'bg-accent/10 text-accent font-medium' : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'}`}
-                data-testid="nav-ai-chat"
-                data-active={activeTab === 'ai-chat'}
-              >
-                <Sparkles className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'ai-chat' ? 'text-accent' : 'opacity-70 group-hover:opacity-100'}`} />
-                <span>{language === 'zh' ? 'AI 对话' : 'AI Chat'}</span>
-              </li>
-              <li
-                onClick={() => { setActiveTab('capsules'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                className={`nav-item group flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-lg transition-all ${activeTab === 'capsules' ? 'bg-accent/10 text-accent font-medium' : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'}`}
-                data-testid="nav-capsules"
-                data-active={activeTab === 'capsules'}
-              >
-                <Package className={`w-3.5 h-3.5 shrink-0 transition-colors ${activeTab === 'capsules' ? 'text-accent' : 'opacity-70 group-hover:opacity-100'}`} />
-                <span>{language === 'zh' ? '时间胶囊' : 'Capsules'}</span>
+              <li>
+                <button
+                  onClick={() => { setActiveTab('notes'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                  data-testid="nav-notes"
+                  data-active={activeTab === 'notes'}
+                  className={`nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left ${
+                    activeTab === 'notes'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>{language === 'zh' ? '笔记' : 'Notes'}</span>
+                </button>
               </li>
             </ul>
+
+            {previousDays.length > 0 && (
+              <div className="mt-7">
+                <h3 className="flex items-center gap-1.5 px-2 mb-2 text-[10px] uppercase tracking-wider text-text-muted/70 font-semibold">
+                  <Clock3 className="w-3 h-3" />
+                  {language === 'zh' ? '最近' : 'Recent'}
+                </h3>
+                <ul className="space-y-0.5">
+                  {previousDays.map(date => (
+                    <li key={date}>
+                      <button
+                        onClick={() => {
+                          setActiveTab('today');
+                          setCurrentFileDate(date);
+                          if (window.innerWidth < 1024) setIsSidebarOpen(false);
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-[11px] transition-colors ${
+                          activeTab === 'today' && currentFileDate === date
+                            ? 'bg-black/[0.04] text-text-heading font-medium'
+                            : 'text-text-muted hover:text-text-heading hover:bg-black/[0.03]'
+                        }`}
+                      >
+                        {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          weekday: 'short',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${date}T00:00:00Z`))}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </nav>
 
           {/* Bottom section: Work/Life toggle + Sync + Settings */}
@@ -262,40 +199,6 @@ export function Sidebar({
                     {language === 'zh' ? '生活' : 'Life'}
                   </button>
                 </div>
-              </div>
-            )}
-
-            {/* GitHub Sync */}
-            {githubConnected && onGitSync && (
-              <div className="space-y-1.5">
-                <button
-                  onClick={onGitSync}
-                  disabled={isSyncing || !hasChanges}
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-medium rounded-lg transition-colors hover:bg-black/[0.03] disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.99]"
-                  title={language === 'zh' ? '同步到 GitHub' : 'Sync to GitHub'}
-                >
-                  <div className="flex items-center gap-2">
-                    {isSyncing ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                    ) : hasChanges ? (
-                      <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                    )}
-                    <span className="text-text-muted">
-                      {isSyncing
-                        ? (language === 'zh' ? '同步中' : 'Syncing')
-                        : hasChanges
-                        ? (language === 'zh' ? '未提交的更改' : 'Uncommitted changes')
-                        : (language === 'zh' ? '已是最新' : 'Up to date')}
-                    </span>
-                  </div>
-                </button>
-                {!isSyncing && (lastSyncTime || gitLastCommitTime) && formatSyncTime && (
-                  <p className="text-[10px] text-text-muted px-2 opacity-60">
-                    {formatSyncTime(lastSyncTime || gitLastCommitTime!, language, nowTime || Date.now())}
-                  </p>
-                )}
               </div>
             )}
 

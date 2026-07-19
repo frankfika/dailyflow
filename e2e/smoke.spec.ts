@@ -10,19 +10,8 @@ test.describe('DailyFlow Smoke Tests', () => {
   });
 
   test('sidebar shows navigation items', async ({ page }) => {
+    await expect(page.getByTestId('nav-today')).toBeVisible();
     await expect(page.getByTestId('nav-notes')).toBeVisible();
-    await expect(page.getByTestId('nav-ai-chat')).toBeVisible();
-    await expect(page.getByTestId('nav-capsules')).toBeVisible();
-  });
-
-  test('can switch to Capsules tab', async ({ page }) => {
-    await page.getByTestId('nav-capsules').click();
-    await expect(page.getByText(/Time Capsules|时间胶囊/i).first()).toBeVisible();
-  });
-
-  test('can switch to AI Chat tab', async ({ page }) => {
-    await page.getByTestId('nav-ai-chat').click();
-    await expect(page.getByText(/AI Chat|AI 对话/i).first()).toBeVisible();
   });
 
   test('settings panel opens', async ({ page }) => {

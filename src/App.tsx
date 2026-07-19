@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, gitApi, configApi, notesApi, aiApi, recurringApi, workspacesApi } from './api/client';
+import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, recurringApi, workspacesApi } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig } from './types/models';
@@ -21,8 +21,8 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
-import { FloatingAIPanel } from './components/FloatingAIPanel';
 import { DailyNoteCards } from './components/DailyNoteCards';
+import { DailyFocus } from './components/DailyFocus';
 import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -47,8 +47,6 @@ type Task = {
   source_date?: string;
 };
 
-// Data is now loaded from backend API
-
 async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
   if (!repoUrl || !token) return false;
   try {
@@ -58,35 +56,16 @@ async function verifyGithubConnection(repoUrl: string, token: string): Promise<b
       .replace(/\/$/, '');
     const [owner, repo] = repoPath.split('/');
     if (!owner || !repo) return false;
-    const res = await fetch(`${API_BASE.github}/repos/${owner}/${repo}`, {
+    const response = await fetch(`${API_BASE.github}/repos/${owner}/${repo}`, {
       headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
       },
     });
-    return res.ok;
+    return response.ok;
   } catch {
     return false;
   }
-}
-
-function formatSyncTime(isoString: string, lang: 'en' | 'zh', nowMs: number = Date.now()): string {
-  const date = new Date(isoString);
-  const diffMs = nowMs - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-
-  if (diffMin < 1) return lang === 'zh' ? '刚刚同步' : 'Synced just now';
-  if (diffMin <= 10) return lang === 'zh' ? `已同步 ${diffMin}分钟前` : `Synced ${diffMin}m ago`;
-
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const y = date.getFullYear();
-  const m = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  const h = pad(date.getHours());
-  const min = pad(date.getMinutes());
-  return lang === 'zh'
-    ? `上次同步在 ${y}-${m}-${d} ${h}:${min}`
-    : `Last synced at ${y}-${m}-${d} ${h}:${min}`;
 }
 
 export default function App() {
@@ -107,18 +86,7 @@ export default function App() {
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat' | 'capsules'>('today');
-  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
-  const [aiButtonOffset, setAiButtonOffset] = useState<{ x: number; y: number }>(() => {
-    if (typeof window === 'undefined') return { x: 0, y: 0 };
-    try {
-      const raw = localStorage.getItem('df_ai_button_offset');
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return { x: 0, y: 0 };
-  });
-  const isDraggingAiButtonRef = useRef(false);
-  const aiButtonDragStartRef = useRef({ clientX: 0, clientY: 0, x: 0, y: 0 });
-  const aiButtonDidDragRef = useRef(false);
+  const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
   // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
@@ -134,17 +102,7 @@ export default function App() {
     return map;
   }, [dailyNotes]);
   const [lastSyncedMD, setLastSyncedMD] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [gitHasChanges, setGitHasChanges] = useState(false);
-  const [nowTime, setNowTime] = useState(Date.now());
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('df_last_sync_time');
-    } catch {
-      return null;
-    }
-  });
-  const [gitLastCommitTime, setGitLastCommitTime] = useState<string | null>(null);
+  const [, setIsSyncing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
@@ -162,7 +120,6 @@ export default function App() {
   const [newTaskDeadline, setNewTaskDeadline] = useState<string>('');
   const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
 
-  const [rolloverBanner, setRolloverBanner] = useState<{ count: number; fromDate: string } | null>(null);
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
@@ -177,6 +134,7 @@ export default function App() {
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
   const [hideDoneTasks, setHideDoneTasks] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
@@ -184,7 +142,7 @@ export default function App() {
   const [showGithubToken, setShowGithubToken] = useState<boolean>(false);
   const [githubVerifyStatus, setGithubVerifyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [githubVerifyMsg, setGithubVerifyMsg] = useState<string>('');
-  const [githubConnected, setGithubConnected] = useState<boolean>(false);
+  const [, setGithubConnected] = useState(false);
   const [aiApiKey, setAiApiKey] = useState<string>('');
   const [aiModel, setAiModel] = useState<string>('');
   const [aiBaseUrl, setAiBaseUrl] = useState<string>('');
@@ -202,6 +160,31 @@ export default function App() {
   const [ipfsApiKey, setIpfsApiKey] = useState<string>('');
   const [ipfsGateway, setIpfsGateway] = useState<string>('');
   const markdownRef = React.useRef(markdown);
+
+  const focusStorageKey = `df_focus_${activeWorkspaceId || 'default'}_${activeContext}_${currentFileDate}`;
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(focusStorageKey);
+      setFocusTaskIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setFocusTaskIds([]);
+    }
+  }, [focusStorageKey]);
+
+  useEffect(() => {
+    setShowAllTasks(false);
+    setSelectedCategory(null);
+  }, [currentFileDate, activeContext]);
+
+  const updateFocusTaskIds = useCallback((ids: string[]) => {
+    const next = ids.slice(0, 3);
+    setFocusTaskIds(next);
+    try {
+      localStorage.setItem(focusStorageKey, JSON.stringify(next));
+    } catch {
+      // Local focus planning is a progressive enhancement.
+    }
+  }, [focusStorageKey]);
 
   // Check first run on mount
   useEffect(() => {
@@ -263,11 +246,6 @@ export default function App() {
           } catch { /* ignore */ }
         }
 
-        // Verify GitHub connection if repo and token are configured
-        if (config.githubRepo && config.githubToken) {
-          const ok = await verifyGithubConnection(config.githubRepo, config.githubToken);
-          setGithubConnected(ok);
-        }
       } catch (e) {
         // ignore
       }
@@ -339,34 +317,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Poll git status when connected
-  useEffect(() => {
-    if (!githubConnected) return;
-    const checkGitStatus = async () => {
-      try {
-        const status = await gitApi.getStatus();
-        setGitHasChanges(status.hasChanges);
-        if (status.lastCommitTime) {
-          setGitLastCommitTime(status.lastCommitTime);
-        }
-      } catch {
-        // workspace might not be a git repo yet
-      }
-    };
-    checkGitStatus();
-    
-    // Also periodically update the formatted time string without making network requests
-    const timeUpdateInterval = setInterval(() => {
-      setNowTime(Date.now());
-    }, 60000); // every minute
-
-    const interval = setInterval(checkGitStatus, 10000);
-    return () => {
-      clearInterval(interval);
-      clearInterval(timeUpdateInterval);
-    };
-  }, [githubConnected]);
-
   // Save activeContext when it changes
   useEffect(() => {
     document.documentElement.setAttribute('data-context', activeContext);
@@ -432,10 +382,7 @@ export default function App() {
           console.error('Recurring instantiation failed', e);
         }
         try {
-          const rolloverResult = await rolloverApi.apply(date, activeContext);
-          if (rolloverResult.migratedCount > 0) {
-            setRolloverBanner({ count: rolloverResult.migratedCount, fromDate: date });
-          }
+          await rolloverApi.apply(date, activeContext);
         } catch (rolloverErr) {
           console.error('Auto-rollover failed', rolloverErr);
         }
@@ -531,8 +478,6 @@ export default function App() {
       setTasks([]);
       setDailyNotes([]);
       setFilesMap({});
-      setRolloverBanner(null);
-
       // Restore last date for this workspace, fallback to today
       let nextDate = getTodayStr();
       try {
@@ -548,12 +493,6 @@ export default function App() {
         'success'
       );
 
-      // Re-check git status for the new workspace
-      try {
-        const status = await gitApi.getStatus();
-        setGitHasChanges(status.hasChanges);
-        setGitLastCommitTime(status.lastCommitTime || null);
-      } catch { /* ignore — might not be a git repo */ }
     } catch (e: any) {
       showToast(
         e.message || (language === 'zh' ? '切换笔记本失败' : 'Failed to switch workspace'),
@@ -605,8 +544,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [language, showToast]);
-
-  const hasChanges = markdown !== lastSyncedMD || gitHasChanges;
 
   const processBrainDump = async () => {
     if (!brainDumpText.trim()) return;
@@ -722,58 +659,6 @@ export default function App() {
     }
     console.error('Failed to toggle task', lastError);
     showToast(language === 'zh' ? '切换失败，请重试' : 'Toggle failed — please retry', 'error');
-  };
-
-  const handleGitSync = async () => {
-    setIsSyncing(true);
-    try {
-      // 1. 先保存当前文件到后端
-      await filesApi.update(currentFileDate, markdown);
-      setLastSyncedMD(markdown);
-
-      // 2. 生成提交信息
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      const timeStr = now.toTimeString().split(' ')[0];
-      const commitMessage = `Update daily notes: ${dateStr} ${timeStr}`;
-
-      // 3. 调用 Git 同步 API
-      const result = await gitApi.sync(commitMessage);
-
-      if (result.success) {
-        const syncTime = new Date().toISOString();
-        setLastSyncTime(syncTime);
-        try {
-          localStorage.setItem('df_last_sync_time', syncTime);
-        } catch {
-          // ignore
-        }
-        showToast(
-          language === 'zh'
-            ? `✓ 已推送到 GitHub (${result.commitHash?.substring(0, 7)})`
-            : `✓ Pushed to GitHub (${result.commitHash?.substring(0, 7)})`,
-          'success'
-        );
-      } else {
-        const errorMsg = result.stage === 'commit'
-          ? (language === 'zh' ? '提交失败' : 'Commit failed')
-          : (language === 'zh' ? '推送失败' : 'Push failed');
-        showToast(`${errorMsg}: ${result.error}`, 'error');
-      }
-    } catch (e: any) {
-      console.error('Sync failed', e);
-      showToast(
-        language === 'zh' ? `同步失败: ${e.message}` : `Sync failed: ${e.message}`,
-        'error'
-      );
-    } finally {
-      setIsSyncing(false);
-      // Refresh git status
-      try {
-        const status = await gitApi.getStatus();
-        setGitHasChanges(status.hasChanges);
-      } catch {}
-    }
   };
 
   const handleEditTask = async (
@@ -904,6 +789,7 @@ export default function App() {
   // Life context: only show life tasks
   const contextFilteredTasks = filterTasksByContext(tasks, activeContext);
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
+  const backlogTasks = todayTasks.filter(t => !focusTaskIds.includes(t.id));
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
@@ -911,6 +797,67 @@ export default function App() {
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
+
+  const handleGenerateDailyPlan = async (brief: string): Promise<{ taskIds: string[]; summary: string }> => {
+    if (!aiApiKey || !aiBaseUrl) {
+      throw new Error('AI provider not configured');
+    }
+    const openTasks = todayTasks
+      .filter(task => task.status !== 'done')
+      .map(task => ({
+        id: task.id,
+        title: task.title,
+        priority: task.priority || null,
+        deadline: task.deadline || null,
+        sourceDate: task.source_date || null,
+        tags: (task.tags || []).filter(tag => !systemTags.includes(tag)),
+      }))
+      .slice(0, 60);
+    if (openTasks.length === 0) {
+      throw new Error('No open tasks');
+    }
+
+    const outputLanguage = language === 'zh' ? 'Simplified Chinese' : 'English';
+    const { summary: raw } = await aiApi.summarize({
+      apiKey: aiApiKey,
+      model: aiModel || undefined,
+      baseUrl: aiBaseUrl,
+      maxTokens: 800,
+      systemPrompt: [
+        'You are the planning intelligence inside a daily focus product.',
+        'Choose at most 3 tasks that make a realistic, coherent day.',
+        'Respect the user brief above raw urgency. Prefer meaningful progress over clearing the oldest debt.',
+        'Use only exact task ids from the supplied list.',
+        `Write the summary in ${outputLanguage}, in one concise sentence explaining the tradeoff.`,
+        'Return ONLY JSON: {"taskIds":["id"],"summary":"why these, what can wait"}.',
+      ].join(' '),
+      userPrompt: JSON.stringify({
+        date: currentFileDate,
+        context: activeContext,
+        userBrief: brief || (language === 'zh' ? '没有额外限制，请给我一个现实可完成的计划。' : 'No extra constraints. Build a realistic plan.'),
+        openTasks,
+      }),
+    });
+
+    const jsonText = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    const start = jsonText.indexOf('{');
+    const end = jsonText.lastIndexOf('}');
+    const parsed = JSON.parse(start >= 0 && end >= start ? jsonText.slice(start, end + 1) : jsonText);
+    const proposedIds: unknown[] = Array.isArray(parsed.taskIds) ? parsed.taskIds : [];
+    const validIds: string[] = Array.from(new Set(
+      proposedIds.filter((id): id is string => typeof id === 'string' && openTasks.some(task => task.id === id)),
+    )).slice(0, 3);
+    if (validIds.length === 0) throw new Error('AI returned no valid task ids');
+    return {
+      taskIds: validIds,
+      summary: typeof parsed.summary === 'string' && parsed.summary.trim()
+        ? parsed.summary.trim()
+        : (language === 'zh' ? '这是今天最现实的一组推进组合，其余事项可以等待。' : 'This is the most realistic combination for today; the rest can wait.'),
+    };
+  };
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1048,14 +995,6 @@ export default function App() {
         activeContext={activeContext}
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
-        githubConnected={githubConnected}
-        isSyncing={isSyncing}
-        hasChanges={hasChanges}
-        lastSyncTime={lastSyncTime}
-        gitLastCommitTime={gitLastCommitTime}
-        formatSyncTime={formatSyncTime}
-        nowTime={nowTime}
-        onGitSync={handleGitSync}
       />
 
       {/* Main Content Area */}
@@ -1070,104 +1009,6 @@ export default function App() {
             <Menu className="w-5 h-5" />
           </button>
         )}
-
-        {/* Floating AI Panel Toggle */}
-        <button
-          onClick={() => {
-            if (aiButtonDidDragRef.current) {
-              aiButtonDidDragRef.current = false;
-              return;
-            }
-            setIsAIPanelOpen(prev => !prev);
-          }}
-          onPointerDown={(e) => {
-            aiButtonDidDragRef.current = false;
-            isDraggingAiButtonRef.current = true;
-            try {
-              (e.currentTarget as Element).setPointerCapture(e.pointerId);
-            } catch {}
-            aiButtonDragStartRef.current = {
-              clientX: e.clientX,
-              clientY: e.clientY,
-              x: aiButtonOffset.x,
-              y: aiButtonOffset.y,
-            };
-          }}
-          onPointerMove={(e) => {
-            if (!isDraggingAiButtonRef.current) return;
-            const dx = e.clientX - aiButtonDragStartRef.current.clientX;
-            const dy = e.clientY - aiButtonDragStartRef.current.clientY;
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-              aiButtonDidDragRef.current = true;
-            }
-            setAiButtonOffset({
-              x: aiButtonDragStartRef.current.x + dx,
-              y: aiButtonDragStartRef.current.y + dy,
-            });
-          }}
-          onPointerUp={(e) => {
-            if (!isDraggingAiButtonRef.current) return;
-            isDraggingAiButtonRef.current = false;
-            try {
-              (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-            } catch {}
-            try {
-              localStorage.setItem('df_ai_button_offset', JSON.stringify(aiButtonOffset));
-            } catch {}
-          }}
-          onPointerCancel={(e) => {
-            isDraggingAiButtonRef.current = false;
-            try {
-              (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-            } catch {}
-          }}
-          className={`fixed bottom-20 right-6 z-[60] flex items-center justify-center w-12 h-12 rounded-full border shadow-lg backdrop-blur-2xl cursor-grab active:cursor-grabbing active:scale-95 transition-colors duration-300 ${
-            isAIPanelOpen
-              ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_4px_20px_rgba(0,122,255,0.15)]'
-              : 'bg-white/50 border-white/70 text-text-heading hover:text-accent hover:border-accent/30 hover:bg-white/70 shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
-          }`}
-          style={{
-            transform: `translate3d(${aiButtonOffset.x}px, ${aiButtonOffset.y}px, 0)`,
-          }}
-          title={language === 'zh' ? 'AI 助手' : 'AI Assistant'}
-        >
-          <motion.span
-            className="flex items-center justify-center"
-            animate={{ rotate: [0, 14, -14, 0], scale: [1, 1.15, 1] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <Sparkles className="w-5 h-5" />
-          </motion.span>
-        </button>
-
-        <FloatingAIPanel
-          isOpen={isAIPanelOpen}
-          onClose={() => setIsAIPanelOpen(false)}
-          language={language}
-          activeContext={activeContext}
-          tasks={contextFilteredTasks}
-          notes={contextNotes}
-          filesMap={filesMap}
-          showToast={showToast}
-          initialDraft={chatDraft}
-          onDraftConsumed={() => setChatDraft(null)}
-          onNoteCreated={() => {
-            // Refresh daily notes for today so the new note appears immediately
-            const today = new Date().toISOString().slice(0, 10);
-            notesApi.getByDate(today).then(dateNotes => {
-              setDailyNotes(prev => {
-                const others = prev.filter(n => n.date !== today);
-                return [...others, ...dateNotes];
-              });
-            }).catch(err => console.error('Failed to refresh daily notes:', err));
-            loadContextNotes();
-          }}
-          focusedContext={
-            activeTab === 'notes'
-              ? { type: 'note', title: language === 'zh' ? '笔记库' : 'Notes' }
-              : { type: 'today', title: language === 'zh' ? '今日任务' : 'Today' }
-          }
-        />
 
         <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={activeTab === 'ai-chat' || activeTab === 'capsules' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
@@ -1194,32 +1035,6 @@ export default function App() {
                   {language === 'zh' ? '重试' : 'Retry'}
                 </button>
               </div>
-            )}
-            {/* Empty state */}
-            {!isLoading && !loadError && tasks.length === 0 && activeTab === 'today' && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1.0] }}
-                className="flex flex-col items-center justify-center py-32 gap-4 text-center"
-              >
-                <div className="empty-state-icon p-4 mb-2">
-                  <Calendar className="w-8 h-8 text-text-muted/50" strokeWidth={1.5} />
-                </div>
-                <h3 className="text-lg font-semibold text-text-heading">
-                  {language === 'zh' ? '今天还没有任务' : 'No tasks for today'}
-                </h3>
-                <p className="text-sm text-text-muted max-w-xs leading-relaxed">
-                  {language === 'zh' ? '开始记录今天要做的事吧' : 'Start tracking what you want to do today'}
-                </p>
-                <button
-                  onClick={() => setShowTaskInput(true)}
-                  className="mt-2 px-4 py-2 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors shadow-sm flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  {language === 'zh' ? '添加第一个任务' : 'Add your first task'}
-                </button>
-              </motion.div>
             )}
             {!isLoading && !loadError && (
               activeTab === 'today' ? (
@@ -1271,11 +1086,11 @@ export default function App() {
                       {currentFileDate === getTodayStr() && (
                       <button
                         onClick={handleManualRollover}
-                        title={language === 'zh' ? '手动迁移历史未完成任务' : 'Migrate unfinished tasks from past'}
+                        title={language === 'zh' ? '回顾并处理历史未完成事项' : 'Review unfinished items from earlier days'}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-accent hover:bg-accent/10 border border-border/60 hover:border-accent/20 transition-all active:scale-95"
                       >
                         <RefreshCw className="w-3 h-3" />
-                        {language === 'zh' ? '迁移' : 'Rollover'}
+                        {language === 'zh' ? '整理遗留' : 'Review leftovers'}
                       </button>
                       )}
                       {currentFileDate !== getTodayStr() && (
@@ -1289,7 +1104,7 @@ export default function App() {
                       </button>
                       )}
                     </div>
-                    {categories.length > 0 && (
+                    {showAllTasks && categories.length > 0 && (
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setSelectedCategory(null)}
@@ -1318,42 +1133,43 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Auto-rollover Banner */}
-                  {rolloverBanner && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border text-text-main text-sm shadow-sm"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                          <CornerUpRight className="w-3.5 h-3.5 text-accent" />
-                        </div>
-                        <span className="font-medium">
-                          {language === 'zh'
-                            ? `已从 ${rolloverBanner.fromDate} 迁移 ${rolloverBanner.count} 个未完成任务`
-                            : `Migrated ${rolloverBanner.count} unfinished tasks from ${rolloverBanner.fromDate}`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => { setRolloverBanner(null); handleManualRollover(); }}
-                          className="text-xs font-medium text-text-muted hover:text-text-heading hover:bg-black/5 px-2 py-1 rounded-md transition-colors"
-                        >
-                          {language === 'zh' ? '查看详情' : 'Details'}
-                        </button>
-                        <button onClick={() => setRolloverBanner(null)} className="p-1 rounded-md text-text-muted hover:text-text-heading hover:bg-black/5 transition-colors">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
+                  <DailyFocus
+                    tasks={todayTasks}
+                    focusTaskIds={focusTaskIds}
+                    onFocusTaskIdsChange={updateFocusTaskIds}
+                    onToggleTask={handleToggleTask}
+                    onAddTask={() => setShowTaskInput(true)}
+                    language={language}
+                    isToday={currentFileDate === getTodayStr()}
+                    aiAvailable={Boolean(aiApiKey && aiBaseUrl)}
+                    onGenerateAIPlan={handleGenerateDailyPlan}
+                    onConfigureAI={() => setActiveTab('ai-chat')}
+                  />
 
+                  <button
+                    onClick={() => setShowAllTasks(value => !value)}
+                    data-testid="everything-else-toggle"
+                    className="w-full flex items-center justify-between gap-3 px-1 py-2 text-left group"
+                    aria-expanded={showAllTasks}
+                  >
+                    <div>
+                      <h2 className="text-[13px] font-semibold text-text-heading">
+                        {language === 'zh' ? '其他待办' : 'Everything else'}
+                        <span className="ml-2 text-[11px] font-normal text-text-muted">{backlogTasks.filter(task => task.status !== 'done').length}</span>
+                      </h2>
+                      <p className="mt-0.5 text-[11px] text-text-muted">
+                        {language === 'zh' ? '需要时再展开，不和今日三件事争注意力' : 'Open only when you need to re-plan'}
+                      </p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${showAllTasks ? 'rotate-180' : ''}`} />
+                  </button>
 
+                  {showAllTasks && (
+                  <>
                   {(() => {
                     // 排序：含 pending 的 category 排在前面，全是 done 的排到末尾
                     const catsWithStats = categories.map(category => {
-                      const catTasks = todayTasks.filter(t => {
+                      const catTasks = backlogTasks.filter(t => {
                         const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
                         return taskCategories[0] === category;
                       });
@@ -1367,7 +1183,7 @@ export default function App() {
                     ];
                     return sortedCategories.map(({ category, pendingCount, doneCount }) => {
                     if (selectedCategory && selectedCategory !== category) return null;
-                    const catTasks = todayTasks.filter(t => {
+                    const catTasks = backlogTasks.filter(t => {
                       const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
                       return taskCategories[0] === category;
                     });
@@ -1457,7 +1273,7 @@ export default function App() {
                   })()}
                   {/* 兜底：显示没有任何 category tag 的任务 */}
                   {(() => {
-                    const uncategorized = todayTasks.filter(t => {
+                    const uncategorized = backlogTasks.filter(t => {
                       const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
                       return taskCategories.length === 0;
                     });
@@ -1591,6 +1407,9 @@ export default function App() {
                     );
                   })()}
 
+                  </>
+                  )}
+
                   {/* Today's Notes */}
                   <DailyNoteCards
                     notes={filterNotesByContext(dailyNotes, activeContext)}
@@ -1677,7 +1496,7 @@ export default function App() {
         </div>
 
         {/* FAB: Add Task */}
-        {activeTab === 'today' && !showTaskInput && !isAIPanelOpen && (
+        {activeTab === 'today' && !showTaskInput && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}

@@ -4,9 +4,9 @@
 
 # DailyFlow
 
-> **本地优先的任务、笔记与时间胶囊系统** · Local-first tasks, notes & on-chain time capsules
+> **把无限待办，收敛成今天的三件事**
 >
-> 简单记录，专注今天，让未来见证你的承诺。 · Keep it simple. Focus on today. Make the future witness your promises.
+> 每天少承诺一点，真正完成一点。数据只存在你的本地 Markdown 里。
 
 ![主界面](./docs/assets/home.png)
 
@@ -14,7 +14,6 @@
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
-![Chain](https://img.shields.io/badge/Chain-EVM%20Multichain-success?style=flat-square)
 
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [时间胶囊](#-时间胶囊) · [快速开始](#-快速开始) · [技术栈](#-技术栈) · [贡献](#-贡献)
 
@@ -24,41 +23,60 @@ __简体中文__ | [English](./README_EN.md)
 
 </div>
 
-## 🎉 v1.0.6 更新：时间胶囊上线
+> [!IMPORTANT]
+> 当前 README 描述的是已实现版本及其过渡中的 Today’s Three 体验。下一代 AI-native 产品的开发主规范是 [`docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md`](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md)。后续产品、数据模型和开发决策以该文档为准。
 
-新增第三个独立标签页 **⏳ 时间胶囊（Time Capsules）**——把承诺、秘密、里程碑封进链上，由未来打开。
+## ✦ 下一版：Today’s Three
 
-| 你想做的事 | DailyFlow 怎么做 |
-|-----------|----------------|
-| 立 flag 但怕忘记 | 写进胶囊，**写入 EVM 区块链**，时间到了再来打开 |
-| 给未来的自己留一封信 | 加密落库 + 链上哈希，**不可篡改、不可删除** |
-| 记录人生的里程碑时刻 | 「Commitment / Secret / Milestone」三种胶囊类型任选 |
-| 多链体验 | 一键切换 **Base / Optimism / Arbitrum / Sepolia / Hardhat** |
+大多数任务工具擅长帮你**收集更多**，DailyFlow 现在只解决一个更具体的问题：
 
-![Capsules](./docs/assets/capsules-list.png)
+> 当待办越积越多时，今天到底该做什么？
+
+每天打开应用，AI 会先读完你的待办、优先级、截止日期和积压时间。你只需告诉它一句今天的现实限制，它会提出三件「今日承诺」并解释取舍；你可以继续用自然语言重排，也可以随时手动调整。
+
+1. **收集**：把脑中的事情快速记进收集箱
+2. **收敛**：只选今天最值得推进的三件事
+3. **完成**：一次只盯下一件，完成后获得清晰的闭环
+4. **回顾**：其余任务留在待办池，不用把“没做完”当成失败
 
 ---
 
 ## 📖 项目简介
 
-DailyFlow 是一个 **本地优先（local-first）** 的智能任务、笔记与时间胶囊管理桌面应用。Markdown 文件作为唯一数据源，内置 AI 助手（支持 15+ 模型供应商），未完成任务自动跨日迁移，并且现在可以把承诺 **写进 EVM 区块链** 让未来见证。
+DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first）每日聚焦工具**。Markdown 文件是唯一数据源；AI、笔记和时间胶囊是辅助工具，核心始终是帮助你决定并完成今天最重要的三件事。
 
 ### 为什么选择 DailyFlow？
 
 | 传统方式 | DailyFlow |
 |---------|-----------|
-| 每天手动复制未完成任务 | 自动迁移，打开即用 |
+| 打开应用先看到一整墙欠下的任务 | 先选「今日三件事」，其余自动退到背景 |
+| 完成多少都觉得不够 | 三件完成即可明确收工 |
 | 数据锁在 SaaS 平台 | 本地 Markdown，完全可控 |
 | 需要网络才能使用 | 离线优先，**内置 Node.js 运行时** |
-| 复杂项目管理工具上手难 | 极简设计，专注当日 |
-| AI 功能要额外付费 | 内置 AI，支持 15+ 模型供应商 |
-| 承诺立了就忘 | **链上时间胶囊**，到点自动提醒，无法篡改 |
+| 复杂项目管理工具上手难 | 不管理整个组织，只帮助你过好今天 |
 
 ---
 
 ## ✨ 核心功能
 
-### ⏳ 时间胶囊（新！v1.0.6）
+### 🎯 今日三件事（vNext）
+
+- **AI 每日规划**：一句话描述时间、精力和硬约束，AI 直接生成今日三件事
+- **解释而非黑盒**：明确说明为什么选这三件、哪些事情可以等待
+- **持续重排**：情况变化后用一句话让 AI 重新规划
+- **人工掌控**：任何时候都可以切换为手动选择
+- **单一视觉重点**：选中后从普通列表移出，不再重复争夺注意力
+- **明确进度**：实时显示 0/3 → 3/3，完成即闭环
+- **本地记忆**：按日期、工作区和 Work/Life 模式分别保存
+
+### 📋 任务管理
+
+- **自动迁移**：未完成任务在次日自动迁移，保留来源日期标记
+- **卡片式界面**：任务按标签分类，支持评论、关联笔记
+- **Work/Life 切换**：一键切换工作/生活上下文，任务自动过滤
+- **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`
+
+### ⏳ 时间胶囊（实验性工具）
 
 - **三种胶囊类型**：Commitment（承诺）、Secret（秘密）、Milestone（里程碑）
 - **多链 EVM**：Base Sepolia、Optimism Sepolia、Arbitrum Sepolia、Sepolia、本地 Hardhat
@@ -69,14 +87,6 @@ DailyFlow 是一个 **本地优先（local-first）** 的智能任务、笔记�
 - **趣味 UI**：SVG 插画 + 渐变背景 + 倒计时动效
 
 ![Capsule Detail](./docs/assets/capsules-detail.png)
-
-### 📋 任务管理
-
-- **自动迁移**：未完成任务在次日自动迁移，保留来源日期标记
-- **卡片式界面**：任务按标签分类，支持评论、关联笔记
-- **Work/Life 切换**：一键切换工作/生活上下文，任务自动过滤
-- **项目概览**：跨日期聚合待办，按分类查看全局进度
-- **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`
 
 ### 🤖 AI 助手
 

@@ -4,9 +4,9 @@
 
 # DailyFlow
 
-> **Local-first tasks, notes & on-chain time capsules**
+> **Turn an endless backlog into three things for today**
 >
-> Keep it simple. Focus on today. Make the future witness your promises.
+> Commit to less. Actually finish more. Keep every task in local Markdown.
 
 ![Main Interface](./docs/assets/home.png)
 
@@ -14,7 +14,6 @@
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
-![Chain](https://img.shields.io/badge/Chain-EVM%20Multichain-success?style=flat-square)
 
 [Features](#-features) · [Screenshots](#-screenshots) · [Time Capsules](#-time-capsules) · [Quick Start](#-quick-start) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
 
@@ -24,41 +23,60 @@
 
 </div>
 
-## 🎉 v1.0.6: Time Capsules are here
+> [!IMPORTANT]
+> This README describes the current implementation and its transitional Today’s Three experience. The source of truth for the next AI-native product is [`docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md`](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md). Future product, data-model, and implementation decisions should follow that specification.
 
-A brand-new third tab — **⏳ Time Capsules** — lets you seal commitments, secrets, and milestones on-chain, and only the future can unseal them.
+## ✦ Next: Today’s Three
 
-| What you want to do | How DailyFlow does it |
-|---------------------|----------------------|
-| Make a promise you'll forget | Write a capsule, **commit it to an EVM chain**, get reminded later |
-| Send a letter to your future self | Local encryption + on-chain hash — **tamper-proof and forever** |
-| Record a life milestone | Pick from **Commitment / Secret / Milestone** |
-| Try multiple chains | One-click switch across **Base / Optimism / Arbitrum / Sepolia / Hardhat** |
+Most task managers help you **collect more**. DailyFlow now answers one narrower, more painful question:
 
-![Capsules](./docs/assets/capsules-list.png)
+> When the backlog never ends, what should I actually do today?
+
+Open the app and AI first reads your backlog, priorities, deadlines, and stale work. Tell it what is different about today in one sentence; it proposes three commitments and explains the tradeoff. Re-plan in natural language or take over manually at any time.
+
+1. **Capture** everything that is pulling at your attention
+2. **Commit** to only three things worth moving today
+3. **Finish** one next action at a time
+4. **Close** the day without treating the remaining backlog as failure
 
 ---
 
 ## 📖 Introduction
 
-DailyFlow is a **local-first** desktop app for tasks, notes, and now on-chain time capsules. Markdown files are the single source of truth, a built-in AI assistant supports **15+ model providers**, unfinished tasks auto-roll to the next day, and your most meaningful promises can be **sealed onto an EVM blockchain** so the future can verify them.
+DailyFlow is a **local-first daily focus tool for people with overloaded backlogs**. Markdown files are the single source of truth. AI, notes, and time capsules remain supporting tools; the core job is helping you choose and finish the three things that matter today.
 
 ### Why DailyFlow?
 
 | Traditional | DailyFlow |
 |-------------|-----------|
-| Manually carry over unfinished tasks every day | Auto-migration, ready when you open |
+| Open the app to a wall of overdue work | Choose “Today’s Three”; everything else recedes |
+| Never feel finished, no matter how much you do | Three completed commitments create a clear stopping point |
 | Data locked in SaaS platforms | Local Markdown files, full ownership |
 | Requires internet and Node.js installed | Offline-first, **bundled Node.js runtime** |
-| Complex project tools are hard to learn | Minimal design, focused on today |
-| AI features cost extra | Built-in AI, 15+ providers |
-| Promises you forget | **On-chain time capsules**, unopenable until unlock time |
+| Complex project tools manage everything | DailyFlow only helps you make today count |
 
 ---
 
 ## ✨ Features
 
-### ⏳ Time Capsules (New in v1.0.6)
+### 🎯 Today’s Three (vNext)
+
+- **AI daily planning**: describe your time, energy, and constraints in one sentence
+- **Explainable tradeoffs**: AI says why it chose these three and what can wait
+- **Natural-language re-planning**: tell AI when the day changes
+- **Human control**: switch to manual selection at any time
+- **One visual priority**: selected tasks leave the regular list instead of appearing twice
+- **A visible finish line**: progress moves from 0/3 to 3/3
+- **Local memory**: plans are stored separately by date, workspace, and Work/Life context
+
+### 📋 Task Management
+
+- **Auto Migration**: unfinished tasks auto-roll to the next day with source date tracking
+- **Card-based UI**: tasks grouped by tags, with comments and linked notes
+- **Work/Life Switch**: one-click context switching, tasks auto-filtered
+- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
+
+### ⏳ Time Capsules (Experimental tool)
 
 - **Three capsule types**: Commitment, Secret, Milestone
 - **Multi-chain EVM**: Base Sepolia, Optimism Sepolia, Arbitrum Sepolia, Sepolia, local Hardhat
@@ -69,14 +87,6 @@ DailyFlow is a **local-first** desktop app for tasks, notes, and now on-chain ti
 - **Delightful UI**: SVG illustrations, gradient backgrounds, live countdown
 
 ![Capsule Detail](./docs/assets/capsules-detail.png)
-
-### 📋 Task Management
-
-- **Auto Migration**: unfinished tasks auto-roll to next day with source date tracking
-- **Card-based UI**: tasks grouped by tags, with comments and linked notes
-- **Work/Life Switch**: one-click context switching, tasks auto-filtered
-- **Project Overview**: cross-date aggregation by category
-- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
 
 ### 🤖 AI Assistant
 
