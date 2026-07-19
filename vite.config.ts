@@ -50,6 +50,10 @@ export default defineConfig(() => {
             return 'vendor';
           },
         },
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          v2: path.resolve(__dirname, 'src/features/v2/v2-standalone.html'),
+        },
       },
       chunkSizeWarningLimit: 800,
     },
@@ -57,7 +61,7 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: 'http://localhost:3003',
+          target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3003',
           changeOrigin: true,
         },
       },
