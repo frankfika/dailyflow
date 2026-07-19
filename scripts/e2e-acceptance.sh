@@ -85,8 +85,17 @@ echo "$WAIT" | python3 -c "import sys,json; c=json.load(sys.stdin)['commitment']
 echo "=== 9. Complete with outcome ==="
 COMP=$(curl -s -X POST http://localhost:$PORT/api/v2/commitments/$COM_ID/complete \
   -H "content-type: application/json" \
-  -d '{"outcomeKind":"sent","outcomeSummary":"已向 Zhang 发送合作方案。"}')
-echo "$COMP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'state={d[\"commitment\"][\"state\"]} outcomeId={d[\"outcome\"][\"id\"]}')"
+  -d '{"outcomeKind":"sent","outcomeSummary":"已向 Zhang 发送合作方案。还需要在周五前跟 Zhang 确认报价细节。"}')
+echo "$COMP" | python3 -c "import sys,json; d=json.load(sys.stdin); fup=d.get('followUpProposal'); print(f'state={d[\"commitment\"][\"state\"]} outcomeId={d[\"outcome\"][\"id\"]} followUpProposal={fup[\"id\"] if fup else None} candidates={fup[\"candidateCount\"] if fup else 0}')"
+
+echo "=== 9b. Follow-up proposal exists, can be accepted (§26 step 14) ==="
+FUP_ID=$(echo "$COMP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['followUpProposal']['id'] if d.get('followUpProposal') else '')")
+if [ -n "$FUP_ID" ]; then
+  APPLY=$(curl -s -X POST http://localhost:$PORT/api/v2/proposals/$FUP_ID/accept \
+    -H "content-type: application/json" \
+    -d '{}')
+  echo "$APPLY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'created={len(d.get(\"created\", []))}')"
+fi
 
 echo "=== 10. Memory search ==="
 SEARCH=$(curl -s "http://localhost:$PORT/api/v2/memory/search?q=Zhang")

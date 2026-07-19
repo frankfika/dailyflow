@@ -82,6 +82,33 @@ class DeterministicLocalProvider implements AIProvider {
   }
 }
 
+class FixtureProvider implements AIProvider {
+  name = 'fixture';
+  private readonly responses: CompletionResult[];
+
+  constructor(responses: CompletionResult[]) {
+    this.responses = responses;
+  }
+
+  async available(): Promise<{ ready: boolean; reason?: string }> {
+    return { ready: this.responses.length > 0 };
+  }
+
+  async complete(_req: CompletionRequest): Promise<CompletionResult> {
+    if (this.responses.length === 0) {
+      return {
+        data: null,
+        text: 'Fixture exhausted',
+        provider: this.name,
+        model: 'fixture',
+        fallback: true,
+        fallbackReason: 'no_provider',
+      };
+    }
+    return this.responses.shift()!;
+  }
+}
+
 class OpenAICompatibleProvider implements AIProvider {
   name = 'openai-compatible';
 
@@ -181,7 +208,7 @@ class OpenAICompatibleProvider implements AIProvider {
 }
 
 export interface V2AIConfig {
-  provider: 'openai-compatible' | 'local-deterministic';
+  provider: 'openai-compatible' | 'local-deterministic' | 'fixture';
   baseUrl?: string;
   model?: string;
   apiKey?: string;

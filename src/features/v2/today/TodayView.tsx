@@ -22,9 +22,11 @@ import {
   resumeCommitment,
   completeCommitment,
   replan,
+  getWaitingOverdue,
   V2ApiError,
   type DailyPlan,
   type Commitment,
+  type WaitingOverdueItem,
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
 
@@ -69,6 +71,13 @@ export function TodayView() {
     c => c.dueAt && c.state !== 'completed' && c.state !== 'cancelled' && new Date(c.dueAt) < new Date()
   );
 
+  // Spec §26 step 12: surface overdue waiting items so the user can
+  // review them. The system must NOT auto-resume or auto-send.
+  const overdueWaiting = useQuery({
+    queryKey: ['v2-waiting-overdue'],
+    queryFn: () => getWaitingOverdue(),
+  });
+
   return (
     <div className="flex flex-col gap-4 p-4">
       <MorningBrief
@@ -77,6 +86,21 @@ export function TodayView() {
         completedRecently={completedRecently}
         onRefresh={refresh}
       />
+
+      {overdueWaiting.data && overdueWaiting.data.items.length > 0 && (
+        <OverdueWaitingSection
+          items={overdueWaiting.data.items}
+          onResume={async (id) => {
+            await resumeCommitment(id);
+            refresh();
+            overdueWaiting.refetch();
+          }}
+          onChanged={() => {
+            refresh();
+            overdueWaiting.refetch();
+          }}
+        />
+      )}
 
       <ReplanBar
         loading={replanMut.isPending}
@@ -421,6 +445,62 @@ function DoneTodaySection({ completed }: { completed: Commitment[] }) {
           <li key={c.id} className="truncate">{c.title}</li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+/**
+ * OverdueWaitingSection — items whose `reviewAt` already passed.
+ *
+ * Spec §26 step 12: the system must remind the user, but must NOT
+ * auto-resume or auto-send messages. The user reviews each item
+ * explicitly: resume it, plan a new review, or cancel.
+ */
+function OverdueWaitingSection({
+  items,
+  onResume,
+  onChanged,
+}: {
+  items: WaitingOverdueItem[];
+  onResume: (id: string) => Promise<void>;
+  onChanged: () => void;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Badge tone="danger">需复查</Badge>
+          <div className="text-sm font-medium">已过复查日的 Waiting</div>
+        </div>
+        <div className="text-xs text-[var(--color-text-muted)]">
+          系统只做提醒；不会自动恢复或发送消息。
+        </div>
+        <ul className="mt-1 flex flex-col gap-1">
+          {items.map(it => (
+            <li
+              key={it.commitmentId}
+              className="flex items-center justify-between rounded-md border border-[var(--color-border)] p-2 text-sm"
+            >
+              <div>
+                <div className="font-medium">{it.title}</div>
+                <div className="text-xs text-[var(--color-text-muted)]">
+                  在等 {it.waitingOn} · 已超期 {it.daysOverdue} 天（应于 {new Date(it.reviewAt).toLocaleDateString()} 复查）
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onResume(it.commitmentId)}
+                >
+                  恢复
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Button size="sm" variant="ghost" onClick={onChanged}>刷新</Button>
+      </div>
     </Card>
   );
 }

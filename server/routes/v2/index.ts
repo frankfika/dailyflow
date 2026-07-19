@@ -39,6 +39,43 @@ import { search, getContext } from '../../services/v2/memoryService.js';
 import { loadLegacyTasks, migrateLegacyTask } from '../../services/v2/legacyAdapter.js';
 import { getV2Flags } from '../../services/v2/featureFlags.js';
 import { listConnectors, getConnector, syncConnector, pauseConnector, deleteConnector, runConnectorSyncOnce } from '../../services/v2/connectors.js';
+import {
+  processMeeting,
+  recordDecision,
+  getMeetingStats,
+} from '../../services/v2/meetingService.js';
+import {
+  getStaleCommitments,
+  getWaitingOverdue,
+  generateWeeklyReview,
+  buildTriageProposal,
+} from '../../services/v2/reviewerService.js';
+import {
+  syncCalendar,
+  listCalendarConnectors,
+} from '../../services/v2/calendarConnectors.js';
+import {
+  syncMessages,
+  listMessageConnectors,
+} from '../../services/v2/messageConnectors.js';
+import {
+  buildDraft,
+  confirmAndSend,
+  blockedSendImpl,
+} from '../../services/v2/externalWriteService.js';
+import {
+  listEntities,
+  getEntity as getExportEntity,
+  searchEntities,
+} from '../../services/v2/exportService.js';
+import {
+  issueMobileToken,
+  listMobileTokens,
+  revokeMobileToken,
+  authenticateMobileToken,
+  mobileCapture,
+  MobileCaptureInputSchema,
+} from '../../services/v2/mobileService.js';
 import { ConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
 
 export const v2Router = Router();
@@ -340,6 +377,7 @@ v2Router.post('/commitments/:id/complete', async (req, res) => {
       outcomeSummary: z.string().min(1).max(2000),
       evidenceIds: z.array(z.string()).optional(),
       followUpCommitmentIds: z.array(z.string()).optional(),
+      suggestFollowUp: z.boolean().optional(),
     });
     const input = schema.parse(req.body);
     const r = await completeWithOutcome(repo, req.params.id, {
@@ -347,8 +385,14 @@ v2Router.post('/commitments/:id/complete', async (req, res) => {
       outcomeSummary: input.outcomeSummary,
       evidenceIds: input.evidenceIds,
       followUpCommitmentIds: input.followUpCommitmentIds,
+      suggestFollowUp: input.suggestFollowUp,
     });
-    res.json({ commitment: r.commitment, outcome: r.outcome });
+    res.json({
+      commitment: r.commitment,
+      outcome: r.outcome,
+      followUpProposal: r.followUpProposal,
+      followUpCandidates: r.followUpCandidates,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -648,6 +692,295 @@ v2Router.post('/connectors/sync-once', async (req, res) => {
   try {
     const result = await runConnectorSyncOnce(req.body?.type ?? 'local-markdown');
     res.json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Meeting (Phase 3)
+// ---------------------------------------------------------------------------
+
+v2Router.post('/meetings/process', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const workspaceId = ctx.workspaceId;
+    const schema = z.object({ sourceId: z.string() });
+    const { sourceId } = schema.parse(req.body);
+    const source = await repo.getSourceItem(sourceId);
+    if (!source) return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
+    const out = await processMeeting(repo, { source, workspaceId, autoAcceptDecisions: false });
+    res.json(out);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/decisions', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const schema = z.object({
+      title: z.string().min(1),
+      decision: z.string().min(1),
+      rationale: z.string().optional(),
+      participantIds: z.array(z.string()).optional(),
+      projectId: z.string().optional(),
+      evidenceIds: z.array(z.string()).optional(),
+    });
+    const input = schema.parse(req.body) as {
+      title: string;
+      decision: string;
+      rationale?: string;
+      participantIds?: string[];
+      projectId?: string;
+      evidenceIds?: string[];
+    };
+    const d = await recordDecision(repo, ctx.workspaceId, input);
+    res.status(201).json({ decision: d });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/meetings/stats', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    res.json(await getMeetingStats(repo));
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Reviewer (Phase 7)
+// ---------------------------------------------------------------------------
+
+v2Router.get('/review/stale', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    res.json({ items: await getStaleCommitments(repo) });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/review/waiting-overdue', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    res.json({ items: await getWaitingOverdue(repo) });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/review/weekly', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    res.json(await generateWeeklyReview(repo));
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/review/triage', async (_req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const prop = await buildTriageProposal(repo, { workspaceId: ctx.workspaceId, userId: 'user' });
+    res.json(prop);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Calendar (Phase 5)
+// ---------------------------------------------------------------------------
+
+v2Router.get('/calendar/connectors', async (_req, res) => {
+  res.json({ items: listCalendarConnectors() });
+});
+
+v2Router.post('/calendar/sync', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const schema = z.object({
+      connectorId: z.string(),
+      cursor: z.string().optional(),
+      timeMin: z.string().datetime({ offset: true }).optional(),
+      timeMax: z.string().datetime({ offset: true }).optional(),
+    });
+    const input = schema.parse(req.body) as {
+      connectorId: string;
+      cursor?: string;
+      timeMin?: string;
+      timeMax?: string;
+    };
+    const r = await syncCalendar(repo, input);
+    res.json(r);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Messages (Phase 6)
+// ---------------------------------------------------------------------------
+
+v2Router.get('/messages/connectors', async (_req, res) => {
+  res.json({ items: listMessageConnectors() });
+});
+
+v2Router.post('/messages/sync', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const schema = z.object({
+      connectorId: z.string(),
+      threadId: z.string().optional(),
+      cursor: z.string().optional(),
+      limit: z.number().int().positive().max(100).optional(),
+    });
+    const input = schema.parse(req.body) as {
+      connectorId: string;
+      threadId?: string;
+      cursor?: string;
+      limit?: number;
+    };
+    const r = await syncMessages(repo, input);
+    res.json(r);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// External write (Phase 8)
+// ---------------------------------------------------------------------------
+
+v2Router.post('/external-writes/draft', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const schema = z.object({
+      commitmentId: z.string(),
+      kind: z.enum(['email', 'message', 'calendar_event']),
+      recipient: z.union([z.string(), z.array(z.string())]),
+      bodyOverride: z.string().optional(),
+      subjectOverride: z.string().optional(),
+      template: z.enum(['follow_up', 'send_update', 'invite', 'reminder']).optional(),
+    });
+    const input = schema.parse(req.body) as {
+      commitmentId: string;
+      kind: 'email' | 'message' | 'calendar_event';
+      recipient: string | string[];
+      bodyOverride?: string;
+      subjectOverride?: string;
+      template?: 'follow_up' | 'send_update' | 'invite' | 'reminder';
+    };
+    const c = await repo.getCommitment(input.commitmentId);
+    if (!c) return res.status(404).json({ error: { code: 'not_found', message: 'Commitment not found' } });
+    const draft = await buildDraft(repo, { commitment: c, ...input });
+    res.json({ draft });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/external-writes/:id/confirm', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    // The default transport is blocked. Real implementations replace
+    // the impl when the user has granted credentials. We still expose
+    // the endpoint so the UI can render a preview + confirm flow.
+    const r = await confirmAndSend(repo, req.params.id, blockedSendImpl);
+    res.json(r);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Export / MCP (Phase 9)
+// ---------------------------------------------------------------------------
+
+v2Router.get('/export/entities', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const kind = req.query.kind as any;
+    const items = await listEntities(repo, kind, {
+      since: req.query.since as string | undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
+    res.json({ items });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/export/entities/:kind/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const e = await getExportEntity(repo, req.params.kind as any, req.params.id);
+    if (!e) return res.status(404).json({ error: { code: 'not_found', message: 'Entity not found' } });
+    res.json({ entity: e });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/export/search', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const q = (req.query.q as string) ?? '';
+    res.json(await searchEntities(repo, q));
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Mobile (Phase 9)
+// ---------------------------------------------------------------------------
+
+v2Router.post('/mobile/tokens', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const schema = z.object({ deviceLabel: z.string().min(1) });
+    const { deviceLabel } = schema.parse(req.body);
+    const t = await issueMobileToken(ctx.root, deviceLabel);
+    res.status(201).json({ token: t });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/mobile/tokens', async (_req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    res.json({ items: await listMobileTokens(ctx.root) });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.delete('/mobile/tokens/:id', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const ok = await revokeMobileToken(ctx.root, req.params.id);
+    res.json({ ok });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/mobile/capture', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const auth = req.header('X-Mobile-Token');
+    if (!auth) return res.status(401).json({ error: { code: 'unauthorized', message: 'X-Mobile-Token required' } });
+    const ok = await authenticateMobileToken(ctx.root, auth);
+    if (!ok) return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid or expired token' } });
+    const input = MobileCaptureInputSchema.parse(req.body);
+    const r = await mobileCapture(repo, ctx.workspaceId, input);
+    res.status(201).json({ source: r.source });
   } catch (err) {
     handleError(err, res);
   }

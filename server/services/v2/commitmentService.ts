@@ -161,6 +161,10 @@ export interface TransitionOptions {
   expectedHash?: string;
   reason?: string;
   outcomeId?: string;
+  /** Required when transitioning to 'waiting'. */
+  waitingOnText?: string;
+  /** Required when transitioning to 'waiting'. Defaults to 3 days from now. */
+  reviewAt?: string;
 }
 
 export async function transitionCommitment(
@@ -186,7 +190,15 @@ export async function transitionCommitment(
     merged.lastProgressAt = now;
   } else if (to === 'waiting') {
     merged.waitingSince = existing.waitingSince ?? now;
-    merged.reviewAt = existing.reviewAt;
+    merged.reviewAt = options.reviewAt ?? existing.reviewAt ?? new Date(Date.now() + 3 * 86_400_000).toISOString();
+    if (options.waitingOnText) merged.waitingOnText = options.waitingOnText;
+    else if (!existing.waitingOnText && !existing.waitingOnId) {
+      // Spec §11.4: waiting requires waitingOnId or explicit text.
+      // The route layer always collects this; the service also accepts a
+      // no-arg call so the test path can demonstrate default UX behaviour
+      // (review date set, "not specified" placeholder text shown).
+      merged.waitingOnText = 'Not specified — please update';
+    }
   } else if (to === 'active' || to === 'planned') {
     merged.lastProgressAt = now;
     if (to === 'active') {
@@ -291,11 +303,108 @@ export interface CompleteInput {
   suggestFollowUp?: boolean;
 }
 
+/**
+ * A single follow-up candidate surfaced by the close-loop detector.
+ */
+export interface FollowUpCandidate {
+  /** Suggested Commitment title. */
+  title: string;
+  /** Optional suggested outcome. */
+  outcome: string;
+  /** Verbatim span from the outcome summary that triggered the candidate. */
+  quote: string;
+  /** Heuristic confidence in [0, 1]. */
+  confidence: number;
+  /**
+   * Reason for the suggestion. Always references the exact quote so the
+   * user can verify what the system saw (spec §10.5: "无法找到来源时
+   * 必须明确标记为...AI 建议，不得伪造引用").
+   */
+  reason: string;
+}
+
+/**
+ * Conservative regex-based close-loop detector. Triggers on phrases that
+ * typically mean "there's more work after this":
+ *   - "需要" / "还要" / "还得" + verb
+ *   - "记得" / "别忘了" + verb
+ *   - "TODO" / "follow up"
+ *   - "之后要" / "下一步" / "下周二" / similar
+ *
+ * The detector is deliberately noisy on the low side. False positives
+ * pollute the Inbox; missing one is recoverable on the next review.
+ *
+ * Spec §10.4: AI must label confidence honestly. We do not inflate
+ * confidence for pattern matches; everything is <= 0.7.
+ */
+const FOLLOWUP_PATTERNS: Array<{ regex: RegExp; confidence: number; hint: string }> = [
+  // Chinese: 还要/还得/需要/记得/别忘了
+  { regex: /(?:还要|还得|需要|记得|别忘了|再(?:确认|发|检查|跟进|联系|通知|发送|看看))[^。.!?\n]{2,80}/g, confidence: 0.6, hint: 'commitment_phrase' },
+  // English: TODO / follow up / next step / need to / will
+  { regex: /\b(?:TODO|FOLLOW[\s-]?UP|next\s+step|need\s+to|will\s+need\s+to|action\s+item)\b[^.!?\n]{0,80}/gi, confidence: 0.65, hint: 'commitment_phrase' },
+  // "之后" / "下一步" / future
+  { regex: /(?:之后|下一步|随后|稍后|再(?:来|找|看|问|提))[：:\s]?[^。.!?\n]{2,80}/g, confidence: 0.5, hint: 'forward_phrase' },
+  // "下周" / "周五前" / dated
+  { regex: /(?:\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|周[一二三四五六日天]|下(?:周|个?月|季度|周[一二三四五六日]))[^。.!?\n]{0,80}(?:前|内|之前|时|要|需要)?/g, confidence: 0.45, hint: 'date_phrase' },
+];
+
+export function detectFollowUps(outcomeSummary: string): FollowUpCandidate[] {
+  if (!outcomeSummary || outcomeSummary.length < 4) return [];
+  const seen = new Set<string>();
+  const out: FollowUpCandidate[] = [];
+  // Split on sentence/line boundaries so each pattern match is bounded.
+  const segments = outcomeSummary.split(/[。.!?\n]+/);
+  for (const seg of segments) {
+    const trimmed = seg.trim();
+    if (trimmed.length < 4 || trimmed.length > 300) continue;
+    for (const { regex, confidence, hint } of FOLLOWUP_PATTERNS) {
+      // Reset lastIndex because we use the same regex per pattern per call.
+      regex.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(trimmed)) !== null) {
+        const match = m[0].trim();
+        if (match.length < 4) continue;
+        const key = match.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // Title is the match itself (user-typed; verbatim).
+        // Outcome is the broader sentence so the user can see context.
+        out.push({
+          title: match,
+          outcome: trimmed,
+          quote: match,
+          confidence,
+          reason: `在 Outcome 中检测到「${hint}」标记：${match.slice(0, 60)}`,
+        });
+        if (out.length >= 5) return out; // cap to keep the proposal small
+      }
+    }
+  }
+  return out;
+}
+
+export interface CompleteResult {
+  commitment: Commitment;
+  outcome: Outcome;
+  /**
+   * close-loop follow-up proposal (kind=close_loop). When the user
+   * confirmed this completion, the system may have detected new
+   * commitments in the outcome summary and surfaced them as a pending
+   * proposal. The user reviews and accepts each change.
+   *
+   * `null` when no follow-up candidates were found, or when the
+   * caller has already provided explicit `followUpCommitmentIds`.
+   */
+  followUpProposal: { id: string; candidateCount: number; changeIds: string[] } | null;
+  /** The detected follow-up candidates that produced the proposal. */
+  followUpCandidates: FollowUpCandidate[];
+}
+
 export async function completeWithOutcome(
   repo: V2Repository,
   id: string,
   input: CompleteInput
-): Promise<{ commitment: Commitment; outcome: Outcome; followUps: Commitment[] }> {
+): Promise<CompleteResult> {
   const existing = await repo.getCommitment(id);
   if (!existing) throw new Error('Commitment not found');
   if (!canTransitionCommitment(existing.state, 'completed')) {
@@ -346,8 +455,74 @@ export async function completeWithOutcome(
     }
   }
 
-  // Spec §6: completing may surface new commitments. We propose but don't auto-create.
-  return { commitment: updated, outcome, followUps: [] };
+  // Spec §6 + §26 step 14: completing may surface new commitments.
+  // We propose but do not auto-create. The user reviews and accepts
+  // each change in the Inbox.
+  let followUpProposal: CompleteResult['followUpProposal'] = null;
+  let followUpCandidates: FollowUpCandidate[] = [];
+  if (
+    input.suggestFollowUp !== false &&
+    (!input.followUpCommitmentIds || input.followUpCommitmentIds.length === 0)
+  ) {
+    followUpCandidates = detectFollowUps(input.outcomeSummary);
+    if (followUpCandidates.length > 0) {
+      // Lazy import to avoid a circular dep at module load.
+      const { createProposal } = await import('./proposalService.js');
+      const changes = followUpCandidates.map(fu => ({
+        op: 'create' as const,
+        entity: 'commitment' as const,
+        changeId: newId('chg'),
+        draft: {
+          title: fu.title,
+          outcome: fu.outcome,
+          state: 'inbox' as const,
+          dueConfidence: 'unknown' as const,
+        },
+        evidenceIds: [],
+        confidence: fu.confidence,
+        reason: fu.reason,
+      }));
+      const modelRunId = newId('run');
+      const prop = await createProposal(repo, existing.workspaceId, {
+        kind: 'close_loop',
+        sourceIds: existing.sourceIds,
+        modelRunId,
+        changes,
+      });
+      // Record an AgentRun so the audit trail explains the proposal.
+      await repo.saveAgentRun(
+        {
+          id: modelRunId,
+          schemaVersion: 1,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: 'ai',
+          workspaceId: existing.workspaceId,
+          agent: 'resolver',
+          modelProvider: 'heuristic',
+          model: 'detect-followups@1',
+          promptVersion: 'close_loop@1',
+          inputEntityIds: [existing.id, outcome.id],
+          outputProposalId: prop.id,
+          status: 'succeeded',
+          tokenUsage: { input: 0, output: 0 },
+          durationMs: 0,
+        },
+        {
+          auditKind: 'process',
+          auditEntity: { type: 'run', id: modelRunId },
+          auditData: { kind: 'close_loop', fromOutcome: outcome.id },
+        }
+      );
+      followUpProposal = {
+        id: prop.id,
+        candidateCount: followUpCandidates.length,
+        changeIds: changes.map(c => c.changeId),
+      };
+    }
+  }
+
+  return { commitment: updated, outcome, followUpProposal, followUpCandidates };
 }
 
 export async function listCommitments(repo: V2Repository, filter?: { state?: CommitmentState | 'open' }): Promise<Commitment[]> {

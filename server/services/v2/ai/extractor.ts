@@ -94,6 +94,11 @@ export interface ExtractorInput {
   source: SourceItem;
   /** Optional context: the user explicitly opted in to a workspace scope. */
   context?: { body: string };
+  /**
+   * Inject a provider for tests. When omitted, the function loads the
+   * provider from the v2 env config (production path).
+   */
+  provider?: AIProvider;
 }
 
 export interface ExtractorOutput {
@@ -119,8 +124,7 @@ Rules (strict):
 
 export async function runExtractor(input: ExtractorInput): Promise<ExtractorOutput> {
   const start = Date.now();
-  const cfg = loadV2AIConfig();
-  const provider: AIProvider = buildProvider(cfg);
+  const provider: AIProvider = input.provider ?? buildProvider(loadV2AIConfig());
 
   const prompt = buildPrompt(input);
   const result = await provider.complete({

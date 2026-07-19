@@ -1865,6 +1865,13 @@ Memory 空状态:
 > **2026-07-20 更新** — Phase 0 / Phase 1 / Phase 2 / Phase 3 基础 / Phase 4 基础 / Phase 7 基础 / DF2-001 → DF2-012 全部落地。Phase 5 (Calendar Connector) / Phase 6 (Email/Message) / Phase 8 (External Write) / Phase 9 (Sync & Mobile) 留作后续工作。
 >
 > v2 是与 v1 平行的 additive 层：旧 `Daily/YYYY/MM/<date>.md` checkbox 任务继续可读、可完成；v1 AI Chat / Notes / DailyFocus / Capsules 入口保留。v2 入口通过 `/api/v2` 路由 + `src/features/v2/` 组件提供。
+>
+> **2026-07-20 第二轮** — §26 验收场景覆盖推进：
+> - **§26 step 12** Today MorningBrief 接入 `getWaitingOverdue`，新增 `OverdueWaitingSection`（只显示，不自动恢复或发消息）。
+> - **§26 step 14** `completeWithOutcome` 调用启发式 `detectFollowUps` 检测 Outcome 中的后续动作；命中时创建 `close_loop` Proposal（kind=close_loop, confidence ≤ 0.7, evidence 引用原文片段），用户审阅接受。
+> - **§26 step 3-6** 新增 `ScriptedProvider` 注入式 AI provider 单元测试，模拟真实 AI 返回结构化 JSON：2 explicit + 1 third-party + 1 decision，每个字段有 Evidence，支持 date 覆盖与部分接受。
+> - **§26 step 9b** e2e 增加 9b 步骤验证 follow-up proposal 可被接受创建真实 Commitment。
+> - `transitionCommitment` 扩展 `TransitionOptions` 支持 `waitingOnText` / `reviewAt`；waiting 状态进入有合理默认（3 天 review + 提示文本）。
 
 | 能力 | 状态 | 当前说明 |
 |---|---|---|
@@ -1882,6 +1889,10 @@ Memory 空状态:
 | Memory v2 | 已实现 | 全文检索 + 带 snippet 和 source id；带引用 |
 | Waiting | 已实现 | 状态机要求 reviewAt + waitingOn（id 或 text）|
 | Outcome | 已实现 | `completeWithOutcome` + Outcome 文件 + audit |
+| Close-loop Follow-up | 已实现 | `detectFollowUps` 启发式 + `close_loop` Proposal；用户审阅后 accept |
+| Today Waiting Review | 已实现 | MorningBrief 显示 `getWaitingOverdue`，只提示不自动恢复 |
+| §26 step 3-6 验证 | 已实现 | `ScriptedProvider` 单元测试 + `extractorFixture.test.ts` 覆盖 4 个子场景 |
+| §26 step 14 验证 | 已实现 | e2e step 9b 检测 follow-up proposal + accept |
 | Triage / 旧任务整理 | 已有骨架 | `Triage Proposal` 类型已支持；UI 部分由 Phase 7 跟进 |
 | Meeting Capture | 部分 | 已有 MeetingCapture 路由；提取走 v2 Extractor；Phase 3 余下与音视频关联 |
 | Calendar Connector | 协议 + 阻塞 | Connector Contract 已实现；所有外部 connector 默认 `blocked_by_external_authorization` |

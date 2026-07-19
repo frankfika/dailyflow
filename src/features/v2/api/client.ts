@@ -143,11 +143,37 @@ export const resumeCommitment = (id: string) =>
 export const cancelCommitment = (id: string, reason?: string) =>
   request<{ commitment: Commitment }>('POST', `/commitments/${id}/cancel`, { reason });
 
-export const completeCommitment = (id: string, body: { outcomeKind: string; outcomeSummary: string; evidenceIds?: string[] }) =>
-  request<{ commitment: Commitment; outcome: Outcome }>('POST', `/commitments/${id}/complete`, body);
+export const completeCommitment = (id: string, body: { outcomeKind: string; outcomeSummary: string; evidenceIds?: string[]; suggestFollowUp?: boolean }) =>
+  request<{ commitment: Commitment; outcome: Outcome; followUpProposal: { id: string; candidateCount: number; changeIds: string[] } | null; followUpCandidates: { title: string; quote: string; confidence: number; reason: string }[] }>('POST', `/commitments/${id}/complete`, body);
 
 export const commitmentHistory = (id: string) =>
   request<{ events: AuditEvent[] }>('GET', `/commitments/${id}/history`);
+
+// ---------------------------------------------------------------------------
+// Reviewer (Phase 7)
+// ---------------------------------------------------------------------------
+
+export interface WaitingOverdueItem {
+  commitmentId: string;
+  title: string;
+  waitingOn: string;
+  reviewAt: string;
+  daysOverdue: number;
+}
+
+export const getWaitingOverdue = () =>
+  request<{ items: WaitingOverdueItem[] }>('GET', '/review/waiting-overdue');
+
+export interface StaleCommitmentItem {
+  commitmentId: string;
+  title: string;
+  daysSinceProgress: number;
+  reason: string;
+  suggestions: Array<{ op: 'transition' | 'cancel' | 'merge'; to?: string; reason: string }>;
+}
+
+export const getStaleCommitments = () =>
+  request<{ items: StaleCommitmentItem[] }>('GET', '/review/stale');
 
 // ---------------------------------------------------------------------------
 // Proposal
