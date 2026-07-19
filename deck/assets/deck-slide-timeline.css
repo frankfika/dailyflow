@@ -1,0 +1,94 @@
+/* slide 10 — milestones timeline */
+
+.slide[data-layout="timeline"] .tl-wrap {
+  margin-top: 32px;
+  position: relative;
+  padding: 36px 0 8px;
+  min-height: 540px;
+}
+.tl-axis {
+  position: absolute;
+  left: 0; right: 0;
+  top: 90px;
+  height: 2px;
+  background: var(--ink);
+}
+.tl-axis .tick {
+  position: absolute;
+  width: 1px;
+  height: 14px;
+  background: var(--ink);
+  top: -6px;
+}
+.tl-axis .dot {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  top: -6px;
+  transform: translateX(-7px);
+}
+.tl-axis .dot.accent { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); }
+.tl-axis .dot.chain { background: var(--chain); border-color: var(--chain); box-shadow: 0 0 0 6px var(--chain-soft); }
+
+.tl-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 12px;
+}
+.tl-cell {
+  position: relative;
+  padding-top: 110px;
+  min-height: 280px;
+}
+.tl-cell .when {
+  position: absolute;
+  top: 32px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tl-cell .when strong {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 30px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.tl-cell .label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--ink);
+  padding: 0 6px;
+}
+.tl-cell .detail {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  padding: 6px 6px 0;
+}
+.tl-cell.flag .label { color: var(--accent-deep); }
+.tl-cell.flag-chain .label { color: var(--chain-deep); }
+
+.tl-axis .label {
+  position: absolute;
+  top: 26px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}

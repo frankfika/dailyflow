@@ -1,0 +1,128 @@
+/* slide 11 — architecture / live contract */
+
+.slide[data-layout="architecture"] {
+  display: block;
+  padding: 48px var(--gutter) 40px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.slide[data-layout="architecture"] .arch-wrap {
+  margin-top: 22px;
+  height: calc(100% - 220px);
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 24px;
+}
+
+.slide[data-layout="architecture"] .arch-wrap {
+  margin-top: 22px;
+  height: calc(100% - 220px);
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 24px;
+}
+
+.slide[data-layout="architecture"] .arch-left {
+  border-right: 1px solid var(--line);
+  padding-right: 24px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+}
+
+.slide[data-layout="architecture"] .arch-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.slide[data-layout="architecture"] .arch-box {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 16px 18px;
+  display: grid;
+  gap: 4px;
+}
+.slide[data-layout="architecture"] .arch-box.chain {
+  border-color: var(--chain);
+  border-width: 2px;
+  background: linear-gradient(90deg, var(--chain-soft) 0%, var(--paper) 60%);
+}
+.slide[data-layout="architecture"] .arch-box.local {
+  border-color: var(--ink);
+}
+.slide[data-layout="architecture"] .arch-box .ix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="architecture"] .arch-box .name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.slide[data-layout="architecture"] .arch-box .meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.slide[data-layout="architecture"] .arrow {
+  text-align: center;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  font-size: 14px;
+  margin: -4px 0;
+}
+.slide[data-layout="architecture"] .arch-foot {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.slide[data-layout="architecture"] .arch-right {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+.slide[data-layout="architecture"] .arch-code {
+  background: #0B0B0F;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+.slide[data-layout="architecture"] .arch-code-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #C7C9D0;
+}
+.slide[data-layout="architecture"] .arch-code-meta .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(20,181,138,0.18);
+}
+.slide[data-layout="architecture"] .arch-code-meta .filename {
+  color: #fff;
+}
+.slide[data-layout="architecture"] .arch-code-meta .line {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: #6B7394;
+  letter-spacing: 0.1em;
+}
+.slide[data-layout="architecture"] .arch-code pre.code {
+  border-radius: 0;
+  height: 100%;
+  font-size: 12px;
+  padding: 18px 22px 22px;
+}

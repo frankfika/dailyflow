@@ -1,0 +1,118 @@
+/* slide 12 — live demo */
+
+.slide[data-layout="demo"] {
+  display: flex;
+  flex-direction: column;
+  padding: 48px var(--gutter) 32px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.slide[data-layout="demo"] .demo-wrap {
+  margin-top: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.6fr 0.85fr;
+  gap: 24px;
+  align-content: stretch;
+}
+.slide[data-layout="demo"] .demo-track {
+  display: grid;
+  gap: 4px;
+  position: relative;
+  align-content: stretch;
+}
+.slide[data-layout="demo"] .demo-track::before {
+  content: "";
+  position: absolute;
+  left: 72px;
+  top: 32px;
+  bottom: 32px;
+  width: 1px;
+  background: var(--line-strong);
+}
+.slide[data-layout="demo"] .demo-step {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  padding: 2px 0;
+  position: relative;
+}
+.slide[data-layout="demo"] .demo-step::before {
+  content: "";
+  position: absolute;
+  left: 68px;
+  top: 24px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--accent);
+  z-index: 1;
+}
+.slide[data-layout="demo"] .demo-step .t {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--accent-deep);
+  text-transform: uppercase;
+  align-self: start;
+}
+.slide[data-layout="demo"] .demo-step .ix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="demo"] .demo-step .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.18;
+  color: var(--ink);
+  margin: 2px 0 4px;
+}
+.slide[data-layout="demo"] .demo-step .body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 760px;
+}
+
+.slide[data-layout="demo"] .demo-side {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: space-between;
+  gap: 18px;
+  border-left: 1px solid var(--line);
+  padding-left: 24px;
+}
+.slide[data-layout="demo"] .demo-cta {
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 22px 22px;
+  display: grid;
+  gap: 12px;
+}
+.slide[data-layout="demo"] .demo-cta .pressure-tag.live {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(20,181,138,0.08);
+}
+.slide[data-layout="demo"] .demo-cta p {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.45;
+  margin: 0;
+}
+.slide[data-layout="demo"] .demo-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-content: end;
+}
+.slide[data-layout="demo"] .demo-stats .kpi .value {
+  font-size: 44px;
+}

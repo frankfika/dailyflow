@@ -1,0 +1,82 @@
+/* slide 11 — market / timing */
+
+.slide[data-layout="market"] .mkt-wrap {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  margin-top: 28px;
+  min-height: 540px;
+}
+.mkt-chart {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  padding: 24px 28px 28px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+}
+.mkt-chart .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.mkt-chart .head .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--ink);
+}
+.mkt-chart .head .src {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mkt-chart svg { width: 100%; height: auto; }
+.mkt-axes text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+}
+.mkt-axes line { stroke: var(--line); }
+.mkt-series.ai { stroke: var(--accent); stroke-width: 3; fill: none; }
+.mkt-series.wallet { stroke: var(--chain); stroke-width: 3; fill: none; stroke-dasharray: 5 4; }
+.mkt-area.ai { fill: var(--accent); opacity: 0.12; }
+
+.mkt-points {
+  display: grid;
+  grid-template-rows: repeat(3, auto);
+  gap: 14px;
+}
+.mkt-points .pt {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.mkt-points .pt .num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 28px;
+  color: var(--accent-deep);
+  line-height: 1;
+}
+.mkt-points .pt .num.chain { color: var(--chain-deep); }
+.mkt-points .pt .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.mkt-points .pt .body {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}

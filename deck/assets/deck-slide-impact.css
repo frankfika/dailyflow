@@ -1,0 +1,129 @@
+/* slide — impact / numbers that press
+ * Big-number editorial with one hero stat, three supporting facts,
+ * and a "what changes if this wins" line.
+ */
+
+.slide[data-layout="impact"] {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px var(--gutter) 40px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.slide[data-layout="impact"] .impact-left {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 18px;
+  padding-right: 40px;
+  border-right: 1px solid var(--line);
+}
+
+.slide[data-layout="impact"] .hero-num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 180px;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.slide[data-layout="impact"] .hero-num .accent { color: var(--accent-deep); }
+.slide[data-layout="impact"] .hero-num .chain { color: var(--chain-deep); }
+.slide[data-layout="impact"] .hero-num small {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 6px;
+  letter-spacing: 0.1em;
+}
+.slide[data-layout="impact"] .hero-claim {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.32;
+  color: var(--ink-2);
+  max-width: 620px;
+}
+.slide[data-layout="impact"] .hero-claim strong { font-style: normal; color: var(--accent-deep); }
+.slide[data-layout="impact"] .hero-claim .c2 { color: var(--chain-deep); }
+
+.slide[data-layout="impact"] .hero-foot {
+  display: flex;
+  gap: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="impact"] .hero-foot span strong {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0;
+  margin-right: 6px;
+  text-transform: none;
+}
+
+.slide[data-layout="impact"] .impact-right {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  align-self: stretch;
+  padding-left: 40px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+}
+.slide[data-layout="impact"] .impact-right .ix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="impact"] .impact-right .stack {
+  display: grid;
+  gap: 14px;
+}
+.slide[data-layout="impact"] .impact-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.slide[data-layout="impact"] .impact-row .num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.slide[data-layout="impact"] .impact-row .num small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.slide[data-layout="impact"] .impact-row .txt {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+.slide[data-layout="impact"] .impact-row .src {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="impact"] .impact-row.chain { border-left: 3px solid var(--chain); }
+.slide[data-layout="impact"] .impact-row.ai { border-left: 3px solid var(--accent); }

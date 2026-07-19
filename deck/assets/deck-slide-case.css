@@ -1,0 +1,102 @@
+/* slide 06 — Time Capsule deep-dive (case study) */
+
+.slide[data-layout="case-capsule"] {
+  padding: 56px var(--gutter) 40px;
+}
+.slide[data-layout="case-capsule"] .case-wrap {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 40px;
+  margin-top: 28px;
+  min-height: 540px;
+}
+
+.case-flow {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.case-flow .step {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 22px 22px 18px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  min-height: 320px;
+}
+.case-flow .step .ix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.case-flow .step .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.18;
+  margin-top: 10px;
+  color: var(--ink);
+}
+.case-flow .step .body {
+  margin-top: 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.case-flow .step .kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.case-flow .step.local { border-color: var(--ink); }
+.case-flow .step.chain { border-color: var(--chain); background: var(--chain-soft); }
+.case-flow .step.mint { border-color: var(--accent); background: var(--accent-soft); }
+
+.case-right {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 16px;
+}
+.case-right .pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.case-right .meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-2);
+}
+.case-right .meta-row .kpi { gap: 2px; }
+.case-right .meta-row .kpi .value { font-size: 36px; }
+.case-right .meta-row .kpi .label { font-size: 10px; }
+
+.case-side {
+  margin-top: 18px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.case-side .quote-mini {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink);
+  padding-left: 14px;
+  border-left: 2px solid var(--accent);
+  margin-top: 12px;
+}

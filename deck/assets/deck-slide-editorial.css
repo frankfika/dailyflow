@@ -1,0 +1,75 @@
+/* slide 04 — Editorial insight */
+
+.slide[data-layout="editorial-insight"] {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px var(--gutter) 40px;
+  background: var(--paper);
+}
+
+.slide[data-layout="editorial-insight"] .ed-hero {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 56px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.ed-headline {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 64px;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+.ed-headline em {
+  color: var(--accent-deep);
+}
+.ed-headline .violet {
+  color: var(--chain-deep);
+  font-style: italic;
+}
+
+.ed-side {
+  border-left: 1px solid var(--line);
+  padding-left: 32px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.ed-side .label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.ed-side p + p { margin-top: 12px; }
+
+.ed-annotation {
+  margin-top: 28px;
+  display: flex;
+  gap: 24px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.ed-annotation .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ed-annotation .swatch {
+  width: 10px; height: 10px; border-radius: 50%;
+}

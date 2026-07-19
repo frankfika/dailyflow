@@ -1,0 +1,163 @@
+/* slide — vision / manifesto
+ * Used as an opener before solutions. Asymmetric two-column with a "halo"
+ * diagram on the right showing local / AI / chain convergence.
+ */
+
+.slide[data-layout="vision"] {
+  background: var(--paper);
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px 96px 40px;
+  overflow: hidden;
+}
+
+.slide[data-layout="vision"] .vision-left {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.slide[data-layout="vision"] .vision-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="vision"] .vision-eyebrow strong {
+  color: var(--ink);
+  letter-spacing: 0.18em;
+  margin-right: 10px;
+  border: 1px solid var(--ink);
+  padding: 3px 8px;
+}
+
+.slide[data-layout="vision"] .vision-headline {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 58px;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 6px 0 14px;
+  max-width: 760px;
+}
+.slide[data-layout="vision"] .vision-headline em {
+  font-style: italic;
+  color: var(--accent-deep);
+}
+.slide[data-layout="vision"] .vision-headline .violet { color: var(--chain-deep); font-style: italic; }
+.slide[data-layout="vision"] .vision-headline .warm { color: #B27011; font-style: italic; }
+
+.slide[data-layout="vision"] .vision-sub {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  max-width: 620px;
+}
+
+.slide[data-layout="vision"] .vision-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.slide[data-layout="vision"] .vision-right {
+  grid-column: 2 / 3;
+  grid-row: 1 / 4;
+  align-self: stretch;
+  border-left: 1px solid var(--line);
+  padding-left: 56px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.slide[data-layout="vision"] .halo {
+  position: relative;
+  width: 460px;
+  height: 460px;
+}
+.slide[data-layout="vision"] .halo-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+.slide[data-layout="vision"] .halo-ring.r2 {
+  inset: 50px;
+  border-color: var(--line-strong);
+}
+.slide[data-layout="vision"] .halo-ring.r3 {
+  inset: 100px;
+  border: 1px dashed var(--accent);
+  opacity: 0.7;
+}
+.slide[data-layout="vision"] .halo-ring.r4 {
+  inset: 150px;
+  border: 1px solid var(--chain);
+  opacity: 0.5;
+}
+.slide[data-layout="vision"] .halo-core {
+  position: absolute;
+  inset: 170px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.18;
+  padding: 0 24px;
+  overflow: hidden;
+}
+.slide[data-layout="vision"] .halo-core small {
+  display: block;
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  margin-top: 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.slide[data-layout="vision"] .halo-node {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.slide[data-layout="vision"] .halo-node .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--halo-mint);
+}
+.slide[data-layout="vision"] .halo-node.chain .dot { background: var(--chain); box-shadow: 0 0 0 4px var(--halo-chain); }
+.slide[data-layout="vision"] .halo-node.warm .dot { background: var(--warm); box-shadow: 0 0 0 4px var(--halo-warm); }
+.slide[data-layout="vision"] .halo-node.local .dot { background: var(--ink); box-shadow: 0 0 0 4px rgba(11,11,15,0.15); }
+
+.slide[data-layout="vision"] .halo-node.n-local { top: 12%; left: -10%; }
+.slide[data-layout="vision"] .halo-node.n-ai    { top: 2%; right: 8%; }
+.slide[data-layout="vision"] .halo-node.n-chain { bottom: 16%; right: -6%; }
+.slide[data-layout="vision"] .halo-node.n-warm  { bottom: 6%; left: 6%; }

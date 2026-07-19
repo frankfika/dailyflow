@@ -1,0 +1,66 @@
+/* slide 03 — Pain grid (2x2) */
+
+.slide[data-layout="pain-grid"] .pain-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 24px;
+  margin-top: 36px;
+  min-height: 520px;
+}
+
+.pain-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 28px 32px 28px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+}
+.pain-card .ix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pain-card .headline {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.18;
+  margin: 14px 0 14px;
+  color: var(--ink);
+}
+.pain-card .headline em {
+  font-style: italic;
+  color: var(--chain-deep);
+}
+.pain-card .detail {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.pain-card .sig {
+  position: absolute;
+  right: 22px;
+  top: 22px;
+  font-family: var(--font-mono);
+  font-size: 56px;
+  color: var(--line-strong);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.pain-side {
+  position: absolute;
+  right: 80px;
+  bottom: 64px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 220px;
+  text-align: right;
+}

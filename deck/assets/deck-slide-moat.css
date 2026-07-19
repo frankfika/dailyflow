@@ -1,0 +1,81 @@
+/* slide — moat / defensibility
+ * 4 quadrant matrix: each axis is a differentiator (Local / AI / Chain /
+ * Solo-Builder advantage). Each quadrant carries one sentence.
+ */
+
+.slide[data-layout="moat"] {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px var(--gutter) 40px;
+  background: var(--paper);
+}
+
+.slide[data-layout="moat"] .moat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+  margin-top: 24px;
+}
+
+.slide[data-layout="moat"] .moat-cell {
+  position: relative;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding: 36px 36px 32px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 12px;
+}
+
+.slide[data-layout="moat"] .moat-ix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.slide[data-layout="moat"] .moat-ix strong {
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  padding: 2px 8px;
+  border: 1px solid var(--ink);
+}
+.slide[data-layout="moat"] .moat-claim {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 34px;
+  line-height: 1.12;
+  color: var(--ink);
+  margin: 4px 0;
+}
+.slide[data-layout="moat"] .moat-claim em {
+  font-style: italic;
+  color: var(--accent-deep);
+}
+.slide[data-layout="moat"] .moat-claim.violet em { color: var(--chain-deep); }
+
+.slide[data-layout="moat"] .moat-body {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 540px;
+}
+
+.slide[data-layout="moat"] .moat-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.slide[data-layout="moat"] .moat-cell.q1 { background: linear-gradient(180deg, rgba(20,181,138,0.06), transparent); }
+.slide[data-layout="moat"] .moat-cell.q2 { background: linear-gradient(180deg, rgba(124,92,255,0.06), transparent); }
+.slide[data-layout="moat"] .moat-cell.q3 { background: linear-gradient(180deg, rgba(244,169,59,0.06), transparent); }
+.slide[data-layout="moat"] .moat-cell.q4 { background: linear-gradient(180deg, rgba(11,11,15,0.06), transparent); }

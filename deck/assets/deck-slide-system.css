@@ -1,0 +1,100 @@
+/* slide 05 — Solution overview (system / layered architecture) */
+
+.slide[data-layout="system-overview"] .sys-wrap {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: stretch;
+  margin-top: 28px;
+  min-height: 540px;
+}
+
+.sys-stack {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 24px;
+  background: var(--paper);
+  display: grid;
+  grid-template-rows: 56px repeat(3, 1fr) 56px;
+  gap: 14px;
+}
+.sys-stack .layer-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  align-self: end;
+}
+.sys-layer {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-2);
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+}
+.sys-layer.ai { border-color: var(--accent); background: var(--accent-soft); }
+.sys-layer.chain { border-color: var(--chain); background: var(--chain-soft); }
+.sys-layer.local { border-color: var(--ink); background: var(--paper); }
+
+.sys-layer .ix {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--muted);
+}
+.sys-layer .body .name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--ink);
+}
+.sys-layer .body .desc {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.sys-layer .pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.sys-right .lede { margin-top: 0; }
+.sys-right .stack-list {
+  margin-top: 24px;
+  display: grid;
+  gap: 10px;
+}
+.sys-right .stack-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.sys-right .stack-row:first-child { border-top: none; }
+.sys-right .stack-row .k {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sys-right .stack-row .v {
+  font-size: 15px;
+  color: var(--ink);
+}

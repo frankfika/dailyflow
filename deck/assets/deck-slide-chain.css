@@ -1,0 +1,124 @@
+/* slide 07 — Multi-chain + privacy (system / matrix) */
+
+.slide[data-layout="chain-matrix"] .chain-wrap {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  margin-top: 28px;
+  min-height: 540px;
+}
+
+.chain-table {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--paper);
+}
+.chain-table .row {
+  display: grid;
+  grid-template-columns: 220px 130px 1fr 100px;
+  align-items: center;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.chain-table .row:first-child {
+  border-top: none;
+  background: var(--paper-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chain-table .row .name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--ink);
+}
+.chain-table .row .name small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.chain-table .row
+.chain-table .row .chain-id {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.chain-table .row .explorer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.chain-table .row .status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: right;
+}
+.chain-table .row .status.live { color: var(--accent-deep); }
+.chain-table .row .status.draft { color: var(--muted); }
+.chain-table .row .status.local { color: var(--chain-deep); }
+
+.privacy-card {
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--paper);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+.privacy-card .head {
+  padding: 22px 26px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.privacy-card .head .label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.privacy-card .head .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  margin-top: 8px;
+  color: var(--ink);
+}
+.privacy-card .body {
+  padding: 22px 26px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.privacy-card .foot {
+  padding: 16px 26px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.privacy-card .foot .glyph {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--accent);
+  letter-spacing: 0;
+  text-transform: none;
+}

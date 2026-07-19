@@ -1,0 +1,440 @@
+/* ============================================================
+ * deck-base.css — tokens, canvas, typography, shared primitives
+ * Editorial Productivity OS route × AI + Web3 demo-competition mood:
+ *  - white field, hairline grid, serif display headline
+ *  - mint (#14B58A) for AI; violet (#7C5CFF) for chain
+ *  - restrained warm (#F4A93B) for "human / future" moments
+ *  - new "demo" tokens for the competition's pressure moments
+ * ============================================================ */
+
+:root {
+  /* canvas */
+  --canvas-w: 1600px;
+  --canvas-h: 900px;
+  --slide-w: var(--canvas-w);
+  --slide-h: var(--canvas-h);
+
+  /* paper & ink */
+  --paper: #FAFAF7;
+  --paper-2: #F2F1EC;
+  --ink: #0B0B0F;
+  --ink-2: #1B1B22;
+  --muted: #5B5B66;
+  --muted-2: #8A8A95;
+  --line: #E5E7EB;
+  --line-strong: #C9CCD3;
+
+  /* accent system — mint = AI, violet = on-chain, amber = human */
+  --accent: #14B58A;          /* primary mint — AI actions */
+  --accent-soft: #D9F4EC;
+  --accent-deep: #0E8F6E;
+  --chain: #7C5CFF;            /* violet — Web3 / on-chain */
+  --chain-soft: #ECE6FF;
+  --chain-deep: #5538D9;
+  --warm: #F4A93B;             /* human / future, never as a fill */
+  --warm-soft: #FBE8C7;
+
+  /* "demo" pressure tokens */
+  --danger: #E0533B;
+  --electric: #19E0C7;         /* used on hairline glow accents */
+  --halo-mint: rgba(20,181,138,.18);
+  --halo-chain: rgba(124,92,255,.20);
+  --halo-warm: rgba(244,169,59,.18);
+
+  /* status */
+  --good: #14B58A;
+  --warn: #F4A93B;
+  --bad:  #E0533B;
+
+  /* type */
+  --font-display: "Times New Roman", "Songti SC", "Source Han Serif SC",
+    "Noto Serif CJK SC", Georgia, serif;
+  --font-body: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo,
+    Consolas, monospace;
+
+  /* rhythm */
+  --gutter: 80px;       /* outer margin, ~5% of canvas-w */
+  --gutter-tight: 48px;
+  --gutter-loose: 120px;
+  --rule: 1px;
+  --rule-strong: 2px;
+  --pad-card: 28px;
+
+  /* transitions */
+  --ease: cubic-bezier(.2,.7,.2,1);
+}
+
+/* ============== reset ============== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ============== page chrome (used outside the slide) ============== */
+body {
+  overflow: hidden;
+}
+
+.deck-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.deck-frame {
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  transform-origin: center center;
+  position: relative;
+  background: var(--paper);
+  isolation: isolate;
+}
+
+/* ============== hairline grid background ============== */
+.deck-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(11, 11, 15, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 11, 15, 0.035) 1px, transparent 1px);
+  background-size: 80px 80px;
+  background-position: 0 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============== slide primitive ============== */
+.slide-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s var(--ease);
+  z-index: 1;
+}
+.slide-wrap.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.slide {
+  position: relative;
+  width: var(--slide-w);
+  height: var(--slide-h);
+  background: var(--paper);
+  overflow: hidden;
+  color: var(--ink);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px var(--gutter) 40px;
+}
+
+/* eyebrow / section */
+.section {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.section::before {
+  content: "";
+  display: inline-block;
+  width: 22px;
+  height: 1px;
+  background: var(--muted);
+}
+
+/* title hierarchy */
+.title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 18px 0 0;
+}
+.title em {
+  font-style: italic;
+  color: var(--accent-deep);
+}
+.title.violet em {
+  color: var(--chain-deep);
+}
+.title.warm em {
+  color: #B27011;
+}
+.subtitle {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  margin: 14px 0 0;
+  font-weight: 400;
+}
+.lede {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 920px;
+  margin: 14px 0 0;
+}
+
+/* footer */
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: var(--rule) solid var(--line);
+  padding-top: 14px;
+  margin-top: 0;
+}
+.foot .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.foot .brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--halo-mint);
+}
+.foot .brand-dot.chain {
+  background: var(--chain);
+  box-shadow: 0 0 0 4px var(--halo-chain);
+}
+.foot .pagenum {
+  font-feature-settings: "tnum" 1;
+}
+
+/* primitives — used by slide-specific CSS */
+
+.rule {
+  height: 1px;
+  background: var(--line);
+  margin: 28px 0;
+}
+.rule.strong {
+  background: var(--ink);
+  height: 2px;
+}
+.rule.accent {
+  background: var(--accent);
+  height: 2px;
+}
+.rule.chain {
+  background: var(--chain);
+  height: 2px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.tag.accent {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+.tag.chain {
+  border-color: var(--chain);
+  color: var(--chain-deep);
+}
+.tag.warm {
+  border-color: var(--warm);
+  color: #8a5a13;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpi .value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.kpi .value small {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--muted);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+.kpi .label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+}
+.panel.tinted {
+  background: #F6F4EE;
+}
+.panel.accent {
+  border-color: var(--accent);
+}
+.panel.chain {
+  border-color: var(--chain);
+}
+.panel-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-body {
+  padding: 22px 24px;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  background: #0B0B0F;
+  padding: 18px 22px;
+  border-radius: 8px;
+  color: #E6E8EE;
+  white-space: pre;
+  overflow: hidden;
+}
+.code .kw { color: #C792EA; }
+.code .id { color: #82AAFF; }
+.code .str { color: #C3E88D; }
+.code .num { color: #F78C6C; }
+.code .com { color: #6B7394; }
+
+.eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.quote {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 32px;
+  line-height: 1.32;
+  color: var(--ink);
+  max-width: 1100px;
+}
+.quote::before {
+  content: "“";
+  font-size: 60px;
+  line-height: 0;
+  margin-right: 6px;
+  color: var(--accent);
+  vertical-align: -0.2em;
+}
+.quote::after {
+  content: "”";
+  font-size: 60px;
+  line-height: 0;
+  margin-left: 6px;
+  color: var(--accent);
+  vertical-align: -0.2em;
+}
+
+/* "demo pressure" visual hammer — used on vision / closing / impact */
+.pressure-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: var(--paper);
+}
+.pressure-tag.live::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--halo-mint);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.pressure-tag.chain {
+  border-color: var(--chain);
+  color: var(--chain-deep);
+}
+.pressure-tag.chain::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--chain);
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.4; }
+}
+
+/* language visibility toggles */
+[data-lang="zh-CN"] .lang-en { display: none; }
+[data-lang="en-US"] .lang-zh { display: none; }

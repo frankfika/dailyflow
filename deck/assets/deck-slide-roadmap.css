@@ -1,0 +1,70 @@
+/* slide 13 — forward roadmap (3 phases) */
+
+.slide[data-layout="roadmap"] {
+  padding: 56px var(--gutter) 40px;
+}
+.slide[data-layout="roadmap"] .rm-wrap {
+  margin-top: 22px;
+  display: grid;
+  grid-template-rows: 1fr;
+  gap: 18px;
+  min-height: 540px;
+}
+.rm-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  position: relative;
+  border-top: 2px solid var(--ink);
+  padding-top: 22px;
+}
+.rm-row .phase {
+  position: relative;
+  padding: 0 24px 0 0;
+  border-right: 1px solid var(--line);
+}
+.rm-row .phase:last-child { border-right: none; padding-right: 0; }
+.rm-row .phase:not(:first-child) { padding-left: 24px; }
+.rm-row .phase .when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rm-row .phase .ver {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--ink);
+  margin: 4px 0 12px;
+}
+.rm-row .phase.chain .ver { color: var(--chain-deep); }
+.rm-row .phase .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.rm-row .phase ul {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rm-row .phase li {
+  font-size: 13px;
+  color: var(--ink-2);
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.rm-row .phase li strong {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 14px;
+  margin-bottom: 2px;
+}

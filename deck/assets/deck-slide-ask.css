@@ -1,0 +1,108 @@
+/* slide — ask / call-to-judges
+ * "What we ask the judges" — 3 lanes + a "press the button" line.
+ */
+
+.slide[data-layout="ask"] {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 56px var(--gutter) 40px;
+  background: var(--paper);
+}
+
+.slide[data-layout="ask"] .ask-wrap {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 18px;
+}
+
+.slide[data-layout="ask"] .ask-card {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 26px 24px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 14px;
+}
+.slide[data-layout="ask"] .ask-card.flag { border-color: var(--accent); border-width: 2px; }
+.slide[data-layout="ask"] .ask-card.flag-chain { border-color: var(--chain); border-width: 2px; }
+
+.slide[data-layout="ask"] .ask-ix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="ask"] .ask-card .price {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1.1;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.slide[data-layout="ask"] .ask-card .price small {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  margin-left: 6px;
+}
+.slide[data-layout="ask"] .ask-card .claim {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.slide[data-layout="ask"] .ask-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.slide[data-layout="ask"] .ask-card li {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  padding-left: 16px;
+  position: relative;
+}
+.slide[data-layout="ask"] .ask-card li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.slide[data-layout="ask"] .ask-card.flag-chain li::before { color: var(--chain); }
+
+.slide[data-layout="ask"] .press-bar {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 22px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.slide[data-layout="ask"] .press-bar .left {
+  flex: 1;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.3;
+}
+.slide[data-layout="ask"] .press-bar .left strong { font-style: normal; color: var(--accent); }
+.slide[data-layout="ask"] .press-bar .right {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--paper-2);
+  text-align: right;
+}

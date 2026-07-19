@@ -1,0 +1,97 @@
+/* slide 16 — Web3 narrative extension (4 use cases, 1 wide) */
+
+.slide[data-layout="narrative"] .nar-wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  gap: 18px;
+  margin-top: 28px;
+}
+.slide[data-layout="narrative"] .nar-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  padding: 24px 26px 24px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  position: relative;
+  min-height: 220px;
+}
+.slide[data-layout="narrative"] .nar-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--chain);
+  border-radius: 8px 0 0 8px;
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide {
+  grid-column: 1 / span 3;
+  background: linear-gradient(180deg, var(--paper) 70%, rgba(124,92,255,0.06) 100%);
+  border-color: var(--line-strong);
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide::before {
+  background: linear-gradient(180deg, var(--accent), var(--chain));
+  width: 6px;
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide .glyph {
+  background: var(--ink);
+  color: var(--paper);
+}
+.slide[data-layout="narrative"] .nar-card .glyph {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--chain-soft);
+  color: var(--chain-deep);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+.slide[data-layout="narrative"] .nar-card .ix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide[data-layout="narrative"] .nar-card .ttl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.2;
+  margin-top: 8px;
+  color: var(--ink);
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide .ttl {
+  font-size: 28px;
+}
+.slide[data-layout="narrative"] .nar-card .desc {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide .desc {
+  font-size: 16px;
+  max-width: 1280px;
+}
+.slide[data-layout="narrative"] .nar-card .foot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--chain-deep);
+  display: flex;
+  justify-content: space-between;
+}
+.slide[data-layout="narrative"] .nar-card.nar-card-wide .foot {
+  color: var(--accent-deep);
+}

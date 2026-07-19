@@ -1,0 +1,102 @@
+/* slide 02 — The shift (3 timing facts) */
+
+.slide[data-layout="thesis-shift"] {
+  padding: 56px var(--gutter) 40px;
+}
+.slide[data-layout="thesis-shift"] .title {
+  font-size: 42px;
+  line-height: 1.1;
+  margin: 14px 0 0;
+}
+.slide[data-layout="thesis-shift"] .shift-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.shift-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 24px 26px 22px;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  min-height: 360px;
+}
+.shift-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 6px 0 0 6px;
+}
+.shift-card.violet::before { background: var(--chain); }
+.shift-card.warm::before { background: var(--warm); }
+
+.shift-card .num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 80px;
+  line-height: 0.92;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+}
+.shift-card .num small {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.shift-card .heading {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.22;
+  color: var(--ink);
+}
+.shift-card .body {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.shift-card .source {
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.shift-bar {
+  margin-top: 28px;
+  padding: 22px 28px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.shift-bar .glyph {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 28px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.shift-bar .text {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.35;
+}
