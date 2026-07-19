@@ -50,6 +50,16 @@ export interface Config {
   ipfsGateway?: string; // e.g. https://gateway.pinata.cloud or https://ipfs.io
   // AI Provider Configs (JSON string for durability across updates)
   providerConfigs?: string;
+  /** v2 (AI-Native) feature flags. Independent of the v1 config. */
+  v2?: {
+    enabled?: boolean;
+    inboxV2?: boolean;
+    todayV2?: boolean;
+    memoryV2?: boolean;
+    connectorsV2?: boolean;
+    aiEnabled?: boolean;
+    contextBudgetBytes?: number;
+  };
 }
 
 export interface IpfsBackupRecord {

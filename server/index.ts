@@ -14,6 +14,7 @@ import ipfsRouter from './routes/ipfs.js';
 import capsuleRouter from './routes/capsule.js';
 import thinkingWorkspacesRouter from './routes/thinkingWorkspaces.js';
 import meetingsRouter from './routes/meetings.js';
+import { v2Router } from './routes/v2/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -71,6 +72,7 @@ app.use('/api/ipfs', ipfsRouter);
 app.use('/api/capsules', capsuleRouter);
 app.use('/api/thinking-workspaces', thinkingWorkspacesRouter);
 app.use('/api/meetings', meetingsRouter);
+app.use('/api/v2', v2Router);
 
 // 健康检查
 app.get('/health', (req, res) => {
