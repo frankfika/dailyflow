@@ -49,7 +49,7 @@ export async function search(repo: V2Repository, query: string, limit = 20): Pro
   const candidates: MemorySearchHit[] = [];
   const usedSourceIds = new Set<string>();
 
-  const addHit = (entity: { id?: string; type?: string; sourceIds?: string[]; evidenceIds?: string[] }, title: string, snippetSource: string | undefined, scoreBase: number) => {
+  const addHit = (entity: { id?: string; sourceIds?: string[]; evidenceIds?: string[] }, type: string, title: string, snippetSource: string | undefined, scoreBase: number) => {
     const lower = (title + '\n' + (snippetSource ?? '')).toLowerCase();
     let score = 0;
     if (lower.includes(q)) score = scoreBase + 10;
@@ -61,37 +61,36 @@ export async function search(repo: V2Repository, query: string, limit = 20): Pro
     }
     if (score <= 0) return;
     const snippet = extractSnippet(snippetSource ?? title, q);
-    const e = entity as unknown as { type?: string; id?: string; sourceIds?: string[]; evidenceIds?: string[] };
-    if (!e.id) return;
+    if (!entity.id) return;
     candidates.push({
-      type: e.type ?? 'unknown',
-      id: e.id,
+      type,
+      id: entity.id,
       title,
       snippet,
       score,
-      sourceIds: e.sourceIds ?? [],
-      evidenceIds: e.evidenceIds ?? [],
+      sourceIds: entity.sourceIds ?? [],
+      evidenceIds: entity.evidenceIds ?? [],
     });
-    for (const sid of e.sourceIds ?? []) usedSourceIds.add(sid);
+    for (const sid of entity.sourceIds ?? []) usedSourceIds.add(sid);
   };
 
   for (const c of commitments) {
-    addHit(c, c.title, c.outcome, 6);
+    addHit(c, 'commitment', c.title, c.outcome, 6);
   }
   for (const p of projects) {
-    addHit(p, p.name, p.objective, 4);
+    addHit(p, 'project', p.name, p.objective, 4);
   }
   for (const person of people) {
-    addHit(person, person.displayName, person.relationshipNotes, 5);
+    addHit(person, 'person', person.displayName, person.relationshipNotes, 5);
   }
   for (const d of decisions) {
-    addHit(d, d.title, `${d.decision}\n${d.rationale ?? ''}`, 7);
+    addHit(d, 'decision', d.title, `${d.decision}\n${d.rationale ?? ''}`, 7);
   }
   for (const o of outcomes) {
-    addHit(o, o.summary, o.summary, 4);
+    addHit(o, 'outcome', o.summary, o.summary, 4);
   }
   for (const s of sources) {
-    addHit(s, s.title ?? s.body?.slice(0, 80) ?? 'Source', s.body, 3);
+    addHit(s, 'source', s.title ?? s.body?.slice(0, 80) ?? 'Source', s.body, 3);
   }
 
   candidates.sort((a, b) => b.score - a.score);
@@ -117,9 +116,12 @@ export interface ContextBundle {
   related: {
     project?: Project;
     person?: Person;
-    decision?: Decision;
+    /** Decisions linked through shared evidence IDs. */
+    decisions: Decision[];
     outcomes: Outcome[];
     sourceItems: SourceItem[];
+    /** Evidence for this commitment (for §26 step 5 / step 10). */
+    evidence: import('../../domain/v2/types.js').Evidence[];
   };
 }
 
@@ -130,16 +132,31 @@ export async function getContext(repo: V2Repository, commitmentId: string): Prom
   const people = c.ownerId || c.beneficiaryId
     ? (await repo.listPeople()).filter(p => p.id === c.ownerId || p.id === c.beneficiaryId)
     : [];
+  const allDecisions = await repo.listDecisions();
+  // Spec §7.5 / §15.4: a decision is "related" when it shares evidence
+  // or sources with the commitment. This is the primary link between
+  // meeting context and the work that flows out of it.
+  const decisionEvidence = new Set(c.evidenceIds);
+  const relatedDecisions = allDecisions
+    .filter(d => {
+      if (d.evidenceIds.some(eid => decisionEvidence.has(eid))) return true;
+      if (d.projectId && d.projectId === c.projectId) return true;
+      return false;
+    })
+    .slice(0, 10);
   const allOutcomes = (await repo.listOutcomes()).filter(o => o.commitmentId === c.id);
   const allSources = (await repo.listSourceItems()).filter(s => c.sourceIds.includes(s.id));
+  const allEvidence = await repo.listEvidence();
+  const evidence = allEvidence.filter(e => c.evidenceIds.includes(e.id));
   return {
     commitment: c,
     related: {
       project: projects[0],
       person: people[0],
-      decision: undefined, // future: link Decision via evidence
+      decisions: relatedDecisions,
       outcomes: allOutcomes,
       sourceItems: allSources,
+      evidence,
     },
   };
 }

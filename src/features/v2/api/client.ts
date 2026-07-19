@@ -335,10 +335,17 @@ export const searchMemory = (q: string) =>
   request<{ query: string; hits: MemoryHit[]; usedSourceIds: string[] }>('GET', `/memory/search?q=${encodeURIComponent(q)}`);
 
 export const getContext = (commitmentId: string) =>
-  request<{ commitment: Commitment; related: { project?: unknown; person?: unknown; decision?: unknown; outcomes: Outcome[]; sourceItems: SourceItem[] } }>(
-    'GET',
-    `/memory/context?commitmentId=${commitmentId}`
-  );
+  request<{
+    commitment: Commitment;
+    related: {
+      project?: unknown;
+      person?: unknown;
+      decisions: Array<{ id: string; title: string; decision: string; rationale?: string; decidedAt: string; evidenceIds: string[] }>;
+      outcomes: Outcome[];
+      sourceItems: Array<{ id: string; title?: string; body?: string; kind: string }>;
+      evidence: Array<{ id: string; sourceId: string; quote: string; locator: unknown }>;
+    };
+  }>('GET', `/memory/context?commitmentId=${commitmentId}`);
 
 // ---------------------------------------------------------------------------
 // Connectors

@@ -101,6 +101,61 @@ echo "=== 10. Memory search ==="
 SEARCH=$(curl -s "http://localhost:$PORT/api/v2/memory/search?q=Zhang")
 echo "$SEARCH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Hits: {len(d[\"hits\"])}')"
 
+echo "=== 10a. Manually create Evidence + Decision linked to the source (§26 step 10/15) ==="
+# Pick a verbatim substring from the meeting body so Evidence is real.
+EV=$(SOURCE_ID="$SOURCE_ID" python3 -c "
+import json, os, urllib.request
+req = urllib.request.Request(
+  'http://localhost:$PORT/api/v2/evidence',
+  data=json.dumps({'sourceId': os.environ['SOURCE_ID'], 'quote': 'Alex 答应下周三前给到技术方案。'}).encode('utf-8'),
+  headers={'content-type': 'application/json'},
+  method='POST',
+)
+print(urllib.request.urlopen(req).read().decode('utf-8'))
+")
+EV_ID=$(echo "$EV" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('evidence',{}).get('id',''))")
+echo "Evidence: $EV_ID"
+
+DEC=$(EV_ID="$EV_ID" python3 -c "
+import json, os, urllib.request
+req = urllib.request.Request(
+  'http://localhost:$PORT/api/v2/decisions',
+  data=json.dumps({
+    'title': '采用两档定价',
+    'decision': '采用两档定价更好覆盖客户分层',
+    'rationale': '客户分层需求明确',
+    'evidenceIds': [os.environ['EV_ID']],
+  }).encode('utf-8'),
+  headers={'content-type': 'application/json'},
+  method='POST',
+)
+print(urllib.request.urlopen(req).read().decode('utf-8'))
+")
+DEC_ID=$(echo "$DEC" | python3 -c "import sys,json; print(json.load(sys.stdin)['decision']['id'])")
+echo "Decision: $DEC_ID"
+
+# Patch the commitment to include the same evidenceId so the link is
+# bidirectional (§7.5 + §15.4).
+COM_ID="$COM_ID" EV_ID="$EV_ID" python3 -c "
+import json, os, urllib.request
+req = urllib.request.Request(
+  'http://localhost:$PORT/api/v2/commitments/' + os.environ['COM_ID'],
+  data=json.dumps({'evidenceIds': [os.environ['EV_ID']]}).encode('utf-8'),
+  headers={'content-type': 'application/json'},
+  method='PATCH',
+)
+print(urllib.request.urlopen(req).read().decode('utf-8'))
+" > /dev/null
+echo "Commitment patched to reference evidence $EV_ID"
+
+echo "=== 10b. Memory search for decision (Q3 / 决定) returns Decisions (§26 step 15) ==="
+SEARCH_DEC=$(curl -s --get "http://localhost:$PORT/api/v2/memory/search" --data-urlencode "q=Zhang")
+echo "$SEARCH_DEC" | python3 -c "import sys,json; d=json.load(sys.stdin); types=[h['type'] for h in d['hits']]; print(f'Hits: {len(d[\"hits\"])}, types={set(types)}')"
+
+echo "=== 10c. /memory/context returns decisions + evidence (§26 step 10) ==="
+CTX=$(curl -s "http://localhost:$PORT/api/v2/memory/context?commitmentId=$COM_ID")
+echo "$CTX" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'decisions={len(d[\"related\"][\"decisions\"])} evidence={len(d[\"related\"][\"evidence\"])} sources={len(d[\"related\"][\"sourceItems\"])}')"
+
 echo "=== 11. Connectors blocked ==="
 CONN=$(curl -s http://localhost:$PORT/api/v2/connectors)
 echo "$CONN" | python3 -c "import sys,json; d=json.load(sys.stdin); blocked=[c for c in d['items'] if c.get('blockedBy')]; print(f'Total: {len(d[\"items\"])}, blocked: {len(blocked)}')"

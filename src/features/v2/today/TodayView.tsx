@@ -29,6 +29,7 @@ import {
   type WaitingOverdueItem,
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
+import { CommitmentContext } from '../commitments/CommitmentContext';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -37,6 +38,7 @@ function todayStr() {
 export function TodayView() {
   const today = useMemo(() => todayStr(), []);
   const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const plan = useQuery({
     queryKey: ['v2-plan', today],
     queryFn: () => getPlan(today),
@@ -117,8 +119,18 @@ export function TodayView() {
         onGenerate={() => generate.mutate()}
         onAccept={(id) => accept.mutate(id)}
         onChanged={refresh}
+        onSelect={(id) => setSelectedId(id)}
+        selectedId={selectedId}
         commitmentsById={Object.fromEntries(allCommitments.map(c => [c.id, c]))}
       />
+
+      {selectedId && (
+        <CommitmentContext
+          commitmentId={selectedId}
+          onChanged={refresh}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
 
       <WaitingSection waiting={waiting} onChanged={refresh} />
 
@@ -244,6 +256,8 @@ function PlanSection({
   onGenerate,
   onAccept,
   onChanged,
+  onSelect,
+  selectedId,
   commitmentsById,
 }: {
   plan: DailyPlan | null;
@@ -252,6 +266,8 @@ function PlanSection({
   onGenerate: () => void;
   onAccept: (id: string) => void;
   onChanged: () => void;
+  onSelect: (id: string) => void;
+  selectedId: string | null;
   commitmentsById: Record<string, Commitment>;
 }) {
   if (error) return <Card><div className="text-sm text-red-600">{error.message}</div></Card>;
@@ -291,8 +307,15 @@ function PlanSection({
           <ol className="flex flex-col gap-2">
             {plan.items.map(item => {
               const c = commitmentsById[item.commitmentId];
+              const isSelected = selectedId === item.commitmentId;
               return (
-                <li key={item.commitmentId} className="rounded-md border border-[var(--color-border)] p-2">
+                <li
+                  key={item.commitmentId}
+                  className={`cursor-pointer rounded-md border p-2 ${
+                    isSelected ? 'border-[var(--color-accent)]' : 'border-[var(--color-border)]'
+                  }`}
+                  onClick={() => onSelect(item.commitmentId)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Badge>#{item.rank}</Badge>
@@ -312,7 +335,7 @@ function PlanSection({
                     <span className="font-medium">原因：</span> {item.reason}
                   </div>
                   {c && (
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <div className="mt-2 flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
                       <Button
                         size="sm"
                         variant="primary"

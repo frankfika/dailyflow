@@ -12,6 +12,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import { newId } from '../../domain/v2/ulid.js';
 import { bootstrapV2 } from '../../services/v2/workspaceContext.js';
 import {
   capture,
@@ -586,10 +587,69 @@ v2Router.get('/meetings', async (req, res) => {
   }
 });
 
-v2Router.get('/decisions', async (req, res) => {
+v2Router.get('/decisions', async (_req, res) => {
   try {
     const { repo } = getV2(res);
     res.json({ items: await repo.listDecisions() });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// Manual evidence creation. Used when the user wants to attach a snippet
+// from a Source to a Commitment or Decision, or when the AI is offline and
+// the user is recording the link themselves. Spec §10.5: "无法找到来源时
+// 必须明确标记为...AI 建议，不得伪造引用" — this endpoint creates real
+// evidence only; the user cannot link to a quote that does not exist.
+v2Router.post('/evidence', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const { EvidenceSchema } = await import('../../domain/v2/types.js');
+    const schema = z.object({
+      sourceId: z.string(),
+      quote: z.string().min(1).max(2000),
+      locator: z
+        .union([
+          z.object({ kind: z.literal('text'), start: z.number(), end: z.number() }),
+          z.object({ kind: z.literal('lines'), start: z.number(), end: z.number() }),
+          z.object({ kind: z.literal('audio'), startSeconds: z.number(), endSeconds: z.number() }),
+        ])
+        .optional(),
+    });
+    const input = schema.parse(req.body);
+    const source = await repo.getSourceItem(input.sourceId);
+    if (!source) {
+      return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
+    }
+    // The quote MUST be a verbatim substring of the source body.
+    if (source.body && !source.body.includes(input.quote)) {
+      return res.status(400).json({
+        error: {
+          code: 'validation',
+          message: 'Quote must be a verbatim substring of the source body. Spec §10.5 forbids fabrication.',
+        },
+      });
+    }
+    const now = new Date().toISOString();
+    const evidence = EvidenceSchema.parse({
+      id: newId('ev'),
+      schemaVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: 'user',
+      workspaceId: source.workspaceId,
+      sourceId: input.sourceId,
+      quote: input.quote,
+      locator: input.locator ?? { kind: 'text', start: 0, end: input.quote.length },
+      sourceContentHash: source.contentHash,
+      stale: false,
+    });
+    await repo.saveEvidence(evidence, {
+      auditKind: 'commitment.update',
+      auditEntity: { type: 'evidence', id: evidence.id },
+      auditData: { sourceId: input.sourceId, manual: true },
+    });
+    res.status(201).json({ evidence });
   } catch (err) {
     handleError(err, res);
   }
