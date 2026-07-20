@@ -9,10 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending for next release
 
-- 接 App.tsx:1134 把 `dailyNotes` / `onOpenNotesTab` 传给 TodayBacklog (Today's Notes 收口到 TodayBacklog, 删 App.tsx 的 DailyNoteCards 重复)
-- focus mode icon strip 在 > 20 notes 时需要 scroll 体验
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
-- Notes focus 模式 + Settings 280% bug 修复均在 1.1.4
+- mobile sidebar collapse / Settings backup-restore — 留 1.1.6
+- icon strip 内的 "N+" click 当前是切回 split 模式, 后续可以让用户直接展开 strip
+
+## [1.1.5] - 2026-07-20
+
+### Added
+- **Notes focus mode icon strip polish** (`src/features/v2/notes/NoteList.tsx`, commit `<pending>`) — 之前 16+ 灰圆点垂直列, 选中不明显. 现在:
+  - 12 cap: top 11 dots + 1 "N+" 折叠 indicator (灰底 + dashed border + count)
+  - 选中 note 不在 top 11 时自动 `scrollIntoView({ block: 'nearest' })` 滚到可视区
+  - Hover 200ms 后弹 portal tooltip (玻璃模糊 backdrop, 右侧浮, title + body 前 90 字符)
+  - 选中态 `scale(1.05) ring-2 ring-accent` 强化
+  - Scroll cue: 顶部/底部 fade gradient + `IntersectionObserver` 监听 first/last item
+  - 抽出 `FocusStrip` 子组件 (310 行), 保留 split 模式原状
+- **App.tsx: 传 `dailyNotes` + `onOpenNotesTab` 到 TodayBacklog, 删 DailyNoteCards 重复** — 之前同一份 "Today's notes" 数据在 `App.tsx` 渲染两次 (DailyNoteCards + TodayBacklog 备用 section), 现在统一在 TodayBacklog 内部:
+  - TodayBacklog 备用 section 真的 list 前 3 个 note (title + preview 90 字符)
+  - Empty 时显示 "Capture today's note" CTA → `onOpenNotesTab` 跳 Notes tab
+  - 多于 3 时显示 "View all" 跳 Notes tab
+  - 删 `src/components/DailyNoteCards.tsx` (220 行死代码)
+
+### Removed
+- `src/components/DailyNoteCards.tsx` — 被 TodayBacklog 收口替代 (220 行)
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 32 files / 304 tests pass
+- `npm run build` ✅ vite 2.75s, main chunk 359 kB (-9 kB from 1.1.4 — DailyNoteCards 删除 > strip polish 增加)
+- `npx playwright test` ✅ 13/13 e2e pass (新增 cap test, 12 上限 + tooltip + N+ 跳转)
 
 ## [1.1.4] - 2026-07-20
 

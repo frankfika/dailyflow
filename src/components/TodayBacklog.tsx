@@ -561,8 +561,10 @@ export function TodayBacklog({
         )}
 
         {/* Today's notes card — only rendered when the parent opts in by
-            passing both dailyNotes and onOpenNotesTab. Keeps the section
-            backward-compatible for callers that don't have notes data. */}
+            passing both dailyNotes and onOpenNotesTab. Shows up to
+            three recent notes as quick links; "View all" jumps to
+            the Notes tab. Keeps the section backward-compatible for
+            callers that don't have notes data. */}
         {isToday && dailyNotes !== undefined && onOpenNotesTab && (
           <section className="today-group is-notes" data-testid="today-notes-section">
             <header className="today-group-header">
@@ -574,6 +576,16 @@ export function TodayBacklog({
               <p className="today-group-sub">
                 {language === 'zh' ? '把今天的事写下来更清晰' : 'Writing things down clarifies today'}
               </p>
+              {dailyNotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onOpenNotesTab}
+                  className="today-group-view-all"
+                  data-testid="today-notes-view-all"
+                >
+                  {language === 'zh' ? '查看全部' : 'View all'}
+                </button>
+              )}
             </header>
             {dailyNotes.length === 0 ? (
               <button
@@ -587,11 +599,25 @@ export function TodayBacklog({
                 </span>
               </button>
             ) : (
-              <p className="today-group-empty">
-                {language === 'zh'
-                  ? `今天已有 ${dailyNotes.length} 篇笔记`
-                  : `${dailyNotes.length} note${dailyNotes.length === 1 ? '' : 's'} captured today`}
-              </p>
+              <ul className="today-group-list" data-testid="today-notes-list">
+                {dailyNotes.slice(0, 3).map((n) => {
+                  const title = n.title || n.body?.split('\n').find((l) => l.trim().length > 0)?.replace(/^#+\s*/, '').slice(0, 60) || (language === 'zh' ? '（无标题）' : '(untitled)');
+                  const preview = (n.body || '').replace(/\n+/g, ' ').slice(0, 90);
+                  return (
+                    <li key={n.id} className="today-group-item">
+                      <button
+                        type="button"
+                        onClick={onOpenNotesTab}
+                        className="today-note-quick"
+                        data-testid={`today-note-${n.id}`}
+                      >
+                        <span className="today-note-quick-title">{title}</span>
+                        {preview && <span className="today-note-quick-preview">{preview}</span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </section>
         )}

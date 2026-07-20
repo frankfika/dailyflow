@@ -20,7 +20,6 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
-import { DailyNoteCards } from './components/DailyNoteCards';
 import { TodayBacklog } from './components/TodayBacklog';
 import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
@@ -1154,17 +1153,12 @@ export default function App() {
                     aiAvailable={Boolean(aiApiKey && aiBaseUrl)}
                     onGenerateAIPlan={handleGenerateDailyPlan}
                     onConfigureAI={() => setActiveTab('ai-chat')}
-                  />
-
-                  {/* Today's Notes */}
-                  <DailyNoteCards
-                    notes={filterNotesByContext(dailyNotes, activeContext)}
-                    language={language}
-                    activeContext={activeContext}
-                    onViewAll={() => setActiveTab('notes')}
-                    onAddNote={() => { setEditingDailyNote(null); setQuickNoteDefaultType(undefined); setShowQuickNoteEditor(true); }}
-                    onAddMeetingNote={() => { setEditingDailyNote(null); setQuickNoteDefaultType('meeting_note'); setShowQuickNoteEditor(true); }}
-                    onNoteClick={(n) => { setEditingDailyNote(n); setQuickNoteDefaultType(undefined); setShowQuickNoteEditor(true); }}
+                    // 1.1.5: route the Today's Notes card into the
+                    // TodayBacklog footer so we stop rendering the
+                    // same section twice (this file's DailyNoteCards
+                    // was deleted in 1.1.5 — see CHANGELOG).
+                    dailyNotes={filterNotesByContext(dailyNotes, activeContext)}
+                    onOpenNotesTab={() => setActiveTab('notes')}
                   />
 
                 </motion.div>

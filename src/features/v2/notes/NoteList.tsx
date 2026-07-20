@@ -7,8 +7,26 @@
  * forcing the user to pick a kind or date before they can write —
  * the empty state offers an "Untitled note" button that calls the
  * backend immediately and opens the editor.
+ *
+ * Focus mode (1.1.4): the list collapses to a 56px icon strip. The
+ * strip caps the visible dots at 12 so the user isn't drowned in
+ * vertical scroll when they have 16+ notes; the rest are folded
+ * into a single "N+" placeholder that switches back to the list
+ * view on click. A pair of top/bottom fade gradients plus an
+ * IntersectionObserver cue scrollability, and a hover tooltip
+ * (200ms delay, portaled to the right) reminds the user which dot
+ * is which.
  */
-import { useState, useMemo } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useNotes, useCreateNote, useArchiveNote, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
@@ -24,6 +42,11 @@ const VIEW_LABELS: Record<ViewKey, { label: string; sub: string }> = {
   pinned: { label: 'Pinned', sub: 'Stickied to the top' },
   archived: { label: 'Archived', sub: 'Soft-deleted, recoverable' },
 };
+
+/** Max notes shown in the focus-mode strip before the "N+" overflow. */
+const STRIP_MAX_NOTES = 11;
+/** Delay before the hover preview shows, in ms. Long enough to avoid flicker. */
+const STRIP_HOVER_DELAY_MS = 200;
 
 function inferTitle(n: NoteDocument): string {
   if (n.title) return n.title;
@@ -103,48 +126,13 @@ export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayou
   // avatar; the active one is highlighted. Click to switch.
   if (layout === 'note') {
     return (
-      <div className="flex flex-col h-full" data-testid="notes-strip">
-        <button
-          onClick={onToggleLayout}
-          className="m-2 p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10 self-end"
-          title="Show list"
-          data-testid="notes-show-list"
-          aria-label="Show list"
-        >
-          ⇆
-        </button>
-        <ul className="flex flex-col items-center gap-1.5 px-1 overflow-y-auto">
-          <li>
-            <button
-              onClick={() => createAndOpen('general')}
-              className="w-9 h-9 rounded-full border border-dashed border-border text-text-muted hover:text-text-heading text-base"
-              title="New note"
-              data-testid="notes-strip-new"
-            >
-              +
-            </button>
-          </li>
-          {filtered.map((n) => {
-            const isSelected = n.id === selectedId;
-            return (
-              <li key={n.id}>
-                <button
-                  onClick={() => onSelect(n.id)}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
-                    isSelected
-                      ? 'bg-accent text-white'
-                      : 'bg-surface-elevated text-text-muted hover:text-text-heading'
-                  }`}
-                  title={inferTitle(n)}
-                  data-testid={`notes-strip-${n.id}`}
-                >
-                  {inferGlyph(n)}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <FocusStrip
+        notes={filtered}
+        selectedId={selectedId ?? null}
+        onSelect={onSelect}
+        onCreate={() => createAndOpen('general')}
+        onToggleLayout={onToggleLayout}
+      />
     );
   }
 
@@ -295,6 +283,307 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       <Button className="mt-3" onClick={onRetry}>
         Try again
       </Button>
+    </div>
+  );
+}
+
+/* -----------------------------------------------------------------------
+   FocusStrip — the 1.1.4 redesigned focus-mode icon strip.
+
+   Visual rules:
+   - "+" new note at top of the scrollable area (always reachable).
+   - Up to STRIP_MAX_NOTES (11) dots, single-character glyphs.
+   - If the selected note is past the visible window, swap it in for
+     the last visible dot so the user always sees their current note.
+   - If there are still hidden notes, render a single "N+" placeholder
+     that opens the list view on click.
+   - Top/bottom fade gradients appear when the list scrolls; the IO
+     hides them once the first/last dot is fully visible.
+   - Hover a dot for 200ms to see the title + first body line in a
+     portaled tooltip.
+   - Selected dot scales up + gets a stronger ring.
+
+   Server contract is unchanged — FocusStrip is pure presentation.
+   ----------------------------------------------------------------------- */
+
+interface FocusStripProps {
+  notes: NoteDocument[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onToggleLayout?: () => void;
+}
+
+interface VisibleSlice {
+  /** Notes to render as dots, in display order. */
+  shown: NoteDocument[];
+  /** Number of notes folded into the "N+" placeholder. */
+  hiddenCount: number;
+}
+
+function useVisibleStrip(notes: NoteDocument[], selectedId: string | null, max: number): VisibleSlice {
+  return useMemo(() => {
+    if (notes.length <= max) {
+      return { shown: notes, hiddenCount: 0 };
+    }
+    const top = notes.slice(0, max);
+    const topIds = new Set(top.map((n) => n.id));
+    if (selectedId && !topIds.has(selectedId)) {
+      const sel = notes.find((n) => n.id === selectedId);
+      if (sel) {
+        // Drop the last of the top window and slot the selected in
+        // so the user can always see what they're editing.
+        return { shown: [...top.slice(0, max - 1), sel], hiddenCount: notes.length - max };
+      }
+    }
+    return { shown: top, hiddenCount: notes.length - max };
+  }, [notes, selectedId, max]);
+}
+
+function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: FocusStripProps) {
+  const { shown, hiddenCount } = useVisibleStrip(notes, selectedId, STRIP_MAX_NOTES);
+
+  // Refs for scroll-into-view + IntersectionObserver.
+  const scrollerRef = useRef<HTMLUListElement | null>(null);
+  const firstNoteRef = useRef<HTMLLIElement | null>(null);
+  const lastNoteRef = useRef<HTMLLIElement | null>(null);
+  const itemRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
+
+  // Fade visibility — true means "there's something to scroll to in
+  // that direction", which makes the fade appear.
+  const [fadeTop, setFadeTop] = useState(false);
+  const [fadeBottom, setFadeBottom] = useState(false);
+
+  // Tooltip state — one tooltip at a time, portaled to <body>.
+  const [hovered, setHovered] = useState<{
+    note: NoteDocument;
+    x: number;
+    y: number;
+  } | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+
+  const cancelHover = useCallback(() => {
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHovered(null);
+  }, []);
+
+  // Track scroll position to flip the fades when the user scrolls
+  // past the IO-detected state (programmatic scrolls + drag).
+  const recomputeFades = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    setFadeTop(scrollTop > 1);
+    setFadeBottom(scrollTop + clientHeight < scrollHeight - 1);
+  }, []);
+
+  // IntersectionObserver: when the first/last dot is fully visible,
+  // there's no more to scroll in that direction → fade off.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || shown.length === 0) return;
+    const targets: Element[] = [];
+    if (firstNoteRef.current) targets.push(firstNoteRef.current);
+    if (lastNoteRef.current && lastNoteRef.current !== firstNoteRef.current) {
+      targets.push(lastNoteRef.current);
+    }
+    if (targets.length === 0) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.target === firstNoteRef.current) {
+            setFadeTop(!e.isIntersecting);
+          }
+          if (e.target === lastNoteRef.current) {
+            setFadeBottom(!e.isIntersecting);
+          }
+        }
+      },
+      { root: scroller, threshold: 1 },
+    );
+    targets.forEach((t) => io.observe(t));
+    // Also recompute from raw scroll metrics — IO can miss edge cases
+    // (e.g. when the list fits without overflow, both targets are
+    // "intersecting" but the list isn't actually scrollable).
+    recomputeFades();
+    scroller.addEventListener('scroll', recomputeFades, { passive: true });
+    return () => {
+      io.disconnect();
+      scroller.removeEventListener('scroll', recomputeFades);
+    };
+  }, [shown, recomputeFades]);
+
+  // Auto-scroll the selected dot into view whenever it changes — so a
+  // user deep-linking or jumping to a hidden note can still see the
+  // highlight. We use 'nearest' to avoid unnecessary scroll if it's
+  // already on screen.
+  useEffect(() => {
+    if (!selectedId) return;
+    const li = itemRefs.current.get(selectedId);
+    if (!li) return;
+    // Defer to next frame so layout/IO have settled.
+    const raf = window.requestAnimationFrame(() => {
+      li.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      recomputeFades();
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [selectedId, shown.length, recomputeFades]);
+
+  // Clean up the hover timer on unmount.
+  useEffect(() => () => cancelHover(), [cancelHover]);
+
+  const handleDotEnter = useCallback(
+    (e: ReactMouseEvent<HTMLButtonElement>, n: NoteDocument) => {
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+      }
+      const target = e.currentTarget;
+      const rect = target.getBoundingClientRect();
+      // Anchor the tooltip's right edge ~6px to the right of the dot's
+      // left edge, vertically centered on the dot.
+      const x = rect.right + 8;
+      const y = rect.top + rect.height / 2;
+      hoverTimerRef.current = window.setTimeout(() => {
+        setHovered({ note: n, x, y });
+        hoverTimerRef.current = null;
+      }, STRIP_HOVER_DELAY_MS);
+    },
+    [],
+  );
+
+  const handleDotMove = useCallback((e: ReactMouseEvent<HTMLButtonElement>, n: NoteDocument) => {
+    // Keep the tooltip pinned to the cursor's vertical position so it
+    // doesn't drift if the user moves within the dot.
+    setHovered((prev) => {
+      if (!prev || prev.note.id !== n.id) return prev;
+      const rect = e.currentTarget.getBoundingClientRect();
+      return { ...prev, x: rect.right + 8, y: rect.top + rect.height / 2 };
+    });
+  }, []);
+
+  const handleDotLeave = useCallback(() => {
+    cancelHover();
+  }, [cancelHover]);
+
+  const openList = useCallback(() => {
+    onToggleLayout?.();
+  }, [onToggleLayout]);
+
+  return (
+    <div className="flex flex-col h-full" data-testid="notes-strip">
+      <button
+        onClick={onToggleLayout}
+        className="m-2 p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10 self-end"
+        title="Show list"
+        data-testid="notes-show-list"
+        aria-label="Show list"
+      >
+        ⇆
+      </button>
+      <div className="notes-strip-scroll relative flex-1 min-h-0">
+        <div
+          className={`notes-strip-fade notes-strip-fade-top ${fadeTop ? 'is-visible' : ''}`}
+          aria-hidden="true"
+        />
+        <ul
+          ref={scrollerRef}
+          className="notes-strip-list"
+          data-testid="notes-strip-list"
+          onMouseLeave={cancelHover}
+        >
+          <li>
+            <button
+              onClick={onCreate}
+              className="notes-strip-dot is-new"
+              title="New note"
+              data-testid="notes-strip-new"
+            >
+              +
+            </button>
+          </li>
+          {shown.map((n, idx) => {
+            const isSelected = n.id === selectedId;
+            return (
+              <li
+                key={n.id}
+                ref={(el) => {
+                  if (el) {
+                    itemRefs.current.set(n.id, el);
+                    if (idx === 0) firstNoteRef.current = el;
+                    if (idx === shown.length - 1) lastNoteRef.current = el;
+                  } else {
+                    itemRefs.current.delete(n.id);
+                    if (idx === 0) firstNoteRef.current = null;
+                    if (idx === shown.length - 1) lastNoteRef.current = null;
+                  }
+                }}
+              >
+                <button
+                  onClick={() => onSelect(n.id)}
+                  onMouseEnter={(e) => handleDotEnter(e, n)}
+                  onMouseMove={(e) => handleDotMove(e, n)}
+                  onMouseLeave={handleDotLeave}
+                  onFocus={() => cancelHover()}
+                  className={`notes-strip-dot ${isSelected ? 'is-selected' : ''}`}
+                  title={inferTitle(n)}
+                  aria-label={inferTitle(n)}
+                  aria-current={isSelected ? 'true' : undefined}
+                  data-testid={`notes-strip-${n.id}`}
+                >
+                  {inferGlyph(n)}
+                </button>
+              </li>
+            );
+          })}
+          {hiddenCount > 0 && (
+            <li
+              ref={(el) => {
+                lastNoteRef.current = el;
+              }}
+            >
+              <button
+                onClick={openList}
+                onMouseEnter={cancelHover}
+                onMouseLeave={handleDotLeave}
+                className="notes-strip-dot is-more"
+                title={`${hiddenCount} more — open list view`}
+                data-testid="notes-strip-more"
+              >
+                {hiddenCount}+
+              </button>
+            </li>
+          )}
+        </ul>
+        <div
+          className={`notes-strip-fade notes-strip-fade-bottom ${fadeBottom ? 'is-visible' : ''}`}
+          aria-hidden="true"
+        />
+      </div>
+      {hovered &&
+        createPortal(
+          <FocusTooltip note={hovered.note} x={hovered.x} y={hovered.y} />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+function FocusTooltip({ note, x, y }: { note: NoteDocument; x: number; y: number }) {
+  const title = inferTitle(note);
+  const preview = previewBody(note);
+  return (
+    <div
+      className="notes-strip-tooltip is-visible"
+      role="tooltip"
+      style={{ left: x, top: y, transform: 'translateY(-50%)' }}
+      data-testid={`notes-strip-tooltip-${note.id}`}
+    >
+      <span className="notes-strip-tooltip-title">{title}</span>
+      {preview && <span className="notes-strip-tooltip-body">{preview}</span>}
     </div>
   );
 }

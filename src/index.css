@@ -1231,3 +1231,142 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   .today-focus-bar-meta { display: none; }
   .today-stat-eyebrow { font-size: 0.55rem; }
 }
+
+/* ==========================================================================
+   Notes focus-mode icon strip — v1.1.4 cap + scroll cues
+   Caps the strip at 12 visible dots (1 "+" + 11 notes, or 11 + 1 "N+" when
+   overflowing). Adds top/bottom fade gradients, IntersectionObserver-driven
+   visibility, hover preview tooltip, and a stronger selected state.
+   ========================================================================== */
+
+.notes-strip-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.notes-strip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.25rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  height: 100%;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.notes-strip-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1rem;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-native);
+}
+.notes-strip-fade.is-visible { opacity: 1; }
+.notes-strip-fade-top {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--color-background) 0%,
+    color-mix(in srgb, var(--color-background) 60%, transparent) 70%,
+    transparent 100%
+  );
+}
+.notes-strip-fade-bottom {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    var(--color-background) 0%,
+    color-mix(in srgb, var(--color-background) 60%, transparent) 70%,
+    transparent 100%
+  );
+}
+.notes-strip-dot {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+  transition: transform 0.15s var(--ease-native), background 0.15s, color 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.notes-strip-dot:hover {
+  color: var(--color-text-heading);
+  background: var(--color-surface);
+  transform: scale(1.04);
+}
+.notes-strip-dot.is-selected {
+  background: var(--color-accent);
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 0 0 2px var(--color-accent-light), 0 4px 12px rgba(0, 122, 255, 0.20);
+  border-color: var(--color-accent);
+}
+.notes-strip-dot.is-new {
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  font-weight: 400;
+}
+.notes-strip-dot.is-more {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.7rem;
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.notes-strip-dot.is-more:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+.notes-strip-tooltip {
+  position: fixed;
+  z-index: 80;
+  max-width: 18rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s var(--ease-native), transform 0.15s var(--ease-native);
+}
+.notes-strip-tooltip.is-visible { opacity: 1; transform: translateY(0); }
+.notes-strip-tooltip-title {
+  font-weight: 600;
+  color: var(--color-text-heading);
+  display: block;
+  margin-bottom: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-strip-tooltip-body {
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
