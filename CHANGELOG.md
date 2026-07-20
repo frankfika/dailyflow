@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 TBD.
 
+## [1.0.8] - 2026-07-20
+
+### Added
+- **TodayBacklog — focus bar + urgency-grouped backlog** (commit `160637a`)
+  - `src/components/TodayBacklog.tsx` (450 行) — replaces the 1.0.7 DailyFocus modal with a sticky "today's three" focus bar at the top + always-visible urgency-grouped backlog (overdue / today / this week / later / no-deadline) below. Each backlog card has a one-click `+` to add to today's three (or a `✓` to remove when already in the three). Filter pills at the top toggle the view between All / Overdue / Today / This week / Later.
+  - `src/index.css` (+394 行) — TodayBacklog visual styles (sticky focus bar with backdrop-blur, urgency-group accent colors, filter pill states, add/remove affordances). Comment block explicitly notes this is the v1.0.7 redesign that supersedes the old `daily-focus-*` legacy styles.
+  - `App.tsx` — Today tab now renders `<TodayBacklog>` instead of `<DailyFocus>` + the collapsible "everything else" fold. Net `-269` lines in App.tsx.
+  - `docs/AI_NATIVE_UI_UX_SPEC.md` (+816 行新文件) — authoritative UI/UX spec referenced as equal-implementation-constraint from the main spec. Defines Today / Notes / Memory visual + interaction rules so future agents don't drift from the redesign.
+- **Spec: NoteDocument as first-class object** (`docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md`, +218 行)
+  - §5.2 adds `NoteDocument` alongside `SourceItem` — user-authored, document-first, persistent work journal (quick / daily / meeting / project / reference / general). Distinguishes Notes from "external facts captured automatically" so AI doesn't conflate them.
+  - §7 main navigation renamed from `Today / Inbox / Memory` to `Today / Notes / Memory`. Inbox becomes a smart view inside Notes (Quick capture + recent + uncategorized).
+  - §7.3 Notes full definition: Inbox / Recent / Daily / Meetings / Projects / Favorites.
+  - F-02A "write a note" user flow: open-and-write, auto-save, AI suggestions only in review sidebar, no rewrite of body without explicit diff accept.
+  - §11.3 `NoteDocument` type (title optional, kind, state, projectIds, personIds, sourceIds, pinned, autoSaveVersion, contentHash).
+  - §11.4 `Evidence` broadened to allow `noteId` + `blockId` anchoring (in addition to `sourceId`).
+  - Top of file: links `docs/AI_NATIVE_UI_UX_SPEC.md` as equal-implementation-constraint.
+
+### Changed
+- Today tab no longer shows a modal picker for choosing focus tasks; the "pick 3" is now a sticky bar visible at all times.
+- Today tab backlog is always visible (no more "everything else" fold).
+- Main navigation: `Inbox` tab renamed to `Notes` to match v2 spec narrative.
+
+### Verified
+- `npm run lint` ✅ 0 errors
+- `npm test` ✅ 32 files / 290 tests pass (DailyFocus unit tests still cover the removed modal flow in isolation)
+- `npm run build` ✅ vite build 3.22s, main chunk 360 kB (down from 367 kB at 1.0.7) — net code removal from dropping DailyFocus modal path
+- Playwright e2e `e2e/today-backlog-visual.spec.ts` ✅ renders focus bar + 5 filter pills + empty state; screenshot at `e2e-screenshot-today-backlog.png`
+
+### Known follow-ups
+- `src/components/DailyFocus.tsx` and `src/__tests__/components/DailyFocus.test.tsx` are now dead code (DailyFocus is no longer mounted in App.tsx). Kept in this release so the commit stays scoped; recommend removing them in 1.0.9.
+- 1.0.7's `fix(daily-focus): keep plan modal in Today when AI is not configured` had no production effect in 1.0.7 itself because App.tsx was already mid-refactor at the time of that commit. The same behavior now happens by construction in 1.0.8: TodayBacklog never kicks the user to AI Chat; it stays in Today and degrades to manual `addToFocus` in-place.
+
 ## [1.0.7] - 2026-07-20
 
 ### Fixed
