@@ -10,8 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Pending for next release
 
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
-- mobile sidebar collapse / Settings backup-restore — 留 1.1.6
+- server-side `/api/v2/import` + `/api/v2/reset` 端点 (1.1.6 UI 已加, 后端 "coming soon" mock)
+- mobile sidebar collapse 完整版 (1.1.6 已 work, 留 1.1.7+ for tablet icon-only mode)
 - icon strip 内的 "N+" click 当前是切回 split 模式, 后续可以让用户直接展开 strip
+
+## [1.1.6] - 2026-07-20
+
+### Added
+- **Settings → Workspace Data section** (`src/components/SettingsModal.tsx`, commit `<pending>`) — 1.1.6 主线:
+  - **Export all data**: fetch 8 个 entity endpoint (`/api/v2/export/entities?kind=X` × 8) + `/api/v2/notes` + `/api/v2/commitments`, 包成 JSON, Blob + `<a download>` 触发, 文件名 `dailyflow-${wsSlug}-${date}.json`. 成功 toast + "Last exported 5m ago" inline status
+  - **Import from JSON**: file input accept=".json", 解析后 POST `/api/v2/import`. 服务端该 endpoint **暂不存在** (1.1.6 范围外), UI 友好提示 "server import endpoint not yet implemented, coming soon"
+  - **Reset workspace**: 二次 `confirm()` 保护, 调 `POST /api/v2/reset`. 同上, endpoint 暂缺, UI 提示 "coming soon"
+  - 完整 state 管理: 3 个 loading flag + lastExportTime (localStorage 持久化) + inline status banner
+- **Sidebar Mode 切换器 visual polish** (`src/components/Sidebar.tsx`):
+  - 从 small inline chip 改成 100% 宽 tab-style (grid-cols-2)
+  - 加 uppercase "MODE" 标签 + 右侧 "On the clock" / "Off the clock" status
+  - 选中态 `bg-surface text-accent shadow-sm` 加 14px icon, 视觉权重明显
+  - aria `role="tablist"` + `aria-selected` 配 a11y
+
+### Known limitations
+- `/api/v2/import` + `/api/v2/reset` 1.1.6 暂未实现. UI 已加, 错误优雅 fallback. 1.2.x 真实接入.
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 32 files / 304 tests pass
+- `npm run build` ✅ vite 4.07s, main chunk 363 kB
+- `npx playwright test` ✅ 7/7 e2e pass (no regression from 1.1.5)
 
 ## [1.1.5] - 2026-07-20
 

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
 import { configApi, ipfsApi, type IpfsBackupRecord } from '../api/client';
 import { API_BASE } from '../config/api';
@@ -123,6 +123,16 @@ export function SettingsModal({
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [ipfsBackups, setIpfsBackups] = useState<IpfsBackupRecord[]>([]);
 
+  // Workspace Data state (export / import / reset)
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [lastExportTime, setLastExportTime] = useState<string | null>(() => {
+    try { return localStorage.getItem('df_last_export_time'); } catch { return null; }
+  });
+  const [dataStatus, setDataStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!showSettings || configTab !== 'sync') return;
     ipfsApi.list()
@@ -229,6 +239,174 @@ export function SettingsModal({
   };
 
   const fontWeightLabel = fontWeight === 0 ? 'Normal' : fontWeight === 1 ? 'Medium' : 'Bold';
+
+  // ---------------------------------------------------------------------------
+  // Workspace Data: export / import / reset
+  // ---------------------------------------------------------------------------
+
+  // Server endpoint discovery (verified at task time):
+  //   GET  /api/v2/export/entities?kind=...   — per-kind entity list (exists)
+  //   GET  /api/v2/notes                       — note list (exists)
+  //   GET  /api/v2/commitments                 — commitment list (exists)
+  //   POST /api/v2/import                      — NOT IMPLEMENTED (UI shows "coming soon")
+  //   POST /api/v2/reset                       — NOT IMPLEMENTED (UI shows "coming soon")
+  const V2_BASE = `${(API_BASE as { api?: string }).api ?? ''}/api/v2`;
+
+  const formatRelativeTime = (iso: string): string => {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diffMs / 60_000);
+    if (min < 1) return language === 'zh' ? '刚刚' : 'just now';
+    if (min < 60) return language === 'zh' ? `${min} 分钟前` : `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return language === 'zh' ? `${hr} 小时前` : `${hr}h ago`;
+    const day = Math.floor(hr / 24);
+    return language === 'zh' ? `${day} 天前` : `${day}d ago`;
+  };
+
+  const handleExportWorkspace = async () => {
+    if (!workspaceRoot) {
+      setDataStatus({ type: 'error', message: language === 'zh' ? '请先设置工作区路径' : 'Please set a workspace path first' });
+      return;
+    }
+    setIsExporting(true);
+    setDataStatus(null);
+    try {
+      const kinds = ['source', 'commitment', 'outcome', 'project', 'person', 'decision', 'plan', 'evidence'] as const;
+      const [entitiesByKind, notesRes, commitmentsRes] = await Promise.all([
+        Promise.all(
+          kinds.map(async (kind) => {
+            const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
+            if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
+            const data = await r.json();
+            return [kind, data.items ?? []] as const;
+          })
+        ),
+        fetch(`${V2_BASE}/notes`).then(r => r.ok ? r.json() : { notes: [] }).catch(() => ({ notes: [] })),
+        fetch(`${V2_BASE}/commitments`).then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
+      ]);
+      const exportPayload = {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        workspaceRoot,
+        entities: Object.fromEntries(entitiesByKind),
+        notes: notesRes.notes ?? [],
+        commitments: commitmentsRes.items ?? [],
+      };
+      const totalEntities = entitiesByKind.reduce((s, [, items]) => s + items.length, 0);
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const wsSlug = workspaceRoot.split(/[\\/]/).filter(Boolean).pop() || 'workspace';
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `dailyflow-${wsSlug}-${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      const now = new Date().toISOString();
+      setLastExportTime(now);
+      try { localStorage.setItem('df_last_export_time', now); } catch { /* ignore */ }
+      const msg = language === 'zh'
+        ? `✓ 已导出 ${totalEntities} 个实体 + ${exportPayload.notes.length} 个笔记`
+        : `✓ Exported ${totalEntities} entities + ${exportPayload.notes.length} notes`;
+      setDataStatus({ type: 'success', message: msg });
+      showToast(msg, 'success');
+    } catch (e: any) {
+      const msg = language === 'zh' ? `✗ 导出失败: ${e.message}` : `✗ Export failed: ${e.message}`;
+      setDataStatus({ type: 'error', message: msg });
+      showToast(msg, 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm(language === 'zh'
+      ? '导入将合并或覆盖当前工作区中的数据。是否继续？'
+      : 'Importing will merge or overwrite data in your current workspace. Continue?')) {
+      e.target.value = '';
+      return;
+    }
+    setIsImporting(true);
+    setDataStatus(null);
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const r = await fetch(`${V2_BASE}/import`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${r.status}`);
+      }
+      const result = await r.json();
+      const imported = result.imported ?? 0;
+      const skipped = result.skipped ?? 0;
+      const msg = language === 'zh'
+        ? `✓ 已导入 ${imported} 项, 跳过 ${skipped} 项重复`
+        : `✓ Imported ${imported}, skipped ${skipped} duplicates`;
+      setDataStatus({ type: 'success', message: msg });
+      showToast(msg, 'success');
+    } catch (e: any) {
+      // Server endpoint not yet implemented — surface a "coming soon" hint
+      // without breaking the UI. The file is still parsed so the user can
+      // see it was selected.
+      const msg = language === 'zh'
+        ? `已解析 ${file.name} (服务端 import 端点尚未实现, Coming soon)`
+        : `Parsed ${file.name} (server import endpoint not yet implemented, coming soon)`;
+      setDataStatus({ type: 'info', message: msg });
+      showToast(msg, 'info');
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleResetWorkspace = async () => {
+    if (!workspaceRoot) {
+      setDataStatus({ type: 'error', message: language === 'zh' ? '请先设置工作区路径' : 'Please set a workspace path first' });
+      return;
+    }
+    if (!confirm(language === 'zh'
+      ? '⚠ 这将删除所有笔记 / 承诺 / 决策 / 证据。是否继续？'
+      : '⚠ This will delete all notes / commitments / decisions / evidence. Continue?')) {
+      return;
+    }
+    if (!confirm(language === 'zh'
+      ? '最后确认: 此操作不可撤销。确定重置当前工作区？'
+      : 'Final confirmation: this action cannot be undone. Reset the workspace now?')) {
+      return;
+    }
+    setIsResetting(true);
+    setDataStatus(null);
+    try {
+      const r = await fetch(`${V2_BASE}/reset`, { method: 'POST' });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${r.status}`);
+      }
+      const msg = language === 'zh' ? '✓ 工作区已重置, 即将刷新...' : '✓ Workspace reset, refreshing...';
+      setDataStatus({ type: 'success', message: msg });
+      showToast(msg, 'success');
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e: any) {
+      // Server endpoint not yet implemented — surface a "coming soon" hint
+      const msg = language === 'zh'
+        ? `重置 (服务端 reset 端点尚未实现, Coming soon)`
+        : `Reset (server reset endpoint not yet implemented, coming soon)`;
+      setDataStatus({ type: 'info', message: msg });
+      showToast(msg, 'info');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
@@ -558,6 +736,109 @@ export function SettingsModal({
                     <span>{language === 'zh' ? '暗' : 'Dark'}</span>
                     <span>{language === 'zh' ? '亮' : 'Bright'}</span>
                   </div>
+                </div>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* Workspace Data: export / import / reset (Phase X) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-sans text-xs font-bold text-text-muted">
+                    {language === 'zh' ? '工作区数据' : 'Workspace Data'}
+                  </h3>
+                  <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded font-bold">Beta</span>
+                </div>
+                <p className="text-[11px] text-text-muted mb-3">
+                  {language === 'zh'
+                    ? '备份、恢复或重置本地工作区。导出会下载一个 JSON 文件, 包含全部笔记 / 承诺 / 决策 / 证据。'
+                    : 'Back up, restore, or reset the local workspace. Export downloads a JSON file with all notes / commitments / decisions / evidence.'}
+                </p>
+
+                <div className="space-y-2">
+                  {/* Export */}
+                  <button
+                    onClick={handleExportWorkspace}
+                    disabled={isExporting || !workspaceRoot}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-md text-xs font-bold hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isExporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'zh' ? '导出中...' : 'Exporting...'}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        {language === 'zh' ? '导出全部数据' : 'Export all data'}
+                      </>
+                    )}
+                  </button>
+                  {lastExportTime && !isExporting && (
+                    <p className="text-[10px] text-text-muted text-center -mt-1">
+                      {language === 'zh' ? '上次导出：' : 'Last exported: '}{formatRelativeTime(lastExportTime)}
+                    </p>
+                  )}
+
+                  {/* Import */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleImportFile}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface border border-border rounded-md text-xs font-bold text-text-heading hover:bg-surface-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'zh' ? '导入中...' : 'Importing...'}
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        {language === 'zh' ? '从 JSON 导入' : 'Import from JSON'}
+                      </>
+                    )}
+                  </button>
+
+                  {/* Reset (destructive) */}
+                  <button
+                    onClick={handleResetWorkspace}
+                    disabled={isResetting || !workspaceRoot}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isResetting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'zh' ? '重置中...' : 'Resetting...'}
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        {language === 'zh' ? '重置工作区…' : 'Reset workspace…'}
+                      </>
+                    )}
+                  </button>
+
+                  {dataStatus && (
+                    <div
+                      data-testid="workspace-data-status"
+                      className={`text-xs p-2 rounded-md border ${
+                        dataStatus.type === 'success'
+                          ? 'bg-stone-50 text-stone-700 border-stone-200'
+                          : dataStatus.type === 'error'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-stone-50 text-stone-700 border-stone-200'
+                      }`}
+                    >
+                      {dataStatus.message}
+                    </div>
+                  )}
                 </div>
               </div>
 

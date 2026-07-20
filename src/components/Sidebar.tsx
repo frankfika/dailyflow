@@ -169,33 +169,52 @@ export function Sidebar({
 
           {/* Bottom section: Work/Life toggle + Sync + Settings */}
           <div className="mt-auto pt-3 border-t border-border/60 space-y-3">
-            {/* Work/Life toggle */}
+            {/* Work/Life toggle — 1.1.6 visual polish: full-width pill
+                with stronger active state, distinct accent per side
+                so the user knows which context is loaded. */}
             {onContextChange && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-text-muted">
-                  {language === 'zh' ? '模式' : 'Mode'}
-                </span>
-                <div className="flex bg-black/[0.03] rounded-lg p-0.5 border border-border/50">
+              <div>
+                <div className="flex items-center justify-between mb-1.5 px-1">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted">
+                    {language === 'zh' ? '模式' : 'Mode'}
+                  </span>
+                  <span className="text-[10px] text-text-muted/70">
+                    {activeContext === 'work'
+                      ? (language === 'zh' ? '工作中' : 'On the clock')
+                      : (language === 'zh' ? '生活里' : 'Off the clock')}
+                  </span>
+                </div>
+                <div
+                  role="tablist"
+                  aria-label={language === 'zh' ? '上下文' : 'Context'}
+                  className="grid grid-cols-2 gap-0.5 p-0.5 bg-black/[0.03] border border-border/50 rounded-lg"
+                >
                   <button
+                    role="tab"
+                    aria-selected={activeContext === 'work'}
                     onClick={() => onContextChange('work')}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all active:scale-95 ${
+                    data-testid="mode-work"
+                    className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all active:scale-95 ${
                       activeContext === 'work'
                         ? 'bg-surface text-accent shadow-sm'
                         : 'text-text-muted hover:text-text-heading'
                     }`}
                   >
-                    <Briefcase className="w-3 h-3" />
+                    <Briefcase className="w-3.5 h-3.5" />
                     {language === 'zh' ? '工作' : 'Work'}
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={activeContext === 'life'}
                     onClick={() => onContextChange('life')}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all active:scale-95 ${
+                    data-testid="mode-life"
+                    className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all active:scale-95 ${
                       activeContext === 'life'
                         ? 'bg-surface text-accent shadow-sm'
                         : 'text-text-muted hover:text-text-heading'
                     }`}
                   >
-                    <Heart className="w-3 h-3" />
+                    <Heart className="w-3.5 h-3.5" />
                     {language === 'zh' ? '生活' : 'Life'}
                   </button>
                 </div>
