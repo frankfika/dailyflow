@@ -22,7 +22,7 @@ import { ContextSwitcher } from './components/ContextSwitcher';
 import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
 import { DailyNoteCards } from './components/DailyNoteCards';
-import { DailyFocus } from './components/DailyFocus';
+import { TodayBacklog } from './components/TodayBacklog';
 import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -134,7 +134,6 @@ export default function App() {
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
   const [hideDoneTasks, setHideDoneTasks] = useState(false);
-  const [showAllTasks, setShowAllTasks] = useState(false);
   const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
@@ -172,7 +171,6 @@ export default function App() {
   }, [focusStorageKey]);
 
   useEffect(() => {
-    setShowAllTasks(false);
     setSelectedCategory(null);
   }, [currentFileDate, activeContext]);
 
@@ -1104,7 +1102,7 @@ export default function App() {
                       </button>
                       )}
                     </div>
-                    {showAllTasks && categories.length > 0 && (
+                    {categories.length > 0 && (
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setSelectedCategory(null)}
@@ -1133,11 +1131,23 @@ export default function App() {
                     )}
                   </div>
 
-                  <DailyFocus
+                  <TodayBacklog
                     tasks={todayTasks}
                     focusTaskIds={focusTaskIds}
                     onFocusTaskIdsChange={updateFocusTaskIds}
                     onToggleTask={handleToggleTask}
+                    onEditTask={handleEditTask}
+                    onDeleteTask={handleDeleteTask}
+                    onCreateLinkedNote={(taskId) => {
+                      setEditingDailyNote(null);
+                      setPrefillLinkedTaskId(taskId);
+                      setShowQuickNoteEditor(true);
+                    }}
+                    onShowLinkedNotes={(taskId) => {
+                      setNotesFilterByTaskId(taskId);
+                      setActiveTab('notes');
+                    }}
+                    linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => setShowTaskInput(true)}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
@@ -1145,270 +1155,6 @@ export default function App() {
                     onGenerateAIPlan={handleGenerateDailyPlan}
                     onConfigureAI={() => setActiveTab('ai-chat')}
                   />
-
-                  <button
-                    onClick={() => setShowAllTasks(value => !value)}
-                    data-testid="everything-else-toggle"
-                    className="w-full flex items-center justify-between gap-3 px-1 py-2 text-left group"
-                    aria-expanded={showAllTasks}
-                  >
-                    <div>
-                      <h2 className="text-[13px] font-semibold text-text-heading">
-                        {language === 'zh' ? '其他待办' : 'Everything else'}
-                        <span className="ml-2 text-[11px] font-normal text-text-muted">{backlogTasks.filter(task => task.status !== 'done').length}</span>
-                      </h2>
-                      <p className="mt-0.5 text-[11px] text-text-muted">
-                        {language === 'zh' ? '需要时再展开，不和今日三件事争注意力' : 'Open only when you need to re-plan'}
-                      </p>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${showAllTasks ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showAllTasks && (
-                  <>
-                  {(() => {
-                    // 排序：含 pending 的 category 排在前面，全是 done 的排到末尾
-                    const catsWithStats = categories.map(category => {
-                      const catTasks = backlogTasks.filter(t => {
-                        const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
-                        return taskCategories[0] === category;
-                      });
-                      const pendingCount = catTasks.filter(t => t.status !== 'done').length;
-                      const doneCount = catTasks.filter(t => t.status === 'done').length;
-                      return { category, pendingCount, doneCount };
-                    });
-                    const sortedCategories = [
-                      ...catsWithStats.filter(c => c.pendingCount > 0),
-                      ...catsWithStats.filter(c => c.pendingCount === 0 && c.doneCount > 0),
-                    ];
-                    return sortedCategories.map(({ category, pendingCount, doneCount }) => {
-                    if (selectedCategory && selectedCategory !== category) return null;
-                    const catTasks = backlogTasks.filter(t => {
-                      const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
-                      return taskCategories[0] === category;
-                    });
-
-                    const pendingCatTasks = catTasks.filter(t => t.status !== 'done');
-                    const doneCatTasks = catTasks.filter(t => t.status === 'done');
-                    // Don't show empty categories
-                    if (pendingCount === 0 && doneCount === 0) return null;
-                    // When hiding done tasks, skip categories with no pending tasks
-                    if (hideDoneTasks && pendingCount === 0) return null;
-
-                    const showDone = showDoneByCategory[category] ?? false;
-
-                    return (
-                      <div key={category} className="space-y-5">
-                        <h2 className="divider-label font-sans text-[11px] text-text-muted font-semibold mt-8 mb-4">
-                          <span>{category}</span>
-                        </h2>
-
-                        {pendingCatTasks.length > 0 && (
-                          <div className="space-y-4">
-                            <AnimatePresence>
-                              {pendingCatTasks.slice().reverse().map(task => (
-                              <TaskCard
-                                key={task.id}
-                                task={task}
-                                language={language}
-                                categories={categories}
-                                currentFileDate={currentFileDate}
-                                linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
-                                onToggle={() => handleToggleTask(task.id)}
-                                onEdit={(updates) => handleEditTask(task.id, updates)}
-                                onDelete={() => handleDeleteTask(task.id)}
-                                onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
-                                onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
-                                showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                                onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
-                              />
-                            ))}
-                          </AnimatePresence>
-                        </div>
-                        )}
-
-                        {doneCatTasks.length > 0 && !hideDoneTasks && (
-                          <div className="mt-2">
-                            <button
-                              onClick={() => setShowDoneByCategory(prev => ({ ...prev, [category]: !prev[category] }))}
-                              className="group flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-heading transition-colors px-2 py-1.5 -ml-2 rounded-lg hover:bg-black/[0.03]"
-                            >
-                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
-                              {language === 'zh' ? `已完成 (${doneCatTasks.length})` : `Done (${doneCatTasks.length})`}
-                            </button>
-                            <AnimatePresence>
-                              {showDone && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="overflow-hidden space-y-4 mt-3"
-                                >
-                                  {doneCatTasks.slice().reverse().map(task => (
-                                    <TaskCard
-                                      key={task.id}
-                                      task={task}
-                                      language={language}
-                                      categories={categories}
-                                      currentFileDate={currentFileDate}
-                                      linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
-                                      onToggle={() => handleToggleTask(task.id)}
-                                      onEdit={(updates) => handleEditTask(task.id, updates)}
-                                      onDelete={() => handleDeleteTask(task.id)}
-                                      onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
-                                      onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
-                                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                                      onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
-                                    />
-                                  ))}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                  })()}
-                  {/* 兜底：显示没有任何 category tag 的任务 */}
-                  {(() => {
-                    const uncategorized = backlogTasks.filter(t => {
-                      const taskCategories = (t.tags || []).filter(tag => !systemTags.includes(tag));
-                      return taskCategories.length === 0;
-                    });
-                    if (uncategorized.length === 0) return null;
-                    if (selectedCategory) return null;
-                    const pending = uncategorized.filter(t => t.status !== 'done');
-                    const done = uncategorized.filter(t => t.status === 'done');
-                    // When hiding done tasks, skip inbox if it has no pending tasks
-                    if (hideDoneTasks && pending.length === 0) return null;
-                    const showDone = showDoneByCategory['__uncategorized__'] ?? false;
-                    return (
-                      <div className="space-y-5">
-                        <h2 className="font-sans text-xs  text-text-muted font-bold flex items-center space-x-3 mt-8 mb-4">
-                          <span>{language === 'zh' ? '收集箱' : 'Inbox'}</span>
-                          <span className="h-px bg-border flex-1 block w-full"></span>
-                        </h2>
-                        {pending.length > 0 && (
-                          <div className="space-y-4">
-                            <AnimatePresence>
-                              {pending.slice().reverse().map(task => (
-                              <TaskCard
-                                key={task.id}
-                                task={task}
-                                language={language}
-                                categories={categories}
-                                currentFileDate={currentFileDate}
-                                linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
-                                onToggle={() => handleToggleTask(task.id)}
-                                onEdit={(updates) => handleEditTask(task.id, updates)}
-                                onDelete={() => handleDeleteTask(task.id)}
-                                onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
-                                onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
-                                showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                                onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
-                              />
-                            ))}
-                          </AnimatePresence>
-                        </div>
-                        )}
-                        {done.length > 0 && !hideDoneTasks && (
-                          <div className="mt-2">
-                            <button
-                              onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
-                              className="flex items-center gap-1.5 text-xs  font-bold text-text-muted hover:text-text-main transition-colors"
-                            >
-                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDone ? 'rotate-180' : ''}`} />
-                              {language === 'zh' ? `已完成 (${done.length})` : `Done (${done.length})`}
-                            </button>
-                            <AnimatePresence>
-                              {showDone && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-4 mt-4 overflow-hidden">
-                                  {done.slice().reverse().map(task => (
-                                    <TaskCard
-                                      key={task.id}
-                                      task={task}
-                                      language={language}
-                                      categories={categories}
-                                      currentFileDate={currentFileDate}
-                                      linkedNotesCount={taskLinkedNotesCount[task.id] || 0}
-                                      onToggle={() => handleToggleTask(task.id)}
-                                      onEdit={(updates) => handleEditTask(task.id, updates)}
-                                      onDelete={() => handleDeleteTask(task.id)}
-                                      onCreateLinkedNote={() => { setEditingDailyNote(null); setPrefillLinkedTaskId(task.id); setShowQuickNoteEditor(true); }}
-                                      onShowLinkedNotes={() => { setNotesFilterByTaskId(task.id); setActiveTab('notes'); }}
-                                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                                      onCompletionPromptClosed={() => setCompletionPromptTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; })}
-                                    />
-                                  ))}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* 已迁移任务区域 */}
-                  {(() => {
-                    if (hideDoneTasks) return null;
-                    // 只显示状态 literally 为 migrated 的任务
-                    // source_date 在源文件里存储的是迁移目标日期（由 parser 从 ↗ migrated:date 提取）
-                    const migratedTasks = contextFilteredTasks.filter(t => t.status === 'migrated');
-                    if (migratedTasks.length === 0) return null;
-                    const showMigrated = showDoneByCategory['__migrated__'] ?? false;
-                    return (
-                      <div className="space-y-3 mt-8">
-                        <button
-                          onClick={() => setShowDoneByCategory(prev => ({ ...prev, '__migrated__': !prev['__migrated__'] }))}
-                          className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-heading transition-colors px-2 py-1 rounded-md hover:bg-black/5"
-                        >
-                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showMigrated ? 'rotate-180' : ''}`} />
-                          <CornerUpRight className="w-3 h-3" />
-                          {language === 'zh' ? `已迁移 (${migratedTasks.length})` : `Migrated (${migratedTasks.length})`}
-                        </button>
-                        {showMigrated && (
-                          <p className="text-[11px] text-text-muted/70 pl-5 -mt-1">
-                            {language === 'zh' ? '这些任务已被迁移到更新的日期' : 'These tasks were moved to a newer date'}
-                          </p>
-                        )}
-                        <AnimatePresence>
-                          {showMigrated && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-2 overflow-hidden">
-                              {migratedTasks.map(task => (
-                                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border border-border/60 hover:border-border-strong transition-colors">
-                                  <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                                    <CornerUpRight className="w-3.5 h-3.5 text-accent" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-sm text-text-muted line-through truncate block">{task.title}</span>
-                                    {task.source_date && (
-                                      <span className="text-[11px] text-text-muted/60">
-                                        {language === 'zh' ? '迁移到' : 'Migrated to'} {task.source_date}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {task.source_date && (
-                                    <button
-                                      onClick={() => setCurrentFileDate(task.source_date!)}
-                                      className="px-2.5 py-1 text-[11px] font-medium text-accent bg-accent/10 hover:bg-accent/20 rounded-md transition-colors shrink-0"
-                                    >
-                                      {language === 'zh' ? '前往' : 'Go'}
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })()}
-
-                  </>
-                  )}
 
                   {/* Today's Notes */}
                   <DailyNoteCards

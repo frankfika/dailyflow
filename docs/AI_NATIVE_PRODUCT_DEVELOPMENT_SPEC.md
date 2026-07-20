@@ -6,6 +6,8 @@
 > 面向读者:产品设计者、开发者、测试者,以及接手实现的 AI Agent
 > 最后更新:2026-07-19
 
+界面实现必须同时遵守 [`docs/AI_NATIVE_UI_UX_SPEC.md`](./AI_NATIVE_UI_UX_SPEC.md)。产品规范决定“做什么”,UI / UX 规范决定“如何让用户自然地使用”;两者具有同等实施约束。
+
 ---
 
 ## 0. 如何使用这份文档
@@ -24,12 +26,13 @@
 AI Agent 每次实现前必须:
 
 1. 标出要完成的本文档需求编号。
-2. 检查当前代码、相关测试和未提交修改。
-3. 只实现一个可验证的纵向闭环,不同时铺开多个半成品入口。
-4. 对数据模型、文件格式或 API 的变更先提供兼容迁移。
-5. 完成代码、单元测试、集成测试和用户可见状态。
-6. 不得用 mock、固定文本或隐藏失败伪装成真实 AI 能力。
-7. 更新本文档末尾的实施状态表。
+2. 涉及界面时完整阅读 `docs/AI_NATIVE_UI_UX_SPEC.md`,不得只凭现有组件延续旧视觉。
+3. 检查当前代码、相关测试和未提交修改。
+4. 只实现一个可验证的纵向闭环,不同时铺开多个半成品入口。
+5. 对数据模型、文件格式或 API 的变更先提供兼容迁移。
+6. 完成代码、单元测试、集成测试和用户可见状态。
+7. 不得用 mock、固定文本或隐藏失败伪装成真实 AI 能力。
+8. 更新本文档末尾的实施状态表。
 
 本文中的"必须 / MUST"是发布门槛;"应该 / SHOULD"是默认方案,偏离时需要在代码或变更说明中记录理由。
 
@@ -210,11 +213,25 @@ AI 的推断需要置信度和原因。低置信度信息进入 Inbox 等待确�
 
 Source Item 只负责"发生了什么",不等于承诺。
 
-### 5.2 Evidence(证据)
+### 5.2 Note Document(笔记文档)
 
-支持某个推断的可定位片段,包括 source ID、原文片段、时间范围或行号。Evidence 是 AI 判断与原始事实之间的桥。
+Note 是用户主动思考、记录和组织工作的主要空间,也是 DailyFlow 最重要的数据来源之一。它不是附件、Task 的评论区,也不是 AI 输出的垃圾桶。
 
-### 5.3 Commitment(承诺)
+Note 与普通 Source Item 的区别:
+
+- Source Item 更接近外部事实或未经整理的输入。
+- Note 是用户持续编辑、表达判断和形成思路的工作文档。
+- Note 可以引用 Source Item,也可以产生 Evidence、Decision、Commitment 和 Outcome。
+- AI 能理解 Note,但不能把 Note 擅自拆散或用结构化对象替代原文。
+- Note 即使没有产生任何任务,也仍然有独立价值。
+
+Note 的常见模式包括 Quick Note、Daily Note、Meeting Note、Project Note 和 Reference Note。类型应尽量由系统推断或由模板决定,不要求用户每次新建时先选择。
+
+### 5.3 Evidence(证据)
+
+支持某个推断的可定位片段,包括 source ID、note ID、原文片段、block ID、时间范围或行号。Evidence 是 AI 判断与原始事实之间的桥。
+
+### 5.4 Commitment(承诺)
 
 产品最核心的对象。它描述:
 
@@ -222,34 +239,34 @@ Source Item 只负责"发生了什么",不等于承诺。
 
 一个 Commitment 可以有多个 Next Action、多个 Evidence,也可以处于 Waiting 状态。
 
-### 5.4 Next Action(下一步)
+### 5.5 Next Action(下一步)
 
 能够在当前条件下直接执行的最小动作。标题应以动词开头,尽量在一个工作时段内完成。
 
 错误示例:"融资""官网""客户 A"。
 正确示例:"给投资人 A 发出更新后的财务预测表"。
 
-### 5.5 Outcome(结果)
+### 5.6 Outcome(结果)
 
 完成承诺后真实发生的结果,不等于 checkbox。结果可以是交付、决定、发送、确认、失败或取消,并可能产生新的承诺。
 
-### 5.6 Waiting(等待)
+### 5.7 Waiting(等待)
 
 当前无法由用户继续推进、正在等待某人或某事件的状态。必须包含 `waitingOn` 和 `reviewAt`,否则不能进入 Waiting。
 
-### 5.7 Project(项目)
+### 5.8 Project(项目)
 
 一组围绕同一目标的承诺、资料、人员、决定和进展。Project 不是文件夹,也不应要求每个承诺必须属于项目。
 
-### 5.8 Person / Organization(人物 / 组织)
+### 5.9 Person / Organization(人物 / 组织)
 
 用于连接承诺、会议、等待和关系历史。初期允许名称实体,后续接入外部服务时再绑定稳定外部 ID。
 
-### 5.9 Daily Plan(每日计划)
+### 5.10 Daily Plan(每日计划)
 
 AI 针对某一天给出的有理由、有容量约束、可由用户调整的计划。它是 Commitment 和 Next Action 的视图,不复制原始对象。
 
-### 5.10 Proposal(建议变更)
+### 5.11 Proposal(建议变更)
 
 AI 想对系统执行的一组结构化操作。Proposal 必须能预览、逐项接受或拒绝,并记录最终结果。
 
@@ -294,10 +311,12 @@ Memory
 正式版主导航只有:
 
 1. **Today**
-2. **Inbox**
+2. **Notes**
 3. **Memory**
 
 设置通过账户/工作区菜单进入,不作为持续占据注意力的主导航。
+
+三个入口分别对应用户熟悉的行为:Today 负责做事,Notes 负责思考与记录,Memory 负责回忆与关联。AI-native 不意味着取消熟悉的笔记体验,而是让自由书写能够产生可确认的结构、行动和长期记忆。
 
 ### 7.2 Today
 
@@ -317,11 +336,20 @@ Today 回答四个问题:
 - 继续执行区域。
 - 当日收尾。
 
-Today 不展示完整积压列表。用户需要查看或整理积压时进入 Inbox 或 Memory。
+Today 不展示完整积压列表。用户需要写作、采集或整理输入时进入 Notes,需要回看已确认关系时进入 Memory。
 
-### 7.3 Inbox
+### 7.3 Notes
 
-Inbox 是所有未解释、未确认或需要重新决策内容的唯一入口:
+Notes 是完整的写作与思考空间,默认包含:
+
+- Inbox:快速输入、外部导入和尚未整理的内容。
+- Recent:最近编辑。
+- Daily:每日笔记。
+- Meetings:会议笔记。
+- Projects:按项目聚合的笔记。
+- Favorites:用户固定的重要文档。
+
+Inbox 是 Notes 的一个智能视图,承接所有未解释、未确认或需要重新决策的内容:
 
 - 快速输入。
 - 粘贴文本。
@@ -336,9 +364,23 @@ Inbox 是所有未解释、未确认或需要重新决策内容的唯一入口:
 - 接受为 Commitment。
 - 合并到已有 Commitment。
 - 记为参考资料。
+- 整理为正式 Note。
 - 进入 Waiting。
 - 安排到未来。
 - 删除 / 忽略。
+
+Notes 不使用按日期堆叠的卡片墙作为主要体验。默认优先展示标题、正文摘要、最后编辑时间、关联项目/人物和待确认建议。标签、类型和参与人是搜索条件,不是新建 Note 前必须填写的表单。
+
+Note 编辑器必须 document-first:
+
+- 打开即写,标题可为空,正文自动保存。
+- 新建时不先要求类型、日期、标签、参与人或关联任务。
+- 阅读和编辑共享同一文档空间,不制造割裂的表单/预览模式。
+- AI 建议出现在行内或审阅侧栏,不覆盖正文。
+- 选中文本后可以解释、改写、提取承诺、形成决定或创建下一步。
+- AI 从全文发现的 Commitment、Decision、Waiting 和 Question 进入 Proposal。
+- 接受 Proposal 后原文仍保留,结构化对象通过 Evidence 回到对应段落。
+- 离开、刷新和应用重启后草稿必须恢复。
 
 ### 7.4 Memory
 
@@ -350,6 +392,8 @@ Memory 是经过确认的长期工作上下文,不是文件浏览器。默认聚
 - People / Organizations。
 - Decisions。
 - Outcomes。
+
+Memory 可以检索 Note,但不能取代 Notes 的书写与组织体验。
 
 搜索结果必须给出答案、相关对象和原始证据,而不是只返回文件名。
 
@@ -407,7 +451,32 @@ Commitment、Project、Person 和 Meeting 使用统一详情结构:
 
 `已保存 → 正在理解 → 等待确认 → 已处理`
 
-AI 不得阻塞保存。即使 AI 不可用,原始内容也必须可靠留在 Inbox。
+AI 不得阻塞保存。即使 AI 不可用,原始内容也必须可靠留在 Notes 的 Inbox。
+
+### F-02A:写一篇 Note
+
+目标:用户从产生想法到开始书写不超过一次主要操作。
+
+流程:
+
+1. 用户点击 New Note 或使用快捷键。
+2. 立即进入空白正文,系统创建稳定 ID 的本地草稿。
+3. 用户持续书写,正文自动保存。
+4. AI 在后台增量理解,但不阻塞输入。
+5. 当发现明确决定、承诺、等待或开放问题时,在审阅侧栏显示少量建议。
+6. 用户逐项接受、修改、忽略或暂时隐藏。
+7. 接受后生成结构化对象,并保留指向 Note 原文的 Evidence。
+8. 用户回到 Note 时,能看到相关事项后续状态,无需手工维护双向链接。
+
+体验要求:
+
+- 第一屏优先是正文,不是元数据。
+- 默认不要求标题,离开时可采用首行或 AI 建议标题。
+- 自动保存不依赖 AI 和网络。
+- AI 不得自动重写整篇 Note。
+- 文本改写必须显示 diff,允许局部接受。
+- 新 Commitment 必须经过 Proposal,不能直接写进 Today。
+- Note 可以一直只是 Note,不强迫“转任务”。
 
 ### F-03:会议内容进入系统
 
@@ -785,22 +854,52 @@ type SourceItem = EntityMeta & {
 };
 ```
 
-### 11.3 Evidence
+### 11.3 NoteDocument
+
+```ts
+type NoteKind = 'quick' | 'daily' | 'meeting' | 'project' | 'reference' | 'general';
+
+type NoteDocument = EntityMeta & {
+  title?: string;
+  body: string;
+  kind: NoteKind;
+  state: 'draft' | 'active' | 'archived';
+  date?: string;
+  projectIds: string[];
+  personIds: string[];
+  sourceIds: string[];
+  pinned: boolean;
+  lastOpenedAt?: string;
+  autoSaveVersion: number;
+  contentHash: string;
+};
+```
+
+约束:
+
+- 新建 Note 立即持久化为 draft,不以标题作为 ID。
+- 修改标题不改变 ID。
+- 自动保存使用 version 与 hash 冲突检测。
+- AI 派生对象不写回正文,除非用户明确接受文本 diff。
+
+### 11.4 Evidence
 
 ```ts
 type Evidence = EntityMeta & {
   sourceId: string;
+  noteId?: string;
   quote: string;
   locator:
     | { kind: 'text'; start: number; end: number }
     | { kind: 'lines'; start: number; end: number }
+    | { kind: 'block'; blockId: string; start?: number; end?: number }
     | { kind: 'audio'; startSeconds: number; endSeconds: number };
   sourceContentHash: string;
   stale: boolean;
 };
 ```
 
-### 11.4 Commitment
+### 11.5 Commitment
 
 ```ts
 type CommitmentState =
@@ -845,7 +944,7 @@ type Commitment = EntityMeta & {
 - `dueAt` 若来自 AI 推断,必须保留 `dueConfidence: inferred` 和 Evidence。
 - Next Action 不复制为独立 Commitment;只有产生新的对外结果责任时才创建新 Commitment。
 
-### 11.5 Outcome
+### 11.6 Outcome
 
 ```ts
 type Outcome = EntityMeta & {
@@ -857,7 +956,7 @@ type Outcome = EntityMeta & {
 };
 ```
 
-### 11.6 Project
+### 11.7 Project
 
 ```ts
 type Project = EntityMeta & {
@@ -873,7 +972,7 @@ type Project = EntityMeta & {
 };
 ```
 
-### 11.7 Person
+### 11.8 Person
 
 ```ts
 type Person = EntityMeta & {
@@ -888,7 +987,7 @@ type Person = EntityMeta & {
 };
 ```
 
-### 11.8 Decision
+### 11.9 Decision
 
 ```ts
 type Decision = EntityMeta & {
@@ -903,7 +1002,7 @@ type Decision = EntityMeta & {
 };
 ```
 
-### 11.9 DailyPlan
+### 11.10 DailyPlan
 
 ```ts
 type DailyPlan = EntityMeta & {
@@ -924,7 +1023,7 @@ type DailyPlan = EntityMeta & {
 };
 ```
 
-### 11.10 Proposal 与 AgentRun
+### 11.11 Proposal 与 AgentRun
 
 ```ts
 type Proposal = EntityMeta & {
@@ -965,7 +1064,12 @@ AgentRun 不保存 API Key 和隐藏推理过程。只保存必要的输入引�
 
 ```text
 DailyFlow/
-├── Inbox/
+├── Notes/
+│   ├── Inbox/2026/07/note_01K....md
+│   ├── Daily/2026/07/2026-07-19.md
+│   ├── Meetings/2026/07/note_01K....md
+│   └── Library/note_01K....md
+├── Sources/
 │   └── 2026/07/src_01K....md
 ├── Commitments/
 │   └── active/com_01K....md
@@ -1053,7 +1157,7 @@ updated_at: 2026-07-19T12:10:00+08:00
 
 ```text
 React / Tauri UI
-  Today · Inbox · Memory · Context Detail · Settings
+  Today · Notes · Memory · Context Detail · Settings
           │
           ▼
 Local API / Application Services
@@ -1167,7 +1271,23 @@ PATCH  /api/v2/sources/:id
 DELETE /api/v2/sources/:id
 ```
 
-### 14.2 Commitment
+### 14.2 Notes
+
+```text
+POST   /api/v2/notes
+GET    /api/v2/notes
+GET    /api/v2/notes/:id
+PATCH  /api/v2/notes/:id
+POST   /api/v2/notes/:id/autosave
+POST   /api/v2/notes/:id/process
+GET    /api/v2/notes/:id/relations
+GET    /api/v2/notes/:id/proposals
+DELETE /api/v2/notes/:id
+```
+
+`autosave` 必须接收 expectedVersion / expectedHash。冲突时返回可恢复草稿,不得覆盖磁盘上的新版本。
+
+### 14.3 Commitment
 
 ```text
 GET    /api/v2/commitments
@@ -1182,7 +1302,7 @@ POST   /api/v2/commitments/:id/cancel
 GET    /api/v2/commitments/:id/history
 ```
 
-### 14.3 Proposal
+### 14.4 Proposal
 
 ```text
 GET    /api/v2/proposals
@@ -1193,7 +1313,7 @@ POST   /api/v2/proposals/:id/apply-selection
 POST   /api/v2/proposals/:id/expire
 ```
 
-### 14.4 Plan
+### 14.5 Plan
 
 ```text
 POST   /api/v2/plans/generate
@@ -1203,7 +1323,7 @@ POST   /api/v2/plans/:date/replan
 POST   /api/v2/plans/:date/close
 ```
 
-### 14.5 Memory / Search
+### 14.6 Memory / Search
 
 ```text
 GET    /api/v2/memory/search
@@ -1215,7 +1335,7 @@ GET    /api/v2/decisions
 GET    /api/v2/outcomes
 ```
 
-### 14.6 Connector
+### 14.7 Connector
 
 ```text
 GET    /api/v2/connectors
@@ -1419,6 +1539,9 @@ interface ConnectorAdapter {
 ### 18.2 需要重构
 
 - `Task` → `Commitment + LegacyTaskView`。
+- Notes 从日期卡片列表、手动保存和重型元数据表单,重构为自动保存的 document-first 工作空间。
+- Note ID 从 `date + slug(title)` 改为稳定 ULID,标题修改不改变身份。
+- Note 与 Task 的手工单向引用改为由 Evidence 和实体关系自动派生。
 - AI 工具从直接 `create_task` 改为创建 Proposal。
 - `DailyFocus` 从"AI 选三项 Task"升级为读取 DailyPlan。
 - Meeting Action Item 不再直接写入当天文件,先进入 Proposal。
@@ -1480,6 +1603,8 @@ interface ConnectorAdapter {
 交付:
 
 - 快速输入和粘贴。
+- 稳定 ID、自动保存和冲突恢复的 Note 基础。
+- Notes Inbox / Recent 和 document-first 编辑器。
 - SourceItem / Evidence / Commitment 存储。
 - Extractor Agent。
 - Proposal 审阅。
@@ -1489,6 +1614,8 @@ interface ConnectorAdapter {
 发布门槛:
 
 - AI 提取每个字段能查看 Evidence。
+- 无标题 Note 能创建、自动保存、恢复并在之后重命名。
+- 编辑 Note 时不要求先填写类型、日期、标签和任务关联。
 - AI 无法使用时原始输入不丢失。
 - 接受、编辑、拒绝、撤销均有测试。
 - 20 份真实样本的承诺提取 precision 达到预设阈值。
@@ -1767,7 +1894,7 @@ Today 空状态:
 
 > 今天还没有可信计划。告诉我你有什么时间,或先把正在推进的事情放进 Inbox。
 
-Inbox 空状态:
+Notes Inbox 空状态:
 
 > 没有等待处理的内容。你可以粘贴会议纪要、消息或脑中的事情。
 
@@ -1782,7 +1909,7 @@ Memory 空状态:
 以下决策作为默认方向,后续 AI 不应反复重新讨论,除非用户明确改变:
 
 1. 桌面端、本地优先。
-2. Today / Inbox / Memory 三层主导航。
+2. Today / Notes / Memory 三层主导航;Inbox 是 Notes 内的智能视图。
 3. Commitment 是核心对象。
 4. Markdown 保存用户可读业务内容。
 5. SQLite 是可重建索引。
@@ -1846,9 +1973,10 @@ Memory 空状态:
 | DF2-001 | 新增 v2 domain types 和 schema validation | 无 | 类型和非法状态测试通过 |
 | DF2-002 | Markdown Repository + atomic write + audit | DF2-001 | round-trip 与冲突测试通过 |
 | DF2-003 | SourceItem capture API | DF2-002 | 无 AI 时也能保存和恢复 |
+| DF2-003A | NoteDocument Repository、autosave API 与编辑器基础 | DF2-001/002 | 无标题创建、自动保存、冲突恢复、重启恢复通过 |
 | DF2-004 | Evidence 与 Proposal Repository | DF2-002 | Proposal 可持久化和过期 |
-| DF2-005 | Extractor Agent contract | DF2-003/004 | fixture 评估与 schema 校验通过 |
-| DF2-006 | Inbox review UI | DF2-003/004/005 | 可编辑、接受、拒绝 |
+| DF2-005 | Extractor Agent contract | DF2-003/003A/004 | fixture 评估与 schema 校验通过 |
+| DF2-006 | Notes Inbox review UI | DF2-003/003A/004/005 | 可书写、查看 Evidence、编辑、接受、拒绝 |
 | DF2-007 | Commitment state machine/API | DF2-001/002 | Active/Waiting/Complete 规则通过 |
 | DF2-008 | Commitment detail UI | DF2-006/007 | 可看 Evidence 和历史 |
 | DF2-009 | DailyPlan/Planner | DF2-007 | Waiting 不进入计划 |
@@ -1862,7 +1990,7 @@ Memory 空状态:
 
 > AI Agent 完成对应能力后更新；不得把"已有实验代码"标为完整。
 >
-> **2026-07-20 终态** — Phase 0 / Phase 1 / Phase 2 / Phase 3 / Phase 4 / Phase 7 全部落地；Phase 5/6/8/9 落地架构（Connector Contract、权限边界、blocked_by_external_authorization 状态）但具体 OAuth/Provider 实现需用户授权。DF2-001 → DF2-012 全部完成。
+> **2026-07-20 状态纠正** — v2 后端对象、Proposal、Today 和独立演示页已有大量实现,但不能据此宣称产品终态。当前主应用 Notes 仍是旧的日期卡片列表、手动保存、重型元数据表单和易失效的 `linkedTaskIds`;v2 也仍以独立页面存在。因此 Phase 1、Phase 2、Phase 4 和 DF2-001 → DF2-012 应视为“工程能力部分完成、主产品体验未验收”,直到主应用完成整合并通过本节新增的 Note 验收。
 >
 > v2 是与 v1 平行的 additive 层：旧 `Daily/YYYY/MM/<date>.md` checkbox 任务继续可读、可完成；v1 AI Chat / Notes / DailyFocus / Capsules 入口保留。v2 入口通过 `/api/v2` 路由 + `src/features/v2/` 组件 + `src/features/v2/v2-standalone.html` 独立页提供。
 >
@@ -1886,6 +2014,8 @@ Memory 空状态:
 | Markdown Workspace | 已升级 | v2 Repository + 原子写 + hash 冲突检测 |
 | Legacy Task | 已兼容 | `loadLegacyTasks` + `migrateLegacyTask`，原文件不被破坏 |
 | Quick Capture | 已实现 | `POST /api/v2/inbox/capture` → SourceItem 即时落盘 |
+| Note 编辑与列表 | 需重构 | 当前为日期卡片列表、手动保存和重型表单;未达到 document-first、autosave 和稳定 ID 要求 |
+| Note 智能关系 | 未完成 | 当前主要依赖易失效的 `linkedTaskIds`;尚未形成 Note → Evidence → Commitment/Decision 的可信关系 |
 | SourceItem | 已实现 | v2 types + repository + Inbox 列表 |
 | Evidence | 已实现 | 每条 AI 提取的字段关联 source/quote/locator/hash |
 | Commitment | 已实现 | 状态机、Waiting、Outcome 全部 spec-合规 |
@@ -1928,7 +2058,7 @@ Memory 空状态:
 当以下场景可以在真实数据、真实模型和真实持久化条件下完整运行,DailyFlow 才算实现了这份产品定义:
 
 1. 用户粘贴一段混乱的会议纪要。
-2. 原始内容立即保存在本地 Inbox。
+2. 原始内容立即保存在 Notes Inbox,用户也可以继续把它编辑成 Note。
 3. AI 找到两项明确承诺、一项他人承诺和一个决定。
 4. 系统没有把他人承诺错误分配给用户。
 5. 用户能查看每个字段对应的原文 Evidence。
@@ -1943,6 +2073,8 @@ Memory 空状态:
 14. 系统识别一个新的后续承诺,等待用户确认。
 15. 用户一个月后询问"当时为什么这样决定",系统用 Decision 和 Evidence 回答。
 16. 整个过程没有要求用户手动维护文件夹、复制任务或重复补充上下文。
+17. 用户创建一篇无标题 Note 后立即开始书写,离开和重启应用均不丢失内容。
+18. AI 在不改写原文的情况下提出带 Evidence 的决定和承诺,用户可以逐项确认。
+19. Note 中能看到引用它的 Commitment、Decision 和 Outcome 的最新状态,这些关系不因任务迁移或标题修改而失效。
 
 这才是 DailyFlow 与传统 Todo 工具的本质区别。
-
