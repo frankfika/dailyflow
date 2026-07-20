@@ -20,6 +20,7 @@ import { useNote, useNoteAutosave, useNoteBacklinks } from '../hooks/useNotes';
 import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
 import type { AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Button, Badge } from '../components/States';
+import type { NoteBacklinks } from '../api/client';
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -28,6 +29,12 @@ export interface NoteEditorProps {
   language?: 'zh' | 'en';
   /** Optional className for layout. */
   className?: string;
+  /** Layout mode from the parent. `note` means the list is hidden so
+   * the editor gets the full pane width. */
+  layout?: 'split' | 'note';
+  /** Toggle between `split` and `note`. The editor shows a small
+   * button when the list is hidden. */
+  onToggleLayout?: () => void;
 }
 
 const COPY = {
@@ -45,6 +52,8 @@ const COPY = {
     pinned: '置顶',
     archive: '归档',
     unarchive: '取消归档',
+    showList: '显示列表',
+    focusMode: '专注模式',
   },
   en: {
     placeholder: 'Start writing…',
@@ -60,6 +69,8 @@ const COPY = {
     pinned: 'Pinned',
     archive: 'Archive',
     unarchive: 'Unarchive',
+    showList: 'Show list',
+    focusMode: 'Focus mode',
   },
 };
 
@@ -85,7 +96,7 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
   }
 }
 
-export function NoteEditor({ noteId, language = 'en', className = '' }: NoteEditorProps) {
+export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout }: NoteEditorProps) {
   const t = COPY[language];
   const q = useNote(noteId);
   const note = q.data?.note;
@@ -176,6 +187,21 @@ export function NoteEditor({ noteId, language = 'en', className = '' }: NoteEdit
           <span>·</span>
           <span>{new Date(note.updatedAt).toLocaleString()}</span>
           <span className="ml-auto flex items-center gap-1">
+            {onToggleLayout && (
+              <button
+                onClick={onToggleLayout}
+                className={`px-1.5 py-0.5 border rounded ${
+                  layout === 'note'
+                    ? 'border-accent text-accent'
+                    : 'border-border text-text-muted'
+                }`}
+                data-testid="note-toggle-layout"
+                title={layout === 'note' ? t.showList : t.focusMode}
+                aria-label={layout === 'note' ? t.showList : t.focusMode}
+              >
+                {layout === 'note' ? '⇆' : '⛶'}
+              </button>
+            )}
             <select
               value={note.kind}
               onChange={(e) =>
@@ -252,12 +278,115 @@ export function NoteEditor({ noteId, language = 'en', className = '' }: NoteEdit
         data-testid="note-body"
       />
 
-      {/* Backlinks panel — minimal v1; full panel in 1.1.3. */}
-      {backlinks.data && backlinks.data.backlinks.evidenceIds.length > 0 && (
-        <footer className="px-4 py-2 border-t border-border text-xs text-text-muted">
-          {t.backlinks}: {backlinks.data.backlinks.evidenceIds.length} evidence anchor(s)
-        </footer>
+      {/* Backlinks panel — full reverse-relationship view. Spec §26
+          step 19: "用户一个月后询问当时为什么这样决定, 系统用
+          Decision 和 Evidence 回答." We surface the entities that
+          reference this note via shared evidence so the user can jump
+          from a note to the commitment / decision / outcome that
+          cites it. */}
+      {backlinks.data && hasAnyBacklink(backlinks.data.backlinks) && (
+        <BacklinksPanel
+          backlinks={backlinks.data.backlinks}
+          labels={{
+            title: t.backlinks,
+            evidence: language === 'zh' ? '证据' : 'evidence',
+            commitments: language === 'zh' ? '承诺' : 'commitments',
+            decisions: language === 'zh' ? '决定' : 'decisions',
+            outcomes: language === 'zh' ? '结果' : 'outcomes',
+          }}
+        />
       )}
     </div>
+  );
+}
+
+function hasAnyBacklink(b: NoteBacklinks): boolean {
+  return (
+    b.evidenceIds.length > 0 ||
+    b.commitmentIds.length > 0 ||
+    b.decisionIds.length > 0 ||
+    b.outcomeIds.length > 0
+  );
+}
+
+function BacklinksPanel({
+  backlinks,
+  labels,
+}: {
+  backlinks: NoteBacklinks;
+  labels: {
+    title: string;
+    evidence: string;
+    commitments: string;
+    decisions: string;
+    outcomes: string;
+  };
+}) {
+  return (
+    <footer
+      className="px-4 py-3 border-t border-border bg-surface-elevated/50"
+      data-testid="note-backlinks"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+        {labels.title}
+      </p>
+      <ul className="flex flex-col gap-1.5 text-xs">
+        {backlinks.commitmentIds.length > 0 && (
+          <BacklinkRow
+            kind="commitment"
+            label={labels.commitments}
+            ids={backlinks.commitmentIds}
+          />
+        )}
+        {backlinks.decisionIds.length > 0 && (
+          <BacklinkRow
+            kind="decision"
+            label={labels.decisions}
+            ids={backlinks.decisionIds}
+          />
+        )}
+        {backlinks.outcomeIds.length > 0 && (
+          <BacklinkRow
+            kind="outcome"
+            label={labels.outcomes}
+            ids={backlinks.outcomeIds}
+          />
+        )}
+        {backlinks.evidenceIds.length > 0 && (
+          <BacklinkRow
+            kind="evidence"
+            label={labels.evidence}
+            ids={backlinks.evidenceIds}
+          />
+        )}
+      </ul>
+    </footer>
+  );
+}
+
+function BacklinkRow({
+  kind,
+  label,
+  ids,
+}: {
+  kind: 'commitment' | 'decision' | 'outcome' | 'evidence';
+  label: string;
+  ids: string[];
+}) {
+  return (
+    <li className="flex items-baseline gap-2" data-testid={`note-backlinks-${kind}`}>
+      <span className="text-text-muted shrink-0 w-24">{label}</span>
+      <span className="flex flex-wrap gap-1">
+        {ids.map((id) => (
+          <code
+            key={id}
+            className="px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] text-text-muted font-mono"
+            title={id}
+          >
+            {id.slice(0, 16)}…
+          </code>
+        ))}
+      </span>
+    </li>
   );
 }

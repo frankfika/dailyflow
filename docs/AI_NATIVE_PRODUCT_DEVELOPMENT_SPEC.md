@@ -2014,8 +2014,8 @@ Memory 空状态:
 | Markdown Workspace | 已升级 | v2 Repository + 原子写 + hash 冲突检测 |
 | Legacy Task | 已兼容 | `loadLegacyTasks` + `migrateLegacyTask`，原文件不被破坏 |
 | Quick Capture | 已实现 | `POST /api/v2/inbox/capture` → SourceItem 即时落盘 |
-| Note 编辑与列表 | 需重构 | 当前为日期卡片列表、手动保存和重型表单;未达到 document-first、autosave 和稳定 ID 要求 |
-| Note 智能关系 | 未完成 | 当前主要依赖易失效的 `linkedTaskIds`;尚未形成 Note → Evidence → Commitment/Decision 的可信关系 |
+| Note 编辑与列表 | 已实现 | NoteDocument 一等对象 (1.1.0 后端) + NotesView 集成进主 App (1.1.2) + document-first editor + autosave 800ms 节流 + 冲突协议 + focus 模式 (1.1.3) |
+| Note 智能关系 | 已实现 | backlinks 走 evidence 链反向找 Commitment/Decision/Outcome (1.1.3) + memory search 召回 Note (1.1.0) |
 | SourceItem | 已实现 | v2 types + repository + Inbox 列表 |
 | Evidence | 已实现 | 每条 AI 提取的字段关联 source/quote/locator/hash |
 | Commitment | 已实现 | 状态机、Waiting、Outcome 全部 spec-合规 |
@@ -2031,6 +2031,9 @@ Memory 空状态:
 | Today Waiting Review | 已实现 | MorningBrief 显示 `getWaitingOverdue`，只提示不自动恢复 |
 | §26 step 3-6 验证 | 已实现 | `ScriptedProvider` 单元测试 + `extractorFixture.test.ts` 覆盖 4 个子场景 |
 | §26 step 14 验证 | 已实现 | e2e step 9b 检测 follow-up proposal + accept |
+| §26 step 17 验证 | 已实现 | NoteDocument 创建无 title 落盘 + autosave PATCH 持久化 + 刷新后 GET 还在 (1.1.3 e2e `note-acceptance.spec.ts`) |
+| §26 step 18 验证 | 已实现 | NoteService update 必传 expectedAutoSaveVersion, body 字段不被自动改 (1.1.0 + 1.1.3 e2e) |
+| §26 step 19 验证 | 已实现 | `memoryService.search` 召回 Note (`type: 'note'`, 1.1.0) + backlinks service 走 evidence 反向找 Commitment/Decision/Outcome (1.1.3) |
 | Triage / 旧任务整理 | 已有骨架 | `Triage Proposal` 类型已支持；UI 部分由 Phase 7 跟进 |
 | Meeting Capture | 部分 | 已有 MeetingCapture 路由；提取走 v2 Extractor；Phase 3 余下与音视频关联 |
 | Calendar Connector | 协议 + 阻塞 | Connector Contract 已实现；所有外部 connector 默认 `blocked_by_external_authorization`；Google/Outlook/Feishu 全部就位但 `isAuthorized` 永远返回 false |

@@ -9,9 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending for next release
 
-- Frontend: Note ↔ Commitment/Decision/Outcome backlinks panel (full reverse-relationship UI; v1.1.2 only surfaces the evidence count)
-- e2e: §26 step 17/18/19 acceptance (Note document-first survives a refresh; AI suggestions don't rewrite body; Memory search surfaces Notes)
-- Backend: NoteDocument unit tests (currently relies on existing repository + service round-trip tests)
+- (none — 1.1.3 closes the spec §5.2 / §7.3 / §11.3 / F-02A gap)
+
+## [1.1.3] - 2026-07-20
+
+### Added
+- **Note editor focus mode** (commit `<pending>`) — toggle the side list to a 56px icon strip so the document-first editor gets the full pane width for long-form writing. The mode is persisted to `localStorage` (key `df_notes_layout`, namespaced by `workspaceId`) so the choice sticks across sessions.
+  - `src/features/v2/notes/NotesView.tsx` — adds `layout: 'split' | 'note'` state, localStorage persistence, an inline grid-template style for the responsive collapse, and forwards `layout` + `onToggleLayout` to both children.
+  - `src/features/v2/notes/NoteList.tsx` — adds an "icon strip" render path (`layout === 'note'`) with one circular avatar per note (first letter of the inferred title) and a `+` button to create a new note. Each avatar is a one-click switch.
+  - `src/features/v2/notes/NoteEditor.tsx` — adds a `⛶` button in the header that calls `onToggleLayout`. The button stays reachable from focus mode so the user can come back to the list view.
+- **Backlinks panel** (commit `<pending>`) — full reverse-relationship view in the editor footer. Lists every Commitment, Decision, Outcome, and Evidence that references the current note. Implements spec §26 step 19 ("用户一个月后询问当时为什么这样决定, 系统用 Decision 和 Evidence 回答") by surfacing the exact ids the user can click through to.
+  - `server/services/v2/noteService.ts` `backlinks(id)` — was a stub returning `commitmentIds: []` etc. Now walks `repo.listCommitments` / `listDecisions` / `listOutcomes` and returns any whose `evidenceIds` intersect with the note's evidence set. The lookup is O(N×M) but bounded by typical note evidence count (< 50) so it stays cheap; an indexed join in `index.sqlite` is reserved for later if it ever becomes a hot path.
+  - `src/features/v2/notes/NoteEditor.tsx` — new `BacklinksPanel` component renders the four row groups with their id lists (truncated to 16 chars + ellipsis for readability).
+- **§26 step 17 / 18 / 19 acceptance** (`e2e/note-acceptance.spec.ts`, 3 tests, ~3.5s total) — verifies that an empty-body POST creates a `draft`, that a PATCH without `body` never rewrites the body, and that `memory.search` surfaces notes with a matching snippet.
+- **Notes focus mode e2e** (`e2e/notes-focus-mode.spec.ts`) — verifies the toggle round-trips, the icon strip remains usable, and the editor body persists across the layout switch.
+- **NoteDocument unit tests** (`server/services/v2/__tests__/noteService.test.ts`, 17 tests) — created + auto-update + concurrent-modification + partial update + sort + filter + text search + touchLastOpened + archive + delete + cascade + backlinks + markdown round-trip + class re-export identity.
+
+### Fixed
+- **Note body round-trip lost newlines** — `markdownSerializer.yamlString` collapsed `\n` into spaces for inline scalars, so any multi-paragraph note's body was silently mangled when serialized. `serializeNoteDocument` now writes the body to the markdown section only (frontmatter is metadata); the repository's `listNoteDocuments` and `findById` splice the markdown body back in (trimming the trailing newline the serializer adds for clean paragraph breaks). Found by `noteService.test.ts > markdown round-trip`.
+- **Note evidence cascade didn't run** — `listEvidence` walked `notes/_evidence/` at the root, but `saveEvidence` writes `notes/YYYY/MM/_evidence/`. The list always returned `[]` so `listEvidenceForNote` found nothing and `deleteNoteDocument`'s cascade silently orphaned the per-month evidence files. `listEvidence` now walks the whole `notes/` tree and filters on the `_evidence/` path component. Found by `noteService.test.ts > delete cascade`.
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 32 files / 304 tests pass (was 287; +17 NoteDocument tests)
+- `npm run build` ✅ vite build 2.85s, main chunk 363 kB (was 359 kB at 1.1.2; +4 kB for focus mode + backlinks panel)
+- `npx playwright test e2e/notes-focus-mode e2e/notes-view-visual e2e/note-acceptance e2e/today-backlog-visual` ✅ 6/6 pass (15.7s)
+- Playwright e2e `e2e-screenshot-notes-focus-mode.png` shows the icon strip on the left and the editor at full pane width.
 
 ## [1.1.2] - 2026-07-20
 

@@ -31,6 +31,15 @@ function inferTitle(n: NoteDocument): string {
   return first.replace(/^#+\s*/, '').slice(0, 80) || '(untitled)';
 }
 
+function inferGlyph(n: NoteDocument): string {
+  // First non-empty, non-heading character of the title or body. Used
+  // as a one-character avatar when the list is collapsed to a strip
+  // (so the user can still tell notes apart at a glance).
+  const text = inferTitle(n);
+  const ch = text.trim().charAt(0).toUpperCase();
+  return ch || '·';
+}
+
 function previewBody(n: NoteDocument): string {
   const lines = n.body?.split('\n').filter((l) => l.trim().length > 0) ?? [];
   return lines.slice(0, 2).join(' ').slice(0, 140);
@@ -51,9 +60,13 @@ export interface NoteListProps {
   selectedId?: string | null;
   /** When the user picks a note, this is called. */
   onSelect: (id: string) => void;
+  /** Layout mode from the parent. `note` collapses the list to a 56px icon strip. */
+  layout?: 'split' | 'note';
+  /** Toggle between `split` and `note`. The list shows a small button when not collapsed. */
+  onToggleLayout?: () => void;
 }
 
-export function NoteList({ selectedId, onSelect }: NoteListProps) {
+export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayout }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const create = useCreateNote();
   const archive = useArchiveNote();
@@ -86,18 +99,80 @@ export function NoteList({ selectedId, onSelect }: NoteListProps) {
     onSelect(note.id);
   };
 
+  // Collapsed: just an icon strip. Each note is a single character
+  // avatar; the active one is highlighted. Click to switch.
+  if (layout === 'note') {
+    return (
+      <div className="flex flex-col h-full" data-testid="notes-strip">
+        <button
+          onClick={onToggleLayout}
+          className="m-2 p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10 self-end"
+          title="Show list"
+          data-testid="notes-show-list"
+          aria-label="Show list"
+        >
+          ⇆
+        </button>
+        <ul className="flex flex-col items-center gap-1.5 px-1 overflow-y-auto">
+          <li>
+            <button
+              onClick={() => createAndOpen('general')}
+              className="w-9 h-9 rounded-full border border-dashed border-border text-text-muted hover:text-text-heading text-base"
+              title="New note"
+              data-testid="notes-strip-new"
+            >
+              +
+            </button>
+          </li>
+          {filtered.map((n) => {
+            const isSelected = n.id === selectedId;
+            return (
+              <li key={n.id}>
+                <button
+                  onClick={() => onSelect(n.id)}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                    isSelected
+                      ? 'bg-accent text-white'
+                      : 'bg-surface-elevated text-text-muted hover:text-text-heading'
+                  }`}
+                  title={inferTitle(n)}
+                  data-testid={`notes-strip-${n.id}`}
+                >
+                  {inferGlyph(n)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 p-4 h-full overflow-hidden">
       <header className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-text-heading">Notes</h2>
-        <Button
-          variant="primary"
-          disabled={create.isPending}
-          onClick={() => createAndOpen('general')}
-          data-testid="notes-new"
-        >
-          + New note
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {onToggleLayout && (
+            <button
+              onClick={onToggleLayout}
+              className="p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10"
+              title="Hide list (focus on the editor)"
+              data-testid="notes-hide-list"
+              aria-label="Hide list"
+            >
+              ⇤
+            </button>
+          )}
+          <Button
+            variant="primary"
+            disabled={create.isPending}
+            onClick={() => createAndOpen('general')}
+            data-testid="notes-new"
+          >
+            + New note
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Note view">

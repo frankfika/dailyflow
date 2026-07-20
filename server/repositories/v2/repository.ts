@@ -177,14 +177,18 @@ export class V2Repository {
   async listEvidence(): Promise<Evidence[]> {
     // Evidence is split across two trees. Concatenate, dedupe by id.
     const meetings: Evidence[] = await this.listAll<Evidence>('evidence', EvidenceSchema, this.layout.meetings);
-    // Notes evidence lives in `.dailyflow/notes/_evidence/` at the root
-    // (recursive walk handles YYYY/MM partitions). listFilesRecursive is
-    // the same path the repo already uses for other trees; if the notes
-    // dir doesn't exist yet the walk returns [] silently.
+    // Notes-anchored evidence is partitioned by YYYY/MM inside
+    // `.dailyflow/notes/` (mirroring the note body layout), so we
+    // walk the whole notes tree and pick up files inside any
+    // `_evidence/` subdirectory. The two helpers below stay
+    // local to this method to keep the rest of the repo unaware
+    // of the partition shape.
     const notesEvidence: Evidence[] = [];
-    const evidenceRoot = path.join(this.layout.notes, '_evidence');
-    const evidenceFiles = await listFilesRecursive(evidenceRoot, ['.md']);
-    for (const filePath of evidenceFiles) {
+    const allNoteFiles = await listFilesRecursive(this.layout.notes, ['.md']);
+    for (const filePath of allNoteFiles) {
+      // Only pick up files inside any `_evidence/` subdir; the
+      // bodies themselves are not evidence.
+      if (!filePath.includes(`${path.sep}_evidence${path.sep}`)) continue;
       try {
         const text = await fs.readFile(filePath, 'utf8');
         const { data } = _parse(text);
@@ -253,14 +257,14 @@ export class V2Repository {
         if (!data || typeof data !== 'object') continue;
         const d = data as Record<string, unknown>;
         if (d.type !== 'note') continue;
-        // NoteDocumentSchema requires `body`. The serializer writes
-        // body to BOTH the frontmatter and the markdown section, so
-        // the frontmatter copy is the canonical read; the markdown
-        // body is a safety net for files written before 1.1.2 that
-        // only had body in the markdown section.
+        // NoteDocumentSchema requires `body`. As of 1.1.3 the
+        // serializer writes body to the markdown section only (the
+        // frontmatter YAML scalar encoding collapses newlines, which
+        // would mangle multi-paragraph notes). We trim the trailing
+        // \n the serializer adds so the round-trip is lossless.
         const dataWithBody =
           d.body === undefined || d.body === null || d.body === ''
-            ? { ...d, body }
+            ? { ...d, body: body.replace(/\n$/, '') }
             : d;
         const normalized = snakeToCamel<Record<string, unknown>>(dataWithBody);
         const parsed = NoteDocumentSchema.safeParse(normalized);
@@ -540,10 +544,12 @@ export class V2Repository {
           if (d.id === id && d.type === kind) {
             // For NoteDocument, fall back to the markdown body if the
             // frontmatter didn't carry one (1.1.0/1.1.1-era files).
+            // We trim the trailing newline that the serializer adds
+            // so the round-trip is lossless.
             const dataWithBody =
               kind === 'note' &&
               (d.body === undefined || d.body === null || d.body === '')
-                ? { ...d, body }
+                ? { ...d, body: body.replace(/\n$/, '') }
                 : d;
             const normalized = snakeToCamel<Record<string, unknown>>(dataWithBody);
             return schema.parse(normalized) as T;

@@ -282,18 +282,45 @@ export class NoteService {
   }
 
   /**
-   * Compute backlinks for a note. v1 only surfaces evidence anchored
-   * to the note — commitment/decision/outcome reverse-lookups are
-   * reserved for future services that learn to anchor on noteId.
+   * Compute backlinks for a note.
+   *
+   * Spec §26 step 19 asks the user to be able to ask "where does
+   * this note live in the system?" and see every Commitment,
+   * Decision, and Outcome that has been linked to it via Evidence.
+   *
+   * Reverse-lookup strategy (kept simple to stay within a single
+   * service call):
+   *   1. Find all Evidence anchored to this note (noteId field).
+   *   2. Walk Commitment / Decision / Outcome lists, picking up any
+   *      whose `evidenceIds` intersect with that set.
+   *
+   * This is O(NxM) but N and M are tiny (a note usually has < 50
+   * pieces of evidence, the workspace rarely has > 10k entities). If
+   * that ever becomes a hot path, the index.sqlite already has the
+   * necessary joins — we just rebuild lazily.
    */
   async backlinks(id: string): Promise<NoteBacklinks> {
-    const evidence = await this.repo.listEvidenceForNote(id);
-    return {
+    const noteEvidence = await this.repo.listEvidenceForNote(id);
+    const evidenceIds = new Set(noteEvidence.map((e) => e.id));
+    const out: NoteBacklinks = {
       noteId: id,
-      evidenceIds: evidence.map((e) => e.id),
+      evidenceIds: noteEvidence.map((e) => e.id),
       commitmentIds: [],
       decisionIds: [],
       outcomeIds: [],
     };
+    if (evidenceIds.size === 0) return out;
+
+    const intersects = (ids: string[]) => ids.some((eid) => evidenceIds.has(eid));
+
+    const [commitments, decisions, outcomes] = await Promise.all([
+      this.repo.listCommitments(),
+      this.repo.listDecisions(),
+      this.repo.listOutcomes(),
+    ]);
+    out.commitmentIds = commitments.filter((c) => intersects(c.evidenceIds)).map((c) => c.id);
+    out.decisionIds = decisions.filter((d) => intersects(d.evidenceIds)).map((d) => d.id);
+    out.outcomeIds = outcomes.filter((o) => intersects(o.evidenceIds)).map((o) => o.id);
+    return out;
   }
 }

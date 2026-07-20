@@ -296,13 +296,18 @@ export function serializeDecision(d: Decision): string {
 }
 
 export function serializeNoteDocument(n: NoteDocument): string {
+  // Body is the note's authored content. We keep it OUT of the
+  // frontmatter (the YAML scalar encoding collapses newlines into
+  // spaces, which would silently mangle multi-paragraph notes) and
+  // instead place the body in the markdown section below the
+  // frontmatter. The repository's list/getNote splice it back in
+  // when reading.
   const meta: Frontmatter = {
     type: 'note',
     schema_version: 1,
     id: n.id,
     workspace_id: n.workspaceId,
     title: n.title ?? '',
-    body: n.body,
     kind: n.kind,
     state: n.state,
     date: n.date ?? '',
@@ -318,11 +323,10 @@ export function serializeNoteDocument(n: NoteDocument): string {
     updated_at: n.updatedAt,
     created_by: n.createdBy,
   };
-  // Body is the note's authored content. We mirror it into the
-  // markdown section for human readability (so `cat` of a note file
-  // is meaningful) but the frontmatter copy is the one the schema
-  // reads back on load. F-02A forbids blocking on a title — the
-  // first non-empty line of `body` is the de-facto title in the UI.
+  // We add a trailing newline so the markdown section ends cleanly
+  // (frontmatter `---\n` followed immediately by a `body` line would
+  // not parse as a separate paragraph). The reader trims the
+  // trailing \n so the round-trip is lossless.
   const body = n.body.endsWith('\n') ? n.body : n.body + '\n';
   return toYaml(meta, body);
 }
