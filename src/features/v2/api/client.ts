@@ -87,6 +87,99 @@ export const processSource = (id: string) =>
 export const deleteSource = (id: string) => request<{ ok: boolean }>('DELETE', `/sources/${id}`);
 
 // ---------------------------------------------------------------------------
+// NoteDocument (spec §5.2 / §7.3 / §11.3 / F-02A)
+// ---------------------------------------------------------------------------
+
+export type NoteKind = 'quick' | 'daily' | 'meeting' | 'project' | 'reference' | 'general';
+export type NoteState = 'draft' | 'active' | 'archived';
+
+export interface NoteDocument {
+  id: string;
+  schemaVersion: 1;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: 'user' | 'ai' | 'connector' | 'migration';
+  workspaceId: string;
+  title?: string;
+  body: string;
+  kind: NoteKind;
+  state: NoteState;
+  date?: string;
+  projectIds: string[];
+  personIds: string[];
+  sourceIds: string[];
+  pinned: boolean;
+  lastOpenedAt?: string;
+  autoSaveVersion: number;
+  contentHash: string;
+  tagIds?: string[];
+}
+
+export interface CreateNoteInput {
+  body?: string;
+  title?: string;
+  kind?: NoteKind;
+  state?: NoteState;
+  date?: string;
+  projectIds?: string[];
+  personIds?: string[];
+  sourceIds?: string[];
+  pinned?: boolean;
+  tagIds?: string[];
+}
+
+export interface UpdateNoteInput {
+  // The version the client believes it's overwriting. The server rejects
+  // with 409 + code: 'concurrent_modification' if it doesn't match.
+  expectedAutoSaveVersion: number;
+  body?: string;
+  title?: string | null;
+  kind?: NoteKind;
+  state?: NoteState;
+  date?: string | null;
+  projectIds?: string[];
+  personIds?: string[];
+  sourceIds?: string[];
+  pinned?: boolean;
+  tagIds?: string[];
+}
+
+export interface NoteBacklinks {
+  noteId: string;
+  evidenceIds: string[];
+  commitmentIds: string[];
+  decisionIds: string[];
+  outcomeIds: string[];
+}
+
+export const listNotes = (opts?: { state?: NoteState; kind?: NoteKind; q?: string }) => {
+  const params = new URLSearchParams();
+  if (opts?.state) params.set('state', opts.state);
+  if (opts?.kind) params.set('kind', opts.kind);
+  if (opts?.q) params.set('q', opts.q);
+  const qs = params.toString();
+  return request<{ notes: NoteDocument[]; total: number }>('GET', `/notes${qs ? `?${qs}` : ''}`);
+};
+
+export const createNote = (input: CreateNoteInput) =>
+  request<{ note: NoteDocument }>('POST', '/notes', input);
+
+export const getNote = (id: string) =>
+  request<{ note: NoteDocument }>('GET', `/notes/${id}`);
+
+export const updateNote = (id: string, input: UpdateNoteInput) =>
+  request<{ note: NoteDocument }>('PATCH', `/notes/${id}`, input);
+
+export const deleteNote = (id: string) =>
+  request<{ ok: boolean }>('DELETE', `/notes/${id}`);
+
+export const archiveNote = (id: string) =>
+  request<{ note: NoteDocument }>('POST', `/notes/${id}/archive`, {});
+
+export const getNoteBacklinks = (id: string) =>
+  request<{ backlinks: NoteBacklinks }>('GET', `/notes/${id}/backlinks`);
+
+// ---------------------------------------------------------------------------
 // Commitment
 // ---------------------------------------------------------------------------
 

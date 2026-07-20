@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - e2e: §26 step 17/18/19 acceptance (Note document-first, AI suggestions don't rewrite body, Note backlinks)
 - Backend: NoteDocument unit tests (currently relies on existing repository + service round-trip tests)
 
+## [1.1.1] - 2026-07-20
+
+### Added
+- **NoteDocument API client + React Query hooks** (commit `<pending>`) — frontend surface for the 1.1.0 backend. The hooks namespace list keys (`['v2-notes', state, kind, q]`) so Inbox / Recent / Daily / Favorites views mount independently and a single mutation can evict the right slice without invalidating the world.
+  - `src/features/v2/api/client.ts` — adds `NoteDocument`, `CreateNoteInput`, `UpdateNoteInput`, `NoteBacklinks`, `NoteKind`, `NoteState` types and 7 functions: `listNotes` / `createNote` / `getNote` / `updateNote` / `deleteNote` / `archiveNote` / `getNoteBacklinks`.
+  - `src/features/v2/hooks/useNotes.ts` (new) — `useNotes` (list, with state/kind/q filter), `useNote` (single + side-effect-touches `lastOpenedAt`), `useCreateNote`, `useUpdateNote`, `useDeleteNote`, `useArchiveNote`, `useNoteBacklinks`, and a 1-shot autosave helper `useNoteAutosave` that:
+    - debounces body changes (800 ms),
+    - tracks the local `expectedAutoSaveVersion` and bumps it after every successful save,
+    - transparently retries on 409 `concurrent_modification` by re-reading the note and patching again,
+    - exposes `status: 'idle' | 'saving' | 'saved' | 'error' | 'conflict'` so the editor can render a small status indicator without building its own retry machine.
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 31 files / 287 tests pass (no regression)
+- `npm run build` ✅ vite build 5.38s, main chunk 360 kB unchanged (hooks are tiny)
+
 ## [1.1.0] - 2026-07-20
 
 ### Added
