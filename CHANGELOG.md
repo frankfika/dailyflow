@@ -9,7 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending for next release
 
-TBD.
+- Frontend: integrate NoteDocument into the main App Notes tab (replaces v1 1508-line Notes/NoteEditor)
+- Frontend: rewrite Note editor for document-first + autosave + no-title (F-02A)
+- Frontend: Note ↔ Commitment/Decision/Outcome backlinks panel
+- e2e: §26 step 17/18/19 acceptance (Note document-first, AI suggestions don't rewrite body, Note backlinks)
+- Backend: NoteDocument unit tests (currently relies on existing repository + service round-trip tests)
+
+## [1.1.0] - 2026-07-20
+
+### Added
+- **NoteDocument as a first-class v2 entity** (commit `48cdbf7`) — the backend layer for spec §5.2 / §7.3 / §11.3 / F-02A. Notes are persisted to `.dailyflow/notes/YYYY/MM/<id>.md` (isolated from v1's `Notes/` legacy tree) and carry a stable `autoSaveVersion` + `contentHash` for optimistic-concurrency autosave.
+  - `server/domain/v2/types.ts` (+87 行) — `NoteKindSchema` (quick / daily / meeting / project / reference / general) + `NoteDocumentSchema` (title optional, body, kind, state, date, projectIds, personIds, sourceIds, pinned, lastOpenedAt, autoSaveVersion, contentHash, tagIds). Adds NoteDocument to `AnyV2EntitySchema`.
+  - `server/domain/v2/ulid.ts` — adds `'note'` prefix to `EntityPrefix`.
+  - `server/repositories/v2/paths.ts` — `V2Layout.notes` + `entityPath('note', …)` and `entityPath('note_evidence', …)` for co-located per-note evidence.
+  - `server/repositories/v2/markdownSerializer.ts` (+36 行) — `serializeNoteDocument(n)`; updated `serializeEvidence(e)` to emit `note_id` and `source_id` (exactly one, per schema) and an anchor header `Evidence (note:…)` or `Evidence (source:…)`.
+  - `server/repositories/v2/repository.ts` (+127 行) — `saveNoteDocument` / `getNoteDocument` (walks the YYYY/MM partition) / `listNoteDocuments` (recursive + state filter, skips `_evidence/` subdirs) / `deleteNoteDocument` (cascades to note-anchored evidence) / `listEvidence` now unions source + note evidence trees / `listEvidenceForNote(noteId)`.
+  - `server/services/v2/noteService.ts` (new, 299 行) — `NoteService` class wrapping the repo with:
+    - `create(input)` — no title, no kind, no date required; `kind` and `title` inferred from body heuristically; state defaults to `draft`. Spec F-02A.
+    - `update(id, input)` — requires `expectedAutoSaveVersion`; throws `ConcurrentModificationError` (re-exported from the repo for `instanceof` checks at the routes layer) on version mismatch; bumps `autoSaveVersion` and `contentHash`.
+    - `touchLastOpened(id)`, `archive(id)`, `delete(id)`, `backlinks(id)`.
+    - `list({ state, kind, q })` with pinned-first + recency sort, in-memory text filter.
+  - `server/routes/v2/index.ts` (+191 行) — 7 new endpoints:
+    - `GET    /api/v2/notes?state=&kind=&q=`
+    - `POST   /api/v2/notes`
+    - `GET    /api/v2/notes/:id` (side-effects `touchLastOpened` for Recent)
+    - `PATCH  /api/v2/notes/:id` (version conflict → 409)
+    - `DELETE /api/v2/notes/:id` (cascades)
+    - `POST   /api/v2/notes/:id/archive`
+    - `GET    /api/v2/notes/:id/backlinks`
+  - `POST /api/v2/evidence` now accepts `noteId` + `note_block` locator; quote must be a verbatim substring of the note body (spec §10.5).
+  - `server/services/v2/memoryService.ts` — `search` now includes `type: 'note'` hits (spec §26 step 19).
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 31 files / 287 tests pass (no regression; NoteDocument unit tests deferred to 1.1.1)
+- `npm run build` ✅ vite build 3.40s, main chunk 360 kB unchanged (backend-only)
 
 ## [1.0.9] - 2026-07-20
 
