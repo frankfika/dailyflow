@@ -45,6 +45,7 @@ export async function search(repo: V2Repository, query: string, limit = 20): Pro
   const decisions = await repo.listDecisions();
   const outcomes = await repo.listOutcomes();
   const sources = await repo.listSourceItems();
+  const notes = await repo.listNoteDocuments();
 
   const candidates: MemorySearchHit[] = [];
   const usedSourceIds = new Set<string>();
@@ -91,6 +92,32 @@ export async function search(repo: V2Repository, query: string, limit = 20): Pro
   }
   for (const s of sources) {
     addHit(s, 'source', s.title ?? s.body?.slice(0, 80) ?? 'Source', s.body, 3);
+  }
+  // NoteDocument (spec §26 step 19: Memory search must surface notes).
+  // Notes have no sourceIds/evidenceIds shape, so addHit's `entity` is a
+  // minimal stub — we read body for the snippet instead of relying on a
+  // dedicated body slot.
+  for (const n of notes) {
+    const title = n.title ?? n.body?.split('\n').find((l) => l.trim().length > 0)?.slice(0, 80) ?? 'Note';
+    const snippet = n.body;
+    const lower = (title + '\n' + (snippet ?? '')).toLowerCase();
+    let score = 0;
+    if (lower.includes(q)) score = 5 + 10;
+    const tokens = q.split(/\s+/).filter(Boolean);
+    for (const t of tokens) {
+      if (t.length < 2) continue;
+      if (lower.includes(t)) score += 2;
+    }
+    if (score <= 0) continue;
+    candidates.push({
+      type: 'note',
+      id: n.id,
+      title,
+      snippet: extractSnippet(snippet ?? title, q),
+      score,
+      sourceIds: n.sourceIds,
+      evidenceIds: [],
+    });
   }
 
   candidates.sort((a, b) => b.score - a.score);

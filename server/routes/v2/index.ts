@@ -37,6 +37,7 @@ import {
 import { runExtractor, buildExtractorProposal } from '../../services/v2/ai/extractor.js';
 import { generatePlan, acceptPlan, PlanConstraintsSchema } from '../../services/v2/planningService.js';
 import { search, getContext } from '../../services/v2/memoryService.js';
+import { NoteService, NoteNotFoundError } from '../../services/v2/noteService.js';
 import { loadLegacyTasks, migrateLegacyTask } from '../../services/v2/legacyAdapter.js';
 import { getV2Flags } from '../../services/v2/featureFlags.js';
 import { listConnectors, getConnector, syncConnector, pauseConnector, deleteConnector, runConnectorSyncOnce } from '../../services/v2/connectors.js';
@@ -135,6 +136,10 @@ function handleError(err: unknown, res: Response): void {
     res.status(409).json({ error: { code: 'concurrent_modification', message: err.message } });
     return;
   }
+  if (err instanceof NoteNotFoundError) {
+    res.status(404).json({ error: { code: 'not_found', message: err.message } });
+    return;
+  }
   // Avoid leaking internals to the wire
   // eslint-disable-next-line no-console
   console.error('[v2] unhandled error:', err);
@@ -206,6 +211,98 @@ v2Router.delete('/sources/:id', async (req, res) => {
     const ok = await repo.deleteSourceItem(req.params.id);
     if (!ok) return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
     res.json({ ok: true });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Notes (spec §5.2 / §7.3 / F-02A / §11.3)
+// ---------------------------------------------------------------------------
+//
+// Notes are the user's primary working surface. They are intentionally
+// permissive: a note can be created with an empty body and no title, and
+// auto-saves bump a version counter so the client and server can detect
+// concurrent edits and merge gracefully.
+
+v2Router.get('/notes', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const state = typeof req.query.state === 'string' ? (req.query.state as 'draft' | 'active' | 'archived') : undefined;
+    const kind = typeof req.query.kind === 'string' ? (req.query.kind as 'quick' | 'daily' | 'meeting' | 'project' | 'reference' | 'general') : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const notes = await svc.list({ state, kind, q });
+    res.json({ notes, total: notes.length });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/notes', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const note = await svc.create(req.body ?? {});
+    res.status(201).json({ note });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/notes/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const note = await svc.get(req.params.id);
+    // Side-effect: touch lastOpenedAt so Recent works.
+    svc.touchLastOpened(req.params.id).catch(() => undefined);
+    res.json({ note });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.patch('/notes/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const note = await svc.update(req.params.id, req.body ?? {});
+    res.json({ note });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.delete('/notes/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const ok = await svc.delete(req.params.id);
+    if (!ok) return res.status(404).json({ error: { code: 'not_found', message: 'Note not found' } });
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/notes/:id/archive', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const note = await svc.archive(req.params.id);
+    res.json({ note });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/notes/:id/backlinks', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const svc = new NoteService(repo);
+    const backlinks = await svc.backlinks(req.params.id);
+    res.json({ backlinks });
   } catch (err) {
     handleError(err, res);
   }
@@ -597,39 +694,72 @@ v2Router.get('/decisions', async (_req, res) => {
 });
 
 // Manual evidence creation. Used when the user wants to attach a snippet
-// from a Source to a Commitment or Decision, or when the AI is offline and
-// the user is recording the link themselves. Spec §10.5: "无法找到来源时
-// 必须明确标记为...AI 建议，不得伪造引用" — this endpoint creates real
-// evidence only; the user cannot link to a quote that does not exist.
+// from a Source **or a Note** to a Commitment or Decision, or when the AI
+// is offline and the user is recording the link themselves. Spec §10.5:
+// "无法找到来源时必须明确标记为...AI 建议，不得伪造引用" — this endpoint
+// creates real evidence only; the user cannot link to a quote that does
+// not exist in the body.
 v2Router.post('/evidence', async (req, res) => {
   try {
     const { repo } = getV2(res);
     const { EvidenceSchema } = await import('../../domain/v2/types.js');
-    const schema = z.object({
-      sourceId: z.string(),
-      quote: z.string().min(1).max(2000),
-      locator: z
-        .union([
-          z.object({ kind: z.literal('text'), start: z.number(), end: z.number() }),
-          z.object({ kind: z.literal('lines'), start: z.number(), end: z.number() }),
-          z.object({ kind: z.literal('audio'), startSeconds: z.number(), endSeconds: z.number() }),
-        ])
-        .optional(),
-    });
-    const input = schema.parse(req.body);
-    const source = await repo.getSourceItem(input.sourceId);
-    if (!source) {
-      return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
-    }
-    // The quote MUST be a verbatim substring of the source body.
-    if (source.body && !source.body.includes(input.quote)) {
-      return res.status(400).json({
-        error: {
-          code: 'validation',
-          message: 'Quote must be a verbatim substring of the source body. Spec §10.5 forbids fabrication.',
-        },
+    const schema = z
+      .object({
+        // Exactly one of sourceId or noteId is required.
+        sourceId: z.string().optional(),
+        noteId: z.string().optional(),
+        quote: z.string().min(1).max(2000),
+        locator: z
+          .union([
+            z.object({ kind: z.literal('text'), start: z.number(), end: z.number() }),
+            z.object({ kind: z.literal('lines'), start: z.number(), end: z.number() }),
+            z.object({ kind: z.literal('audio'), startSeconds: z.number(), endSeconds: z.number() }),
+            z.object({ kind: z.literal('note_block'), blockId: z.string(), start: z.number(), end: z.number() }),
+          ])
+          .optional(),
+      })
+      .refine((b) => Boolean(b.sourceId) !== Boolean(b.noteId), {
+        message: 'Exactly one of sourceId or noteId is required',
       });
+    const input = schema.parse(req.body);
+
+    // Resolve the anchor and check the quote is verbatim (spec §10.5).
+    let anchorWorkspaceId: string;
+    let anchorContentHash: string;
+    if (input.noteId) {
+      const note = await repo.getNoteDocument(input.noteId);
+      if (!note) {
+        return res.status(404).json({ error: { code: 'not_found', message: 'Note not found' } });
+      }
+      if (!note.body.includes(input.quote)) {
+        return res.status(400).json({
+          error: {
+            code: 'validation',
+            message: 'Quote must be a verbatim substring of the note body. Spec §10.5 forbids fabrication.',
+          },
+        });
+      }
+      anchorWorkspaceId = note.workspaceId;
+      anchorContentHash = note.contentHash;
+    } else if (input.sourceId) {
+      const source = await repo.getSourceItem(input.sourceId);
+      if (!source) {
+        return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
+      }
+      if (source.body && !source.body.includes(input.quote)) {
+        return res.status(400).json({
+          error: {
+            code: 'validation',
+            message: 'Quote must be a verbatim substring of the source body. Spec §10.5 forbids fabrication.',
+          },
+        });
+      }
+      anchorWorkspaceId = source.workspaceId;
+      anchorContentHash = source.contentHash;
+    } else {
+      return res.status(400).json({ error: { code: 'validation', message: 'sourceId or noteId is required' } });
     }
+
     const now = new Date().toISOString();
     const evidence = EvidenceSchema.parse({
       id: newId('ev'),
@@ -637,17 +767,18 @@ v2Router.post('/evidence', async (req, res) => {
       createdAt: now,
       updatedAt: now,
       createdBy: 'user',
-      workspaceId: source.workspaceId,
+      workspaceId: anchorWorkspaceId,
       sourceId: input.sourceId,
+      noteId: input.noteId,
       quote: input.quote,
       locator: input.locator ?? { kind: 'text', start: 0, end: input.quote.length },
-      sourceContentHash: source.contentHash,
+      sourceContentHash: anchorContentHash,
       stale: false,
     });
     await repo.saveEvidence(evidence, {
       auditKind: 'commitment.update',
       auditEntity: { type: 'evidence', id: evidence.id },
-      auditData: { sourceId: input.sourceId, manual: true },
+      auditData: { sourceId: input.sourceId, noteId: input.noteId, manual: true },
     });
     res.status(201).json({ evidence });
   } catch (err) {

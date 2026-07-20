@@ -11,6 +11,7 @@ import { ulid as realUlid } from 'ulid';
 export type EntityPrefix =
   | 'src' // SourceItem
   | 'ev' // Evidence
+  | 'note' // NoteDocument
   | 'com' // Commitment
   | 'out' // Outcome
   | 'prj' // Project

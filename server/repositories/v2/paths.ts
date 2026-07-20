@@ -16,6 +16,7 @@ import path from 'path';
 export interface V2Layout {
   root: string;
   inbox: string;
+  notes: string; // .dailyflow/notes/YYYY/MM — isolated from v1's Notes/ tree
   commitments: {
     active: string;
     planned: string;
@@ -48,6 +49,7 @@ export function deriveLayout(workspaceRoot: string): V2Layout {
   return {
     root: workspaceRoot,
     inbox: path.join(workspaceRoot, 'Inbox'),
+    notes: path.join(workspaceRoot, '.dailyflow', 'notes'),
     commitments: {
       active: path.join(workspaceRoot, 'Commitments', 'active'),
       planned: path.join(workspaceRoot, 'Commitments', 'planned'),
@@ -77,7 +79,7 @@ export function deriveLayout(workspaceRoot: string): V2Layout {
   };
 }
 
-export function entityPath(layout: V2Layout, kind: 'commitment' | 'source' | 'meeting' | 'decision' | 'outcome' | 'person' | 'project' | 'plan' | 'proposal' | 'run', stateOrStatus: string, id: string, occurredAt?: string): string {
+export function entityPath(layout: V2Layout, kind: 'commitment' | 'source' | 'meeting' | 'decision' | 'outcome' | 'person' | 'project' | 'plan' | 'proposal' | 'run' | 'note' | 'note_evidence', stateOrStatus: string, id: string, occurredAt?: string): string {
   const safeId = sanitizeId(id);
   switch (kind) {
     case 'commitment': {
@@ -117,6 +119,23 @@ export function entityPath(layout: V2Layout, kind: 'commitment' | 'source' | 'me
       return path.join(layout.proposals, `${safeId}.md`);
     case 'run':
       return path.join(layout.runs, `${safeId}.json`);
+    case 'note': {
+      // Notes are partitioned by their `date` (or createdAt fallback) so
+      // the directory tree mirrors daily/meeting browsing in the UI.
+      const d = occurredAt ? new Date(occurredAt) : new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return path.join(layout.notes, String(y), m, `${safeId}.md`);
+    }
+    case 'note_evidence': {
+      // Evidence anchored to a NoteDocument lives in the same YYYY/MM
+      // partition as the note itself, so listing a note can co-locate its
+      // evidence without scanning the entire meetings tree.
+      const d = occurredAt ? new Date(occurredAt) : new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return path.join(layout.notes, String(y), m, '_evidence', `${safeId}.md`);
+    }
   }
 }
 

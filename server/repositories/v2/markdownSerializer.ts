@@ -13,6 +13,7 @@ import type {
   Commitment,
   SourceItem,
   Evidence,
+  NoteDocument,
   Outcome,
   Project,
   Person,
@@ -170,12 +171,15 @@ export function serializeCommitment(c: Commitment): string {
 }
 
 export function serializeEvidence(e: Evidence): string {
+  // Exactly one of sourceId or noteId is set (enforced by EvidenceSchema.refine).
+  // We omit the absent key so the frontmatter round-trip is unambiguous.
   const meta: Frontmatter = {
     type: 'evidence',
     schema_version: 1,
     id: e.id,
     workspace_id: e.workspaceId,
     source_id: e.sourceId,
+    note_id: e.noteId,
     quote: e.quote,
     locator: e.locator as unknown as Frontmatter,
     source_content_hash: e.sourceContentHash,
@@ -185,7 +189,8 @@ export function serializeEvidence(e: Evidence): string {
     updated_at: e.updatedAt,
     created_by: e.createdBy,
   };
-  const body = `# Evidence\n\n> ${e.quote.replace(/\n/g, '\n> ')}\n`;
+  const anchor = e.noteId ? `note:${e.noteId}` : `source:${e.sourceId}`;
+  const body = `# Evidence (${anchor})\n\n> ${e.quote.replace(/\n/g, '\n> ')}\n`;
   return toYaml(meta, body);
 }
 
@@ -287,6 +292,35 @@ export function serializeDecision(d: Decision): string {
     created_by: d.createdBy,
   };
   const body = `# ${d.title}\n\n**Decision:** ${d.decision}\n${d.rationale ? `\n**Rationale:** ${d.rationale}\n` : ''}\n`;
+  return toYaml(meta, body);
+}
+
+export function serializeNoteDocument(n: NoteDocument): string {
+  const meta: Frontmatter = {
+    type: 'note',
+    schema_version: 1,
+    id: n.id,
+    workspace_id: n.workspaceId,
+    title: n.title ?? '',
+    kind: n.kind,
+    state: n.state,
+    date: n.date ?? '',
+    project_ids: n.projectIds,
+    person_ids: n.personIds,
+    source_ids: n.sourceIds,
+    pinned: n.pinned,
+    last_opened_at: n.lastOpenedAt ?? '',
+    auto_save_version: n.autoSaveVersion,
+    content_hash: n.contentHash,
+    tag_ids: n.tagIds ?? [],
+    created_at: n.createdAt,
+    updated_at: n.updatedAt,
+    created_by: n.createdBy,
+  };
+  // Body is the note's authored content verbatim. We do **not** add a
+  // rendered title here because F-02A forbids blocking on a title — the
+  // first non-empty line of `body` is the de-facto title in the UI.
+  const body = n.body.endsWith('\n') ? n.body : n.body + '\n';
   return toYaml(meta, body);
 }
 

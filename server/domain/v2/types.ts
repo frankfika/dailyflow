@@ -90,17 +90,42 @@ export const EvidenceLocatorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), start: z.number().int().nonnegative(), end: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('lines'), start: z.number().int().positive(), end: z.number().int().positive() }),
   z.object({ kind: z.literal('audio'), startSeconds: z.number().nonnegative(), endSeconds: z.number().nonnegative() }),
+  // Block-level locator for NoteDocument evidence (spec §11.4).
+  // `blockId` is a stable hash of the anchored text — survives renames,
+  // moves, and surrounding edits as long as the anchored block itself is
+  // unchanged. `start`/`end` are offsets into `body` for rendering.
+  z.object({
+    kind: z.literal('note_block'),
+    blockId: z.string().min(8),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  }),
 ]);
 export type EvidenceLocator = z.infer<typeof EvidenceLocatorSchema>;
 
+/**
+ * Evidence is anchored to **either** a SourceItem OR a NoteDocument, never
+ * both. The two share the same quote/locator/stale contract, so downstream
+ * code treats them uniformly. Spec §11.4 / §5.3.
+ */
 export const EvidenceSchema = EntityMetaSchema.extend({
-  sourceId: z.string().min(8),
+  sourceId: z.string().min(8).optional(),
+  noteId: z.string().min(8).optional(),
   quote: z.string().min(1).max(2000),
   locator: EvidenceLocatorSchema,
+  // Hash of the source-of-truth content the quote was extracted from.
+  // For sourceId anchors this is SourceItem.contentHash; for noteId anchors
+  // it is NoteDocument.contentHash. Required regardless of which side.
   sourceContentHash: z.string().min(8),
   stale: z.boolean(),
   fieldRefs: z.array(z.string()).optional(),
-});
+}).refine(
+  (e) => Boolean(e.sourceId) !== Boolean(e.noteId),
+  {
+    message: 'Evidence must anchor to exactly one of sourceId or noteId, not both or neither',
+    path: ['sourceId'],
+  },
+);
 export type Evidence = z.infer<typeof EvidenceSchema>;
 
 // ---------------------------------------------------------------------------
@@ -231,6 +256,63 @@ export const DecisionSchema = EntityMetaSchema.extend({
 export type Decision = z.infer<typeof DecisionSchema>;
 
 // ---------------------------------------------------------------------------
+// NoteDocument
+// ---------------------------------------------------------------------------
+//
+// A first-class note object. Distinct from SourceItem (which is "what
+// happened" — external, captured, not authored) and from Commitment/Decision
+// (which are structured objects). Notes are the user's primary working
+// surface: meeting notes, daily notes, project notes, quick thoughts, and
+// long-form reference. Spec §5.2 / §11.3 / F-02A.
+
+export const NoteKindSchema = z.enum([
+  'quick',
+  'daily',
+  'meeting',
+  'project',
+  'reference',
+  'general',
+]);
+export type NoteKind = z.infer<typeof NoteKindSchema>;
+
+export const NoteStateSchema = z.enum(['draft', 'active', 'archived']);
+export type NoteState = z.infer<typeof NoteStateSchema>;
+
+export const NoteDocumentSchema = EntityMetaSchema.extend({
+  // Title is optional — F-02A forbids blocking on a title. The first
+  // non-empty line is the fallback for list rendering.
+  title: z.string().max(500).optional(),
+  body: z.string(),
+  kind: NoteKindSchema,
+  state: NoteStateSchema,
+  // ISO date the note is associated with (for daily/meeting). Optional —
+  // a quick note may not be tied to a date.
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  projectIds: z.array(z.string()),
+  personIds: z.array(z.string()),
+  // SourceItems that this note cites or builds on (one-way reference).
+  sourceIds: z.array(z.string()),
+  // Pinned notes surface first in lists. Spec §7.3 Favorites.
+  pinned: z.boolean(),
+  // Last time the user opened the note. Used for Recent ordering.
+  lastOpenedAt: z.string().datetime({ offset: true }).optional(),
+  // Monotonic per-note counter — every autosave bumps it. Combined with
+  // contentHash for optimistic-concurrency collision detection.
+  autoSaveVersion: z.number().int().nonnegative(),
+  // Hash of `body` at the time of the last write. Repository uses this to
+  // reject autosaves against a stale client (F-02A save-resilience).
+  contentHash: z.string().min(8),
+  // Tags on the note — these are different from project tags: they are
+  // note-local labels (e.g. "draft", "follow-up") that help the user find
+  // things later without forcing a type or category at create time.
+  tagIds: z.array(z.string()).optional(),
+});
+export type NoteDocument = z.infer<typeof NoteDocumentSchema>;
+
+// ---------------------------------------------------------------------------
 // DailyPlan
 // ---------------------------------------------------------------------------
 
@@ -351,6 +433,7 @@ export type AgentRun = z.infer<typeof AgentRunSchema>;
 export const AnyV2EntitySchema = z.union([
   SourceItemSchema,
   EvidenceSchema,
+  NoteDocumentSchema,
   CommitmentSchema,
   OutcomeSchema,
   ProjectSchema,

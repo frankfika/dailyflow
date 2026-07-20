@@ -20,6 +20,7 @@ import {
   serializeSourceItem,
   serializeCommitment,
   serializeEvidence,
+  serializeNoteDocument,
   serializeOutcome,
   serializeProject,
   serializePerson,
@@ -34,6 +35,7 @@ import {
   SourceItemSchema,
   CommitmentSchema,
   EvidenceSchema,
+  NoteDocumentSchema,
   OutcomeSchema,
   ProjectSchema,
   PersonSchema,
@@ -46,6 +48,7 @@ import {
   type SourceItem,
   type Commitment,
   type Evidence,
+  type NoteDocument,
   type Outcome,
   type Project,
   type Person,
@@ -158,9 +161,13 @@ export class V2Repository {
 
   async saveEvidence(e: Evidence, opts: WriteOptions = {}): Promise<AtomicWriteResult> {
     const validated = EvidenceSchema.parse(e);
-    const filePath = entityPath(this.layout, 'meeting', '', validated.id, validated.createdAt);
-    // Evidence lives in the same Memory/Meetings tree to keep v2 file
-    // growth predictable. The `type` frontmatter disambiguates.
+    // Evidence lives in the same partition as the entity it anchors.
+    // sourceId → meetings/YYYY/MM/ ; noteId → notes/YYYY/MM/_evidence/.
+    // Co-locating makes per-note evidence listing O(small) without a
+    // global index.
+    const filePath = validated.noteId
+      ? entityPath(this.layout, 'note_evidence', '', validated.id, validated.createdAt)
+      : entityPath(this.layout, 'meeting', '', validated.id, validated.createdAt);
     const content = serializeEvidence(validated);
     const result = await atomicWrite({ filePath, content, expectedHash: opts.expectedHash });
     await this.appendAudit(opts, result);
@@ -168,7 +175,119 @@ export class V2Repository {
   }
 
   async listEvidence(): Promise<Evidence[]> {
-    return this.listAll('evidence', EvidenceSchema, this.layout.meetings);
+    // Evidence is split across two trees. Concatenate, dedupe by id.
+    const meetings: Evidence[] = await this.listAll<Evidence>('evidence', EvidenceSchema, this.layout.meetings);
+    // Notes evidence lives in `.dailyflow/notes/_evidence/` at the root
+    // (recursive walk handles YYYY/MM partitions). listFilesRecursive is
+    // the same path the repo already uses for other trees; if the notes
+    // dir doesn't exist yet the walk returns [] silently.
+    const notesEvidence: Evidence[] = [];
+    const evidenceRoot = path.join(this.layout.notes, '_evidence');
+    const evidenceFiles = await listFilesRecursive(evidenceRoot, ['.md']);
+    for (const filePath of evidenceFiles) {
+      try {
+        const text = await fs.readFile(filePath, 'utf8');
+        const { data } = _parse(text);
+        const normalized = snakeToCamel<Record<string, unknown>>(data);
+        const parsed = EvidenceSchema.safeParse(normalized);
+        if (parsed.success) notesEvidence.push(parsed.data);
+      } catch {
+        // Skip unreadable evidence files; surface as a separate audit later.
+      }
+    }
+    const seen = new Set<string>();
+    const out: Evidence[] = [];
+    for (const e of [...meetings, ...notesEvidence]) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      out.push(e);
+    }
+    return out;
+  }
+
+  async listEvidenceForNote(noteId: string): Promise<Evidence[]> {
+    const all = await this.listEvidence();
+    return all.filter((e) => e.noteId === noteId);
+  }
+
+  // -------------------------------------------------------------------------
+  // NoteDocument
+  // -------------------------------------------------------------------------
+  //
+  // Notes are the user's primary working surface (spec §5.2 / §7.3 / F-02A).
+  // They are persisted to `.dailyflow/notes/YYYY/MM/<id>.md` so the v2
+  // notes tree is fully isolated from the v1 `Notes/` legacy tree.
+
+  async saveNoteDocument(n: NoteDocument, opts: WriteOptions = {}): Promise<AtomicWriteResult> {
+    const validated = NoteDocumentSchema.parse(n);
+    // Notes partition by their `date` when present, else fall back to
+    // createdAt. The YYYY/MM partition makes month-range scans cheap.
+    const partitionDate = validated.date ?? validated.createdAt;
+    const filePath = entityPath(this.layout, 'note', '', validated.id, partitionDate);
+    const content = serializeNoteDocument(validated);
+    const result = await atomicWrite({ filePath, content, expectedHash: opts.expectedHash });
+    await this.appendAudit(opts, result);
+    return result;
+  }
+
+  async getNoteDocument(id: string): Promise<NoteDocument | null> {
+    // The notes tree is partitioned by month; findById walks recursively
+    // under `root` so a single call covers every YYYY/MM subfolder.
+    return this.findById('note', NoteDocumentSchema, id, this.layout.notes);
+  }
+
+  async listNoteDocuments(opts: { state?: 'draft' | 'active' | 'archived' } = {}): Promise<NoteDocument[]> {
+    // Notes are partitioned by YYYY/MM under `notes/`. listAll only walks
+    // a single directory, so for notes we use listFilesRecursive and
+    // parse each frontmatter through the schema (skipping malformed
+    // files — they're v1 leftovers in a sibling tree or partial writes).
+    const files = await listFilesRecursive(this.layout.notes, ['.md']);
+    const out: NoteDocument[] = [];
+    for (const f of files) {
+      // Skip the per-month _evidence/ subdirs — those are evidence files,
+      // not note bodies, and their frontmatter is for Evidence not Note.
+      if (f.includes(`${path.sep}_evidence${path.sep}`)) continue;
+      try {
+        const text = await fs.readFile(f, 'utf8');
+        const { data } = parseFrontmatter(text);
+        if (!data || typeof data !== 'object') continue;
+        const d = data as Record<string, unknown>;
+        if (d.type !== 'note') continue;
+        const normalized = snakeToCamel<Record<string, unknown>>(data);
+        const parsed = NoteDocumentSchema.safeParse(normalized);
+        if (parsed.success) out.push(parsed.data);
+      } catch {
+        // Malformed file: skip silently. Audit can surface later if needed.
+      }
+    }
+    if (!opts.state) return out;
+    return out.filter((n) => n.state === opts.state);
+  }
+
+  async deleteNoteDocument(id: string): Promise<boolean> {
+    const note = await this.getNoteDocument(id);
+    if (!note) return false;
+    const partitionDate = note.date ?? note.createdAt;
+    const filePath = entityPath(this.layout, 'note', '', id, partitionDate);
+    await fs.unlink(filePath);
+    // Also drop any evidence anchored to this note — orphans are
+    // misleading and we have a backref (noteId) to find them.
+    const evidence = await this.listEvidenceForNote(id);
+    for (const e of evidence) {
+      try {
+        const evPath = entityPath(this.layout, 'note_evidence', '', e.id, e.createdAt);
+        await fs.unlink(evPath);
+      } catch {
+        // Best-effort cleanup; the audit log captures the action.
+      }
+    }
+    await this.audit.append({
+      kind: 'commitment.update',
+      actor: 'system',
+      data: { action: 'delete_note', id },
+      entity: { type: 'note', id },
+    });
+    return true;
   }
 
   // -------------------------------------------------------------------------
