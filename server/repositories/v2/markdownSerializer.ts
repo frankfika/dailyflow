@@ -302,6 +302,7 @@ export function serializeNoteDocument(n: NoteDocument): string {
     id: n.id,
     workspace_id: n.workspaceId,
     title: n.title ?? '',
+    body: n.body,
     kind: n.kind,
     state: n.state,
     date: n.date ?? '',
@@ -317,8 +318,10 @@ export function serializeNoteDocument(n: NoteDocument): string {
     updated_at: n.updatedAt,
     created_by: n.createdBy,
   };
-  // Body is the note's authored content verbatim. We do **not** add a
-  // rendered title here because F-02A forbids blocking on a title — the
+  // Body is the note's authored content. We mirror it into the
+  // markdown section for human readability (so `cat` of a note file
+  // is meaningful) but the frontmatter copy is the one the schema
+  // reads back on load. F-02A forbids blocking on a title — the
   // first non-empty line of `body` is the de-facto title in the UI.
   const body = n.body.endsWith('\n') ? n.body : n.body + '\n';
   return toYaml(meta, body);

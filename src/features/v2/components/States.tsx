@@ -22,6 +22,7 @@ export function Button({
   className = '',
   type = 'button',
   title,
+  'data-testid': dataTestId,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -31,6 +32,7 @@ export function Button({
   className?: string;
   type?: 'button' | 'submit';
   title?: string;
+  'data-testid'?: string;
 }) {
   const base = 'inline-flex items-center gap-1.5 rounded-lg font-medium transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed';
   const sizes = {
@@ -50,6 +52,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      data-testid={dataTestId}
       className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
     >
       {children}

@@ -19,13 +19,13 @@ import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
-import { Notes } from './components/Notes';
 import { AIChat } from './components/AIChat';
 import { DailyNoteCards } from './components/DailyNoteCards';
 import { TodayBacklog } from './components/TodayBacklog';
 import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
+import { NotesView } from './features/v2/notes/NotesView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -1209,33 +1209,7 @@ export default function App() {
                   <Capsules language={language} showToast={showToast} />
                 </motion.div>
               ) : (
-                <Notes
-                  activeContext={activeContext}
-                  language={language}
-                  aiApiKey={aiApiKey}
-                  aiModel={aiModel}
-                  aiBaseUrl={aiBaseUrl}
-                  filterByTaskId={notesFilterByTaskId}
-                  onClearTaskFilter={() => setNotesFilterByTaskId(null)}
-                  onNotesChanged={loadContextNotes}
-                  onSendToChat={({ title, body, type, noteId }) => {
-                    const noteTitle = title || (language === 'zh' ? '（无标题）' : '(untitled)');
-                    const prompt = type === 'meeting_note'
-                      ? (language === 'zh' ? '基于这份会议笔记继续讨论：' : 'Continue from this meeting note:')
-                      : type === 'summary'
-                      ? (language === 'zh' ? '基于这份总结继续讨论：' : 'Continue from this summary:')
-                      : (language === 'zh' ? '基于这份笔记继续讨论：' : 'Continue from this note:');
-                    setChatDraft({
-                      text: prompt,
-                      key: `${Date.now()}`,
-                      sourceTitle: title,
-                      contextText: noteId ? undefined : `# ${noteTitle}\n\n${body}`,
-                      contextLabel: noteTitle,
-                      noteId,
-                    });
-                    setActiveTab('ai-chat');
-                  }}
-                />
+                <NotesView language={language} />
               )
             )}
           </div>

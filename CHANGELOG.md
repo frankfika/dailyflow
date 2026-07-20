@@ -9,11 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending for next release
 
-- Frontend: integrate NoteDocument into the main App Notes tab (replaces v1 1508-line Notes/NoteEditor)
-- Frontend: rewrite Note editor for document-first + autosave + no-title (F-02A)
-- Frontend: Note ↔ Commitment/Decision/Outcome backlinks panel
-- e2e: §26 step 17/18/19 acceptance (Note document-first, AI suggestions don't rewrite body, Note backlinks)
+- Frontend: Note ↔ Commitment/Decision/Outcome backlinks panel (full reverse-relationship UI; v1.1.2 only surfaces the evidence count)
+- e2e: §26 step 17/18/19 acceptance (Note document-first survives a refresh; AI suggestions don't rewrite body; Memory search surfaces Notes)
 - Backend: NoteDocument unit tests (currently relies on existing repository + service round-trip tests)
+
+## [1.1.2] - 2026-07-20
+
+### Added
+- **Main App Notes tab integration with v2 NoteDocument** (commit `<pending>`) — the v1 `Notes` component is replaced by `NotesView` in the App's Notes tab so the 1.1.0 backend and 1.1.1 hooks are reachable from the default UI.
+  - `src/features/v2/notes/NoteList.tsx` (new) — list of notes grouped by view (All / Recent / Daily / Meetings / Projects / Pinned / Archived). "+ New note" button creates a draft and opens the editor. Each row exposes archive + delete. Pinned-first sort.
+  - `src/features/v2/notes/NoteEditor.tsx` (new) — document-first editor: optional title input, body fills the rest of the pane, kind/date/pin/archive controls in the header, autosave status badge ("saving…" / "Saved" / "Resolving conflict…" / "Save failed") driven by `useNoteAutosave`. Flushes on unmount to prevent the "edited → navigated → lost" race.
+  - `src/features/v2/notes/NotesView.tsx` (new) — composes list + editor; two-column layout that collapses to a single column on mobile.
+  - `src/App.tsx` — Notes tab default case now renders `<NotesView language={language} />` instead of the v1 `<Notes>`.
+
+### Fixed
+- **NoteDocument frontmatter read-back** — `serializeNoteDocument` now writes `body` to **both** the frontmatter and the markdown section, and `listNoteDocuments` / `findById` splice the markdown body in as a safety net for files written before this fix. Without this, `NoteDocumentSchema.parse` was rejecting the persisted notes because the schema requires `body` and the old serializer had only put it in the markdown section.
+- **Button accepts `data-testid`** — `src/features/v2/components/States.tsx` `Button` now accepts and forwards a `data-testid` prop so callers don't have to wrap it for test selectors.
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 31 files / 287 tests pass
+- `npm run build` ✅ vite build 2.83s, main chunk 359 kB (down 1 kB from 1.1.1)
+- Playwright e2e `e2e/notes-view-visual.spec.ts` ✅ renders NotesView with the list, opens the pre-seeded note, mounts the document-first editor with title + body, and screenshots the result. Screenshot at `e2e-screenshot-notes-view.png`.
 
 ## [1.1.1] - 2026-07-20
 

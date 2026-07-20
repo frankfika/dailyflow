@@ -249,11 +249,20 @@ export class V2Repository {
       if (f.includes(`${path.sep}_evidence${path.sep}`)) continue;
       try {
         const text = await fs.readFile(f, 'utf8');
-        const { data } = parseFrontmatter(text);
+        const { data, body } = parseFrontmatter(text);
         if (!data || typeof data !== 'object') continue;
         const d = data as Record<string, unknown>;
         if (d.type !== 'note') continue;
-        const normalized = snakeToCamel<Record<string, unknown>>(data);
+        // NoteDocumentSchema requires `body`. The serializer writes
+        // body to BOTH the frontmatter and the markdown section, so
+        // the frontmatter copy is the canonical read; the markdown
+        // body is a safety net for files written before 1.1.2 that
+        // only had body in the markdown section.
+        const dataWithBody =
+          d.body === undefined || d.body === null || d.body === ''
+            ? { ...d, body }
+            : d;
+        const normalized = snakeToCamel<Record<string, unknown>>(dataWithBody);
         const parsed = NoteDocumentSchema.safeParse(normalized);
         if (parsed.success) out.push(parsed.data);
       } catch {
@@ -525,11 +534,18 @@ export class V2Repository {
       }
       try {
         const text = await fs.readFile(f, 'utf8');
-        const { data } = parseFrontmatter(text);
+        const { data, body } = parseFrontmatter(text);
         if (data && typeof data === 'object') {
           const d = data as Record<string, unknown>;
           if (d.id === id && d.type === kind) {
-            const normalized = snakeToCamel<Record<string, unknown>>(data);
+            // For NoteDocument, fall back to the markdown body if the
+            // frontmatter didn't carry one (1.1.0/1.1.1-era files).
+            const dataWithBody =
+              kind === 'note' &&
+              (d.body === undefined || d.body === null || d.body === '')
+                ? { ...d, body }
+                : d;
+            const normalized = snakeToCamel<Record<string, unknown>>(dataWithBody);
             return schema.parse(normalized) as T;
           }
         }
