@@ -82,7 +82,11 @@ export function DailyFocus({
   };
 
   const openPlanner = (mode: 'ai' | 'manual') => {
-    setPlannerMode(mode);
+    // Defensive: if AI isn't configured, fall back to manual mode in-place
+    // so the user can still pick their 3 focus tasks without being kicked
+    // out of Today into a chat tab that doesn't help them plan.
+    const resolved = !aiAvailable && mode === 'ai' ? 'manual' : mode;
+    setPlannerMode(resolved);
     setShowAllCandidates(false);
     setAiError('');
     setIsPlanning(true);
@@ -90,7 +94,10 @@ export function DailyFocus({
 
   const generatePlan = async () => {
     if (!aiAvailable) {
-      onConfigureAI();
+      // Belt-and-suspenders: if generatePlan is ever invoked without AI,
+      // stay in the modal and switch to manual mode rather than jumping
+      // to the AI Chat tab via onConfigureAI.
+      setPlannerMode('manual');
       return;
     }
     setIsGenerating(true);
@@ -156,15 +163,17 @@ export function DailyFocus({
         <div className="daily-focus-empty">
           <button
             onClick={() => {
-              candidates.length > 0 ? openPlanner('ai') : onAddTask();
+              candidates.length > 0 ? openPlanner(aiAvailable ? 'ai' : 'manual') : onAddTask();
             }}
             className="daily-focus-primary"
             disabled={!isToday}
           >
             <WandSparkles className="w-4 h-4" />
-            {candidates.length > 0 ? copy.plan : copy.add}
+            {candidates.length > 0
+              ? (aiAvailable ? copy.plan : copy.manual)
+              : copy.add}
           </button>
-          {candidates.length > 0 && isToday && (
+          {candidates.length > 0 && isToday && aiAvailable && (
             <button onClick={() => openPlanner('manual')} className="daily-focus-manual">
               {copy.manual}
             </button>
@@ -306,9 +315,7 @@ export function DailyFocus({
                       {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                       {isGenerating
                         ? (language === 'zh' ? '正在权衡...' : 'Weighing tradeoffs...')
-                        : aiAvailable
-                          ? (language === 'zh' ? '生成今日计划' : 'Build my day')
-                          : (language === 'zh' ? '连接 AI 模型' : 'Connect an AI model')}
+                        : (language === 'zh' ? '生成今日计划' : 'Build my day')}
                     </button>
                   </div>
                 </div>
