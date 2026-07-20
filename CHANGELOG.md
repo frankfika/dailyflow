@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 TBD.
 
+## [1.0.9] - 2026-07-20
+
+### Removed
+- **Dead-code DailyFocus cleanup** (commit `b42ff22`) — `src/components/DailyFocus.tsx` (389 lines) and `src/__tests__/components/DailyFocus.test.tsx` (89 lines, 3 tests) deleted. DailyFocus was the modal-picker introduced in `f1ef5ec` and superseded by `TodayBacklog` in 1.0.8 (commit `160637a`); no production code referenced it at the time of this commit.
+
+### Verified
+- `npm run lint` ✅ 0 errors
+- `npm test` ✅ 31 files / 287 tests pass (was 32/290 — 3 DailyFocus unit tests removed)
+- `npm run build` ✅ main chunk 360 kB unchanged (DailyFocus was already tree-shaken out by 1.0.8)
+
 ## [1.0.8] - 2026-07-20
 
 ### Added
