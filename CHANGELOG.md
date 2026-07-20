@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 TBD.
 
+## [1.0.7] - 2026-07-20
+
+### Fixed
+- **Today plan modal stays in Today when AI is not configured** — `src/components/DailyFocus.tsx` (commit `75acf54`) — When no AI provider is configured (the default state — `useState('')` is never populated unless the user visits Settings), the empty-state primary CTA used to silently jump the user to the AI Chat tab via `onConfigureAI`, which was misleading because the AI Chat tab doesn't help pick 3 focus tasks and the only escape hatch was a "Connect an AI model" button inside the plan modal. Now the primary CTA and the plan modal both stay in Today: they degrade to manual mode in-place so the user can pick their 3 focus tasks directly. The misleading "Connect an AI model" CTA is removed from the planner footer because that flow is no longer reachable when AI is unavailable.
+
+### Verified
+- `npm run lint` ✅ 0 errors
+- `npm run test` ✅ 32 files / 290 tests pass
+- `npm run build` ✅ vite build 4.29s, 4062 modules, all chunks under warning threshold
+
 ## [1.0.6] - 2026-07-16
 
 ### Fixed
