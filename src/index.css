@@ -949,6 +949,113 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .today-filter-add:hover { filter: brightness(1.05); }
 
+/* ----- Stat strip (4-up glance counts above the filter row) ----- */
+.today-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.today-stat-card {
+  padding: 0.65rem 0.85rem 0.7rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: var(--color-surface-elevated, var(--color-surface)) !important;
+  border-color: var(--color-border) !important;
+}
+.today-stat-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.today-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text-heading);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.today-stat-card.is-danger .today-stat-eyebrow { color: var(--color-danger); }
+.today-stat-card.is-danger .today-stat-value { color: var(--color-danger); }
+.today-stat-card.is-danger { border-color: var(--color-danger) !important; background: var(--color-danger-light) !important; }
+.today-stat-progress-track {
+  margin-top: 0.35rem;
+  height: 3px;
+  background: var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.today-stat-progress-value {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* Focus bar empty-state anchor (small line below empty focus bar) */
+.today-focus-bar-anchor {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* No-deadline toggle (inline checkbox in the section header) */
+.today-nodate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.18rem 0.45rem;
+  border-radius: 0.45rem;
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.today-nodate-toggle:hover {
+  color: var(--color-text-heading);
+  background: var(--color-border);
+  border-color: var(--color-border-strong);
+}
+.today-nodate-toggle input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+/* Today's notes empty CTA inside TodayBacklog */
+.today-notes-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.6rem;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, background 0.15s;
+  align-self: flex-start;
+}
+.today-notes-empty:hover { filter: brightness(0.97); background: var(--color-accent-highlight, var(--color-accent-light)); }
+
+/* Modifiers that drive the no-deadline default rendering state. */
+.today-group.is-nodate.is-expanded { display: flex; }
+.today-group.is-nodate.is-collapsed { display: flex; }
+.today-group.is-nodate.is-collapsed .today-group-list { display: none; }
+
 /* ----- Backlog groups ----- */
 .today-backlog-groups {
   display: flex;
@@ -1115,9 +1222,12 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   .today-group-remove { opacity: 1; }
   .today-filter-pill { padding: 0.38rem 0.6rem; font-size: 0.7rem; }
   .today-filter-add { padding: 0.38rem 0.6rem; }
+  .today-stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  .today-stat-value { font-size: 1.1rem; }
 }
 @media (max-width: 480px) {
   .today-filter-pill-count { display: none; }
   .today-focus-bar-item { grid-template-columns: 1.5rem minmax(0, 1fr) auto; }
   .today-focus-bar-meta { display: none; }
+  .today-stat-eyebrow { font-size: 0.55rem; }
 }

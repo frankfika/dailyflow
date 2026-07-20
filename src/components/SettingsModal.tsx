@@ -482,7 +482,7 @@ export function SettingsModal({
                     <label className="text-xs text-text-muted">
                       {language === 'zh' ? '字体大小' : 'Font Size'}
                     </label>
-                    <span className="text-xs font-mono text-accent">{Math.round(80 + textScale * 40)}%</span>
+                    <span className="text-xs font-mono text-accent">{Math.round((0.8 + textScale * 0.04) * 100)}%</span>
                   </div>
                   <input
                     type="range"

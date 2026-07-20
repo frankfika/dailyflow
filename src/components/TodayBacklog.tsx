@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Check, ChevronDown, Clock3, Flame, Sparkles, Target, WandSparkles, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, Clock3, Eye, Flame, ListChecks, Sparkles, Target, WandSparkles, X } from 'lucide-react';
+import { Card } from '../features/v2/components/States';
+import type { NoteData } from '../api/client';
 import { TaskCard } from './TaskCard';
 
 type Task = {
@@ -35,6 +37,11 @@ interface TodayBacklogProps {
   aiAvailable: boolean;
   onGenerateAIPlan: (brief: string) => Promise<{ taskIds: string[]; summary: string }>;
   onConfigureAI: () => void;
+  /** Today's notes (optional). When provided together with onOpenNotesTab,
+   *  the component renders a Today's Notes card so the user can capture
+   *  one in-context. The parent decides whether to wire this up. */
+  dailyNotes?: NoteData[];
+  onOpenNotesTab?: () => void;
 }
 
 const FOCUS_LIMIT = 3;
@@ -98,10 +105,15 @@ export function TodayBacklog({
   aiAvailable,
   onGenerateAIPlan,
   onConfigureAI,
+  dailyNotes,
+  onOpenNotesTab,
 }: TodayBacklogProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [showFocus, setShowFocus] = useState(true);
-  const [showAllNoDeadline, setShowAllNoDeadline] = useState(false);
+  // No-deadline tasks are visible by default so the Today view doesn't look
+  // empty; the checkbox below lets the user collapse them entirely when they
+  // want to focus on dated work.
+  const [hideNoDeadline, setHideNoDeadline] = useState(false);
 
   const today = useMemo(() => startOfTodayIso(), []);
 
@@ -178,6 +190,15 @@ export function TodayBacklog({
   const completedFocus = focusTasks.filter(t => t.status === 'done').length;
   const progress = focusTasks.length === 0 ? 0 : Math.round((completedFocus / focusTasks.length) * 100);
 
+  // Stat strip: glanceable counts that fill the space above the filter row so
+  // the Today view doesn't open with a tall empty gap.
+  const completedToday = useMemo(
+    () => tasks.filter(t => t.status === 'done').length,
+    [tasks],
+  );
+  const dueTodayCount = groups.buckets.today.length;
+  const overdueCount = groups.buckets.overdue.length;
+
   // i18n for filter pills
   const labels: Record<string, string> = {
     all: language === 'zh' ? '全部' : 'All',
@@ -233,11 +254,21 @@ export function TodayBacklog({
               className="overflow-hidden"
             >
               {focusTasks.length === 0 ? (
-                <p className="today-focus-bar-empty">
-                  {language === 'zh'
-                    ? '从下面挑任务加进今天 — 加号 / 拖动都可以，或者直接点 AI 帮你选。'
-                    : 'Add tasks below with the + button, drag them, or let AI pick for you.'}
-                </p>
+                <>
+                  <p className="today-focus-bar-empty">
+                    {language === 'zh'
+                      ? '从下面挑任务加进今天 — 加号 / 拖动都可以，或者直接点 AI 帮你选。'
+                      : 'Add tasks below with + button, or let AI pick your 3.'}
+                  </p>
+                  <p
+                    className="today-focus-bar-anchor"
+                    data-testid="today-focus-bar-anchor"
+                  >
+                    {language === 'zh'
+                      ? `↓ ${dueTodayCount} 件今天，${overdueCount} 件已过期`
+                      : `↓ ${dueTodayCount} today, ${overdueCount} overdue`}
+                  </p>
+                </>
               ) : (
                 <ul className="today-focus-bar-list">
                   {focusTasks.map((task, index) => (
@@ -268,6 +299,58 @@ export function TodayBacklog({
           )}
         </AnimatePresence>
       </section>
+
+      {/* Stat strip: glanceable counts so the Today view opens with
+          something useful instead of a tall empty gap. */}
+      <div
+        className="today-stat-strip"
+        role="group"
+        aria-label={language === 'zh' ? '今日概览' : "Today's overview"}
+        data-testid="today-stat-strip"
+      >
+        <Card className="today-stat-card">
+          <div className="today-stat-eyebrow">
+            <ListChecks className="w-3 h-3" />
+            <span>{language === 'zh' ? '今日任务' : 'Tasks today'}</span>
+          </div>
+          <div className="today-stat-value" data-testid="today-stat-tasks-today">
+            {dueTodayCount}
+          </div>
+        </Card>
+        <Card className={`today-stat-card ${overdueCount > 0 ? 'is-danger' : ''}`}>
+          <div className="today-stat-eyebrow">
+            <Flame className="w-3 h-3" />
+            <span>{language === 'zh' ? '已过期' : 'Overdue'}</span>
+          </div>
+          <div className="today-stat-value" data-testid="today-stat-overdue">
+            {overdueCount}
+          </div>
+        </Card>
+        <Card className="today-stat-card">
+          <div className="today-stat-eyebrow">
+            <Check className="w-3 h-3" />
+            <span>{language === 'zh' ? '已完成' : 'Completed'}</span>
+          </div>
+          <div className="today-stat-value" data-testid="today-stat-completed">
+            {completedToday}
+          </div>
+        </Card>
+        <Card className="today-stat-card">
+          <div className="today-stat-eyebrow">
+            <Target className="w-3 h-3" />
+            <span>{language === 'zh' ? '聚焦' : 'Focus'}</span>
+          </div>
+          <div className="today-stat-value" data-testid="today-stat-focus">
+            {focusTasks.length}/{FOCUS_LIMIT}
+          </div>
+          <div className="today-stat-progress-track" aria-hidden="true">
+            <div
+              className="today-stat-progress-value"
+              style={{ width: `${(focusTasks.length / FOCUS_LIMIT) * 100}%` }}
+            />
+          </div>
+        </Card>
+      </div>
 
       {/* Filter pills */}
       <div className="today-filter-row" role="tablist">
@@ -376,64 +459,139 @@ export function TodayBacklog({
           );
         })}
 
-        {/* No-deadline tasks: collapsed by default since they’re usually the
-            noisiest bucket, but show the count so users know they exist. */}
-        {groups.noDeadline.length > 0 && (
-          <section className="today-group is-nodate" data-testid="today-group-nodate">
-            <button
-              className="today-group-header today-group-header-collapsible"
-              onClick={() => setShowAllNoDeadline(v => !v)}
-              aria-expanded={showAllNoDeadline}
-            >
+        {/* No-deadline tasks: expanded by default so they don't disappear
+            into a collapsed bucket. The "Hide" toggle above the list lets
+            the user collapse them entirely when they want to focus on
+            dated work. */}
+        {groups.noDeadline.length > 0 && !hideNoDeadline && (
+          <section
+            className="today-group is-nodate is-expanded"
+            data-testid="today-group-nodate"
+          >
+            <header className="today-group-header">
               <span className="today-group-mark"><Clock3 className="w-3.5 h-3.5" /></span>
               <h3 className="today-group-title">
                 {language === 'zh' ? '没有截止日期' : 'No deadline'}
               </h3>
               <span className="today-group-count">{groups.noDeadline.length}</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-text-muted transition-transform ${showAllNoDeadline ? 'rotate-180' : ''}`} />
-            </button>
-            {showAllNoDeadline && (
-              <ul className="today-group-list">
-                {groups.noDeadline.map(task => (
-                  <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
-                    <TaskCard
-                      task={task}
-                      language={language}
-                      categories={[]}
-                      currentFileDate={today}
-                      linkedNotesCount={linkedNotesCount(task.id)}
-                      onToggle={() => onToggleTask(task.id)}
-                      onEdit={updates => onEditTask(task.id, updates)}
-                      onDelete={() => onDeleteTask(task.id)}
-                      onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-                      onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                      showCompletionPrompt={false}
-                      onCompletionPromptClosed={() => {}}
-                    />
-                    {!isInFocus(task.id) ? (
-                      <button
-                        className="today-group-add"
-                        onClick={() => addToFocus(task.id)}
-                        disabled={focusTaskIds.length >= FOCUS_LIMIT}
-                        title={language === 'zh' ? '加进今天' : 'Add to today'}
-                        aria-label={language === 'zh' ? '加进今天' : 'Add to today'}
-                        data-testid={`add-to-focus-${task.id}`}
-                      >
-                        +
-                      </button>
-                    ) : (
-                      <button
-                        className="today-group-remove"
-                        onClick={() => removeFromFocus(task.id)}
-                        title={language === 'zh' ? '已在今日 3 件' : 'In today’s 3'}
-                        data-testid={`in-focus-${task.id}`}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <label
+                className="today-nodate-toggle"
+                onClick={e => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={hideNoDeadline}
+                  onChange={e => setHideNoDeadline(e.target.checked)}
+                  data-testid="today-hide-nodate"
+                />
+                <span>
+                  {language === 'zh' ? '隐藏没有截止日期的任务' : 'Hide tasks without deadline'}
+                </span>
+              </label>
+              <p className="today-group-sub">
+                {language === 'zh' ? '可以稍后排进日程' : 'Can be scheduled later'}
+              </p>
+            </header>
+            <ul className="today-group-list">
+              {groups.noDeadline.map(task => (
+                <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
+                  <TaskCard
+                    task={task}
+                    language={language}
+                    categories={[]}
+                    currentFileDate={today}
+                    linkedNotesCount={linkedNotesCount(task.id)}
+                    onToggle={() => onToggleTask(task.id)}
+                    onEdit={updates => onEditTask(task.id, updates)}
+                    onDelete={() => onDeleteTask(task.id)}
+                    onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
+                    onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+                    showCompletionPrompt={false}
+                    onCompletionPromptClosed={() => {}}
+                  />
+                  {!isInFocus(task.id) ? (
+                    <button
+                      className="today-group-add"
+                      onClick={() => addToFocus(task.id)}
+                      disabled={focusTaskIds.length >= FOCUS_LIMIT}
+                      title={language === 'zh' ? '加进今天' : 'Add to today'}
+                      aria-label={language === 'zh' ? '加进今天' : 'Add to today'}
+                      data-testid={`add-to-focus-${task.id}`}
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <button
+                      className="today-group-remove"
+                      onClick={() => removeFromFocus(task.id)}
+                      title={language === 'zh' ? '已在今日 3 件' : 'In today’s 3'}
+                      data-testid={`in-focus-${task.id}`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* When the user hides the no-deadline group, surface a small
+            row of controls so they can bring it back. */}
+        {groups.noDeadline.length > 0 && hideNoDeadline && (
+          <section className="today-group is-nodate is-collapsed" data-testid="today-group-nodate-collapsed">
+            <header className="today-group-header">
+              <span className="today-group-mark"><Clock3 className="w-3.5 h-3.5" /></span>
+              <h3 className="today-group-title">
+                {language === 'zh' ? '没有截止日期' : 'No deadline'}
+              </h3>
+              <span className="today-group-count">{groups.noDeadline.length}</span>
+              <button
+                className="today-nodate-toggle"
+                onClick={() => setHideNoDeadline(false)}
+                data-testid="today-show-nodate"
+              >
+                <Eye className="w-3 h-3" />
+                <span>
+                  {language === 'zh' ? '显示' : 'Show'}
+                </span>
+              </button>
+            </header>
+          </section>
+        )}
+
+        {/* Today's notes card — only rendered when the parent opts in by
+            passing both dailyNotes and onOpenNotesTab. Keeps the section
+            backward-compatible for callers that don't have notes data. */}
+        {isToday && dailyNotes !== undefined && onOpenNotesTab && (
+          <section className="today-group is-notes" data-testid="today-notes-section">
+            <header className="today-group-header">
+              <span className="today-group-mark"><Sparkles className="w-3.5 h-3.5" /></span>
+              <h3 className="today-group-title">
+                {language === 'zh' ? '今日笔记' : "Today's notes"}
+              </h3>
+              <span className="today-group-count">{dailyNotes.length}</span>
+              <p className="today-group-sub">
+                {language === 'zh' ? '把今天的事写下来更清晰' : 'Writing things down clarifies today'}
+              </p>
+            </header>
+            {dailyNotes.length === 0 ? (
+              <button
+                className="today-notes-empty"
+                onClick={onOpenNotesTab}
+                data-testid="today-capture-note"
+              >
+                <WandSparkles className="w-3.5 h-3.5" />
+                <span>
+                  {language === 'zh' ? '记一篇今日笔记' : "Capture today's note"}
+                </span>
+              </button>
+            ) : (
+              <p className="today-group-empty">
+                {language === 'zh'
+                  ? `今天已有 ${dailyNotes.length} 篇笔记`
+                  : `${dailyNotes.length} note${dailyNotes.length === 1 ? '' : 's'} captured today`}
+              </p>
             )}
           </section>
         )}

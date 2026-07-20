@@ -54,6 +54,11 @@ const COPY = {
     unarchive: '取消归档',
     showList: '显示列表',
     focusMode: '专注模式',
+    words: '字',
+    chars: '字符',
+    minRead: '分钟阅读',
+    lastUpdated: '最后更新',
+    bodyEmpty: '空白',
   },
   en: {
     placeholder: 'Start writing…',
@@ -71,6 +76,11 @@ const COPY = {
     unarchive: 'Unarchive',
     showList: 'Show list',
     focusMode: 'Focus mode',
+    words: 'words',
+    chars: 'chars',
+    minRead: 'min read',
+    lastUpdated: 'Last updated',
+    bodyEmpty: 'Empty',
   },
 };
 
@@ -94,6 +104,23 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
     case 'error': return 'danger';
     default: return 'default';
   }
+}
+
+/**
+ * Local copy of NoteList's relativeTime helper. Mirrors the same
+ * buckets (just now / Nm / Nh / Nd / ISO date) so the statusbar
+ * reads the same as the list cells. We don't import it from
+ * NoteList because it's a file-private helper; promoting it to
+ * a shared util is out of scope for this change.
+ */
+function relativeTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  const diff = Date.now() - t;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(iso).toISOString().slice(0, 10);
 }
 
 export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout }: NoteEditorProps) {
@@ -165,6 +192,12 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       </div>
     );
   }
+
+  // Word count for the statusbar. Mirrors the spec: trim, split on
+  // any whitespace, drop empties, count. Pure string math — no
+  // markdown stripping — so a 200-word doc with frontmatter shows
+  // the same count the user sees in their editor.
+  const words = body.trim().split(/\s+/).filter(Boolean).length;
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
@@ -269,14 +302,43 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
         </div>
       </header>
 
-      {/* Body — document-first, fills the rest of the pane. */}
+      {/* Body — document-first, fills the rest of the pane.
+          min-h-[60vh] guarantees a writing area even on empty notes
+          so the statusbar / backlinks below it never crowd into a
+          collapsed header. */}
       <textarea
         value={body}
         onChange={(e) => onBodyChange(e.target.value)}
         placeholder={t.placeholder}
-        className="flex-1 w-full p-4 bg-transparent text-base text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-relaxed"
+        className="flex-1 min-h-[60vh] w-full p-4 bg-transparent text-base text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-relaxed"
         data-testid="note-body"
       />
+
+      {/* Statusbar — word/char/read stats. When there are no
+          backlinks we also surface "Last updated Xm ago" on the
+          left so the strip carries a recency cue that would
+          otherwise only be visible in the list cells. */}
+      <footer
+        className="px-4 py-1.5 border-t border-border flex items-center justify-between text-[11px] text-text-muted"
+        data-testid="note-editor-statusbar"
+      >
+        <span data-testid="note-editor-last-updated">
+          {!(backlinks.data && hasAnyBacklink(backlinks.data.backlinks))
+            ? `${t.lastUpdated} ${relativeTime(note.updatedAt)}`
+            : ''}
+        </span>
+        <div className="flex items-center gap-4">
+          <span data-testid="note-editor-words">
+            {words === 0 ? t.bodyEmpty : `${words} ${t.words}`}
+          </span>
+          <span data-testid="note-editor-chars">
+            {body.length} {t.chars}
+          </span>
+          <span data-testid="note-editor-read">
+            ~{Math.max(1, Math.ceil(words / 200))} {t.minRead}
+          </span>
+        </div>
+      </footer>
 
       {/* Backlinks panel — full reverse-relationship view. Spec §26
           step 19: "用户一个月后询问当时为什么这样决定, 系统用

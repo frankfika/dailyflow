@@ -9,7 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending for next release
 
-- (none — 1.1.3 closes the spec §5.2 / §7.3 / §11.3 / F-02A gap)
+- 接 App.tsx:1134 把 `dailyNotes` / `onOpenNotesTab` 传给 TodayBacklog (Today's Notes 收口到 TodayBacklog, 删 App.tsx 的 DailyNoteCards 重复)
+- focus mode icon strip 在 > 20 notes 时需要 scroll 体验
+- 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
+- Notes focus 模式 + Settings 280% bug 修复均在 1.1.4
+
+## [1.1.4] - 2026-07-20
+
+### Added
+- **Today view UX 收紧** (`src/components/TodayBacklog.tsx`, commit `<pending>`) — 之前 50% 空白 + 7 个 task 藏在折叠组看不见, 现在:
+  - 4 stat cards strip: Tasks today / Overdue (红 if > 0) / Completed / Focus (0-3 进度条), 在 focus bar 与 filter pills 之间
+  - "No deadline" 组默认展开 + "Hide tasks without deadline" checkbox
+  - focus bar 短文案 "Add tasks below with + button, or let AI pick your 3."
+  - focus bar 下面 anchor 行 "↓ N today, N overdue" 视觉锚到下方 backlog
+  - 接口加可选 `dailyNotes` + `onOpenNotesTab` props (后向兼容, 父级没传则备用 section 不渲染)
+  - 配套 CSS 在 `src/index.css`: `.today-stat-strip` 4 列 grid + 响应式 2 列断点
+- **Note editor footer + polish** (`src/features/v2/notes/NoteEditor.tsx`, commit `<pending>`) — 让 editor 不再短 body 看起来太空:
+  - 底部 statusbar: `N words / N chars / ~N min read` (11px muted, 右对齐), 空 body 显示 "Empty"/"空白"
+  - body `min-h-[60vh]` 保证短 note 写区有合理高度
+  - 无 backlinks 时 footer 左侧加 "Last updated 5m ago" 用 relativeTime
+  - i18n COPY 加 5 个 key (zh + en): `words / chars / minRead / lastUpdated / bodyEmpty`
+
+### Fixed
+- **Settings 默认 Font Size 显示 280%** — `SettingsModal.tsx:483` 用 `80 + val*40` 算 label, 但实际 scale 用 `0.8 + val*0.04` (val=5 → CSS scale 1.0 = 100%, 但 label 显示 280%). 改 label 公式为 `Math.round((0.8 + val*0.04) * 100)`, 默认现在正确显示 "100%".
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 32 files / 304 tests pass
+- `npm run build` ✅ vite 2.92s, main chunk 368 kB (+5 kB for stat cards + footer)
+- 6/6 e2e pass (today-backlog + note-acceptance ×3 + notes-focus + notes-view)
 
 ## [1.1.3] - 2026-07-20
 
