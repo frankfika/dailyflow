@@ -68,9 +68,16 @@ function previewBody(n: NoteDocument): string {
   return lines.slice(0, 2).join(' ').slice(0, 140);
 }
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, lang: 'zh' | 'en' = 'en'): string {
   const t = new Date(iso).getTime();
   const diff = Date.now() - t;
+  if (lang === 'zh') {
+    if (diff < 60_000) return '刚刚';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
+    return new Date(iso).toISOString().slice(0, 10);
+  }
   if (diff < 60_000) return 'just now';
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
@@ -87,9 +94,11 @@ export interface NoteListProps {
   layout?: 'split' | 'note';
   /** Toggle between `split` and `note`. The list shows a small button when not collapsed. */
   onToggleLayout?: () => void;
+  /** UI language for relative-time copy. Defaults to English. */
+  language?: 'zh' | 'en';
 }
 
-export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayout }: NoteListProps) {
+export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayout, language = 'en' }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const create = useCreateNote();
   const archive = useArchiveNote();
@@ -220,7 +229,7 @@ export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayou
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-text-heading truncate">{title}</span>
                         <span className="text-[11px] text-text-muted shrink-0">
-                          {relativeTime(n.updatedAt)}
+                          {relativeTime(n.updatedAt, language)}
                         </span>
                       </div>
                       {preview && (
@@ -341,7 +350,16 @@ function useVisibleStrip(notes: NoteDocument[], selectedId: string | null, max: 
 }
 
 function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: FocusStripProps) {
-  const { shown, hiddenCount } = useVisibleStrip(notes, selectedId, STRIP_MAX_NOTES);
+  const { shown: cappedShown, hiddenCount } = useVisibleStrip(notes, selectedId, STRIP_MAX_NOTES);
+
+  // Expanded view (1.1.8 polish): when the user clicks the "N+"
+  // indicator we drop the cap and render every note as a dot, letting
+  // them scroll within the strip to find the one they want. The cap
+  // snaps back the moment the selected note changes so we never render
+  // more than the cap "at rest".
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? notes : cappedShown;
+  const activeHiddenCount = expanded ? 0 : hiddenCount;
 
   // Refs for scroll-into-view + IntersectionObserver.
   const scrollerRef = useRef<HTMLUListElement | null>(null);
@@ -469,9 +487,16 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
     cancelHover();
   }, [cancelHover]);
 
-  const openList = useCallback(() => {
-    onToggleLayout?.();
-  }, [onToggleLayout]);
+  // Toggle the strip's expanded view. When the strip overflows the
+  // 11-dot cap, clicking "N+" reveals every hidden note as a dot in
+  // place; clicking it again collapses back to the cap. We deliberately
+  // do NOT switch to the split layout here — the user is in focus mode
+  // because they want to keep their place, and forcing them out of
+  // focus every time the strip overflows is the exact thing audit
+  // #5 / 1.1.8 polish flagged.
+  const expandStrip = useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
 
   return (
     <div className="flex flex-col h-full" data-testid="notes-strip">
@@ -523,7 +548,13 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
                 }}
               >
                 <button
-                  onClick={() => onSelect(n.id)}
+                  onClick={() => {
+                    // Collapse the expanded view on selection so the
+                    // user gets a stable "where I am" view of the
+                    // strip after picking a note.
+                    setExpanded(false);
+                    onSelect(n.id);
+                  }}
                   onMouseEnter={(e) => handleDotEnter(e, n)}
                   onMouseMove={(e) => handleDotMove(e, n)}
                   onMouseLeave={handleDotLeave}
@@ -539,21 +570,43 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
               </li>
             );
           })}
-          {hiddenCount > 0 && (
+          {activeHiddenCount > 0 && (
             <li
               ref={(el) => {
                 lastNoteRef.current = el;
               }}
             >
               <button
-                onClick={openList}
+                onClick={expandStrip}
                 onMouseEnter={cancelHover}
                 onMouseLeave={handleDotLeave}
                 className="notes-strip-dot is-more"
-                title={`${hiddenCount} more — open list view`}
+                title={`${activeHiddenCount} more — ${expanded ? 'collapse' : 'reveal'} in the strip`}
+                aria-label={`${activeHiddenCount} more — ${expanded ? 'collapse' : 'reveal'} in the strip`}
+                aria-expanded={expanded}
                 data-testid="notes-strip-more"
               >
-                {hiddenCount}+
+                {expanded ? '−' : `${activeHiddenCount}+`}
+              </button>
+            </li>
+          )}
+          {expanded && activeHiddenCount === 0 && hiddenCount > 0 && (
+            // While expanded, surface a "collapse" button at the bottom
+            // so the user can return to the capped view without having
+            // to scroll back up. Only shown when there was overflow
+            // before expansion.
+            <li>
+              <button
+                onClick={expandStrip}
+                onMouseEnter={cancelHover}
+                onMouseLeave={handleDotLeave}
+                className="notes-strip-dot is-more"
+                title="Collapse strip back to cap"
+                aria-label="Collapse strip back to cap"
+                aria-expanded={expanded}
+                data-testid="notes-strip-more"
+              >
+                −
               </button>
             </li>
           )}

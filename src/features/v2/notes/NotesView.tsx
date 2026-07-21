@@ -94,6 +94,7 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
           onSelect={setSelectedId}
           layout={layout}
           onToggleLayout={toggleLayout}
+          language={language}
         />
       </aside>
       <main className="overflow-hidden">

@@ -193,10 +193,29 @@ test('notes focus mode caps strip at 12 and exposes N+ overflow', async ({ page,
   });
 
   // Move the mouse away to dismiss the tooltip, then click the "N+"
-  // placeholder — it should switch back to the list view.
+  // placeholder — per 1.1.8 polish it should reveal all hidden dots
+  // in-place (NOT switch to split layout, so the user can keep their
+  // place in focus mode).
   await page.mouse.move(0, 0);
   await page.getByTestId('notes-strip-more').click();
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
-  await expect(page.getByTestId('notes-list')).toBeVisible();
+  // Expanded: more button now shows "−" and aria-expanded flips.
+  await expect(page.getByTestId('notes-strip-more')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('notes-strip-more')).toHaveText('−');
+  // Layout must still be 'note' — clicking N+ does NOT switch back.
+  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+  // Notes list is hidden because layout is still 'note'.
+  await expect(page.getByTestId('notes-list')).toHaveCount(0);
+  // After expansion, every seeded note (except the cap-capped hidden)
+  // should be reachable in the strip.
+  for (const id of seededIds) {
+    await expect(page.getByTestId(`notes-strip-${id}`)).toBeVisible();
+  }
+  // Click again to collapse.
+  await page.getByTestId('notes-strip-more').click();
+  await expect(page.getByTestId('notes-strip-more')).toHaveAttribute('aria-expanded', 'false');
+  // After collapse the button shows "N+" (the exact N depends on how
+  // many other notes prior test runs left in the workspace, so we
+  // just check the suffix).
+  await expect(page.getByTestId('notes-strip-more')).toHaveText(/^\d+\+$/);
 });
 
