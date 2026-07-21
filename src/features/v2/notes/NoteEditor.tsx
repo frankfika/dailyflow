@@ -16,12 +16,12 @@
  *     race that the spec calls out.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, FileText, Lightbulb, Calendar } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks } from '../hooks/useNotes';
 import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
 import type { AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Button, Badge } from '../components/States';
-import type { NoteBacklinks } from '../api/client';
+import type { NoteBacklinks, NoteKind } from '../api/client';
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -36,6 +36,10 @@ export interface NoteEditorProps {
   /** Toggle between `split` and `note`. The editor shows a small
    * button when the list is hidden. */
   onToggleLayout?: () => void;
+  /** Create a new note from a starter template. Used by the empty-
+   * state onboarding card so a user can pick a template instead of
+   * staring at a wall of textarea whitespace. */
+  onCreateFromTemplate?: (kind: NoteKind, body: string) => void | Promise<void>;
 }
 
 const COPY = {
@@ -59,6 +63,11 @@ const COPY = {
     chars: '字符',
     minRead: '分钟阅读',
     bodyEmpty: '空白',
+    onboardingTitle: '开始你的第一篇笔记',
+    onboardingHint: '挑一个模板，或直接在下面写',
+    templateDaily: '今日记录',
+    templateIdea: '想法捕捉',
+    templateMeeting: '会议纪要',
   },
   en: {
     placeholder: 'Start writing…',
@@ -80,6 +89,11 @@ const COPY = {
     chars: 'chars',
     minRead: 'min read',
     bodyEmpty: 'Empty',
+    onboardingTitle: 'Start your first note',
+    onboardingHint: 'Pick a template, or just start typing below',
+    templateDaily: "Today's log",
+    templateIdea: 'Idea capture',
+    templateMeeting: 'Meeting notes',
   },
 };
 
@@ -105,7 +119,7 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
   }
 }
 
-export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout }: NoteEditorProps) {
+export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate }: NoteEditorProps) {
   const t = COPY[language];
   const q = useNote(noteId);
   const note = q.data?.note;
@@ -152,9 +166,50 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   }, [noteId]);
 
   if (!noteId) {
+    // No note selected — show the same onboarding card the empty
+    // body uses, so the right pane is never just an empty void.
     return (
-      <div className={`flex items-center justify-center h-full text-text-muted ${className}`}>
-        <p className="text-sm">{t.empty}</p>
+      <div
+        className={`flex flex-col h-full items-center justify-center ${className}`}
+        data-testid="note-onboarding"
+      >
+        <div className="flex flex-col items-center gap-3 max-w-md text-center">
+          <p className="text-2xl font-semibold text-text-heading">
+            {t.onboardingTitle}
+          </p>
+          <p className="text-sm text-text-muted">{t.onboardingHint}</p>
+          {onCreateFromTemplate && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                data-testid="note-onboarding-template-daily"
+              >
+                <Calendar size={14} />
+                {t.templateDaily}
+              </button>
+              <button
+                type="button"
+                onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                data-testid="note-onboarding-template-idea"
+              >
+                <Lightbulb size={14} />
+                {t.templateIdea}
+              </button>
+              <button
+                type="button"
+                onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                data-testid="note-onboarding-template-meeting"
+              >
+                <FileText size={14} />
+                {t.templateMeeting}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -292,8 +347,11 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           full width of the editor column (no centered max-width
           island — Frank wanted the note to feel like a big writing
           surface, not a paragraph box). Generous left padding
-          aligns the start of every line with the title above. */}
-      <div className="flex-1 overflow-y-auto">
+          aligns the start of every line with the title above.
+          When the body is empty we overlay a centered onboarding
+          card with three starter templates so the right pane doesn't
+          look like an empty textarea floating in dead air. */}
+      <div className="flex-1 overflow-y-auto relative">
         <textarea
           value={body}
           onChange={(e) => onBodyChange(e.target.value)}
@@ -301,6 +359,50 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
           data-testid="note-body"
         />
+        {body.trim() === '' && onCreateFromTemplate && (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            data-testid="note-onboarding"
+          >
+            <div className="pointer-events-auto flex flex-col items-center gap-3 max-w-md text-center">
+              <p className="text-2xl font-semibold text-text-heading">
+                {t.onboardingTitle}
+              </p>
+              <p className="text-sm text-text-muted">
+                {t.onboardingHint}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  data-testid="note-onboarding-template-daily"
+                >
+                  <Calendar size={14} />
+                  {t.templateDaily}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  data-testid="note-onboarding-template-idea"
+                >
+                  <Lightbulb size={14} />
+                  {t.templateIdea}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  data-testid="note-onboarding-template-meeting"
+                >
+                  <FileText size={14} />
+                  {t.templateMeeting}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Statusbar — word/char/read stats, right-aligned to the

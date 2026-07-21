@@ -17,9 +17,11 @@
  * across sessions. We key on the workspace id when available so two
  * workspaces don't fight over the setting.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NoteList } from './NoteList';
 import { NoteEditor } from './NoteEditor';
+import { useCreateNote } from '../hooks/useNotes';
+import type { NoteKind } from '../api/client';
 
 export type NotesLayout = 'split' | 'note';
 
@@ -67,6 +69,7 @@ function saveLayout(layout: NotesLayout, workspaceId?: string) {
 export function NotesView({ initialNoteId = null, language = 'en', workspaceId }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(initialNoteId);
   const [layout, setLayout] = useState<NotesLayout>(() => loadLayout(workspaceId));
+  const create = useCreateNote();
   // Defer reading from localStorage until after mount to avoid a
   // hydration mismatch on first paint. The `useState(() => load...)`
   // already does this synchronously, but a subsequent effect lets us
@@ -79,6 +82,23 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
   }, [layout, workspaceId]);
 
   const toggleLayout = () => setLayout((l) => (l === 'split' ? 'note' : 'split'));
+
+  // Open a new note with a starter body (used by the editor's empty-
+  // state onboarding card). The card is rendered when the editor is
+  // mounted with an empty body — instead of staring at a tiny
+  // "Start writing..." placeholder floating in a wall of textarea
+  // whitespace, the user gets three starter templates to pick from.
+  const createAndOpen = useCallback(
+    async (kind: NoteKind, body: string) => {
+      const { note } = await create.mutateAsync({
+        body,
+        kind,
+        state: 'draft',
+      });
+      setSelectedId(note.id);
+    },
+    [create],
+  );
 
   // Keyboard shortcut: `mod+\` toggles between split and focus layouts.
   // `mod` is Cmd on macOS, Ctrl on Windows/Linux. We swallow the event
@@ -133,6 +153,7 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
           language={language}
           layout={layout}
           onToggleLayout={toggleLayout}
+          onCreateFromTemplate={createAndOpen}
         />
       </main>
     </div>
