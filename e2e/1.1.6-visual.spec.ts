@@ -1,4 +1,4 @@
-import { test, request } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 
 test('1.1.6 visual: settings workspace data + sidebar mode toggle', async ({ page, baseURL }) => {
   // Bootstrap workspace
@@ -25,7 +25,7 @@ test('1.1.6 visual: settings workspace data + sidebar mode toggle', async ({ pag
     const flist = await fresh.json();
     const wid = flist.workspaces.find((w: { name: string }) => w.name === 'e2e-workspace').id;
     const retry = await ctx.post(`/api/config/workspaces/${wid}/activate`);
-    expect(retry.ok()).toBeTruthy();
+    expect(retry.ok()).toBe(true);
   }
   await ctx.dispose();
 
@@ -40,7 +40,3 @@ test('1.1.6 visual: settings workspace data + sidebar mode toggle', async ({ pag
   await page.waitForTimeout(1500);
   await page.screenshot({ path: '/tmp/audit-1.1.6-settings.png', fullPage: true });
 });
-
-function expect(_v: unknown) {
-  return { ok: () => true, status: () => 200 };
-}

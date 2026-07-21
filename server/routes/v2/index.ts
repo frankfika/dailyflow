@@ -71,6 +71,13 @@ import {
   searchEntities,
 } from '../../services/v2/exportService.js';
 import {
+  importEntities,
+  resetWorkspace,
+  ImportOverwriteConflictError,
+  ImportWorkspaceMismatchError,
+  ResetConfirmError,
+} from '../../services/v2/importService.js';
+import {
   issueMobileToken,
   listMobileTokens,
   revokeMobileToken,
@@ -138,6 +145,32 @@ function handleError(err: unknown, res: Response): void {
   }
   if (err instanceof NoteNotFoundError) {
     res.status(404).json({ error: { code: 'not_found', message: err.message } });
+    return;
+  }
+  if (err instanceof ImportOverwriteConflictError) {
+    res.status(409).json({
+      error: {
+        code: 'overwrite_conflict',
+        message: err.message,
+        conflicts: err.conflicts,
+      },
+    });
+    return;
+  }
+  if (err instanceof ImportWorkspaceMismatchError) {
+    res.status(403).json({
+      error: {
+        code: 'workspace_mismatch',
+        message: err.message,
+        offenders: err.offenders,
+      },
+    });
+    return;
+  }
+  if (err instanceof ResetConfirmError) {
+    res.status(400).json({
+      error: { code: 'reset_confirm_required', message: err.message },
+    });
     return;
   }
   // Avoid leaking internals to the wire
@@ -1172,6 +1205,72 @@ v2Router.post('/mobile/capture', async (req, res) => {
     const input = MobileCaptureInputSchema.parse(req.body);
     const r = await mobileCapture(repo, ctx.workspaceId, input);
     res.status(201).json({ source: r.source });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Workspace data lifecycle (Phase X — import + reset)
+//
+//   POST /api/v2/import   { entities, mode }   → { imported, skipped, errors }
+//   POST /api/v2/reset    { confirm }          → { ok, cleared, preResetCounts }
+//
+// The body shape mirrors what `exportService.listEntities` produces, so a
+// round-trip through the UI's "Export JSON → Import JSON" loop is a no-op
+// at the data layer. The client's settings modal also accepts the same
+// payload, so we accept it directly here without re-shaping.
+// ---------------------------------------------------------------------------
+
+v2Router.post('/import', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const workspaceId = ctx.workspaceId;
+    const schema = z.object({
+      entities: z.record(z.array(z.unknown())).default({}),
+      mode: z.enum(['merge', 'overwrite']).optional(),
+    });
+    const parsed = schema.parse(req.body ?? {});
+    // Tolerant aliasing: the client export shape also puts notes and
+    // commitments at the top level of the payload. Pull those into the
+    // canonical `entities` map so we don't silently drop a third of the
+    // payload because the import format predates the spec.
+    const entities: Record<string, unknown[]> = { ...(parsed.entities as Record<string, unknown[]>) };
+    if (Array.isArray((req.body as any)?.notes)) {
+      entities.note = (entities.note ?? []).concat((req.body as any).notes);
+    }
+    if (Array.isArray((req.body as any)?.commitments)) {
+      entities.commitment = (entities.commitment ?? []).concat((req.body as any).commitments);
+    }
+    const result = await importEntities(repo, workspaceId, {
+      entities,
+      mode: parsed.mode,
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/reset', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const schema = z.object({
+      confirm: z.string().min(1),
+    });
+    const parsed = schema.parse(req.body ?? {});
+    const result = await resetWorkspace(repo, { confirm: parsed.confirm });
+    // After reset the existing repo instance is still alive (it just
+    // writes to a freshly-recreated audit log) — but res.locals.v2 was
+    // set at middleware time and may point at now-deleted directories.
+    // Re-bootstrap so subsequent requests on the same connection land
+    // on the fresh layout.
+    const { bootstrapV2 } = await import('../../services/v2/workspaceContext.js');
+    res.locals.v2 = await bootstrapV2({
+      workspaceRoot: ctx.root,
+      workspaceId: ctx.workspaceId,
+    });
+    res.status(200).json(result);
   } catch (err) {
     handleError(err, res);
   }

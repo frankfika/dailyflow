@@ -50,24 +50,28 @@ function ensureWorkspaces(config: Config): Config {
 
 export async function loadConfig(): Promise<Config> {
   let raw: Partial<Config> = {};
-  let needsPersist = false;
+  let fileExisted = false;
   try {
     const content = await fs.readFile(CONFIG_FILE, 'utf-8');
     raw = JSON.parse(content);
+    fileExisted = true;
   } catch (error: any) {
     if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
       throw error;
     }
-    needsPersist = true;
+    // File did not exist — that's a real first run, seed defaults.
   }
 
-  const hadWorkspaces = Array.isArray(raw.workspaces) && raw.workspaces.length > 0;
   const merged: Config = { ...DEFAULT_CONFIG, ...raw };
   const normalized = ensureWorkspaces(merged);
 
-  if (!hadWorkspaces) needsPersist = true;
-
-  if (needsPersist) {
+  // Only seed the file when it was missing entirely. If the file existed
+  // but had no workspaces, the user either (a) explicitly deleted the last
+  // workspace via DELETE /api/config/workspaces/:id, or (b) a race left
+  // the file empty. In both cases we must NOT echo an empty workspaces
+  // array back to disk — that would re-wipe on the next read, and the
+  // resulting cascade is what was wiping the e2e workspace mid-test.
+  if (!fileExisted) {
     try {
       const dir = path.dirname(CONFIG_FILE);
       await fs.mkdir(dir, { recursive: true });

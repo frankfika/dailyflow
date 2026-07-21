@@ -216,9 +216,12 @@ test('§26 step 19 — memory search surfaces notes with a matching snippet', as
   //    extraction in memoryService.ts preserves a window around the
   //    matched token, so a single distinctive word is enough to be
   //    certain the body is being indexed and surfaced.
+  //    limit=50 keeps the test stable across runs: each §26 step 19 run
+  //    creates a new "v2 spec acceptance for Note backlinks" note, and
+  //    the default 20 can clip ours off the end as data accumulates.
   const token = 'backlinks';
   const search2 = await ctx.get(
-    `/api/v2/memory/search?q=${encodeURIComponent(token)}`,
+    `/api/v2/memory/search?q=${encodeURIComponent(token)}&limit=50`,
   );
   expect(search2.ok()).toBeTruthy();
   const hits2: Array<{ type: string; id: string; snippet: string }> =

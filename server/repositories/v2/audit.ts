@@ -36,7 +36,9 @@ export type AuditEventKind =
   | 'agent.error'
   | 'system.error'
   | 'file.write'
-  | 'file.conflict';
+  | 'file.conflict'
+  | 'workspace.reset'
+  | 'workspace.import';
 
 export interface AuditEvent {
   /** Stable, time-sortable id. */

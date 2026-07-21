@@ -317,10 +317,19 @@ export default function App() {
   // Save activeContext when it changes
   useEffect(() => {
     document.documentElement.setAttribute('data-context', activeContext);
-    
+
     const saveActiveContext = async () => {
       try {
         const config = await configApi.get();
+        // Guard: do not echo a partial config back if the server has no
+        // workspaces yet. saveConfig() treats an empty workspaces array
+        // as "reset to first-run", so this would wipe a workspace the
+        // user just created via the bootstrap API but hasn't loaded the
+        // app for yet (e.g. right after the e2e bootstrap creates a
+        // workspace and the page navigates to the dashboard before the
+        // first GET returns the new list).
+        const list = Array.isArray(config.workspaces) ? config.workspaces : [];
+        if (list.length === 0) return;
         await configApi.update({
           ...config,
           activeContext,

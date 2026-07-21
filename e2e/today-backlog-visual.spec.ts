@@ -1,25 +1,46 @@
 import { test, expect, request } from '@playwright/test';
 
-test('today-backlog renders in Today view', async ({ page, baseURL }) => {
-  // Seed workspace via API so WorkspaceSetup modal doesn't gate the page.
+/**
+ * Resolve (or re-create) the e2e-workspace and activate it. If a prior
+ * test run left a half-state (config entry exists but workspaceRoot
+ * was never bootstrapped), the first activate will 404; in that case we
+ * create the workspace fresh and try again. Mirrors the helper in
+ * note-acceptance.spec.ts so the two tests behave the same way under
+ * sequential execution.
+ */
+async function bootstrapWorkspace(baseURL: string | undefined): Promise<void> {
+  if (!baseURL) throw new Error('baseURL is required');
   const ctx = await request.newContext({ baseURL });
-  const createRes = await ctx.post('/api/config/workspaces', {
-    data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
-  });
-  let workspaceId: string;
-  if (createRes.ok()) {
-    workspaceId = (await createRes.json()).id;
-  } else {
-    const listRes = await ctx.get('/api/config/workspaces');
-    const list = await listRes.json();
-    workspaceId = list.workspaces.find(
-      (w: { name: string }) => w.name === 'e2e-workspace',
-    ).id;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const createRes = await ctx.post('/api/config/workspaces', {
+      data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+    });
+    let workspaceId: string;
+    if (createRes.ok()) {
+      workspaceId = (await createRes.json()).id;
+    } else {
+      const listRes = await ctx.get('/api/config/workspaces');
+      const list = await listRes.json();
+      workspaceId = list.workspaces.find(
+        (w: { name: string }) => w.name === 'e2e-workspace',
+      ).id;
+    }
+    const activateRes = await ctx.post(`/api/config/workspaces/${workspaceId}/activate`);
+    if (activateRes.ok()) {
+      await ctx.dispose();
+      return;
+    }
+    if (attempt === 1) {
+      throw new Error(
+        `activate failed after retry: ${activateRes.status()} ${await activateRes.text()}`,
+      );
+    }
+    // 404 on first try: stale config entry. Recreate on the next loop.
   }
-  const activateRes = await ctx.post(`/api/config/workspaces/${workspaceId}/activate`);
-  console.log('ACTIVATE status:', activateRes.status(), await activateRes.text());
-  expect(activateRes.ok()).toBeTruthy();
-  await ctx.dispose();
+}
+
+test('today-backlog renders in Today view', async ({ page, baseURL }) => {
+  await bootstrapWorkspace(baseURL);
 
   // Seed today's file with a few tasks so the backlog groups are populated.
   const today = new Date().toISOString().slice(0, 10);
