@@ -30,6 +30,7 @@ import { createPortal } from 'react-dom';
 import { useNotes, useCreateNote, useArchiveNote, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
+import { Minimize2 } from 'lucide-react';
 
 type ViewKey = 'all' | 'recent' | 'daily' | 'meeting' | 'project' | 'pinned' | 'archived';
 
@@ -504,10 +505,10 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
         onClick={onToggleLayout}
         className="m-2 p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10 self-end"
         title="Show list"
-        data-testid="notes-show-list"
+        data-testid="notes-strip-show-list"
         aria-label="Show list"
       >
-        ⇆
+        <Minimize2 size={14} />
       </button>
       <div className="notes-strip-scroll relative flex-1 min-h-0">
         <div

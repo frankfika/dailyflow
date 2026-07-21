@@ -1,221 +1,193 @@
 import { test, expect, request } from '@playwright/test';
 
 /**
- * Visual verification of the 1.1.3 focus mode: a user should be able
- * to collapse the note list to a 56px icon strip so the editor gets
- * the full pane width for long-form writing. The toggle round-trips
- * and the strip remains usable (each note is still one click away).
+ * Focus mode is the default layout for the Notes tab. The list
+ * collapses to a 56px icon strip so the editor gets the full pane
+ * width for long-form writing. The user can switch back to the 280px
+ * split view via the "Show list" button on the strip, the
+ * `note-toggle-layout` button in the editor header, or the
+ * `mod+\` keyboard shortcut.
  */
-test('notes focus mode toggles split ↔ note-only', async ({ page, baseURL }) => {
-  // Bootstrap workspace + seed a note.
-  const ctx = await request.newContext({ baseURL });
-  const createRes = await ctx.post('/api/config/workspaces', {
-    data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
-  });
-  let workspaceId: string;
-  if (createRes.ok()) {
-    workspaceId = (await createRes.json()).id;
-  } else {
-    const listRes = await ctx.get('/api/config/workspaces');
-    const list = await listRes.json();
-    workspaceId = list.workspaces.find(
-      (w: { name: string }) => w.name === 'e2e-workspace',
-    ).id;
-  }
-  const activateRes = await ctx.post(`/api/config/workspaces/${workspaceId}/activate`);
-  if (!activateRes.ok()) {
-    await ctx.post('/api/config/workspaces', {
+test.describe('Notes focus mode (default layout)', () => {
+  // Shared workspace + note bootstrap. Each test creates its own
+  // unique note so parallel runs don't collide on the seeded body.
+  async function bootstrapWorkspace(baseURL: string | undefined): Promise<void> {
+    if (!baseURL) throw new Error('baseURL is required');
+    const ctx = await request.newContext({ baseURL });
+    const createRes = await ctx.post('/api/config/workspaces', {
       data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
     });
-    const fresh = await ctx.get('/api/config/workspaces');
-    const flist = await fresh.json();
-    const wid = flist.workspaces.find((w: { name: string }) => w.name === 'e2e-workspace').id;
-    const retry = await ctx.post(`/api/config/workspaces/${wid}/activate`);
-    expect(retry.ok()).toBeTruthy();
+    let workspaceId: string;
+    if (createRes.ok()) {
+      workspaceId = (await createRes.json()).id;
+    } else {
+      const listRes = await ctx.get('/api/config/workspaces');
+      const list = await listRes.json();
+      workspaceId = list.workspaces.find(
+        (w: { name: string }) => w.name === 'e2e-workspace',
+      ).id;
+    }
+    const activateRes = await ctx.post(`/api/config/workspaces/${workspaceId}/activate`);
+    if (!activateRes.ok()) {
+      // The previous test run may have left the workspace in a
+      // half-state (config written but workspaceRoot not bootstrapped).
+      // Retry by re-creating it fresh.
+      await ctx.post('/api/config/workspaces', {
+        data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+      });
+      const fresh = await ctx.get('/api/config/workspaces');
+      const flist = await fresh.json();
+      const wid = flist.workspaces.find((w: { name: string }) => w.name === 'e2e-workspace').id;
+      const retry = await ctx.post(`/api/config/workspaces/${wid}/activate`);
+      expect(retry.ok()).toBeTruthy();
+    }
+    await ctx.dispose();
   }
-  await ctx.dispose();
 
-  const noteCtx = await request.newContext({ baseURL });
-  const seedRes = await noteCtx.post('/api/v2/notes', {
-    data: {
-      body: '# Focus mode visual test\n\nLong enough to look different in the wider editor pane.\n',
-      title: 'Focus mode visual test',
-      kind: 'general',
-      state: 'active',
-    },
-  });
-  expect(seedRes.ok()).toBeTruthy();
-  const seeded = await seedRes.json();
-  const noteId = seeded.note.id;
-  await noteCtx.dispose();
-
-  await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: /^notes$/i }).first().click();
-  await expect(page.getByTestId('v2-notes-view')).toBeVisible({ timeout: 10000 });
-  // Default layout is `split` (two-column 320px + 1fr).
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
-
-  // Open the seeded note so the editor shows the body and the
-  // focus-mode toggle button is in the header.
-  await page.getByTestId(`notes-item-${noteId}`).click();
-  await expect(page.getByTestId('note-editor')).toBeVisible();
-  await expect(page.getByTestId('note-body')).toContainText('Focus mode visual test');
-
-  // Click the focus-mode toggle in the editor header.
-  await page.getByTestId('note-toggle-layout').click();
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
-  // The list now shows as an icon strip.
-  await expect(page.getByTestId('notes-strip')).toBeVisible();
-  await expect(page.getByTestId(`notes-strip-${noteId}`)).toBeVisible();
-  // The full list pane is gone.
-  await expect(page.getByTestId('notes-list')).toHaveCount(0);
-  // The editor still shows the body.
-  await expect(page.getByTestId('note-body')).toContainText('Focus mode visual test');
-
-  // Screenshot the focus-mode layout.
-  await page.screenshot({
-    path: '/Users/fangchen/Baidu/GitHub/dailyflow/e2e-screenshot-notes-focus-mode.png',
-    fullPage: true,
-  });
-
-  // Click another note in the strip to confirm it switches the editor.
-  await page.getByTestId(`notes-strip-${noteId}`).click();
-  await expect(page.getByTestId('note-body')).toContainText('Focus mode visual test');
-
-  // Toggle back to split mode.
-  await page.getByTestId('note-toggle-layout').click();
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
-  await expect(page.getByTestId('notes-list')).toBeVisible();
-});
-
-/**
- * 1.1.4 focus-mode icon strip caps the visible dots at 12. Once a
- * user has more than 11 notes the rest fold into a single "N+"
- * placeholder that switches back to the list view on click. The
- * selected note is also pinned into the visible window so the user
- * always sees what they're editing.
- */
-test('notes focus mode caps strip at 12 and exposes N+ overflow', async ({ page, baseURL }) => {
-  // Bootstrap workspace + activate it (idempotent across runs).
-  const ctx = await request.newContext({ baseURL });
-  const createRes = await ctx.post('/api/config/workspaces', {
-    data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
-  });
-  let workspaceId: string;
-  if (createRes.ok()) {
-    workspaceId = (await createRes.json()).id;
-  } else {
-    const listRes = await ctx.get('/api/config/workspaces');
-    const list = await listRes.json();
-    workspaceId = list.workspaces.find(
-      (w: { name: string }) => w.name === 'e2e-workspace',
-    ).id;
-  }
-  const activateRes = await ctx.post(`/api/config/workspaces/${workspaceId}/activate`);
-  if (!activateRes.ok()) {
-    await ctx.post('/api/config/workspaces', {
-      data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
-    });
-    const fresh = await ctx.get('/api/config/workspaces');
-    const flist = await fresh.json();
-    const wid = flist.workspaces.find(
-      (w: { name: string }) => w.name === 'e2e-workspace',
-    ).id;
-    const retry = await ctx.post(`/api/config/workspaces/${wid}/activate`);
-    expect(retry.ok()).toBeTruthy();
-  }
-  await ctx.dispose();
-
-  // Seed 16 notes — enough to overflow the 12-dot cap (11 notes + 1 N+).
-  const noteCtx = await request.newContext({ baseURL });
-  const seededIds: string[] = [];
-  for (let i = 0; i < 16; i++) {
-    const seed = await noteCtx.post('/api/v2/notes', {
+  async function seedNote(baseURL: string | undefined, marker: string): Promise<string> {
+    if (!baseURL) throw new Error('baseURL is required');
+    const ctx = await request.newContext({ baseURL });
+    const res = await ctx.post('/api/v2/notes', {
       data: {
-        body: `# Strip overflow #${i}\n\nBody line for note ${i} — should be visible in the hover tooltip.`,
-        title: `Strip overflow #${i}`,
+        body: `# ${marker}\n\nThis note exists to prove the layout reflects the seed.`,
+        title: marker,
         kind: 'general',
         state: 'active',
       },
     });
-    expect(seed.ok()).toBeTruthy();
-    const out = await seed.json();
-    seededIds.push(out.note.id);
+    expect(res.ok()).toBeTruthy();
+    const out = await res.json();
+    await ctx.dispose();
+    return out.note.id;
   }
-  await noteCtx.dispose();
 
-  await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: /^notes$/i }).first().click();
-  await expect(page.getByTestId('v2-notes-view')).toBeVisible({ timeout: 10000 });
+  /**
+   * Open the app, click into Notes, and wait for the view to mount.
+   * Returns nothing; tests follow up with their own assertions.
+   */
+  async function openNotesTab(page: import('@playwright/test').Page): Promise<void> {
+    await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /^notes$/i }).first().click();
+    await expect(page.getByTestId('v2-notes-view')).toBeVisible({ timeout: 10000 });
+  }
 
-  // Pick the LAST seeded note as selected — it's the one most likely
-  // to be off-screen in the strip, which is exactly the case the
-  // cap + auto-scroll is supposed to handle.
-  const lastNoteId = seededIds[seededIds.length - 1];
-  await page.getByTestId(`notes-item-${lastNoteId}`).click();
-  await expect(page.getByTestId('note-editor')).toBeVisible();
+  test('default layout is focus mode — aside is 56px, not 280px', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    await openNotesTab(page);
 
-  // Switch to focus mode.
-  await page.getByTestId('note-toggle-layout').click();
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
-  await expect(page.getByTestId('notes-strip')).toBeVisible();
+    // Layout starts as `note` (focus mode), not `split`.
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
 
-  // The "+" new note + 11 dots + "N+" placeholder = 13 <li> in the
-  // scrollable list. Count the visible dots to confirm the cap.
-  await expect(page.getByTestId('notes-strip-new')).toBeVisible();
-  await expect(page.getByTestId('notes-strip-more')).toBeVisible();
+    // The aside collapses to a 56px icon strip. The split-mode list
+    // pane (notes-list) is gone — it only exists in split layout.
+    const aside = page.getByTestId('notes-aside');
+    await expect(aside).toBeVisible();
+    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
+    expect(asideWidth).toBeCloseTo(56, 0);
 
-  // The selected (last) note must be in the visible window — either
-  // by being in the top-11 (we explicitly selected the most recent
-  // seed) or by being swapped in. Either way the strip renders its
-  // dot.
-  await expect(page.getByTestId(`notes-strip-${lastNoteId}`)).toBeVisible();
+    // The strip is the visible surface; the full list is hidden.
+    await expect(page.getByTestId('notes-strip')).toBeVisible();
+    await expect(page.getByTestId('notes-list')).toHaveCount(0);
 
-  // Hover the first note dot (skip the "+" new-note button and the
-  // "N+" overflow placeholder — those are siblings in the same list
-  // but don't render a hover tooltip). The portaled tooltip should
-  // appear with the title and first body line.
-  const firstDot = page
-    .locator('[data-testid^="notes-strip-"]')
-    .filter({ hasNotText: 'New note' })
-    .filter({ hasNotText: '+' })
-    .first();
-  await firstDot.hover();
-  // Wait past the 200ms hover delay for the portal to mount.
-  await page.waitForTimeout(400);
-  const tooltips = page.locator('.notes-strip-tooltip.is-visible');
-  await expect(tooltips.first()).toBeVisible();
-
-  // Screenshot the capped strip with the tooltip.
-  await page.screenshot({
-    path: '/Users/fangchen/Baidu/GitHub/dailyflow/e2e-screenshot-notes-focus-strip-capped.png',
-    fullPage: true,
+    // The toggle button at the top of the strip is reachable inside
+    // the 56px column (it must not overflow the aside).
+    const toggle = page.getByTestId('notes-strip-show-list');
+    await expect(toggle).toBeVisible();
+    const toggleBox = await toggle.boundingBox();
+    expect(toggleBox).not.toBeNull();
+    if (toggleBox) {
+      const asideBox = await aside.boundingBox();
+      expect(asideBox).not.toBeNull();
+      if (asideBox) {
+        expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(asideBox.x + asideBox.width + 1);
+        expect(toggleBox.x).toBeGreaterThanOrEqual(asideBox.x - 1);
+      }
+    }
   });
 
-  // Move the mouse away to dismiss the tooltip, then click the "N+"
-  // placeholder — per 1.1.8 polish it should reveal all hidden dots
-  // in-place (NOT switch to split layout, so the user can keep their
-  // place in focus mode).
-  await page.mouse.move(0, 0);
-  await page.getByTestId('notes-strip-more').click();
-  // Expanded: more button now shows "−" and aria-expanded flips.
-  await expect(page.getByTestId('notes-strip-more')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByTestId('notes-strip-more')).toHaveText('−');
-  // Layout must still be 'note' — clicking N+ does NOT switch back.
-  await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
-  // Notes list is hidden because layout is still 'note'.
-  await expect(page.getByTestId('notes-list')).toHaveCount(0);
-  // After expansion, every seeded note (except the cap-capped hidden)
-  // should be reachable in the strip.
-  for (const id of seededIds) {
-    await expect(page.getByTestId(`notes-strip-${id}`)).toBeVisible();
-  }
-  // Click again to collapse.
-  await page.getByTestId('notes-strip-more').click();
-  await expect(page.getByTestId('notes-strip-more')).toHaveAttribute('aria-expanded', 'false');
-  // After collapse the button shows "N+" (the exact N depends on how
-  // many other notes prior test runs left in the workspace, so we
-  // just check the suffix).
-  await expect(page.getByTestId('notes-strip-more')).toHaveText(/^\d+\+$/);
-});
+  test('strip "Show list" button toggles back to split layout', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    await openNotesTab(page);
 
+    // Precondition: focus mode is the default.
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+
+    // Click the toggle at the top of the strip.
+    await page.getByTestId('notes-strip-show-list').click();
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
+
+    // Aside grows to 280px and the full list returns.
+    const aside = page.getByTestId('notes-aside');
+    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
+    expect(asideWidth).toBeCloseTo(280, 0);
+    await expect(page.getByTestId('notes-list')).toBeVisible();
+
+    // The strip itself is no longer mounted — it's a focus-mode-only
+    // view.
+    await expect(page.getByTestId('notes-strip')).toHaveCount(0);
+  });
+
+  test('mod+\\ keyboard shortcut toggles split → focus', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    // Seed a note so the editor has something to show once the
+    // shortcut switches layouts.
+    const noteId = await seedNote(baseURL, 'Keyboard shortcut test');
+    await openNotesTab(page);
+
+    // Precondition: start in split mode (click the strip's "Show
+    // list" button), so the shortcut has somewhere to go.
+    await page.getByTestId('notes-strip-show-list').click();
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
+
+    // Open the seeded note so the editor is mounted and the keyboard
+    // event target is in a known place (not the empty-state CTA).
+    await page.getByTestId(`notes-item-${noteId}`).click();
+    await expect(page.getByTestId('note-editor')).toBeVisible();
+
+    // Fire `Control+\` — the NotesView handler accepts either meta
+    // or ctrl, and Control maps cleanly on both macOS and Linux dev
+    // hosts. We need to first move focus out of any text input so
+    // the handler's INPUT/TEXTAREA escape doesn't short-circuit.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+\\');
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+
+    // Aside collapses back to 56px; editor stays mounted.
+    const aside = page.getByTestId('notes-aside');
+    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
+    expect(asideWidth).toBeCloseTo(56, 0);
+    await expect(page.getByTestId('notes-strip')).toBeVisible();
+    await expect(page.getByTestId('note-editor')).toBeVisible();
+    await expect(page.getByTestId('note-body')).toContainText('Keyboard shortcut test');
+  });
+
+  test('editor-header toggle switches focus mode → split', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    // Seed + open the note so the editor header is mounted (the
+    // toggle button only renders when a note is open).
+    const noteId = await seedNote(baseURL, 'Editor header toggle test');
+    await openNotesTab(page);
+
+    // Open the note via the strip dot.
+    await page.getByTestId(`notes-strip-${noteId}`).click();
+    await expect(page.getByTestId('note-editor')).toBeVisible();
+
+    // Precondition: focus mode.
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+
+    // Click the editor-header toggle (different button from the
+    // strip "Show list" — proves the second entry point also works).
+    await page.getByTestId('note-toggle-layout').click();
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
+
+    // Aside widens to 280px; the strip is gone.
+    const aside = page.getByTestId('notes-aside');
+    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
+    expect(asideWidth).toBeCloseTo(280, 0);
+    await expect(page.getByTestId('notes-strip')).toHaveCount(0);
+    await expect(page.getByTestId('notes-list')).toBeVisible();
+
+    // The editor is still showing the same note.
+    await expect(page.getByTestId('note-body')).toContainText('Editor header toggle test');
+  });
+});

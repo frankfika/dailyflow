@@ -16,6 +16,7 @@
  *     race that the spec calls out.
  */
 import { useEffect, useRef, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks } from '../hooks/useNotes';
 import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
 import type { AutosaveStatus } from '../hooks/useNotes';
@@ -57,7 +58,6 @@ const COPY = {
     words: '字',
     chars: '字符',
     minRead: '分钟阅读',
-    lastUpdated: '最后更新',
     bodyEmpty: '空白',
   },
   en: {
@@ -79,7 +79,6 @@ const COPY = {
     words: 'words',
     chars: 'chars',
     minRead: 'min read',
-    lastUpdated: 'Last updated',
     bodyEmpty: 'Empty',
   },
 };
@@ -104,30 +103,6 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
     case 'error': return 'danger';
     default: return 'default';
   }
-}
-
-/**
- * Local copy of NoteList's relativeTime helper. Mirrors the same
- * buckets (just now / Nm / Nh / Nd / ISO date) so the statusbar
- * reads the same as the list cells. We don't import it from
- * NoteList because it's a file-private helper; promoting it to
- * a shared util is out of scope for this change.
- */
-function relativeTime(iso: string, lang: 'zh' | 'en' = 'en'): string {
-  const t = new Date(iso).getTime();
-  const diff = Date.now() - t;
-  if (lang === 'zh') {
-    if (diff < 60_000) return '刚刚';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
-    return new Date(iso).toISOString().slice(0, 10);
-  }
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return new Date(iso).toISOString().slice(0, 10);
 }
 
 export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout }: NoteEditorProps) {
@@ -208,39 +183,24 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
-      {/* Title is optional — F-02A forbids blocking on a title. */}
-      <header className="px-4 pt-4 pb-2 flex flex-col gap-1 border-b border-border">
+      {/* Title is optional — F-02A forbids blocking on a title.
+          Header is two rows: (1) the title input, (2) the metadata /
+          actions strip. Both rows are capped at max-w-[68ch] and
+          centered so they line up with the body column below. */}
+      <header className="px-4 pt-4 pb-2 flex flex-col gap-2 border-b border-border">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder={t.untitled}
-          className="w-full bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
+          className="w-full max-w-[68ch] mx-auto bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
           data-testid="note-title"
         />
-        <div className="flex items-center gap-2 text-xs text-text-muted">
-          {autosave.status !== 'idle' && (
-            <Badge tone={statusTone(autosave.status)}>
-              {statusCopy(autosave.status, language)}
-            </Badge>
-          )}
-          <span>v{autosave.lastSavedVersion}</span>
-          <span>·</span>
-          <span>{new Date(note.updatedAt).toLocaleString()}</span>
-          <span className="ml-auto flex items-center gap-1">
-            {onToggleLayout && (
-              <button
-                onClick={onToggleLayout}
-                className={`px-1.5 py-0.5 border rounded ${
-                  layout === 'note'
-                    ? 'border-accent text-accent'
-                    : 'border-border text-text-muted'
-                }`}
-                data-testid="note-toggle-layout"
-                title={layout === 'note' ? t.showList : t.focusMode}
-                aria-label={layout === 'note' ? t.showList : t.focusMode}
-              >
-                {layout === 'note' ? '⇆' : '⛶'}
-              </button>
+        <div className="w-full max-w-[68ch] mx-auto flex items-center justify-between gap-2 text-xs text-text-muted">
+          <div className="flex items-center gap-2">
+            {autosave.status !== 'idle' && (
+              <Badge tone={statusTone(autosave.status)}>
+                {statusCopy(autosave.status, language)}
+              </Badge>
             )}
             <select
               value={note.kind}
@@ -278,6 +238,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               className="bg-transparent border border-border rounded px-1.5 py-0.5"
               data-testid="note-date"
             />
+          </div>
+          <div className="flex items-center gap-1">
             <button
               onClick={() =>
                 update.mutate({
@@ -305,36 +267,51 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             >
               {t.archive}
             </button>
-          </span>
+            {onToggleLayout && (
+              <button
+                onClick={onToggleLayout}
+                className={`px-2 py-1 border rounded inline-flex items-center justify-center transition-colors ${
+                  layout === 'note'
+                    ? 'border-accent text-accent bg-accent/5'
+                    : 'border-border text-text-muted hover:text-text-heading hover:border-text-muted'
+                }`}
+                data-testid="note-toggle-layout"
+                title={layout === 'note' ? t.showList : t.focusMode}
+                aria-label={layout === 'note' ? t.showList : t.focusMode}
+              >
+                {layout === 'note' ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Body — document-first, fills the rest of the pane.
-          min-h-[60vh] guarantees a writing area even on empty notes
-          so the statusbar / backlinks below it never crowd into a
-          collapsed header. */}
-      <textarea
-        value={body}
-        onChange={(e) => onBodyChange(e.target.value)}
-        placeholder={t.placeholder}
-        className="flex-1 min-h-[60vh] w-full p-4 bg-transparent text-base text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-relaxed"
-        data-testid="note-body"
-      />
+          The wrapper takes the remaining vertical space (flex-1) and
+          centers the textarea to a comfortable reading column
+          (max-w-[68ch]). Empty notes no longer reserve 60vh of dead
+          whitespace; the textarea sits at the top of the pane and
+          grows with content. */}
+      <div className="flex-1 overflow-y-auto flex justify-center">
+        <textarea
+          value={body}
+          onChange={(e) => onBodyChange(e.target.value)}
+          placeholder={t.placeholder}
+          className="w-full max-w-[68ch] min-h-full px-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
+          data-testid="note-body"
+        />
+      </div>
 
-      {/* Statusbar — word/char/read stats. When there are no
-          backlinks we also surface "Last updated Xm ago" on the
-          left so the strip carries a recency cue that would
-          otherwise only be visible in the list cells. */}
+      {/* Statusbar — word/char/read stats, aligned to the right
+          edge of the body column (max-w-[68ch]). The recency cue
+          used to live here but it duplicated the header timestamp
+          that we removed, so the strip now only carries live
+          writing stats. */}
       <footer
-        className="px-4 py-1.5 border-t border-border flex items-center justify-between text-[11px] text-text-muted"
+        className="px-4 py-1.5 border-t border-border"
         data-testid="note-editor-statusbar"
       >
-        <span data-testid="note-editor-last-updated">
-          {!(backlinks.data && hasAnyBacklink(backlinks.data.backlinks))
-            ? `${t.lastUpdated} ${relativeTime(note.updatedAt, language)}`
-            : ''}
-        </span>
-        <div className="flex items-center gap-4">
+        <div className="w-full max-w-[68ch] mx-auto flex items-center justify-end gap-4 text-[11px] text-text-muted">
           <span data-testid="note-editor-words">
             {words === 0 ? t.bodyEmpty : `${words} ${t.words}`}
           </span>

@@ -3,11 +3,13 @@
  * document-first editor. Used by the main App's Notes tab.
  *
  * Layout modes (spec F-02A asks for plenty of writing room):
- *   - `split` (default) — 320px list + 1fr editor, two-column
- *   - `note` — list collapses to a 56px icon strip so the editor
- *     gets the full pane width for long-form writing. The strip keeps
- *     every note reachable with a single click; the active note is
- *     highlighted.
+ *   - `note` (default) — list collapses to a 56px icon strip so the
+ *     editor gets the full pane width for long-form writing. The
+ *     strip keeps every note reachable with a single click; the
+ *     active note is highlighted.
+ *   - `split` — 280px list + 1fr editor, two-column. Toggle with
+ *     `mod+\` (Cmd+\ on macOS, Ctrl+\ on Windows/Linux) or the
+ *     button in the list header.
  *
  * The mode is persisted to localStorage so the user's choice sticks
  * across sessions. We key on the workspace id when available so two
@@ -33,13 +35,16 @@ const STORAGE_KEY = 'df_notes_layout';
 function loadLayout(workspaceId?: string): NotesLayout {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return 'split';
+    if (!raw) return 'note';
     const parsed = JSON.parse(raw) as Record<string, NotesLayout>;
+    // Preserve an explicit user choice (including 'split') for the active
+    // workspace — only fall through to the new focus-mode default when
+    // no value is stored for this workspace.
     if (workspaceId && parsed[workspaceId]) return parsed[workspaceId];
     if (parsed.__default) return parsed.__default;
-    return 'split';
+    return 'note';
   } catch {
-    return 'split';
+    return 'note';
   }
 }
 
@@ -71,7 +76,28 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
 
   const toggleLayout = () => setLayout((l) => (l === 'split' ? 'note' : 'split'));
 
-  const asideWidth = layout === 'split' ? '320px' : '56px';
+  // Keyboard shortcut: `mod+\` toggles between split and focus layouts.
+  // `mod` is Cmd on macOS, Ctrl on Windows/Linux. We swallow the event
+  // only when the user isn't typing into a text control, so editing
+  // notes still works as expected.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key !== '\\') return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (target.isContentEditable) return;
+      }
+      e.preventDefault();
+      setLayout((l) => (l === 'split' ? 'note' : 'split'));
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const asideWidth = layout === 'split' ? '280px' : '56px';
   const gridTemplate =
     typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
       ? `${asideWidth} 1fr`
