@@ -10,6 +10,14 @@ src-tauri/target/
 .playwright-mcp/
 test-results/
 playwright-report/
+# Debug-only specs that generate 1920x1080 screenshots for visual
+# verification. Not part of the CI suite — Frank runs them by hand
+# when the layout needs an eyeball check.
+e2e/visual-check.spec.ts
+e2e/measure-layout.spec.ts
+# Same as above — visual-check drops these into the repo root.
+visual-*-1920.png
+e2e-screenshot-state-*.png
 *.dmg
 dist-server/
 .vercel
