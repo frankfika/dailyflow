@@ -2,14 +2,16 @@
  * NotesView — the v2 Notes tab shell. Pairs a list of notes with the
  * document-first editor. Used by the main App's Notes tab.
  *
- * Layout modes (spec F-02A asks for plenty of writing room):
- *   - `note` (default) — list collapses to a 56px icon strip so the
- *     editor gets the full pane width for long-form writing. The
- *     strip keeps every note reachable with a single click; the
- *     active note is highlighted.
- *   - `split` — 280px list + 1fr editor, two-column. Toggle with
- *     `mod+\` (Cmd+\ on macOS, Ctrl+\ on Windows/Linux) or the
- *     button in the list header.
+ * Layout modes:
+ *   - `split` (default) — 280px list + 1fr editor, two-column. The
+ *     list shows real empty-state when there are no notes instead of
+ *     a 56px strip of dead air. Frank's 1.1.9 default was `note` and
+ *     the 56px column was an unusable dead column the user couldn't
+ *     get rid of without explicit action.
+ *   - `note` — list collapses to a 56px icon strip so the editor gets
+ *     the full pane width for long-form writing. Toggle with `mod+\`
+ *     (Cmd+\ on macOS, Ctrl+\ on Windows/Linux) or the button in the
+ *     list header.
  *
  * The mode is persisted to localStorage so the user's choice sticks
  * across sessions. We key on the workspace id when available so two
@@ -35,16 +37,18 @@ const STORAGE_KEY = 'df_notes_layout';
 function loadLayout(workspaceId?: string): NotesLayout {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return 'note';
+    if (!raw) return 'split';
     const parsed = JSON.parse(raw) as Record<string, NotesLayout>;
-    // Preserve an explicit user choice (including 'split') for the active
-    // workspace — only fall through to the new focus-mode default when
-    // no value is stored for this workspace.
+    // Preserve an explicit user choice (including 'note') for the
+    // active workspace — only fall through to the new default when no
+    // value is stored. Returning 'split' as the default means an empty
+    // notes list fills the 280px column with its real empty-state
+    // (no notes yet) rather than 56px of focus-strip dead air.
     if (workspaceId && parsed[workspaceId]) return parsed[workspaceId];
     if (parsed.__default) return parsed.__default;
-    return 'note';
+    return 'split';
   } catch {
-    return 'note';
+    return 'split';
   }
 }
 

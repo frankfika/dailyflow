@@ -63,80 +63,45 @@ test.describe('Notes focus mode (default layout)', () => {
 
   /**
    * Open the app, click into Notes, and wait for the view to mount.
-   * Returns nothing; tests follow up with their own assertions.
+   * Clears the layout preference from localStorage first so each
+   * test starts from a known default.
    */
   async function openNotesTab(page: import('@playwright/test').Page): Promise<void> {
     await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+    // Wipe any stored layout so the test starts from the actual
+    // loadLayout() default, not whatever a previous test / dev
+    // session left in localStorage.
+    await page.evaluate(() => localStorage.removeItem('df_notes_layout'));
+    await page.reload({ waitUntil: 'networkidle' });
     await page.getByRole('button', { name: /^notes$/i }).first().click();
     await expect(page.getByTestId('v2-notes-view')).toBeVisible({ timeout: 10000 });
   }
 
-  test('default layout is focus mode — aside is 56px, not 280px', async ({ page, baseURL }) => {
+  test('default layout is split — aside is 280px with the list, not 56px focus strip', async ({ page, baseURL }) => {
     await bootstrapWorkspace(baseURL);
     await openNotesTab(page);
 
-    // Layout starts as `note` (focus mode), not `split`.
-    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+    // Layout starts as `split` (full list), not `note` (focus strip).
+    // The 56px focus strip was eating the left edge with no useful
+    // content when the user wanted to look at the actual list.
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
 
-    // The aside collapses to a 56px icon strip. The split-mode list
-    // pane (notes-list) is gone — it only exists in split layout.
+    // The aside is the full list at 280px. The focus strip is gone.
     const aside = page.getByTestId('notes-aside');
     await expect(aside).toBeVisible();
     const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
-    expect(asideWidth).toBeCloseTo(56, 0);
-
-    // The strip is the visible surface; the full list is hidden.
-    await expect(page.getByTestId('notes-strip')).toBeVisible();
-    await expect(page.getByTestId('notes-list')).toHaveCount(0);
-
-    // The toggle button at the top of the strip is reachable inside
-    // the 56px column (it must not overflow the aside).
-    const toggle = page.getByTestId('notes-strip-show-list');
-    await expect(toggle).toBeVisible();
-    const toggleBox = await toggle.boundingBox();
-    expect(toggleBox).not.toBeNull();
-    if (toggleBox) {
-      const asideBox = await aside.boundingBox();
-      expect(asideBox).not.toBeNull();
-      if (asideBox) {
-        expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(asideBox.x + asideBox.width + 1);
-        expect(toggleBox.x).toBeGreaterThanOrEqual(asideBox.x - 1);
-      }
-    }
-  });
-
-  test('strip "Show list" button toggles back to split layout', async ({ page, baseURL }) => {
-    await bootstrapWorkspace(baseURL);
-    await openNotesTab(page);
-
-    // Precondition: focus mode is the default.
-    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
-
-    // Click the toggle at the top of the strip.
-    await page.getByTestId('notes-strip-show-list').click();
-    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
-
-    // Aside grows to 280px and the full list returns.
-    const aside = page.getByTestId('notes-aside');
-    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
     expect(asideWidth).toBeCloseTo(280, 0);
-    await expect(page.getByTestId('notes-list')).toBeVisible();
 
-    // The strip itself is no longer mounted — it's a focus-mode-only
-    // view.
+    await expect(page.getByTestId('notes-list')).toBeVisible();
     await expect(page.getByTestId('notes-strip')).toHaveCount(0);
   });
 
   test('mod+\\ keyboard shortcut toggles split → focus', async ({ page, baseURL }) => {
     await bootstrapWorkspace(baseURL);
-    // Seed a note so the editor has something to show once the
-    // shortcut switches layouts.
     const noteId = await seedNote(baseURL, 'Keyboard shortcut test');
     await openNotesTab(page);
 
-    // Precondition: start in split mode (click the strip's "Show
-    // list" button), so the shortcut has somewhere to go.
-    await page.getByTestId('notes-strip-show-list').click();
+    // Precondition: start in split mode (the new default).
     await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
 
     // Open the seeded note so the editor is mounted and the keyboard
@@ -146,13 +111,13 @@ test.describe('Notes focus mode (default layout)', () => {
 
     // Fire `Control+\` — the NotesView handler accepts either meta
     // or ctrl, and Control maps cleanly on both macOS and Linux dev
-    // hosts. We need to first move focus out of any text input so
-    // the handler's INPUT/TEXTAREA escape doesn't short-circuit.
+    // hosts. Move focus out of any text input first so the
+    // handler's INPUT/TEXTAREA escape doesn't short-circuit.
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Control+\\');
     await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
 
-    // Aside collapses back to 56px; editor stays mounted.
+    // Aside collapses to 56px strip; editor stays mounted.
     const aside = page.getByTestId('notes-aside');
     const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
     expect(asideWidth).toBeCloseTo(56, 0);
@@ -161,33 +126,47 @@ test.describe('Notes focus mode (default layout)', () => {
     await expect(page.getByTestId('note-body')).toContainText('Keyboard shortcut test');
   });
 
-  test('editor-header toggle switches focus mode → split', async ({ page, baseURL }) => {
+  test('editor-header toggle switches split → focus', async ({ page, baseURL }) => {
     await bootstrapWorkspace(baseURL);
-    // Seed + open the note so the editor header is mounted (the
-    // toggle button only renders when a note is open).
     const noteId = await seedNote(baseURL, 'Editor header toggle test');
     await openNotesTab(page);
 
-    // Open the note via the strip dot.
-    await page.getByTestId(`notes-strip-${noteId}`).click();
+    // Precondition: split (default). Open the note from the list.
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
+    await page.getByTestId(`notes-item-${noteId}`).click();
     await expect(page.getByTestId('note-editor')).toBeVisible();
 
-    // Precondition: focus mode.
+    // Click the editor-header toggle to enter focus mode.
+    await page.getByTestId('note-toggle-layout').click();
     await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
 
-    // Click the editor-header toggle (different button from the
-    // strip "Show list" — proves the second entry point also works).
-    await page.getByTestId('note-toggle-layout').click();
-    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
-
-    // Aside widens to 280px; the strip is gone.
+    // Aside collapses to 56px; the list is replaced by the strip.
     const aside = page.getByTestId('notes-aside');
     const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
-    expect(asideWidth).toBeCloseTo(280, 0);
-    await expect(page.getByTestId('notes-strip')).toHaveCount(0);
-    await expect(page.getByTestId('notes-list')).toBeVisible();
+    expect(asideWidth).toBeCloseTo(56, 0);
+    await expect(page.getByTestId('notes-strip')).toBeVisible();
+    await expect(page.getByTestId('notes-list')).toHaveCount(0);
 
     // The editor is still showing the same note.
     await expect(page.getByTestId('note-body')).toContainText('Editor header toggle test');
+  });
+
+  test('list-header "Focus" button switches split → focus', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    await openNotesTab(page);
+
+    // Precondition: split (default). The list header has its own
+    // focus-mode toggle so the user has three entry points
+    // (mod+\, editor header, list header).
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'split');
+
+    await page.getByTestId('notes-hide-list').click();
+    await expect(page.getByTestId('v2-notes-view')).toHaveAttribute('data-layout', 'note');
+
+    // Aside collapses to 56px; strip replaces the list.
+    const aside = page.getByTestId('notes-aside');
+    const asideWidth = await aside.evaluate((el) => el.getBoundingClientRect().width);
+    expect(asideWidth).toBeCloseTo(56, 0);
+    await expect(page.getByTestId('notes-strip')).toBeVisible();
   });
 });
