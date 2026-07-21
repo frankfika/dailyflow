@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.1.10] - 2026-07-21
+
+### Fixed
+- **Notes right pane actually fills the viewport** (`src/App.tsx`, `src/features/v2/notes/NoteEditor.tsx`, `src/features/v2/notes/NotesView.tsx`) — Frank 多次反馈 "note 太小 / 中间空 / section 留白大", 根因是 3 层嵌套限制:
+  - `App.tsx:1019` 的 page-style wrapper (`p-4 md:p-8 lg:p-12`) 给 Notes 套了 48px 横向 padding
+  - `App.tsx:1020` 的 `max-w-3xl mx-auto` 把整页挤到 768px 居中, 1920 视口里左右各漏 ~576px 蓝白渐变 background
+  - `App.tsx:1215` 我之前加的 `h-full w-full` wrapper 也被父级 max-w-3xl 卡住, 救不回来
+  - **修法**: Notes 跟 ai-chat/capsules 一样走 full-bleed wrapper (`overflow-hidden` + `w-full h-full`), 删掉废的 L1215 wrapper
+- **No-selection onboarding fills the right pane** (`src/features/v2/notes/NoteEditor.tsx`) — 之前 `!noteId` 早 return 用的是 `max-w-2xl` 简化 onboarding (标题 + 4 按钮 + hint), 右下半截完全空. 现在跟 body-empty 共享新抽出的 `OnboardingPanel` 组件 (大字 + 4 模板 + recent 3 个 + tips 双卡) 整片撑满
+- **List column no longer gets stretched by content** (`src/features/v2/notes/NotesView.tsx`) — aside 加 `min-w-0`, 280px 是死的, 不被 Card 内容撑大
+- **Shared `OnboardingPanel` component** (`src/features/v2/notes/NoteEditor.tsx`) — `!noteId` 分支和 empty-body 分支都渲染同一份 onboarding, 不会再出现两个 onboarding 长得不一样 (一个 max-w-2xl 小岛, 一个完整 3 段) 的分裂
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 33 files / 315 tests pass
+- `npx playwright test e2e/notes-focus-mode.spec.ts --workers=1` ✅ 4/4 pass
+- `npx playwright test e2e/visual-check.spec.ts` ✅ 1920×1080 截图肉眼确认 A/B/C 三个状态右半屏都撑满 1410px (从 x=510 到 x=1920), 不再有 section 留白
+
+## [1.1.9] - 2026-07-21
+
+### Changed (rolled back in 1.1.10)
+- **Focus mode is the default + body `max-w-[68ch] mx-auto` 居中** (`src/features/v2/notes/NotesView.tsx`, `src/features/v2/notes/NoteEditor.tsx`, commit `f144c0c`) — 试过把 focus 当 default 让长文写作有更多空间, 配合 `mod+\` 快捷键 + lucide `Maximize2`/`Minimize2` SVG toggle. **实际效果**: list 被压成 56px icon strip 是死列, 用户没法回 split. 1.1.10 改回 split default, focus mode 留作 opt-in
+- **`pl-6 pr-8` 左对齐 + `w-full` 撑满** (commit `9867b71`) — Frank 拒绝居中岛 (1.1.9 居中版), 改回左对齐撑满, 1.1.10 完整保留
+
 ## [1.1.8] - 2026-07-21
 
 ### Added

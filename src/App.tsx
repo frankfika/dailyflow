@@ -1016,8 +1016,15 @@ export default function App() {
           </button>
         )}
 
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
+        {/* Notes gets the same full-bleed wrapper as ai-chat/capsules
+            so the editor column actually fills the viewport. The default
+            `max-w-3xl mx-auto` collapses the right pane to ~480px on a
+            1920px screen — Frank 多次反馈 "note 太小 / 中间空 /
+            section 留白大", 根因就是这里. AI/capsules already escape
+            the page-style wrapper; notes needs the same treatment
+            because the v2 editor IS a wide-pane workspace, not a doc. */}
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">

@@ -129,13 +129,13 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
 
   return (
     <div
-      className="grid h-full overflow-hidden transition-[grid-template-columns] duration-200"
+      className="h-full grid overflow-hidden transition-[grid-template-columns] duration-200"
       data-testid="v2-notes-view"
       data-layout={layout}
-      style={{ gridTemplateColumns: gridTemplate }}
+      style={{ gridTemplateColumns: gridTemplate, minHeight: 0 }}
     >
       <aside
-        className="border-r border-border overflow-y-auto"
+        className="border-r border-border overflow-y-auto min-w-0"
         style={{ width: asideWidth }}
         data-testid="notes-aside"
       >
@@ -154,6 +154,7 @@ export function NotesView({ initialNoteId = null, language = 'en', workspaceId }
           layout={layout}
           onToggleLayout={toggleLayout}
           onCreateFromTemplate={createAndOpen}
+          onSelectNote={setSelectedId}
         />
       </main>
     </div>

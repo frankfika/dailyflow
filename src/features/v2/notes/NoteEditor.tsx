@@ -16,8 +16,8 @@
  *     race that the spec calls out.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, PenLine } from 'lucide-react';
-import { useNote, useNoteAutosave, useNoteBacklinks } from '../hooks/useNotes';
+import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, PenLine, ArrowRight } from 'lucide-react';
+import { useNote, useNoteAutosave, useNoteBacklinks, useNotes } from '../hooks/useNotes';
 import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
 import type { AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Button, Badge } from '../components/States';
@@ -40,6 +40,9 @@ export interface NoteEditorProps {
    * state onboarding card so a user can pick a template instead of
    * staring at a wall of textarea whitespace. */
   onCreateFromTemplate?: (kind: NoteKind, body: string) => void | Promise<void>;
+  /** Switch which note the editor is showing. Used by the recent-
+   * notes list in the empty-state onboarding card. */
+  onSelectNote?: (id: string) => void;
 }
 
 const COPY = {
@@ -69,6 +72,11 @@ const COPY = {
     templateIdea: '想法捕捉',
     templateMeeting: '会议纪要',
     templateBlank: '直接开始写',
+    recentSection: '或继续编辑',
+    recentEmpty: '还没有其他笔记。',
+    tipsTitle: '小贴士',
+    tipShortcut: '按 ⌘+\\ 切换专注模式',
+    tipAutosave: '输入自动保存,800ms debounce',
   },
   en: {
     placeholder: 'Start writing…',
@@ -96,8 +104,35 @@ const COPY = {
     templateIdea: 'Idea capture',
     templateMeeting: 'Meeting notes',
     templateBlank: 'Just start typing',
+    recentSection: 'Or pick up where you left off',
+    recentEmpty: 'No other notes yet.',
+    tipsTitle: 'Tips',
+    tipShortcut: 'Press ⌘+\\ to toggle focus mode',
+    tipAutosave: 'Edits auto-save (800ms debounce)',
   },
 };
+
+/**
+ * "X minutes ago" style short timestamp. Mirror of NoteList's
+ * helper so the onboarding card and the list agree on the same
+ * relative-time bucket names.
+ */
+function relativeTime(iso: string, lang: 'zh' | 'en' = 'en'): string {
+  const t = new Date(iso).getTime();
+  const diff = Date.now() - t;
+  if (lang === 'zh') {
+    if (diff < 60_000) return '刚刚';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(iso).toISOString().slice(0, 10);
+}
 
 function statusCopy(s: AutosaveStatus, lang: 'zh' | 'en'): string {
   const c = COPY[lang];
@@ -121,13 +156,21 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
   }
 }
 
-export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate }: NoteEditorProps) {
+export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote }: NoteEditorProps) {
   const t = COPY[language];
   const q = useNote(noteId);
   const note = q.data?.note;
   const update = useUpdateNote();
   const archive = useArchiveNote();
   const backlinks = useNoteBacklinks(noteId);
+  // Pull a small slice of recent notes so the empty-state card
+  // can offer a "pick up where you left off" section — without it
+  // the right pane is just the 4 template buttons floating in
+  // ~700px of viewport whitespace on a 1080p screen.
+  const recent = useNotes({ state: 'active' });
+  const recentItems = (recent.data?.notes ?? [])
+    .filter((n) => n.id !== noteId && (n.body?.trim() || n.title))
+    .slice(0, 3);
 
   // Local mirror of body and title. The hook drives persistence; this
   // is what the textarea reads/writes. We seed from the server fetch
@@ -193,58 +236,23 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   }, [noteId]);
 
   if (!noteId) {
-    // No note selected — show the same onboarding card the empty
-    // body uses, so the right pane is never just an empty void.
+    // No note selected — render the SAME full-bleed onboarding
+    // composition the empty-body branch uses (big headline, template
+    // buttons, recent notes, tips) so the right pane is filled top
+    // to bottom on a 1080p screen. The old 1.1.10 branch only
+    // showed a small `max-w-2xl` island in the top-left, which
+    // left the rest of the pane as a wall of gradient background —
+    // Frank 反馈 "section 留白大 / 中间空".
     return (
-      <div
-        className={`px-8 pt-12 pb-16 ${className}`}
-        data-testid="note-onboarding"
-      >
-        <div className="flex flex-col items-start gap-4 max-w-2xl">
-          <p className="text-4xl font-semibold text-text-heading leading-tight">
-            {t.onboardingTitle}
-          </p>
-          <p className="text-base text-text-muted">{t.onboardingHint}</p>
-          {onCreateFromTemplate && (
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                data-testid="note-onboarding-template-daily"
-              >
-                <Calendar size={18} />
-                {t.templateDaily}
-              </button>
-              <button
-                type="button"
-                onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                data-testid="note-onboarding-template-idea"
-              >
-                <Lightbulb size={18} />
-                {t.templateIdea}
-              </button>
-              <button
-                type="button"
-                onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                data-testid="note-onboarding-template-meeting"
-              >
-                <FileText size={18} />
-                {t.templateMeeting}
-              </button>
-              <button
-                type="button"
-                onClick={() => onCreateFromTemplate('general', '\u200B')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
-                data-testid="note-onboarding-blank"
-              >
-                <PenLine size={18} />
-                {t.templateBlank}
-              </button>
-            </div>
-          )}
+      <div className={`flex flex-col h-full ${className}`} data-testid="note-editor-no-selection">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <OnboardingPanel
+            t={t}
+            language={language}
+            onCreateFromTemplate={onCreateFromTemplate}
+            onSelectNote={onSelectNote}
+            recentItems={recentItems}
+          />
         </div>
       </div>
     );
@@ -379,64 +387,26 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       </header>
 
       {/* Body — when the user hasn't typed yet, render the onboarding
-          card INSTEAD of a textarea so the right pane is one composition
-          (no textarea whitespace below the card). The card is top-
-          aligned at the natural reading line — leaving whitespace below
-          the buttons reads as "this is where your writing will go"
-          rather than "an empty island surrounded by void". Once the
-          user types anything (or presses "Just start typing"), switch
-          to a textarea that fills the rest of the pane. */}
-      <div className="flex-1 overflow-y-auto">
+          composition INSTEAD of a textarea. The composition is built
+          to fill the right pane top-to-bottom on a 1080p screen:
+          big headline, full-width template buttons, recent notes
+          (so the user has somewhere to click even if they don't want
+          a template), and a tips row. Without these the right pane
+          is a tiny island in a sea of whitespace.
+
+          Once the user types anything (or presses "Just start
+          typing"), switch to a textarea that fills the rest of the
+          pane. */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {!bodyTouched && body === '' && onCreateFromTemplate ? (
-          <div
-            className="px-8 pt-12 pb-16"
-            data-testid="note-onboarding"
-          >
-            <div className="flex flex-col items-start gap-4 max-w-2xl">
-              <p className="text-4xl font-semibold text-text-heading leading-tight">
-                {t.onboardingTitle}
-              </p>
-              <p className="text-base text-text-muted">{t.onboardingHint}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                  data-testid="note-onboarding-template-daily"
-                >
-                  <Calendar size={18} />
-                  {t.templateDaily}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                  data-testid="note-onboarding-template-idea"
-                >
-                  <Lightbulb size={18} />
-                  {t.templateIdea}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-                  data-testid="note-onboarding-template-meeting"
-                >
-                  <FileText size={18} />
-                  {t.templateMeeting}
-                </button>
-                <button
-                  type="button"
-                  onClick={justStartTyping}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
-                  data-testid="note-onboarding-blank"
-                >
-                  <PenLine size={18} />
-                  {t.templateBlank}
-                </button>
-              </div>
-            </div>
-          </div>
+          <OnboardingPanel
+            t={t}
+            language={language}
+            onCreateFromTemplate={onCreateFromTemplate}
+            onSelectNote={onSelectNote}
+            recentItems={recentItems}
+            onJustStartTyping={justStartTyping}
+          />
         ) : (
           <textarea
             value={body}
@@ -485,6 +455,144 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * OnboardingPanel — the full-bleed empty-state composition used by
+ * two call sites:
+ *   1. The editor with no note selected (the first thing the user
+ *      sees when they open the Notes tab).
+ *   2. The editor mounted on an existing note whose body is empty
+ *      and the user hasn't typed yet (so they don't stare at a
+ *      wall of textarea whitespace).
+ *
+ * Both call sites used to render their own (different!) copy of
+ * the onboarding card — the no-selection variant was a small
+ * `max-w-2xl` island in the top-left, the empty-body variant was
+ * the full 3-section layout. Frank 反馈 "section 留白大 / 中间空"
+ * when entering the Notes tab with no note picked, because the
+ * top-left island left the rest of the pane as gradient
+ * background. Both call sites now share this single component.
+ */
+function OnboardingPanel({
+  t,
+  language,
+  onCreateFromTemplate,
+  onSelectNote,
+  recentItems,
+  onJustStartTyping,
+}: {
+  t: (typeof COPY)['en'];
+  language: 'zh' | 'en';
+  onCreateFromTemplate?: (kind: NoteKind, body: string) => void | Promise<void>;
+  onSelectNote?: (id: string) => void;
+  recentItems: { id: string; title?: string | null; body?: string | null; updatedAt: string }[];
+  onJustStartTyping?: () => void;
+}) {
+  return (
+    <div
+      className="h-full flex flex-col gap-8 px-10 py-10"
+      data-testid="note-onboarding"
+    >
+      <div className="flex flex-col items-start gap-5 w-full">
+        <p className="text-5xl font-semibold text-text-heading leading-tight tracking-tight">
+          {t.onboardingTitle}
+        </p>
+        <p className="text-lg text-text-muted">{t.onboardingHint}</p>
+        {onCreateFromTemplate && (
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            <button
+              type="button"
+              onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
+              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
+              data-testid="note-onboarding-template-daily"
+            >
+              <Calendar size={20} />
+              <span className="font-medium">{t.templateDaily}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
+              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
+              data-testid="note-onboarding-template-idea"
+            >
+              <Lightbulb size={20} />
+              <span className="font-medium">{t.templateIdea}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
+              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
+              data-testid="note-onboarding-template-meeting"
+            >
+              <FileText size={20} />
+              <span className="font-medium">{t.templateMeeting}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onJustStartTyping ?? (() => onCreateFromTemplate('general', '\u200B'))}
+              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
+              data-testid="note-onboarding-blank"
+            >
+              <PenLine size={20} />
+              <span className="font-medium">{t.templateBlank}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Recent notes — natural height, capped at 3 items. Hidden
+          when there's nothing real to show (e.g. fresh workspace). */}
+      {recentItems.length > 0 && (
+        <div className="flex flex-col items-start gap-3 w-full">
+          <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+            {t.recentSection}
+          </p>
+          <ul className="w-full flex flex-col gap-1">
+            {recentItems.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectNote?.(n.id)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left text-text-heading hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                  data-testid={`note-onboarding-recent-${n.id}`}
+                >
+                  <FileText size={16} className="shrink-0 text-text-muted" />
+                  <span className="flex-1 truncate font-medium">
+                    {n.title || (n.body?.split('\n')[0]?.slice(0, 60) || t.untitled)}
+                  </span>
+                  <span className="text-xs text-text-muted shrink-0">
+                    {relativeTime(n.updatedAt, language)}
+                  </span>
+                  <ArrowRight size={14} className="text-text-muted shrink-0" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Tips row — anchored at the bottom of the pane by the
+          recent-notes flex-1 spacer above. Cards have a solid
+          surface background so they're visible. */}
+      <div className="flex flex-col items-start gap-3 w-full">
+        <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+          {t.tipsTitle}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+          <div className="px-4 py-3 rounded-lg border border-border bg-surface text-sm text-text-muted">
+            <kbd className="font-mono text-xs px-1.5 py-0.5 rounded bg-background border border-border text-text-heading">
+              {language === 'zh' ? '⌘+\\' : 'mod+\\'}
+            </kbd>{' '}
+            {t.tipShortcut}
+          </div>
+          <div className="px-4 py-3 rounded-lg border border-border bg-surface text-sm text-text-muted">
+            {t.tipAutosave}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
