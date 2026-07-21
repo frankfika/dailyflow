@@ -31,6 +31,7 @@ import { useNotes, useCreateNote, useArchiveNote, useDeleteNote } from '../hooks
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
 import { Minimize2 } from 'lucide-react';
+import { relativeTime } from './relativeTime';
 
 type ViewKey = 'all' | 'recent' | 'daily' | 'meeting' | 'project' | 'pinned' | 'archived';
 
@@ -67,23 +68,6 @@ function inferGlyph(n: NoteDocument): string {
 function previewBody(n: NoteDocument): string {
   const lines = n.body?.split('\n').filter((l) => l.trim().length > 0) ?? [];
   return lines.slice(0, 2).join(' ').slice(0, 140);
-}
-
-function relativeTime(iso: string, lang: 'zh' | 'en' = 'en'): string {
-  const t = new Date(iso).getTime();
-  const diff = Date.now() - t;
-  if (lang === 'zh') {
-    if (diff < 60_000) return '刚刚';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
-    return new Date(iso).toISOString().slice(0, 10);
-  }
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return new Date(iso).toISOString().slice(0, 10);
 }
 
 export interface NoteListProps {
@@ -571,10 +555,18 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
               </li>
             );
           })}
-          {activeHiddenCount > 0 && (
+          {/* Single "more" toggle: shows N+ when capped, − when
+              expanded. The previous code had two parallel branches
+              with the same data-testid — one fired while
+              activeHiddenCount > 0, the other fired post-expansion
+              with hiddenCount > 0. They were mutually exclusive
+              (expansion forces activeHiddenCount = 0) so we collapse
+              to a single condition: there's something to expand OR
+              we're expanded and have overflow to collapse back. */}
+          {(activeHiddenCount > 0 || (expanded && hiddenCount > 0)) && (
             <li
               ref={(el) => {
-                lastNoteRef.current = el;
+                if (activeHiddenCount > 0) lastNoteRef.current = el;
               }}
             >
               <button
@@ -582,32 +574,20 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
                 onMouseEnter={cancelHover}
                 onMouseLeave={handleDotLeave}
                 className="notes-strip-dot is-more"
-                title={`${activeHiddenCount} more — ${expanded ? 'collapse' : 'reveal'} in the strip`}
-                aria-label={`${activeHiddenCount} more — ${expanded ? 'collapse' : 'reveal'} in the strip`}
+                title={
+                  expanded
+                    ? 'Collapse strip back to cap'
+                    : `${activeHiddenCount} more — reveal in the strip`
+                }
+                aria-label={
+                  expanded
+                    ? 'Collapse strip back to cap'
+                    : `${activeHiddenCount} more — reveal in the strip`
+                }
                 aria-expanded={expanded}
                 data-testid="notes-strip-more"
               >
                 {expanded ? '−' : `${activeHiddenCount}+`}
-              </button>
-            </li>
-          )}
-          {expanded && activeHiddenCount === 0 && hiddenCount > 0 && (
-            // While expanded, surface a "collapse" button at the bottom
-            // so the user can return to the capped view without having
-            // to scroll back up. Only shown when there was overflow
-            // before expansion.
-            <li>
-              <button
-                onClick={expandStrip}
-                onMouseEnter={cancelHover}
-                onMouseLeave={handleDotLeave}
-                className="notes-strip-dot is-more"
-                title="Collapse strip back to cap"
-                aria-label="Collapse strip back to cap"
-                aria-expanded={expanded}
-                data-testid="notes-strip-more"
-              >
-                −
               </button>
             </li>
           )}

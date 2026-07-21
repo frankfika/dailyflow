@@ -15,13 +15,12 @@
  *   - flush() on unmount prevents the "edited → navigated → lost"
  *     race that the spec calls out.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, PenLine, ArrowRight } from 'lucide-react';
-import { useNote, useNoteAutosave, useNoteBacklinks, useNotes } from '../hooks/useNotes';
-import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
-import type { AutosaveStatus } from '../hooks/useNotes';
-import { Spinner, Button, Badge } from '../components/States';
+import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useUpdateNote, useArchiveNote, type AutosaveStatus } from '../hooks/useNotes';
+import { Spinner, Badge } from '../components/States';
 import type { NoteBacklinks, NoteKind } from '../api/client';
+import { relativeTime } from './relativeTime';
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -59,7 +58,6 @@ const COPY = {
     date: '日期',
     pinned: '置顶',
     archive: '归档',
-    unarchive: '取消归档',
     showList: '显示列表',
     focusMode: '专注模式',
     words: '字',
@@ -73,7 +71,6 @@ const COPY = {
     templateMeeting: '会议纪要',
     templateBlank: '直接开始写',
     recentSection: '或继续编辑',
-    recentEmpty: '还没有其他笔记。',
     tipsTitle: '小贴士',
     tipShortcut: '按 ⌘+\\ 切换专注模式',
     tipAutosave: '输入自动保存,800ms debounce',
@@ -91,7 +88,6 @@ const COPY = {
     date: 'Date',
     pinned: 'Pinned',
     archive: 'Archive',
-    unarchive: 'Unarchive',
     showList: 'Show list',
     focusMode: 'Focus mode',
     words: 'words',
@@ -105,34 +101,11 @@ const COPY = {
     templateMeeting: 'Meeting notes',
     templateBlank: 'Just start typing',
     recentSection: 'Or pick up where you left off',
-    recentEmpty: 'No other notes yet.',
     tipsTitle: 'Tips',
     tipShortcut: 'Press ⌘+\\ to toggle focus mode',
     tipAutosave: 'Edits auto-save (800ms debounce)',
   },
 };
-
-/**
- * "X minutes ago" style short timestamp. Mirror of NoteList's
- * helper so the onboarding card and the list agree on the same
- * relative-time bucket names.
- */
-function relativeTime(iso: string, lang: 'zh' | 'en' = 'en'): string {
-  const t = new Date(iso).getTime();
-  const diff = Date.now() - t;
-  if (lang === 'zh') {
-    if (diff < 60_000) return '刚刚';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
-    return new Date(iso).toISOString().slice(0, 10);
-  }
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return new Date(iso).toISOString().slice(0, 10);
-}
 
 function statusCopy(s: AutosaveStatus, lang: 'zh' | 'en'): string {
   const c = COPY[lang];
@@ -184,10 +157,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   const [bodyTouched, setBodyTouched] = useState<boolean>(
     Boolean(note?.body),
   );
-  const seedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    seedRef.current = noteId;
     setBody(note?.body ?? '');
     setTitle(note?.title ?? '');
     setBodyTouched(Boolean(note?.body));
@@ -532,7 +503,7 @@ function OnboardingPanel({
             </button>
             <button
               type="button"
-              onClick={onJustStartTyping ?? (() => onCreateFromTemplate('general', '\u200B'))}
+              onClick={onJustStartTyping}
               className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
               data-testid="note-onboarding-blank"
             >

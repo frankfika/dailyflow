@@ -14,8 +14,7 @@
  *     list header.
  *
  * The mode is persisted to localStorage so the user's choice sticks
- * across sessions. We key on the workspace id when available so two
- * workspaces don't fight over the setting.
+ * across sessions.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { NoteList } from './NoteList';
@@ -26,60 +25,44 @@ import type { NoteKind } from '../api/client';
 export type NotesLayout = 'split' | 'note';
 
 export interface NotesViewProps {
-  /** Optional initial note id (deep link). */
-  initialNoteId?: string | null;
   /** Optional language for editor copy. */
   language?: 'zh' | 'en';
-  /** Optional workspace id for namespacing the layout preference. */
-  workspaceId?: string;
 }
 
 const STORAGE_KEY = 'df_notes_layout';
 
-function loadLayout(workspaceId?: string): NotesLayout {
+function loadLayout(): NotesLayout {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return 'split';
-    const parsed = JSON.parse(raw) as Record<string, NotesLayout>;
-    // Preserve an explicit user choice (including 'note') for the
-    // active workspace — only fall through to the new default when no
-    // value is stored. Returning 'split' as the default means an empty
-    // notes list fills the 280px column with its real empty-state
-    // (no notes yet) rather than 56px of focus-strip dead air.
-    if (workspaceId && parsed[workspaceId]) return parsed[workspaceId];
-    if (parsed.__default) return parsed.__default;
-    return 'split';
+    const parsed = JSON.parse(raw) as { __default?: NotesLayout };
+    // Preserve an explicit user choice (including 'note') — only fall
+    // through to the new default when no value is stored. Returning
+    // 'split' as the default means an empty notes list fills the
+    // 280px column with its real empty-state (no notes yet) rather
+    // than 56px of focus-strip dead air.
+    return parsed.__default ?? 'split';
   } catch {
     return 'split';
   }
 }
 
-function saveLayout(layout: NotesLayout, workspaceId?: string) {
+function saveLayout(layout: NotesLayout) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed: Record<string, NotesLayout> = raw ? JSON.parse(raw) : {};
-    if (workspaceId) parsed[workspaceId] = layout;
-    parsed.__default = layout;
+    const parsed: Record<string, NotesLayout> = { __default: layout };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
   } catch {
     // localStorage may be unavailable (private mode) — non-fatal.
   }
 }
 
-export function NotesView({ initialNoteId = null, language = 'en', workspaceId }: NotesViewProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(initialNoteId);
-  const [layout, setLayout] = useState<NotesLayout>(() => loadLayout(workspaceId));
+export function NotesView({ language = 'en' }: NotesViewProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [layout, setLayout] = useState<NotesLayout>(() => loadLayout());
   const create = useCreateNote();
-  // Defer reading from localStorage until after mount to avoid a
-  // hydration mismatch on first paint. The `useState(() => load...)`
-  // already does this synchronously, but a subsequent effect lets us
-  // react to workspace changes.
   useEffect(() => {
-    setLayout(loadLayout(workspaceId));
-  }, [workspaceId]);
-  useEffect(() => {
-    saveLayout(layout, workspaceId);
-  }, [layout, workspaceId]);
+    saveLayout(layout);
+  }, [layout]);
 
   const toggleLayout = () => setLayout((l) => (l === 'split' ? 'note' : 'split'));
 
