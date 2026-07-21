@@ -16,7 +16,7 @@
  *     race that the spec calls out.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, FileText, Lightbulb, Calendar } from 'lucide-react';
+import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, PenLine } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks } from '../hooks/useNotes';
 import { useUpdateNote, useArchiveNote } from '../hooks/useNotes';
 import type { AutosaveStatus } from '../hooks/useNotes';
@@ -68,6 +68,7 @@ const COPY = {
     templateDaily: '今日记录',
     templateIdea: '想法捕捉',
     templateMeeting: '会议纪要',
+    templateBlank: '直接开始写',
   },
   en: {
     placeholder: 'Start writing…',
@@ -94,6 +95,7 @@ const COPY = {
     templateDaily: "Today's log",
     templateIdea: 'Idea capture',
     templateMeeting: 'Meeting notes',
+    templateBlank: 'Just start typing',
   },
 };
 
@@ -132,12 +134,20 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // and only re-seed on noteId change.
   const [body, setBody] = useState<string>(note?.body ?? '');
   const [title, setTitle] = useState<string>(note?.title ?? '');
+  // Once the user has touched the body — typed a character or
+  // pressed "Just start typing" — we never put the onboarding card
+  // back in front of them. Otherwise erasing every character would
+  // teleport them back to the templates, which feels punitive.
+  const [bodyTouched, setBodyTouched] = useState<boolean>(
+    Boolean(note?.body),
+  );
   const seedRef = useRef<string | null>(null);
 
   useEffect(() => {
     seedRef.current = noteId;
     setBody(note?.body ?? '');
     setTitle(note?.title ?? '');
+    setBodyTouched(Boolean(note?.body));
   }, [noteId, note?.body, note?.title]);
 
   const autosave = useNoteAutosave(note ?? null);
@@ -146,11 +156,28 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // persists via PATCH.
   const onBodyChange = (v: string) => {
     setBody(v);
+    setBodyTouched(true);
     autosave.schedule({ body: v });
   };
   const onTitleChange = (v: string) => {
     setTitle(v);
     autosave.schedule({ title: v === '' ? null : v });
+  };
+  // "Just start typing" — swap the onboarding card for an empty
+  // textarea and focus it so the user can start writing immediately.
+  // We use a zero-width space so the body isn't literally empty
+  // (otherwise bodyTouched && body === '' would push us back into
+  // the onboarding branch) but the user sees a blank note.
+  const justStartTyping = () => {
+    setBody('\u200B');
+    setBodyTouched(true);
+    setTimeout(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>(
+        '[data-testid="note-body"]',
+      );
+      ta?.focus();
+      ta?.setSelectionRange(1, 1);
+    }, 0);
   };
 
   // Flush on unmount or before navigation.
@@ -170,42 +197,51 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     // body uses, so the right pane is never just an empty void.
     return (
       <div
-        className={`flex flex-col h-full items-center justify-center ${className}`}
+        className={`px-8 pt-12 pb-16 ${className}`}
         data-testid="note-onboarding"
       >
-        <div className="flex flex-col items-center gap-3 max-w-md text-center">
-          <p className="text-2xl font-semibold text-text-heading">
+        <div className="flex flex-col items-start gap-4 max-w-2xl">
+          <p className="text-4xl font-semibold text-text-heading leading-tight">
             {t.onboardingTitle}
           </p>
-          <p className="text-sm text-text-muted">{t.onboardingHint}</p>
+          <p className="text-base text-text-muted">{t.onboardingHint}</p>
           {onCreateFromTemplate && (
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                 data-testid="note-onboarding-template-daily"
               >
-                <Calendar size={14} />
+                <Calendar size={18} />
                 {t.templateDaily}
               </button>
               <button
                 type="button"
                 onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                 data-testid="note-onboarding-template-idea"
               >
-                <Lightbulb size={14} />
+                <Lightbulb size={18} />
                 {t.templateIdea}
               </button>
               <button
                 type="button"
                 onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                 data-testid="note-onboarding-template-meeting"
               >
-                <FileText size={14} />
+                <FileText size={18} />
                 {t.templateMeeting}
+              </button>
+              <button
+                type="button"
+                onClick={() => onCreateFromTemplate('general', '\u200B')}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
+                data-testid="note-onboarding-blank"
+              >
+                <PenLine size={18} />
+                {t.templateBlank}
               </button>
             </div>
           )}
@@ -342,66 +378,73 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
         </div>
       </header>
 
-      {/* Body — document-first, fills the rest of the pane.
-          The textarea takes the remaining vertical space and the
-          full width of the editor column (no centered max-width
-          island — Frank wanted the note to feel like a big writing
-          surface, not a paragraph box). Generous left padding
-          aligns the start of every line with the title above.
-          When the body is empty we overlay a centered onboarding
-          card with three starter templates so the right pane doesn't
-          look like an empty textarea floating in dead air. */}
-      <div className="flex-1 overflow-y-auto relative">
-        <textarea
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
-          placeholder={t.placeholder}
-          className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
-          data-testid="note-body"
-        />
-        {body.trim() === '' && onCreateFromTemplate && (
+      {/* Body — when the user hasn't typed yet, render the onboarding
+          card INSTEAD of a textarea so the right pane is one composition
+          (no textarea whitespace below the card). The card is top-
+          aligned at the natural reading line — leaving whitespace below
+          the buttons reads as "this is where your writing will go"
+          rather than "an empty island surrounded by void". Once the
+          user types anything (or presses "Just start typing"), switch
+          to a textarea that fills the rest of the pane. */}
+      <div className="flex-1 overflow-y-auto">
+        {!bodyTouched && body === '' && onCreateFromTemplate ? (
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            className="px-8 pt-12 pb-16"
             data-testid="note-onboarding"
           >
-            <div className="pointer-events-auto flex flex-col items-center gap-3 max-w-md text-center">
-              <p className="text-2xl font-semibold text-text-heading">
+            <div className="flex flex-col items-start gap-4 max-w-2xl">
+              <p className="text-4xl font-semibold text-text-heading leading-tight">
                 {t.onboardingTitle}
               </p>
-              <p className="text-sm text-text-muted">
-                {t.onboardingHint}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <p className="text-base text-text-muted">{t.onboardingHint}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                   data-testid="note-onboarding-template-daily"
                 >
-                  <Calendar size={14} />
+                  <Calendar size={18} />
                   {t.templateDaily}
                 </button>
                 <button
                   type="button"
                   onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                   data-testid="note-onboarding-template-idea"
                 >
-                  <Lightbulb size={14} />
+                  <Lightbulb size={18} />
                   {t.templateIdea}
                 </button>
                 <button
                   type="button"
                   onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-sm text-text-heading hover:border-accent hover:text-accent transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
                   data-testid="note-onboarding-template-meeting"
                 >
-                  <FileText size={14} />
+                  <FileText size={18} />
                   {t.templateMeeting}
+                </button>
+                <button
+                  type="button"
+                  onClick={justStartTyping}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
+                  data-testid="note-onboarding-blank"
+                >
+                  <PenLine size={18} />
+                  {t.templateBlank}
                 </button>
               </div>
             </div>
           </div>
+        ) : (
+          <textarea
+            value={body}
+            onChange={(e) => onBodyChange(e.target.value)}
+            placeholder={t.placeholder}
+            className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
+            data-testid="note-body"
+          />
         )}
       </div>
 
