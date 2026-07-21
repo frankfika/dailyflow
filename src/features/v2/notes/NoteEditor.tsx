@@ -185,17 +185,18 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
       {/* Title is optional — F-02A forbids blocking on a title.
           Header is two rows: (1) the title input, (2) the metadata /
-          actions strip. Both rows are capped at max-w-[68ch] and
-          centered so they line up with the body column below. */}
-      <header className="px-4 pt-4 pb-2 flex flex-col gap-2 border-b border-border">
+          actions strip. Both rows fill the editor column left-aligned
+          so the body below has the same writing footprint — no
+          centered max-width island surrounded by dead space. */}
+      <header className="pl-6 pr-8 pt-5 pb-2 flex flex-col gap-2 border-b border-border">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder={t.untitled}
-          className="w-full max-w-[68ch] mx-auto bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
+          className="w-full bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
           data-testid="note-title"
         />
-        <div className="w-full max-w-[68ch] mx-auto flex items-center justify-between gap-2 text-xs text-text-muted">
+        <div className="w-full flex items-center justify-between gap-2 text-xs text-text-muted">
           <div className="flex items-center gap-2">
             {autosave.status !== 'idle' && (
               <Badge tone={statusTone(autosave.status)}>
@@ -287,41 +288,38 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       </header>
 
       {/* Body — document-first, fills the rest of the pane.
-          The wrapper takes the remaining vertical space (flex-1) and
-          centers the textarea to a comfortable reading column
-          (max-w-[68ch]). Empty notes no longer reserve 60vh of dead
-          whitespace; the textarea sits at the top of the pane and
-          grows with content. */}
-      <div className="flex-1 overflow-y-auto flex justify-center">
+          The textarea takes the remaining vertical space and the
+          full width of the editor column (no centered max-width
+          island — Frank wanted the note to feel like a big writing
+          surface, not a paragraph box). Generous left padding
+          aligns the start of every line with the title above. */}
+      <div className="flex-1 overflow-y-auto">
         <textarea
           value={body}
           onChange={(e) => onBodyChange(e.target.value)}
           placeholder={t.placeholder}
-          className="w-full max-w-[68ch] min-h-full px-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
+          className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
           data-testid="note-body"
         />
       </div>
 
-      {/* Statusbar — word/char/read stats, aligned to the right
-          edge of the body column (max-w-[68ch]). The recency cue
-          used to live here but it duplicated the header timestamp
-          that we removed, so the strip now only carries live
-          writing stats. */}
+      {/* Statusbar — word/char/read stats, right-aligned to the
+          editor column edge. The 'Last updated' cue used to live
+          here but duplicated the header timestamp that we removed,
+          so the strip now only carries live writing stats. */}
       <footer
-        className="px-4 py-1.5 border-t border-border"
+        className="pl-6 pr-8 py-1.5 border-t border-border flex items-center justify-end gap-4 text-[11px] text-text-muted"
         data-testid="note-editor-statusbar"
       >
-        <div className="w-full max-w-[68ch] mx-auto flex items-center justify-end gap-4 text-[11px] text-text-muted">
-          <span data-testid="note-editor-words">
-            {words === 0 ? t.bodyEmpty : `${words} ${t.words}`}
-          </span>
-          <span data-testid="note-editor-chars">
-            {body.length} {t.chars}
-          </span>
-          <span data-testid="note-editor-read">
-            ~{Math.max(1, Math.ceil(words / 200))} {t.minRead}
-          </span>
-        </div>
+        <span data-testid="note-editor-words">
+          {words === 0 ? t.bodyEmpty : `${words} ${t.words}`}
+        </span>
+        <span data-testid="note-editor-chars">
+          {body.length} {t.chars}
+        </span>
+        <span data-testid="note-editor-read">
+          ~{Math.max(1, Math.ceil(words / 200))} {t.minRead}
+        </span>
       </footer>
 
       {/* Backlinks panel — full reverse-relationship view. Spec §26
