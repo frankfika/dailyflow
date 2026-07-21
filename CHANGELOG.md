@@ -10,14 +10,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Pending for next release
 
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
-- server-side `/api/v2/import` + `/api/v2/reset` 端点 (1.1.6 UI 已加, 后端 "coming soon" mock)
-- mobile sidebar collapse 完整版 (1.1.6 已 work, 留 1.1.7+ for tablet icon-only mode)
-- icon strip 内的 "N+" click 当前是切回 split 模式, 后续可以让用户直接展开 strip
+- tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
+
+## [1.1.8] - 2026-07-21
+
+### Added
+- **Focus mode strip N+ in-place expansion** (`src/features/v2/notes/NoteList.tsx`, `src/features/v2/notes/NotesView.tsx`, commit `e3003d9`) — 之前点 N+ 直接 eject 回 split 模式打断 focus, 现在就地展开:
+  - 点击 N+ → strip 解除 11-dot cap, 渲染所有 note 圆点, 焦点模式不丢
+  - 再点 (或选中任意 note) → 收回 11-dot cap
+  - a11y: `aria-expanded` 翻转, 按钮文案 `N+` ↔ `−`, tooltip 双向提示
+- **Bilingual relative time** (`src/features/v2/notes/NoteList.tsx`, `src/features/v2/notes/NoteEditor.tsx`) — `just now / Nm / Nh / Nd` (en) + `刚刚 / N 分钟前 / N 小时前 / N 天前` (zh). List 单元格和 editor statusbar 用同一 helper, 语言一致
+- **E2E expansion contract** (`e2e/notes-focus-mode.spec.ts`) — 重写后断言新行为: 始终留在 `note` layout, N+ 切到 `−`, 所有 seeded note 在 strip 内可见, 选中后塌回 cap
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 33 files / 315 tests pass
+- `npm run build` ✅ vite 2.x s, main chunk 376 kB
+- `npx playwright test` ✅ 13/13 e2e pass (新增 + 重写的 N+ 展开合同)
+
+## [1.1.7] - 2026-07-21
+
+### Added
+- **Server import/reset endpoints** (`server/routes/v2/index.ts`, `server/services/v2/importService.ts`, commit `f8defa8`) — 补齐 1.1.6 留的 mock 端点:
+  - `POST /api/v2/import` — merge / overwrite 双模式, per-entity 错误回包
+  - `POST /api/v2/reset` — `RESET WORKSPACE` confirm phrase guard
+  - `importService.ts` (375 行) + 11 vitest 单测覆盖双模式 + 边界 case
+  - 2 个新 audit event kind: `workspace.import`, `workspace.reset`
+- **3-viewport responsive Sidebar** (`src/components/Sidebar.tsx`, +469 行) — 拆 mobile/tablet/desktop:
+  - mobile (≤640): fixed overlay + slide 动画 + backdrop + Esc 关闭
+  - tablet (641-1024): 60px icon strip 默认, hover/click 展开
+  - desktop (>1024): 230px in flow
+  - `localStorage df_sidebar_collapsed` 持久化 tablet/desktop 偏好
+  - `AnimatePresence` + `motion.aside` 动画, a11y 完整 (`aria-expanded` / `aria-controls` / `role="navigation"` / `aria-label`)
+
+### Fixed
+- **loadConfig 不再回写空 workspaces 数组到磁盘** (`server/services/config.ts`) — 之前空数组被 cascade 到每个 server route, e2e workspace 在测试中途被剔除, 现在只在首次 true first-run 才 seed 文件
+- **saveActiveContext 守 e2e race** — server 还没 workspace 时不再 echo 半截 config
+
+### Verified
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm test` ✅ 33 files / 315 tests pass (新增 11 importService 单测)
+- `npm run build` ✅ vite 3.x s, main chunk ~360 kB
+- `npx playwright test` ✅ 11/11 e2e pass (新增 6 个 sidebar-viewport 测: mobile/tablet/desktop × closed/open)
 
 ## [1.1.6] - 2026-07-20
 
 ### Added
-- **Settings → Workspace Data section** (`src/components/SettingsModal.tsx`, commit `<pending>`) — 1.1.6 主线:
+- **Settings → Workspace Data section** (`src/components/SettingsModal.tsx`, commit `db29db4`) — 1.1.6 主线:
   - **Export all data**: fetch 8 个 entity endpoint (`/api/v2/export/entities?kind=X` × 8) + `/api/v2/notes` + `/api/v2/commitments`, 包成 JSON, Blob + `<a download>` 触发, 文件名 `dailyflow-${wsSlug}-${date}.json`. 成功 toast + "Last exported 5m ago" inline status
   - **Import from JSON**: file input accept=".json", 解析后 POST `/api/v2/import`. 服务端该 endpoint **暂不存在** (1.1.6 范围外), UI 友好提示 "server import endpoint not yet implemented, coming soon"
   - **Reset workspace**: 二次 `confirm()` 保护, 调 `POST /api/v2/reset`. 同上, endpoint 暂缺, UI 提示 "coming soon"
