@@ -53,12 +53,28 @@ async function main() {
   // 2) re-create + activate the e2e workspace so the next browser
   //    session doesn't land on the WorkspaceSetup modal.
   const wsPath = `${process.env.HOME}/dailyflow-v2`;
-  const created = await api('/api/config/workspaces', {
-    method: 'POST',
-    body: JSON.stringify({ name: 'e2e-workspace', path: wsPath }),
-  });
-  const id = created.workspace?.id;
-  if (!id) throw new Error('workspace create did not return an id');
+  let id;
+  try {
+    const created = await api('/api/config/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'e2e-workspace', path: wsPath }),
+    });
+    id = created.workspace?.id;
+  } catch (e) {
+    // 409 duplicate: look up the existing one and reuse it.
+    if (e.message.includes('Workspace already exists')) {
+      const list = await api('/api/config/workspaces');
+      const existing = (list.workspaces || []).find(
+        (w) => w.name === 'e2e-workspace',
+      );
+      if (!existing) throw new Error('duplicate but not found in list');
+      id = existing.id;
+      console.log('[reset] workspace already exists, reusing id=%s', id);
+    } else {
+      throw e;
+    }
+  }
+  if (!id) throw new Error('workspace id missing after create/reuse');
   const act = await api(`/api/config/workspaces/${id}/activate`, { method: 'POST' });
   console.log('[reset] reactivated workspace id=%s, activeWorkspaceId=%s',
     id, act.workspace?.id);
