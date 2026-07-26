@@ -197,7 +197,7 @@ async function transcribeWithWhisper(
   const model = cfg.model || 'whisper-1';
   const form = new FormData();
   // FormData in Node 18+ accepts Blob with filename + mimeType
-  const blob = new Blob([audioBytes], { type: mimeType || 'audio/webm' });
+  const blob = new Blob([Uint8Array.from(audioBytes)], { type: mimeType || 'audio/webm' });
   form.append('file', blob, `recording${ext}`);
   form.append('model', model);
   form.append('response_format', 'verbose_json');
