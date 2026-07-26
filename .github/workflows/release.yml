@@ -27,7 +27,7 @@ jobs:
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - name: macOS Intel
-            os: macos-13
+            os: macos-15-intel
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
           - name: Windows x64
