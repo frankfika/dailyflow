@@ -65,7 +65,7 @@ describe('validateCommitment', () => {
       waitingOnId: 'person_zhang',
       reviewAt: futureReview,
     };
-    const issues = validateCommitment(c);
+    const issues = validateCommitment(c, new Date(baseTime));
     expect(issues.filter(i => i.severity === 'error')).toHaveLength(0);
   });
 
