@@ -10,7 +10,7 @@
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.10-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.12-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
@@ -76,6 +76,13 @@ DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first�
 - **Work/Life 切换**：一键切换工作/生活上下文，任务自动过滤
 - **标签系统**：支持 `#tag`、`#deadline:日期`、`#priority:级别`、`#project:名称`
 
+### 📅 日历工作区
+
+- **统一日历视图**：在侧边栏直接进入日历，按天、周或月查看任务、定时笔记和外部日程
+- **多来源聚合**：将 DailyFlow 本地内容与已连接的企业日历汇总到同一时间轴
+- **飞书日程**：读取飞书日历并显示日程详情，可从 DailyFlow 跳转到原始日程
+- **可扩展连接器**：连接器插件层已支持飞书，Google Calendar 接口预留中
+
 ### ⏳ 时间胶囊（实验性工具）
 
 - **三种胶囊类型**：Commitment（承诺）、Secret（秘密）、Milestone（里程碑）
@@ -130,6 +137,7 @@ DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first�
 
 ### 🔄 同步与备份
 
+- **飞书双向同步**：同步任务标题、描述、截止日和完成状态；定时会议笔记可推送到飞书日历
 - **Git 同步**：一键提交到 GitHub，侧边栏显示同步状态
 - **IPFS 备份**：通过 Pinata 上传去中心化备份，获得永久 CID
 - **应用内更新**：自动检测新版本，一键下载安装
@@ -386,6 +394,25 @@ npx hardhat test
 ---
 
 ## 📜 更新日志
+
+### v1.1.12 (2026-07-27)
+
+**📅 日历工作区与飞书企业同步**
+
+#### ✨ 新功能
+
+- 📅 **全新日历工作区**：新增侧边栏日历入口，支持日 / 周 / 月视图
+- 🧩 **连接器插件架构**：聚合本地任务、定时笔记和外部日历，为更多服务预留统一接口
+- 🔄 **飞书任务双向同步**：同步标题、描述、截止日和完成状态，并处理两端更新
+- 🗓 **飞书日历集成**：读取飞书日程；带开始、结束时间的会议笔记可同步到飞书日历
+- 🔐 **企业账号授权**：在设置中完成飞书授权、查看连接状态并手动触发同步
+- 📝 **笔记体验优化**：改进笔记列表选择、预览和工作区内的导航体验
+
+#### 🧪 质量
+
+- 321 项测试全部通过
+- TypeScript 类型检查、前端生产构建和内置服务端打包全部通过
+- macOS Apple Silicon、macOS Intel、Windows 和 Linux 安装包均已发布
 
 ### v1.0.6 (2026-07-13)
 

@@ -10,7 +10,7 @@
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.10-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.12-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
@@ -76,6 +76,13 @@ DailyFlow is a **local-first daily focus tool for people with overloaded backlog
 - **Work/Life Switch**: one-click context switching, tasks auto-filtered
 - **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
 
+### 📅 Calendar Workspace
+
+- **Unified calendar**: open Calendar from the sidebar and browse tasks, timed notes, and external events by day, week, or month
+- **Multiple sources**: combine local DailyFlow content and connected enterprise calendars on one timeline
+- **Feishu events**: read Feishu Calendar events, inspect their details, and open the original event from DailyFlow
+- **Extensible connectors**: the connector layer supports Feishu today, with a Google Calendar integration point reserved
+
 ### ⏳ Time Capsules (Experimental tool)
 
 - **Three capsule types**: Commitment, Secret, Milestone
@@ -130,6 +137,7 @@ One-click configuration for 15+ AI providers:
 
 ### 🔄 Sync & Backup
 
+- **Two-way Feishu sync**: sync task titles, descriptions, due dates, and completion state; send timed meeting notes to Feishu Calendar
 - **Git Sync**: one-click push to GitHub, status shown in sidebar
 - **IPFS Backup**: decentralized backup via Pinata with permanent CID
 - **In-app Updates**: auto-detect new versions, one-click install
@@ -386,6 +394,25 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 ---
 
 ## 📜 Changelog
+
+### v1.1.12 (2026-07-27)
+
+**📅 Calendar workspace and Feishu Enterprise sync**
+
+#### ✨ New
+
+- 📅 **New calendar workspace**: a dedicated sidebar destination with day, week, and month views
+- 🧩 **Connector plugin architecture**: aggregates local tasks, timed notes, and external calendars behind one interface
+- 🔄 **Two-way Feishu task sync**: syncs titles, descriptions, due dates, and completion state while reconciling updates on both sides
+- 🗓 **Feishu Calendar integration**: reads Feishu events and sends meeting notes with start/end times to Feishu Calendar
+- 🔐 **Enterprise account authorization**: connect Feishu, inspect connection state, and trigger sync from Settings
+- 📝 **Notes UX improvements**: refined note selection, preview, and workspace navigation
+
+#### 🧪 Quality
+
+- All 321 tests pass
+- TypeScript checks, the production front-end build, and the bundled server build all pass
+- Installers published for macOS Apple Silicon, macOS Intel, Windows, and Linux
 
 ### v1.0.6 (2026-07-13)
 
