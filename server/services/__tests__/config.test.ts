@@ -88,4 +88,32 @@ describe('loadConfig', () => {
     const loaded = await loadConfig();
     expect(loaded).toEqual(expect.objectContaining(full));
   });
+
+  it('keeps concurrent writes parseable', async () => {
+    const configs = Array.from({ length: 12 }, (_, index): Config => ({
+      workspaceRoot: `/tmp/concurrent-${index}`,
+      workspaces: [{
+        id: `ws_concurrent_${index}`,
+        name: `Concurrent ${index}`,
+        path: `/tmp/concurrent-${index}`,
+        createdAt: new Date().toISOString(),
+      }],
+      activeWorkspaceId: `ws_concurrent_${index}`,
+      dailyPathTemplate: 'Daily/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: [],
+    }));
+
+    await Promise.all(configs.map(config => saveConfig(config)));
+    const loaded = await loadConfig();
+    expect(loaded.workspaces).toHaveLength(1);
+    expect(loaded.workspaceRoot).toMatch(/^\/tmp\/concurrent-\d+$/);
+  });
+
+  it('does not turn a malformed existing config into first-run state', async () => {
+    const configFile = process.env.DAILYFLOW_CONFIG_FILE!;
+    await fs.writeFile(configFile, '{"workspaces":', 'utf8');
+    await expect(loadConfig()).rejects.toBeInstanceOf(SyntaxError);
+    expect(await fs.readFile(configFile, 'utf8')).toBe('{"workspaces":');
+  });
 });

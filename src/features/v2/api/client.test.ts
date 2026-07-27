@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   captureInput,
+  createNote,
   listInbox,
   processSource,
   applyProposal,
@@ -18,6 +19,7 @@ import {
   getStatus,
   V2ApiError,
 } from './client';
+import { API_BASE } from '../../../config/api';
 
 const originalFetch = globalThis.fetch;
 
@@ -41,6 +43,13 @@ describe('v2/client', () => {
     expect(call[0]).toContain('/api/v2/inbox/capture');
     expect(call[1].method).toBe('POST');
     expect(JSON.parse(call[1].body)).toMatchObject({ kind: 'quick_capture', body: 'hello' });
+  });
+
+  it('createNote uses the configured API origin', async () => {
+    await createNote({ body: '', kind: 'general', state: 'draft' });
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes`);
+    expect(call[1].method).toBe('POST');
   });
 
   it('listInbox GETs /inbox', async () => {

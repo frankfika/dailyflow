@@ -56,6 +56,10 @@ export interface ConfigData {
   ipfsApiKey?: string;
   ipfsGateway?: string;
   providerConfigs?: string;
+  feishuSyncEnabled?: boolean;
+  feishuSyncIntervalMinutes?: number;
+  feishuTaskSyncEnabled?: boolean;
+  feishuCalendarSyncEnabled?: boolean;
 }
 
 export interface Workspace {
@@ -214,6 +218,137 @@ export const configApi = {
       body: JSON.stringify(config),
     });
     if (!res.ok) throw await httpError(res, 'Failed to update config');
+  },
+};
+
+export interface FeishuStatus {
+  cliAvailable: boolean;
+  authorized: boolean;
+  userName?: string;
+  openId?: string;
+  reason?: string;
+  lastTaskSyncAt?: string;
+  lastCalendarSyncAt?: string;
+}
+
+export interface FeishuAgendaEvent {
+  id: string;
+  title: string;
+  description?: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  status: 'confirmed' | 'tentative' | 'cancelled';
+  location?: string;
+  url?: string;
+}
+
+export interface CalendarWorkspaceItem {
+  id: string;
+  kind: 'task' | 'event';
+  source: 'dailyflow' | 'feishu' | 'google' | string;
+  title: string;
+  description?: string;
+  start: string;
+  end?: string;
+  allDay: boolean;
+  status: 'todo' | 'done' | 'confirmed' | 'tentative';
+  location?: string;
+  url?: string;
+  localDate?: string;
+  localTaskId?: string;
+  localNoteId?: string;
+}
+
+export interface CalendarWorkspaceData {
+  items: CalendarWorkspaceItem[];
+  connectors: Array<{
+    id: string;
+    displayName: string;
+    connected: boolean;
+    color: string;
+    error?: string;
+  }>;
+}
+
+export const calendarApi = {
+  async getWorkspace(start: string, end: string): Promise<CalendarWorkspaceData> {
+    const params = new URLSearchParams({ start, end });
+    const res = await fetch(`${API_BASE}/calendar?${params}`);
+    if (!res.ok) throw await httpError(res, 'Failed to load calendar');
+    return res.json();
+  },
+
+  async listPlugins(): Promise<{
+    items: Array<{
+      id: string;
+      displayName: string;
+      provider: string;
+      icon: string;
+      capabilities: string[];
+      accountType: 'enterprise' | 'personal' | 'both';
+      status: 'available' | 'coming_soon';
+      connection: { connected: boolean; accountLabel?: string; reason?: string };
+    }>;
+  }> {
+    const res = await fetch(`${API_BASE}/calendar/plugins`);
+    if (!res.ok) throw await httpError(res, 'Failed to load calendar plugins');
+    return res.json();
+  },
+};
+
+export const feishuApi = {
+  async status(): Promise<FeishuStatus> {
+    const res = await fetch(`${API_BASE}/feishu/status`);
+    if (!res.ok) throw await httpError(res, 'Failed to read Feishu status');
+    return res.json();
+  },
+
+  async startAuth(): Promise<{ verificationUrl: string; deviceCode: string; expiresIn?: number }> {
+    const res = await fetch(`${API_BASE}/feishu/auth/start`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to start Feishu authorization');
+    return res.json();
+  },
+
+  async finishAuth(deviceCode: string): Promise<FeishuStatus> {
+    const res = await fetch(`${API_BASE}/feishu/auth/finish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceCode }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to finish Feishu authorization');
+    return res.json();
+  },
+
+  async syncTasks(): Promise<{
+    ok: boolean;
+    pushed: number;
+    pulled: number;
+    updatedRemote: number;
+    updatedLocal: number;
+    linked: number;
+    skipped: number;
+    conflicts: Array<{ localId: string; remoteGuid: string; title: string }>;
+    errors: string[];
+    syncedAt: string;
+  }> {
+    const res = await fetch(`${API_BASE}/feishu/sync/tasks`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to sync Feishu tasks');
+    return res.json();
+  },
+
+  async syncCalendar(): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const res = await fetch(`${API_BASE}/feishu/sync/calendar`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to sync Feishu calendar');
+    return res.json();
+  },
+
+  async agenda(start: string, end: string): Promise<FeishuAgendaEvent[]> {
+    const params = new URLSearchParams({ start, end });
+    const res = await fetch(`${API_BASE}/feishu/agenda?${params}`);
+    if (!res.ok) throw await httpError(res, 'Failed to load Feishu agenda');
+    const data = await res.json();
+    return data.events;
   },
 };
 

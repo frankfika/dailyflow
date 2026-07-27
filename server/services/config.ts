@@ -69,9 +69,7 @@ export async function loadConfig(): Promise<Config> {
     raw = JSON.parse(content);
     fileExisted = true;
   } catch (error: any) {
-    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
-      throw error;
-    }
+    if (error.code !== 'ENOENT') throw error;
     // File did not exist — that's a real first run, seed defaults.
   }
 
@@ -102,7 +100,13 @@ export async function saveConfig(config: Config): Promise<void> {
   const dir = path.dirname(configFile);
   await fs.mkdir(dir, { recursive: true });
   const normalized = ensureWorkspaces({ ...config });
-  await fs.writeFile(configFile, JSON.stringify(normalized, null, 2), 'utf-8');
+  const tempFile = `${configFile}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tempFile, JSON.stringify(normalized, null, 2), 'utf-8');
+    await fs.rename(tempFile, configFile);
+  } finally {
+    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+  }
 }
 
 export function generateWorkspaceId(): string {

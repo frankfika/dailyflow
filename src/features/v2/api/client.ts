@@ -25,8 +25,7 @@ export class V2ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const base = (API_BASE as { api?: string }).api ?? '';
-  const url = `${base}/api/v2${path}`;
+  const url = `${API_BASE.api}/api/v2${path}`;
   const resp = await fetch(url, {
     method,
     headers: { 'content-type': 'application/json' },

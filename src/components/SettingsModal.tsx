@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2 } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, ipfsApi, type IpfsBackupRecord } from '../api/client';
+import { configApi, feishuApi, ipfsApi, type FeishuStatus, type IpfsBackupRecord } from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 
@@ -114,7 +114,11 @@ export function SettingsModal({
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
 
   // Sync sub-tab state
-  const [syncSubTab, setSyncSubTab] = useState<'github' | 'ipfs'>('github');
+  const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'github' | 'ipfs'>('feishu');
+  const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null);
+  const [feishuLoading, setFeishuLoading] = useState(false);
+  const [feishuDeviceCode, setFeishuDeviceCode] = useState<string | null>(null);
+  const [feishuMessage, setFeishuMessage] = useState('');
 
   // IPFS local state
   const [showIpfsKey, setShowIpfsKey] = useState(false);
@@ -135,10 +139,74 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!showSettings || configTab !== 'sync') return;
+    feishuApi.status()
+      .then(setFeishuStatus)
+      .catch(() => setFeishuStatus(null));
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
   }, [showSettings, configTab]);
+
+  const handleConnectFeishu = async () => {
+    setFeishuLoading(true);
+    setFeishuMessage('');
+    try {
+      const auth = await feishuApi.startAuth();
+      setFeishuDeviceCode(auth.deviceCode);
+      setFeishuMessage(language === 'zh'
+        ? '已打开飞书授权页。授权完成后回到这里点击“我已完成授权”。'
+        : 'Feishu authorization opened. Return here and click “Authorization completed”.');
+      try {
+        await open(auth.verificationUrl);
+      } catch {
+        window.open(auth.verificationUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: any) {
+      setFeishuMessage(e.message);
+    } finally {
+      setFeishuLoading(false);
+    }
+  };
+
+  const handleFinishFeishu = async () => {
+    if (!feishuDeviceCode) return;
+    setFeishuLoading(true);
+    try {
+      const status = await feishuApi.finishAuth(feishuDeviceCode);
+      setFeishuStatus(status);
+      setFeishuDeviceCode(null);
+      setFeishuMessage(status.authorized
+        ? (language === 'zh' ? '飞书企业账号已连接。' : 'Feishu enterprise account connected.')
+        : (status.reason || 'Authorization failed'));
+    } catch (e: any) {
+      setFeishuMessage(e.message);
+    } finally {
+      setFeishuLoading(false);
+    }
+  };
+
+  const handleFeishuSync = async () => {
+    setFeishuLoading(true);
+    setFeishuMessage('');
+    try {
+      const [tasks, calendar] = await Promise.all([
+        feishuApi.syncTasks(),
+        feishuApi.syncCalendar(),
+      ]);
+      const conflictText = tasks.conflicts.length
+        ? (language === 'zh' ? `，${tasks.conflicts.length} 个冲突待处理` : `, ${tasks.conflicts.length} conflicts need review`)
+        : '';
+      setFeishuMessage(language === 'zh'
+        ? `同步完成：任务上传 ${tasks.pushed + tasks.updatedRemote}，下载 ${tasks.pulled + tasks.updatedLocal}；日程新建 ${calendar.created}，更新 ${calendar.updated}${conflictText}`
+        : `Synced: ${tasks.pushed + tasks.updatedRemote} tasks pushed, ${tasks.pulled + tasks.updatedLocal} pulled; ${calendar.created} events created, ${calendar.updated} updated${conflictText}`);
+      setFeishuStatus(await feishuApi.status());
+      window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+    } catch (e: any) {
+      setFeishuMessage(e.message);
+    } finally {
+      setFeishuLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!showSettings) return;
@@ -250,7 +318,7 @@ export function SettingsModal({
   //   GET  /api/v2/commitments                 — commitment list (exists)
   //   POST /api/v2/import                      — NOT IMPLEMENTED (UI shows "coming soon")
   //   POST /api/v2/reset                       — NOT IMPLEMENTED (UI shows "coming soon")
-  const V2_BASE = `${(API_BASE as { api?: string }).api ?? ''}/api/v2`;
+  const V2_BASE = `${API_BASE.api}/api/v2`;
 
   const formatRelativeTime = (iso: string): string => {
     const diffMs = Date.now() - new Date(iso).getTime();
@@ -850,6 +918,12 @@ export function SettingsModal({
               {/* Sync Sub-Tab Switcher */}
               <div className="flex bg-surface p-1 rounded-md shadow-inner border border-border/50 gap-1">
                 <button
+                  onClick={() => setSyncSubTab('feishu')}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'feishu' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                >
+                  {language === 'zh' ? '飞书' : 'Feishu'}
+                </button>
+                <button
                   onClick={() => setSyncSubTab('github')}
                   className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'github' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
                 >
@@ -862,6 +936,105 @@ export function SettingsModal({
                   IPFS
                 </button>
               </div>
+
+              {syncSubTab === 'feishu' && (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-md border border-border bg-surface p-4">
+                    <div className="rounded-md bg-blue-500/10 p-2 text-blue-600">
+                      <CalendarDays className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-text-heading">
+                          {language === 'zh' ? '飞书企业版' : 'Feishu Enterprise'}
+                        </h3>
+                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                          feishuStatus?.authorized
+                            ? 'bg-green-50 text-green-700'
+                            : 'bg-stone-100 text-stone-600'
+                        }`}>
+                          {feishuStatus?.authorized
+                            ? (language === 'zh' ? '已连接' : 'Connected')
+                            : (language === 'zh' ? '未连接' : 'Not connected')}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        {language === 'zh'
+                          ? '任务双向同步标题、描述、截止日和完成状态；带开始/结束时间的会议笔记会同步到飞书日历，飞书日程显示在 DailyFlow 当天视图。'
+                          : 'Tasks sync both ways. Timed meeting notes sync to Feishu Calendar, and Feishu events appear in the DailyFlow day view.'}
+                      </p>
+                      {feishuStatus?.userName && (
+                        <p className="mt-1 truncate text-[10px] text-text-muted">
+                          {language === 'zh' ? '当前账号：' : 'Account: '}{feishuStatus.userName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/70 bg-background p-3 text-[11px] text-text-muted">
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      <span>{language === 'zh' ? '任务' : 'Tasks'}</span>
+                      <span className="text-text-main">
+                        {language === 'zh' ? 'DailyFlow ↔ 飞书任务（双向）' : 'DailyFlow ↔ Feishu Tasks (two-way)'}
+                      </span>
+                      <span>{language === 'zh' ? '日程' : 'Calendar'}</span>
+                      <span className="text-text-main">
+                        {language === 'zh' ? '飞书 → 当天视图；定时会议笔记 → 飞书' : 'Feishu → day view; timed meeting notes → Feishu'}
+                      </span>
+                      <span>{language === 'zh' ? '冲突' : 'Conflicts'}</span>
+                      <span className="text-text-main">
+                        {language === 'zh' ? '两端同时修改时暂停覆盖，保留双方内容' : 'Concurrent edits pause overwrite and preserve both sides'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!feishuStatus?.authorized ? (
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleConnectFeishu}
+                        disabled={feishuLoading}
+                        className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                        {language === 'zh' ? '连接飞书企业账号' : 'Connect Feishu Enterprise'}
+                      </button>
+                      {feishuDeviceCode && (
+                        <button
+                          onClick={handleFinishFeishu}
+                          disabled={feishuLoading}
+                          className="flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                        >
+                          {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                          {language === 'zh' ? '我已完成授权' : 'Authorization completed'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleFeishuSync}
+                      disabled={feishuLoading}
+                      className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {feishuLoading
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <RefreshCw className="h-4 w-4" />}
+                      {language === 'zh' ? '立即双向同步' : 'Sync both ways now'}
+                    </button>
+                  )}
+
+                  {feishuMessage && (
+                    <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs text-stone-700">
+                      {feishuMessage}
+                    </div>
+                  )}
+                  {(feishuStatus?.lastTaskSyncAt || feishuStatus?.lastCalendarSyncAt) && (
+                    <p className="text-center text-[10px] text-text-muted">
+                      {language === 'zh' ? '上次同步：' : 'Last sync: '}
+                      {formatRelativeTime(feishuStatus.lastTaskSyncAt || feishuStatus.lastCalendarSyncAt!)}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {syncSubTab === 'github' && (
               <div className="space-y-5">

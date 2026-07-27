@@ -25,6 +25,10 @@ export type ConfigData = {
   rolloverTrigger: string;
   rolloverSkipTags: string[];
   githubRepo?: string;
+  feishuSyncEnabled?: boolean;
+  feishuSyncIntervalMinutes?: number;
+  feishuTaskSyncEnabled?: boolean;
+  feishuCalendarSyncEnabled?: boolean;
 };
 
 export type Project = {

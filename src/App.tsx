@@ -21,6 +21,8 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { TodayBacklog } from './components/TodayBacklog';
+import { FeishuAgenda } from './components/FeishuAgenda';
+import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -84,7 +86,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat' | 'capsules'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules'>('today');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
@@ -1041,8 +1043,8 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'w-full h-full' : 'w-full'}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' || activeTab === 'calendar' ? 'w-full h-full' : 'w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1164,6 +1166,8 @@ export default function App() {
                     )}
                   </div>
 
+                  <FeishuAgenda date={currentFileDate} language={language} />
+
                   <TodayBacklog
                     tasks={todayTasks}
                     focusTaskIds={focusTaskIds}
@@ -1196,6 +1200,16 @@ export default function App() {
                   />
 
                 </motion.div>
+              ) : activeTab === 'calendar' ? (
+                <CalendarWorkspace
+                  date={currentFileDate}
+                  setDate={setCurrentFileDate}
+                  language={language}
+                  onOpenLocalDate={(date) => {
+                    setCurrentFileDate(date);
+                    setActiveTab('today');
+                  }}
+                />
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
                   key="ai-chat"
@@ -1237,7 +1251,7 @@ export default function App() {
                   <Capsules language={language} showToast={showToast} />
                 </motion.div>
               ) : (
-                <NotesView language={language} />
+                <NotesView language={language} sidebarOpen={isSidebarOpen} />
               )
             )}
           </div>

@@ -27,6 +27,8 @@ export type NotesLayout = 'split' | 'note';
 export interface NotesViewProps {
   /** Optional language for editor copy. */
   language?: 'zh' | 'en';
+  /** Whether the app navigation sidebar is currently visible. */
+  sidebarOpen?: boolean;
 }
 
 const STORAGE_KEY = 'df_notes_layout';
@@ -56,7 +58,7 @@ function saveLayout(layout: NotesLayout) {
   }
 }
 
-export function NotesView({ language = 'en' }: NotesViewProps) {
+export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layout, setLayout] = useState<NotesLayout>(() => loadLayout());
   const create = useCreateNote();
@@ -128,6 +130,7 @@ export function NotesView({ language = 'en' }: NotesViewProps) {
           layout={layout}
           onToggleLayout={toggleLayout}
           language={language}
+          sidebarOpen={sidebarOpen}
         />
       </aside>
       <main className="overflow-hidden">

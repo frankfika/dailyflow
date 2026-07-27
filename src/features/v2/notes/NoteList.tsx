@@ -81,9 +81,18 @@ export interface NoteListProps {
   onToggleLayout?: () => void;
   /** UI language for relative-time copy. Defaults to English. */
   language?: 'zh' | 'en';
+  /** Keeps the app-level sidebar reveal button clear of Notes controls. */
+  sidebarOpen?: boolean;
 }
 
-export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayout, language = 'en' }: NoteListProps) {
+export function NoteList({
+  selectedId,
+  onSelect,
+  layout = 'split',
+  onToggleLayout,
+  language = 'en',
+  sidebarOpen = true,
+}: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const create = useCreateNote();
   const archive = useArchiveNote();
@@ -130,13 +139,14 @@ export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayou
         onSelect={onSelect}
         onCreate={() => createAndOpen('general')}
         onToggleLayout={onToggleLayout}
+        reserveSidebarToggleSpace={!sidebarOpen}
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-3 p-4 h-full overflow-hidden">
-      <header className="flex items-center justify-between">
+      <header className={`flex items-center justify-between ${sidebarOpen ? '' : 'pl-10'}`}>
         <h2 className="text-lg font-semibold text-text-heading">Notes</h2>
         <div className="flex items-center gap-1.5">
           {onToggleLayout && (
@@ -310,6 +320,7 @@ interface FocusStripProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onToggleLayout?: () => void;
+  reserveSidebarToggleSpace?: boolean;
 }
 
 interface VisibleSlice {
@@ -338,7 +349,14 @@ function useVisibleStrip(notes: NoteDocument[], selectedId: string | null, max: 
   }, [notes, selectedId, max]);
 }
 
-function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: FocusStripProps) {
+function FocusStrip({
+  notes,
+  selectedId,
+  onSelect,
+  onCreate,
+  onToggleLayout,
+  reserveSidebarToggleSpace = false,
+}: FocusStripProps) {
   const { shown: cappedShown, hiddenCount } = useVisibleStrip(notes, selectedId, STRIP_MAX_NOTES);
 
   // Expanded view (1.1.8 polish): when the user clicks the "N+"
@@ -488,7 +506,10 @@ function FocusStrip({ notes, selectedId, onSelect, onCreate, onToggleLayout }: F
   }, []);
 
   return (
-    <div className="flex flex-col h-full" data-testid="notes-strip">
+    <div
+      className={`flex flex-col h-full ${reserveSidebarToggleSpace ? 'pt-12' : ''}`}
+      data-testid="notes-strip"
+    >
       <button
         onClick={onToggleLayout}
         className="m-2 p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10 self-end"

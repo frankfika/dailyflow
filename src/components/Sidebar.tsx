@@ -5,6 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CalendarDays,
+  CalendarRange,
   Clock3,
   X,
   FileText,
@@ -71,8 +72,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes' | 'ai-chat' | 'capsules';
-  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat' | 'capsules') => void;
+  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules';
+  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -206,7 +207,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'notes' | 'ai-chat' | 'capsules') => {
+  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -394,6 +395,38 @@ export function Sidebar({
                         className="overflow-hidden whitespace-nowrap"
                       >
                         {language === 'zh' ? '今天' : 'Today'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavClick('calendar')}
+                  data-testid="nav-calendar"
+                  data-active={activeTab === 'calendar'}
+                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
+                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    activeTab === 'calendar'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                  title={isCompact ? (language === 'zh' ? '日历' : 'Calendar') : undefined}
+                  aria-label={language === 'zh' ? '日历' : 'Calendar'}
+                >
+                  <CalendarRange className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <AnimatePresence initial={false}>
+                    {!isCompact && (
+                      <motion.span
+                        key="calendar-label"
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {language === 'zh' ? '日历' : 'Calendar'}
                       </motion.span>
                     )}
                   </AnimatePresence>
