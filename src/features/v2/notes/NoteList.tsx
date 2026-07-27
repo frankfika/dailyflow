@@ -120,6 +120,16 @@ export function NoteList({
     return items.filter(byKind[view]);
   }, [items, view]);
 
+  // A notes app should open directly into the most relevant document.
+  // Keep the selection valid as data/views change instead of leaving a
+  // populated list beside an onboarding panel that requires another click.
+  useEffect(() => {
+    if (filtered.length === 0) return;
+    // Do not replace a fresh selection merely because the list query has
+    // not incorporated a newly-created note yet.
+    if (!selectedId) onSelect(filtered[0].id);
+  }, [filtered, onSelect, selectedId]);
+
   const createAndOpen = async (kind: NoteKind = 'general') => {
     const { note } = await create.mutateAsync({
       body: '',
@@ -166,7 +176,7 @@ export function NoteList({
             onClick={() => createAndOpen('general')}
             data-testid="notes-new"
           >
-            + New note
+            {language === 'zh' ? '+ 新建笔记' : '+ Add note'}
           </Button>
         </div>
       </header>
@@ -199,12 +209,11 @@ export function NoteList({
           <ErrorState onRetry={() => all.refetch()} />
         ) : filtered.length === 0 ? (
           <EmptyState
-            title="No notes yet"
-            body="Start with an untitled note — you can add a title, kind, and date later."
-            action={
-              <Button variant="primary" onClick={() => createAndOpen('general')}>
-                + Untitled note
-              </Button>
+            title={language === 'zh' ? '还没有笔记' : 'No notes yet'}
+            body={
+              language === 'zh'
+                ? '使用右上角“新建笔记”，或者从右侧选择一个模板。'
+                : 'Use “Add note” above, or choose a template on the right.'
             }
           />
         ) : (
@@ -216,13 +225,13 @@ export function NoteList({
               return (
                 <li key={n.id}>
                   <Card
-                    className={`cursor-pointer transition-colors ${
+                    className={`relative overflow-hidden transition-colors ${
                       isSelected ? 'ring-1 ring-accent' : 'hover:bg-surface-elevated'
                     }`}
                   >
                     <button
                       onClick={() => onSelect(n.id)}
-                      className="w-full text-left p-3"
+                      className="w-full cursor-pointer p-3 pr-20 text-left"
                       data-testid={`notes-item-${n.id}`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -245,34 +254,34 @@ export function NoteList({
                             v{n.autoSaveVersion}
                           </span>
                         )}
-                        <span className="ml-auto flex gap-1">
-                          {n.state !== 'archived' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                archive.mutate(n.id);
-                              }}
-                              className="text-[10px] text-text-muted hover:text-text-heading"
-                              title="Archive"
-                            >
-                              archive
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm('Delete this note? This also removes its evidence.')) {
-                                del.mutate(n.id);
-                              }
-                            }}
-                            className="text-[10px] text-text-muted hover:text-danger"
-                            title="Delete"
-                          >
-                            delete
-                          </button>
-                        </span>
                       </div>
                     </button>
+                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                      {n.state !== 'archived' && (
+                        <button
+                          onClick={() => archive.mutate(n.id)}
+                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
+                          title="Archive"
+                          aria-label={`Archive ${title}`}
+                        >
+                          archive
+                        </button>
+                      )}
+                      {!isSelected && (
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this note? This also removes its evidence.')) {
+                              del.mutate(n.id);
+                            }
+                          }}
+                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-red-50 hover:text-danger"
+                          title="Delete"
+                          aria-label={`Delete ${title}`}
+                        >
+                          delete
+                        </button>
+                      )}
+                    </div>
                   </Card>
                 </li>
               );

@@ -21,6 +21,8 @@ export interface CalendarWorkspaceItem {
   localDate?: string;
   localTaskId?: string;
   localNoteId?: string;
+  delayed?: boolean;
+  originalDate?: string;
 }
 
 export interface CalendarWorkspaceResult {
@@ -75,7 +77,10 @@ export async function getCalendarWorkspace(start: string, end: string): Promise<
   for (const date of dates) {
     const note = await readDailyNote(date, config);
     for (const task of note?.tasks || []) {
-      const calendarDate = task.deadline || date;
+      const delayed = Boolean(task.tags?.includes('delayed'));
+      // A rolled-over task belongs to the day it was moved to. Its original
+      // deadline remains metadata, but must not pin it to an old calendar day.
+      const calendarDate = delayed ? date : (task.deadline || date);
       if (calendarDate < start || calendarDate > end || task.status === 'migrated') continue;
       items.push({
         id: `dailyflow:task:${task.id}`,
@@ -88,6 +93,8 @@ export async function getCalendarWorkspace(start: string, end: string): Promise<
         status: task.status === 'done' ? 'done' : 'todo',
         localDate: date,
         localTaskId: task.id,
+        delayed,
+        originalDate: delayed ? (task.deadline || task.source_date) : undefined,
       });
     }
   }

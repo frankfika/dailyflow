@@ -258,6 +258,8 @@ export interface CalendarWorkspaceItem {
   localDate?: string;
   localTaskId?: string;
   localNoteId?: string;
+  delayed?: boolean;
+  originalDate?: string;
 }
 
 export interface CalendarWorkspaceData {

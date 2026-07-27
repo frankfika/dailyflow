@@ -141,6 +141,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
           onToggleLayout={toggleLayout}
           onCreateFromTemplate={createAndOpen}
           onSelectNote={setSelectedId}
+          onDeleted={() => setSelectedId(null)}
         />
       </main>
     </div>

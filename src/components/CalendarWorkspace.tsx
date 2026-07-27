@@ -505,10 +505,22 @@ function CalendarPill({
         item.status === 'done' ? 'opacity-50' : ''
       }`}
       style={{ backgroundColor: `${color}16`, color }}
-      title={`${item.title} · ${sourceLabel(item.source, language)}`}
+      title={[
+        item.title,
+        item.delayed ? (language === 'zh' ? 'Delay（延期）' : 'Delayed') : '',
+        item.originalDate
+          ? `${language === 'zh' ? '原日期' : 'Original date'}: ${item.originalDate}`
+          : '',
+        sourceLabel(item.source, language),
+      ].filter(Boolean).join(' · ')}
     >
       {item.kind === 'task' ? <ListTodo className="h-3 w-3 shrink-0" /> : <CalendarDays className="h-3 w-3 shrink-0" />}
       {!item.allDay && !compact && <span className="shrink-0">{timeText(item.start, language)}</span>}
+      {item.delayed && (
+        <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[8px] font-bold uppercase leading-none text-amber-700">
+          Delay
+        </span>
+      )}
       <span className={`truncate font-medium ${item.status === 'done' ? 'line-through' : ''}`}>{item.title}</span>
       {item.url && <ExternalLink className="ml-auto h-2.5 w-2.5 shrink-0 opacity-0 group-hover:opacity-70" />}
     </button>
