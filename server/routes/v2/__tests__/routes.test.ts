@@ -16,10 +16,15 @@ import { saveConfig } from '../../../services/config';
 
 let app: express.Express;
 let workspace: string;
+let configDir: string;
 let server: any;
+let previousConfigFile: string | undefined;
 
 beforeAll(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-routes-'));
+  configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-config-'));
+  previousConfigFile = process.env.DAILYFLOW_CONFIG_FILE;
+  process.env.DAILYFLOW_CONFIG_FILE = path.join(configDir, 'config.json');
   process.env.DAILYFLOW_V2_WORKSPACE_ROOT = workspace;
   process.env.DAILYFLOW_V2_WORKSPACE_ID = 'ws_test';
   process.env.V2_AI_PROVIDER = 'local-deterministic';
@@ -30,6 +35,13 @@ beforeAll(async () => {
   await saveConfig({
     ...cfg,
     workspaceRoot: workspace,
+    workspaces: [{
+      id: 'ws_test',
+      name: 'V2 test workspace',
+      path: workspace,
+      createdAt: new Date().toISOString(),
+    }],
+    activeWorkspaceId: 'ws_test',
     v2: { enabled: true, inboxV2: true, todayV2: true, memoryV2: true, connectorsV2: false, aiEnabled: false, contextBudgetBytes: 32000 } as any,
   });
 
@@ -41,6 +53,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fs.rm(workspace, { recursive: true, force: true });
+  await fs.rm(configDir, { recursive: true, force: true });
+  if (previousConfigFile === undefined) {
+    delete process.env.DAILYFLOW_CONFIG_FILE;
+  } else {
+    process.env.DAILYFLOW_CONFIG_FILE = previousConfigFile;
+  }
 });
 
 async function post(path: string, body: unknown) {

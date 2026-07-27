@@ -203,8 +203,17 @@ export default function App() {
         setGithubRepoInput(config.githubRepo || '');
         setGithubToken(config.githubToken || '');
         setWorkspaceRoot(config.workspaceRoot || '');
-        setWorkspaces(config.workspaces || []);
+        const configuredWorkspaces = config.workspaces || [];
+        setWorkspaces(configuredWorkspaces);
         setActiveWorkspaceId(config.activeWorkspaceId || '');
+        // Keep the shell consistent with the backend. If the workspace list
+        // was cleared or the config became incomplete, do not leave users in
+        // a dashboard where Task/Note creation fails and the workspace
+        // switcher silently disappears. Route them to the recovery/setup UI.
+        if (configuredWorkspaces.length === 0 || !config.activeWorkspaceId || !config.workspaceRoot) {
+          setIsFirstRun(true);
+          setShowWorkspaceSetup(true);
+        }
         setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
         setRolloverTrigger(config.rolloverTrigger || 'manual');
         setIpfsEnabled(Boolean(config.ipfsEnabled));
@@ -478,21 +487,32 @@ export default function App() {
       setActiveWorkspaceId(id);
       setWorkspaceRoot(ws.path);
 
-      // Reset state for new workspace
+      // A workspace switch is a fresh navigation boundary. Always land on
+      // Today and clear view-local state from the previous workspace; keeping
+      // the Notes tab/editor open made the newly-selected workspace appear to
+      // default to Notes and could leak stale filters or drafts across it.
+      setActiveTab('today');
+      setCurrentFileDate(getTodayStr());
+      setShowTaskInput(false);
+      setShowBrainDump(false);
+      setShowQuickNoteEditor(false);
+      setIsNoteEditorMaximized(false);
+      setEditingDailyNote(null);
+      setPrefillLinkedTaskId(null);
+      setNotesFilterByTaskId(null);
+      setQuickNoteDefaultType(undefined);
+      setChatDraft(null);
+      setSelectedCategory(null);
+
+      // Reset data state for the new workspace.
       setMarkdown('');
       setLastSyncedMD('');
       setTasks([]);
       setDailyNotes([]);
+      setContextNotes([]);
       setFilesMap({});
-      // Restore last date for this workspace, fallback to today
-      let nextDate = getTodayStr();
-      try {
-        const saved = localStorage.getItem(`df_last_date_${id}`);
-        if (saved) nextDate = saved;
-      } catch { /* ignore */ }
 
       await reloadFileList();
-      setCurrentFileDate(nextDate);
 
       showToast(
         language === 'zh' ? `已切换到 ${ws.name}` : `Switched to ${ws.name}`,
@@ -1016,15 +1036,13 @@ export default function App() {
           </button>
         )}
 
-        {/* Notes gets the same full-bleed wrapper as ai-chat/capsules
-            so the editor column actually fills the viewport. The default
-            `max-w-3xl mx-auto` collapses the right pane to ~480px on a
-            1920px screen — Frank 多次反馈 "note 太小 / 中间空 /
-            section 留白大", 根因就是这里. AI/capsules already escape
-            the page-style wrapper; notes needs the same treatment
-            because the v2 editor IS a wide-pane workspace, not a doc. */}
+        {/* Every primary workspace uses the available pane width. Notes,
+            AI Chat, and Capsules own their internal scrolling; Today keeps
+            page padding but must not be constrained to document-reading
+            width. A `max-w-3xl` wrapper left nearly half of a 1920px window
+            empty and made the dashboard cards look like a narrow island. */}
         <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'w-full h-full' : 'max-w-3xl mx-auto w-full'}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' ? 'w-full h-full' : 'w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">

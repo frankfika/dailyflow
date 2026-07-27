@@ -65,7 +65,7 @@ const COPY = {
     minRead: '分钟阅读',
     bodyEmpty: '空白',
     onboardingTitle: '开始你的第一篇笔记',
-    onboardingHint: '挑一个模板，或直接在下面写',
+    onboardingHint: '挑一个模板，或新建一篇空白笔记',
     templateDaily: '今日记录',
     templateIdea: '想法捕捉',
     templateMeeting: '会议纪要',
@@ -95,7 +95,7 @@ const COPY = {
     minRead: 'min read',
     bodyEmpty: 'Empty',
     onboardingTitle: 'Start your first note',
-    onboardingHint: 'Pick a template, or just start typing below',
+    onboardingHint: 'Pick a template, or start with a blank note',
     templateDaily: "Today's log",
     templateIdea: 'Idea capture',
     templateMeeting: 'Meeting notes',
@@ -140,9 +140,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // can offer a "pick up where you left off" section — without it
   // the right pane is just the 4 template buttons floating in
   // ~700px of viewport whitespace on a 1080p screen.
-  const recent = useNotes({ state: 'active' });
+  const recent = useNotes();
   const recentItems = (recent.data?.notes ?? [])
-    .filter((n) => n.id !== noteId && (n.body?.trim() || n.title))
+    .filter((n) => n.state !== 'archived' && n.id !== noteId && (n.body?.trim() || n.title))
     .slice(0, 3);
 
   // Local mirror of body and title. The hook drives persistence; this
@@ -150,18 +150,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // and only re-seed on noteId change.
   const [body, setBody] = useState<string>(note?.body ?? '');
   const [title, setTitle] = useState<string>(note?.title ?? '');
-  // Once the user has touched the body — typed a character or
-  // pressed "Just start typing" — we never put the onboarding card
-  // back in front of them. Otherwise erasing every character would
-  // teleport them back to the templates, which feels punitive.
-  const [bodyTouched, setBodyTouched] = useState<boolean>(
-    Boolean(note?.body),
-  );
-
   useEffect(() => {
     setBody(note?.body ?? '');
     setTitle(note?.title ?? '');
-    setBodyTouched(Boolean(note?.body));
   }, [noteId, note?.body, note?.title]);
 
   const autosave = useNoteAutosave(note ?? null);
@@ -170,30 +161,12 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // persists via PATCH.
   const onBodyChange = (v: string) => {
     setBody(v);
-    setBodyTouched(true);
     autosave.schedule({ body: v });
   };
   const onTitleChange = (v: string) => {
     setTitle(v);
     autosave.schedule({ title: v === '' ? null : v });
   };
-  // "Just start typing" — swap the onboarding card for an empty
-  // textarea and focus it so the user can start writing immediately.
-  // We use a zero-width space so the body isn't literally empty
-  // (otherwise bodyTouched && body === '' would push us back into
-  // the onboarding branch) but the user sees a blank note.
-  const justStartTyping = () => {
-    setBody('\u200B');
-    setBodyTouched(true);
-    setTimeout(() => {
-      const ta = document.querySelector<HTMLTextAreaElement>(
-        '[data-testid="note-body"]',
-      );
-      ta?.focus();
-      ta?.setSelectionRange(1, 1);
-    }, 0);
-  };
-
   // Flush on unmount or before navigation.
   useEffect(() => {
     return () => {
@@ -207,13 +180,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   }, [noteId]);
 
   if (!noteId) {
-    // No note selected — render the SAME full-bleed onboarding
-    // composition the empty-body branch uses (big headline, template
-    // buttons, recent notes, tips) so the right pane is filled top
-    // to bottom on a 1080p screen. The old 1.1.10 branch only
-    // showed a small `max-w-2xl` island in the top-left, which
-    // left the rest of the pane as a wall of gradient background —
-    // Frank 反馈 "section 留白大 / 中间空".
+    // No note selected — render a full-bleed onboarding composition
+    // (headline, templates, recent notes, and tips) so the right pane
+    // is useful without putting another step in front of an existing note.
     return (
       <div className={`flex flex-col h-full ${className}`} data-testid="note-editor-no-selection">
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -223,6 +192,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             onCreateFromTemplate={onCreateFromTemplate}
             onSelectNote={onSelectNote}
             recentItems={recentItems}
+            onJustStartTyping={() => onCreateFromTemplate?.('general', '')}
           />
         </div>
       </div>
@@ -357,36 +327,20 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
         </div>
       </header>
 
-      {/* Body — when the user hasn't typed yet, render the onboarding
-          composition INSTEAD of a textarea. The composition is built
-          to fill the right pane top-to-bottom on a 1080p screen:
-          big headline, full-width template buttons, recent notes
-          (so the user has somewhere to click even if they don't want
-          a template), and a tips row. Without these the right pane
-          is a tiny island in a sea of whitespace.
-
-          Once the user types anything (or presses "Just start
-          typing"), switch to a textarea that fills the rest of the
-          pane. */}
+      {/* Once a note exists, always show the editor. Previously an empty
+          newly-created note rendered the onboarding panel again, so
+          "+ New note" appeared to do nothing and the user had to click
+          a second "Just start typing" action. Templates belong to the
+          no-selection state; a created note should be immediately writable. */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {!bodyTouched && body === '' && onCreateFromTemplate ? (
-          <OnboardingPanel
-            t={t}
-            language={language}
-            onCreateFromTemplate={onCreateFromTemplate}
-            onSelectNote={onSelectNote}
-            recentItems={recentItems}
-            onJustStartTyping={justStartTyping}
-          />
-        ) : (
-          <textarea
-            value={body}
-            onChange={(e) => onBodyChange(e.target.value)}
-            placeholder={t.placeholder}
-            className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
-            data-testid="note-body"
-          />
-        )}
+        <textarea
+          autoFocus
+          value={body}
+          onChange={(e) => onBodyChange(e.target.value)}
+          placeholder={t.placeholder}
+          className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
+          data-testid="note-body"
+        />
       </div>
 
       {/* Statusbar — word/char/read stats, right-aligned to the
@@ -431,21 +385,11 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
 }
 
 /**
- * OnboardingPanel — the full-bleed empty-state composition used by
- * two call sites:
- *   1. The editor with no note selected (the first thing the user
- *      sees when they open the Notes tab).
- *   2. The editor mounted on an existing note whose body is empty
- *      and the user hasn't typed yet (so they don't stare at a
- *      wall of textarea whitespace).
+ * OnboardingPanel — the full-bleed empty state shown when no note is
+ * selected (the first thing the user sees when they open the Notes tab).
  *
- * Both call sites used to render their own (different!) copy of
- * the onboarding card — the no-selection variant was a small
- * `max-w-2xl` island in the top-left, the empty-body variant was
- * the full 3-section layout. Frank 反馈 "section 留白大 / 中间空"
- * when entering the Notes tab with no note picked, because the
- * top-left island left the rest of the pane as gradient
- * background. Both call sites now share this single component.
+ * Once a note has been created, the real textarea replaces this panel
+ * immediately—even if the note is blank.
  */
 function OnboardingPanel({
   t,

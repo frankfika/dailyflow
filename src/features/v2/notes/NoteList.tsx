@@ -89,9 +89,13 @@ export function NoteList({ selectedId, onSelect, layout = 'split', onToggleLayou
   const archive = useArchiveNote();
   const del = useDeleteNote();
 
-  // Fetch all notes (cheap, in-memory). We then bucket client-side.
-  const all = useNotes({ state: view === 'archived' ? 'archived' : 'active' });
-  const items = all.data?.notes ?? [];
+  // Fetch all working notes (active + draft) and bucket client-side.
+  // New notes intentionally start as drafts; querying only `active` made a
+  // freshly-created note vanish from the list immediately and after reload.
+  const all = useNotes(view === 'archived' ? { state: 'archived' } : {});
+  const items = (all.data?.notes ?? []).filter(
+    (note) => view === 'archived' || note.state !== 'archived',
+  );
 
   const filtered = useMemo(() => {
     const cutoff = Date.now() - 7 * 86_400_000;

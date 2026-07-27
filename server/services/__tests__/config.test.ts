@@ -5,32 +5,23 @@ import os from 'os';
 import { loadConfig, saveConfig } from '../config.js';
 import type { Config } from '../../types/task.js';
 
-// We need to override the config file path for testing.
-// Since config.ts uses a module-level const, we'll test via file system manipulation.
-const CONFIG_DIR = path.join(os.homedir(), '.dailyflow');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-const BACKUP_FILE = path.join(CONFIG_DIR, 'config.json.bak');
+let testConfigDir: string;
+let previousConfigFile: string | undefined;
 
 describe('loadConfig', () => {
   beforeAll(async () => {
-    // Backup existing config if present
-    try {
-      const content = await fs.readFile(CONFIG_FILE, 'utf-8');
-      await fs.writeFile(BACKUP_FILE, content, 'utf-8');
-      await fs.unlink(CONFIG_FILE);
-    } catch { /* no existing config */ }
+    testConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dailyflow-config-test-'));
+    previousConfigFile = process.env.DAILYFLOW_CONFIG_FILE;
+    process.env.DAILYFLOW_CONFIG_FILE = path.join(testConfigDir, 'config.json');
   });
 
   afterAll(async () => {
-    // Restore original config
-    try {
-      await fs.unlink(CONFIG_FILE);
-    } catch { /* ignore */ }
-    try {
-      const content = await fs.readFile(BACKUP_FILE, 'utf-8');
-      await fs.writeFile(CONFIG_FILE, content, 'utf-8');
-      await fs.unlink(BACKUP_FILE);
-    } catch { /* no backup */ }
+    if (previousConfigFile === undefined) {
+      delete process.env.DAILYFLOW_CONFIG_FILE;
+    } else {
+      process.env.DAILYFLOW_CONFIG_FILE = previousConfigFile;
+    }
+    await fs.rm(testConfigDir, { recursive: true, force: true });
   });
 
   it('returns default config when file does not exist', async () => {

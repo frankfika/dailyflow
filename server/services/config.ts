@@ -4,7 +4,19 @@ import os from 'os';
 import crypto from 'crypto';
 import type { Config, Workspace } from '../types/task.js';
 
-const CONFIG_FILE = path.join(os.homedir(), '.dailyflow', 'config.json');
+const DEFAULT_CONFIG_FILE = path.join(os.homedir(), '.dailyflow', 'config.json');
+
+/**
+ * Resolve the config path at call time so tests can use an isolated file.
+ *
+ * This must not be a module-level snapshot: Vitest hoists imports before test
+ * setup hooks run. Reading the environment lazily lets each test point config
+ * reads/writes at its own temporary directory without ever touching the
+ * user's real ~/.dailyflow/config.json.
+ */
+function getConfigFile(): string {
+  return process.env.DAILYFLOW_CONFIG_FILE || DEFAULT_CONFIG_FILE;
+}
 
 const DEFAULT_WORKSPACE_PATH = path.join(os.homedir(), 'Desktop', 'DailyFlow');
 
@@ -49,10 +61,11 @@ function ensureWorkspaces(config: Config): Config {
 }
 
 export async function loadConfig(): Promise<Config> {
+  const configFile = getConfigFile();
   let raw: Partial<Config> = {};
   let fileExisted = false;
   try {
-    const content = await fs.readFile(CONFIG_FILE, 'utf-8');
+    const content = await fs.readFile(configFile, 'utf-8');
     raw = JSON.parse(content);
     fileExisted = true;
   } catch (error: any) {
@@ -73,9 +86,9 @@ export async function loadConfig(): Promise<Config> {
   // resulting cascade is what was wiping the e2e workspace mid-test.
   if (!fileExisted) {
     try {
-      const dir = path.dirname(CONFIG_FILE);
+      const dir = path.dirname(configFile);
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(CONFIG_FILE, JSON.stringify(normalized, null, 2), 'utf-8');
+      await fs.writeFile(configFile, JSON.stringify(normalized, null, 2), 'utf-8');
     } catch {
       // best-effort; subsequent saveConfig will persist
     }
@@ -85,10 +98,11 @@ export async function loadConfig(): Promise<Config> {
 }
 
 export async function saveConfig(config: Config): Promise<void> {
-  const dir = path.dirname(CONFIG_FILE);
+  const configFile = getConfigFile();
+  const dir = path.dirname(configFile);
   await fs.mkdir(dir, { recursive: true });
   const normalized = ensureWorkspaces({ ...config });
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(normalized, null, 2), 'utf-8');
+  await fs.writeFile(configFile, JSON.stringify(normalized, null, 2), 'utf-8');
 }
 
 export function generateWorkspaceId(): string {
