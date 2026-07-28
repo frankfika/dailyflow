@@ -25,6 +25,8 @@ __简体中文__ | [English](./README_EN.md)
 
 > [!IMPORTANT]
 > 当前 README 描述的是已实现版本及其过渡中的 Today’s Three 体验。下一代 AI-native 产品的开发主规范是 [`docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md`](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md)。后续产品、数据模型和开发决策以该文档为准。
+>
+> 邮件工作台候选版本的专项规划见 [`docs/MAIL_WORKSPACE_PLAN.md`](./docs/MAIL_WORKSPACE_PLAN.md)，包括 Gmail、附件、回复、标签、自定义回复、开源复用与实施阶段。
 
 ## ✦ 下一版：Today’s Three
 
@@ -81,7 +83,16 @@ DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first�
 - **统一日历视图**：在侧边栏直接进入日历，按天、周或月查看任务、定时笔记和外部日程
 - **多来源聚合**：将 DailyFlow 本地内容与已连接的企业日历汇总到同一时间轴
 - **飞书日程**：读取飞书日历并显示日程详情，可从 DailyFlow 跳转到原始日程
-- **可扩展连接器**：连接器插件层支持飞书与 Google Calendar；Google 使用桌面 OAuth + PKCE 授权
+- **可扩展连接器**：连接器插件层支持飞书；Google Calendar 的桌面 OAuth + PKCE 代码已接入，但正式凭据尚未配置
+
+#### Google Calendar 后续事项
+
+- [ ] 为 DailyFlow 创建并维护官方 Google Cloud 项目
+- [ ] 配置 OAuth 同意屏幕并完成敏感权限验证
+- [ ] 创建正式的 Desktop OAuth Client ID，并注入桌面安装包
+- [ ] 在 macOS、Windows 与 Linux 安装包中验证授权回调、令牌刷新和主日历读取
+
+> 当前状态：Google Calendar 连接器代码已经进入 `main`，但在官方 OAuth Client ID 配置完成前，不应视为开箱即用功能。设置页保留首次配置入口，供开发和内部测试使用。
 
 ### 🤖 AI 助手
 

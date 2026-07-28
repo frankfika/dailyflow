@@ -81,7 +81,16 @@ DailyFlow is a **local-first daily focus tool for people with overloaded backlog
 - **Unified calendar**: open Calendar from the sidebar and browse tasks, timed notes, and external events by day, week, or month
 - **Multiple sources**: combine local DailyFlow content and connected enterprise calendars on one timeline
 - **Feishu events**: read Feishu Calendar events, inspect their details, and open the original event from DailyFlow
-- **Extensible connectors**: the connector layer supports Feishu and Google Calendar with desktop OAuth + PKCE
+- **Extensible connectors**: the connector layer supports Feishu; Google Calendar desktop OAuth + PKCE is implemented, but production credentials are not configured yet
+
+#### Google Calendar follow-up
+
+- [ ] Create and maintain an official DailyFlow Google Cloud project
+- [ ] Configure the OAuth consent screen and complete sensitive-scope verification
+- [ ] Create a production Desktop OAuth Client ID and inject it into desktop builds
+- [ ] Validate callback handling, token refresh, and primary-calendar reads on macOS, Windows, and Linux installers
+
+> Current status: the Google Calendar connector code is on `main`, but it is not an out-of-the-box feature until the official OAuth Client ID is configured. The Settings field remains available for development and internal testing.
 
 ### 🤖 AI Assistant
 
