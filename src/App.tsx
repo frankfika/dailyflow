@@ -1053,7 +1053,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen bg-background/40 backdrop-blur-3xl relative overflow-hidden min-w-0 w-full transition-colors duration-700">
+      <main className="flex-1 flex flex-col h-screen bg-background/90 relative overflow-hidden min-w-0 w-full transition-colors duration-300">
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button

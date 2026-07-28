@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.1.17] - 2026-07-28
+
+### Fixed
+
+- **Desktop runtime jank** — replaced the permanently animated, viewport-sized `blur(140px)` background with static radial gradients.
+- **Expensive full-window compositing** — removed always-on backdrop blur from the main pane, sidebar, task cards, glass panels, and sticky focus bar while preserving their visual hierarchy with opaque surfaces and gradients.
+- **Over-broad transitions** — limited card transitions to the properties that actually animate, avoiding unnecessary style and paint work.
+
+### Verified
+
+- DailyFlow idle process CPU: `0.0%`
+- WebKit content CPU: approximately `0.2%`
+- WebKit GPU CPU: `0.0%`
+- `npm run lint` ✅
+- `npm run build` ✅
+- `npm test` ✅ 37 files / 336 tests
+
 ## [1.1.10] - 2026-07-21
 
 ### Fixed

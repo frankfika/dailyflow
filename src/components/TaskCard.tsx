@@ -108,7 +108,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       className={`group relative p-4 flex items-start space-x-3.5 rounded-xl transition-all duration-300
         ${isDone
           ? 'bg-gradient-to-br from-surface/40 to-background/60 border border-border/30 shadow-sm opacity-70'
-          : 'bg-gradient-to-br from-white/90 to-surface/80 border border-white/60 shadow-[0_2px_8px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_-4px_rgba(0,122,255,0.08),0_4px_12px_-2px_rgba(0,0,0,0.04)] hover:border-accent/20 hover:-translate-y-0.5 backdrop-blur-xl'
+          : 'bg-gradient-to-br from-white/95 to-surface/90 border border-white/60 shadow-[0_2px_8px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_-4px_rgba(0,122,255,0.08),0_4px_12px_-2px_rgba(0,0,0,0.04)] hover:border-accent/20 hover:-translate-y-0.5'
         }`}
     >
       <button
