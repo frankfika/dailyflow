@@ -2,6 +2,27 @@
 
 > 原则：先验证最核心的「Markdown 自动迁移」价值，再扩展项目、思维导图和同步体验。
 
+## 当前统一产品基线（2026-07-28）
+
+当前实现以 [`DAILYFLOW_UNIFIED_PRODUCT_IMPLEMENTATION_PLAN.md`](./DAILYFLOW_UNIFIED_PRODUCT_IMPLEMENTATION_PLAN.md) 为执行基线：一级入口为 Today、Notes、AI Chat、Memory；Calendar 位于 Today 的 Plan / Calendar 子视图，Review 位于 Needs decision，Inbox 位于 Notes。AI Workspace 不再作为独立导航入口。所有 AI 写入先进入 Proposal，后台长任务使用可恢复 Job。
+
+---
+
+## vNext 专项：Mail Workspace
+
+邮件工作台候选版本已经形成独立规划，目标是在 DailyFlow 中提供可日常使用的 Gmail 阅读、附件查看、回复、标签和自定义回复能力，并将邮件中的承诺、等待项和项目资料接入 AI-Native 工作闭环。
+
+完整范围、开源复用方案、架构、阶段计划与发布门槛见：
+
+- [`MAIL_WORKSPACE_PLAN.md`](./MAIL_WORKSPACE_PLAN.md)
+
+当前默认方向：
+
+- Gmail 首发，Outlook 和通用 IMAP/SMTP 后续。
+- Zero Email 作为主要参考和模块移植来源，不整体替换 DailyFlow 技术底座。
+- 先建立安全的读取、正文和附件闭环，再开放回复、标签等受控写操作。
+- 所有 AI 回复必须经过用户预览和确认，不自动发送。
+
 ---
 
 ## Phase 0：需求与样本整理

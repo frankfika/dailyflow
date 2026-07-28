@@ -24,6 +24,8 @@ import {
   type Commitment,
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
+import { queryKeys } from '../../../queryKeys';
+import { useWorkspaceScope } from '../../../workspaceScope';
 
 export function CommitmentContext({
   commitmentId,
@@ -35,8 +37,9 @@ export function CommitmentContext({
   onClose?: () => void;
 }) {
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   const ctx = useQuery({
-    queryKey: ['v2-context', commitmentId],
+    queryKey: queryKeys.commitment(workspaceId, commitmentId),
     queryFn: () => getContext(commitmentId),
   });
 
@@ -44,16 +47,16 @@ export function CommitmentContext({
     mutationFn: (body: { waitingOnText: string; reviewAt: string }) =>
       waitOnCommitment(commitmentId, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['v2-context', commitmentId] });
-      qc.invalidateQueries({ queryKey: ['v2-commitments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.commitment(workspaceId, commitmentId) });
+      qc.invalidateQueries({ queryKey: queryKeys.commitmentsRoot(workspaceId) });
       onChanged?.();
     },
   });
   const resumeMut = useMutation({
     mutationFn: () => resumeCommitment(commitmentId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['v2-context', commitmentId] });
-      qc.invalidateQueries({ queryKey: ['v2-commitments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.commitment(workspaceId, commitmentId) });
+      qc.invalidateQueries({ queryKey: queryKeys.commitmentsRoot(workspaceId) });
       onChanged?.();
     },
   });
@@ -61,16 +64,16 @@ export function CommitmentContext({
     mutationFn: (body: { outcomeKind: string; outcomeSummary: string }) =>
       completeCommitment(commitmentId, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['v2-context', commitmentId] });
-      qc.invalidateQueries({ queryKey: ['v2-commitments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.commitment(workspaceId, commitmentId) });
+      qc.invalidateQueries({ queryKey: queryKeys.commitmentsRoot(workspaceId) });
       onChanged?.();
     },
   });
   const cancelMut = useMutation({
     mutationFn: () => cancelCommitment(commitmentId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['v2-context', commitmentId] });
-      qc.invalidateQueries({ queryKey: ['v2-commitments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.commitment(workspaceId, commitmentId) });
+      qc.invalidateQueries({ queryKey: queryKeys.commitmentsRoot(workspaceId) });
       onChanged?.();
     },
   });

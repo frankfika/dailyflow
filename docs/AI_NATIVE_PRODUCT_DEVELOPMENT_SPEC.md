@@ -8,6 +8,8 @@
 
 界面实现必须同时遵守 [`docs/AI_NATIVE_UI_UX_SPEC.md`](./AI_NATIVE_UI_UX_SPEC.md)。产品规范决定“做什么”,UI / UX 规范决定“如何让用户自然地使用”;两者具有同等实施约束。
 
+> **2026-07-28 产品决策覆盖**：独立 AI Workspace 不再是用户入口；AI Chat 恢复为一级入口。Calendar 归入 Today 的 Plan，Review 归入 Today 的 Needs decision，Inbox 归入 Notes。具体迁移顺序和状态机制以 [`DAILYFLOW_UNIFIED_PRODUCT_IMPLEMENTATION_PLAN.md`](./DAILYFLOW_UNIFIED_PRODUCT_IMPLEMENTATION_PLAN.md) 为准。
+
 ---
 
 ## 0. 如何使用这份文档

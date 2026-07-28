@@ -6,7 +6,7 @@
  * The search bar returns hits with snippets and source IDs — never just
  * a filename.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   searchMemory,
@@ -19,20 +19,27 @@ import {
   type Commitment,
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
+import { queryKeys } from '../../../queryKeys';
+import { openEntity } from '../../../components/EntityContextDrawer';
 
-export function MemoryView() {
+export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }) {
   const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [q]);
   const search = useQuery({
-    queryKey: ['v2-search', q],
-    queryFn: () => searchMemory(q),
-    enabled: q.length > 0,
+    queryKey: queryKeys.memory(workspaceId, debouncedQ),
+    queryFn: ({ signal }) => searchMemory(debouncedQ, signal),
+    enabled: debouncedQ.length > 0,
   });
   const commitments = useQuery({
-    queryKey: ['v2-memory-commitments'],
+    queryKey: queryKeys.commitments(workspaceId, { state: 'open' }),
     queryFn: () => listCommitments({ state: 'open' }),
   });
   const legacy = useQuery({
-    queryKey: ['v2-legacy-tasks'],
+    queryKey: queryKeys.today(workspaceId, 'legacy'),
     queryFn: () => listLegacyTasks(),
   });
 
@@ -68,7 +75,7 @@ export function MemoryView() {
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
               {(search.data?.hits ?? []).map((h, i) => (
-                <SearchHit key={i} hit={h} />
+                <SearchHit key={i} hit={h} workspaceId={workspaceId} />
               ))}
             </ul>
           )}
@@ -119,9 +126,15 @@ export function MemoryView() {
   );
 }
 
-function SearchHit({ hit }: { hit: MemoryHit }) {
+function SearchHit({ hit, workspaceId }: { hit: MemoryHit; workspaceId: string }) {
   return (
-    <li className="rounded-md border border-[var(--color-border)] p-2 text-sm">
+    <li
+      className="cursor-pointer rounded-md border border-[var(--color-border)] p-2 text-sm hover:bg-black/[0.03]"
+      onClick={() => openEntity({ workspaceId, type: hit.type, id: hit.id, label: hit.title })}
+      onKeyDown={e => { if (e.key === 'Enter') openEntity({ workspaceId, type: hit.type, id: hit.id, label: hit.title }); }}
+      tabIndex={0}
+      role="button"
+    >
       <div className="flex items-center gap-2">
         <Badge>{hit.type}</Badge>
         <span className="font-medium">{hit.title}</span>

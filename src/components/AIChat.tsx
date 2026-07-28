@@ -18,6 +18,7 @@ import { ChatInputArea } from './ChatInputArea';
 import { getTodayStr } from '../utils/tagColors';
 
 interface AIChatProps {
+  workspaceId?: string;
   language: 'en' | 'zh';
   activeContext?: 'work' | 'life';
   tasks: any[];
@@ -26,18 +27,18 @@ interface AIChatProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null;
   onDraftConsumed?: () => void;
-  onOpenMeetingCapture?: () => void;  // 由 App.tsx 统一控制 Modal, 同步 FloatingAIPanel
+  onOpenMeetingCapture?: () => void;
   onNoteCreated?: () => void;
 }
 
-export function AIChat({ language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onOpenMeetingCapture, onNoteCreated }: AIChatProps) {
+export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onOpenMeetingCapture, onNoteCreated }: AIChatProps) {
   const {
-    sessions, activeSession, setActiveSessionId, createSession, deleteSession, renameSession,
+    sessions, activeSession, setActiveSessionId, createSession, prepareSessionForDraft, deleteSession, renameSession,
     isStreaming, sendMessage, stopMessage, retryMessage,
     providers, activeProvider, switchProvider, reloadProvidersAndSkills,
     skills, pendingSkillId, setPendingSkillId, activeSkill,
     addContext, removeContext,
-  } = useAiSession({ language, tasks, notes, filesMap, activeContext, showToast });
+  } = useAiSession({ workspaceId, language, tasks, notes, filesMap, activeContext, showToast });
 
   // UI 状态 (本地)
   const [inputValue, setInputValue] = useState('');
@@ -99,7 +100,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
             data: { text: initialDraft.contextText },
           }]
         : [];
-    createSession({ contextItems });
+    prepareSessionForDraft(contextItems);
     setInputValue(initialDraft.text);
     setDraftSourceTitle(initialDraft.sourceTitle || null);
     setTimeout(() => {
@@ -111,7 +112,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
       }
     }, 50);
     onDraftConsumed?.();
-  }, [initialDraft, onDraftConsumed, language, createSession]);
+  }, [initialDraft, onDraftConsumed, language, prepareSessionForDraft]);
 
   const startRename = useCallback((session: typeof sessions[number]) => {
     setEditingSessionId(session.id);
@@ -176,7 +177,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <span className="text-sm font-bold text-text-heading">
-                    {language === 'zh' ? 'AI 工作台' : 'AI Workspace'}
+                    {language === 'zh' ? 'AI 对话' : 'AI Chat'}
                   </span>
                 </div>
                 <button

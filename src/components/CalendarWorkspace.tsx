@@ -22,6 +22,8 @@ import {
 import { open } from '@tauri-apps/plugin-shell';
 import {
   calendarApi,
+  dispatchDomainEvent,
+  DOMAIN_EVENTS,
   feishuApi,
   type CalendarWorkspaceData,
   type CalendarWorkspaceItem,
@@ -260,8 +262,12 @@ export function CalendarWorkspace({
   useEffect(() => {
     load();
     const refresh = () => load();
-    window.addEventListener('df:feishu-synced', refresh);
-    return () => window.removeEventListener('df:feishu-synced', refresh);
+    window.addEventListener(DOMAIN_EVENTS.calendarConnectionChanged, refresh);
+    window.addEventListener(DOMAIN_EVENTS.calendarEventsChanged, refresh);
+    return () => {
+      window.removeEventListener(DOMAIN_EVENTS.calendarConnectionChanged, refresh);
+      window.removeEventListener(DOMAIN_EVENTS.calendarEventsChanged, refresh);
+    };
   }, [load]);
 
   const changeMode = (next: CalendarViewMode) => {
@@ -326,7 +332,11 @@ export function CalendarWorkspace({
             ? (language === 'zh' ? '已关联已有飞书任务' : 'Linked to an existing Feishu task')
             : (language === 'zh' ? '任务已是最新状态' : 'Task is already up to date');
       setNotice({ kind: 'success', text: `${item.title} · ${action}` });
-      window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+      dispatchDomainEvent(DOMAIN_EVENTS.calendarEventsChanged, {
+        provider: 'feishu',
+        reason: 'task-sync',
+        taskId,
+      });
     } catch (e: any) {
       setNotice({ kind: 'error', text: e.message || String(e) });
     } finally {
@@ -525,6 +535,10 @@ export function CalendarWorkspace({
             setNotice({
               kind: 'success',
               text: language === 'zh' ? `${title} · 已创建到飞书日历` : `${title} · Created in Feishu Calendar`,
+            });
+            dispatchDomainEvent(DOMAIN_EVENTS.calendarEventsChanged, {
+              provider: 'feishu',
+              reason: 'event-created',
             });
             await load();
           }}

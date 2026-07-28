@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { loadConfig, saveConfig, generateWorkspaceId } from '../services/config.js';
+import {
+  loadConfig,
+  loadVersionedConfig,
+  patchConfig,
+  saveConfig,
+  generateWorkspaceId,
+  type ConfigPatch,
+} from '../services/config.js';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -57,7 +64,7 @@ async function canonicalizeWorkspacePath(input: string): Promise<string> {
  */
 router.get('/', async (req, res) => {
   try {
-    const config = await loadConfig();
+    const config = await loadVersionedConfig();
     res.json(config);
   } catch (error: any) {
     console.error('Error loading config:', error);
@@ -66,12 +73,35 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * POST /api/config - 更新配置
+ * PATCH /api/config - 带版本保护的部分配置更新
+ */
+router.patch('/', async (req, res) => {
+  try {
+    const { version, patch } = req.body as { version?: string; patch?: ConfigPatch };
+    if (!version || !patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      return res.status(400).json({ error: 'version and patch are required' });
+    }
+    const result = await patchConfig(patch, version);
+    if (!result.ok) {
+      return res.status(409).json({
+        error: 'Config changed since it was loaded',
+        config: result.config,
+      });
+    }
+    res.json(result.config);
+  } catch (error: any) {
+    console.error('Error saving config:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/config - legacy full replacement kept for older packaged clients.
+ * New clients must use the versioned PATCH endpoint above.
  */
 router.post('/', async (req, res) => {
   try {
-    const config = req.body;
-    await saveConfig(config);
+    await saveConfig(req.body);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error saving config:', error);

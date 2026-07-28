@@ -35,6 +35,8 @@ export interface WeeklyReview {
 }
 
 import { Card, Badge, StateView } from '../components/States';
+import { queryKeys } from '../../../queryKeys';
+import { useWorkspaceScope } from '../../../workspaceScope';
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(`/api/v2${url}`);
@@ -43,9 +45,10 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export function ReviewView() {
-  const stale = useQuery({ queryKey: ['v2-stale'], queryFn: () => getJson<{ items: StaleItem[] }>('/review/stale') });
-  const overdue = useQuery({ queryKey: ['v2-overdue'], queryFn: () => getJson<{ items: WaitingOverdueItem[] }>('/review/waiting-overdue') });
-  const weekly = useQuery({ queryKey: ['v2-weekly'], queryFn: () => getJson<WeeklyReview>('/review/weekly') });
+  const workspaceId = useWorkspaceScope();
+  const stale = useQuery({ queryKey: queryKeys.proposals(workspaceId, { review: 'stale' }), queryFn: () => getJson<{ items: StaleItem[] }>('/review/stale') });
+  const overdue = useQuery({ queryKey: queryKeys.proposals(workspaceId, { review: 'overdue' }), queryFn: () => getJson<{ items: WaitingOverdueItem[] }>('/review/waiting-overdue') });
+  const weekly = useQuery({ queryKey: queryKeys.proposals(workspaceId, { review: 'weekly' }), queryFn: () => getJson<WeeklyReview>('/review/weekly') });
 
   return (
     <div className="flex flex-col gap-4 p-4">

@@ -22,6 +22,7 @@ export type EntityPrefix =
   | 'plan' // DailyPlan
   | 'prop' // Proposal
   | 'run' // AgentRun
+  | 'job' // durable background Job
   | 'chg'; // ProposedChange (in-memory, not persisted as a separate entity)
 
 export function newId(prefix: EntityPrefix, seedTime?: number): string {

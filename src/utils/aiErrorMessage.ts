@@ -1,9 +1,9 @@
 /**
  * Translate technical AI error messages into user-friendly actionable guidance.
  *
- * Shared by AIChat, FloatingAIPanel, and Notes (AI Summary panel) so every
+ * Shared by AIChat and Notes (AI Summary panel) so every
  * AI call surfaces the same kind of error UX. Previously the function was
- * duplicated verbatim in AIChat.tsx and FloatingAIPanel.tsx, and Notes.tsx
+ * duplicated across AI surfaces
  * had no friendly mapping at all (ux-audit 2026-07-12 §3).
  */
 export function getFriendlyAiErrorMessage(

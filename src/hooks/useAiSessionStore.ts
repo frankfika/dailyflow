@@ -4,11 +4,11 @@
  */
 
 /**
- * useAiSessionStore — AIChat + FloatingAIPanel 共享的 AI 会话状态 (模块级).
+ * useAiSessionStore — AI Chat 的模块级共享会话状态.
  *
  * 设计要点 (R3 重构, 2026-07-12):
  * - 模块级 store + pub/sub, 不依赖 zustand, React 19 + Vite 现有依赖足够.
- * - 跨 AIChat / FloatingAIPanel 实例同步 session 列表 (修两个列表互不可见的 bug).
+ * - 跨 AI Chat 组件实例同步 session 列表.
  * - localStorage key 保持 `df_ai_chat_store` 不变, 老用户 session 不丢.
  */
 
@@ -21,7 +21,7 @@ import {
   type ContextItem,
 } from '../types/chat';
 import { loadProviderConfigs, type ProviderConfig } from '../types/models';
-import { promptsApi, type PromptTemplateData, loadSkillUsage, sortSkillsByUsage } from '../api/client';
+import { DOMAIN_EVENTS, promptsApi, type PromptTemplateData, loadSkillUsage, sortSkillsByUsage } from '../api/client';
 
 export interface SharedStore {
   sessions: ChatSession[];
@@ -95,7 +95,7 @@ export function ensureInitialized(): SharedStore {
 
   // 监听 provider 变化 (其他组件, e.g. ChatSettingsPanel save)
   if (typeof window !== 'undefined') {
-    window.addEventListener('df:provider-changed', () => {
+    window.addEventListener(DOMAIN_EVENTS.aiProviderChanged, () => {
       const fresh = loadProviderConfigs();
       setStore({ providers: fresh.configs, activeProviderId: fresh.activeId });
     });

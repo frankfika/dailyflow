@@ -103,6 +103,28 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       const processed = await post(`/sources/${sourceId}/process`, {});
       expect(processed.status).toBe(200);
       expect(processed.body.fallback).toBe(true);
+      expect(processed.body.job.status).toMatch(/succeeded|waiting_review/);
+      const resumedProcessing = await post(`/sources/${sourceId}/process`, {});
+      expect(resumedProcessing.status).toBe(200);
+      expect(resumedProcessing.body.resumed).toBe(true);
+      expect(resumedProcessing.body.job.id).toBe(processed.body.job.id);
+
+      // Durable job can be recovered after the processing request returns.
+      const processedJob = await get(`/jobs/${processed.body.job.id}`);
+      expect(processedJob.status).toBe(200);
+      expect(processedJob.body.job.entityRef).toEqual({ type: 'source', id: sourceId });
+
+      // Generic jobs are idempotent and can be cancelled through the API.
+      const jobBody = {
+        kind: 'import',
+        entityRef: { type: 'workspace', id: 'ws_test' },
+        idempotencyKey: 'route-test-import-job',
+      };
+      const createdJob = await post('/jobs', jobBody);
+      const duplicateJob = await post('/jobs', jobBody);
+      expect(duplicateJob.body.job.id).toBe(createdJob.body.job.id);
+      const cancelledJob = await post(`/jobs/${createdJob.body.job.id}/cancel`, {});
+      expect(cancelledJob.body.job.status).toBe('cancelled');
 
       // 5. Manually create a commitment (user typed the data)
       const create = await post('/commitments', {

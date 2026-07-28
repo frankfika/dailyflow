@@ -40,6 +40,7 @@ export interface V2Layout {
     sqlite: string;
     connectors: string;
     config: string;
+    jobs: string;
   };
   proposals: string;
   runs: string;
@@ -75,6 +76,7 @@ export function deriveLayout(workspaceRoot: string): V2Layout {
       sqlite: path.join(workspaceRoot, '.dailyflow', 'index.sqlite'),
       connectors: path.join(workspaceRoot, '.dailyflow', 'connector-state.json'),
       config: path.join(workspaceRoot, '.dailyflow', 'config.json'),
+      jobs: path.join(workspaceRoot, '.dailyflow', 'jobs'),
     },
   };
 }

@@ -32,7 +32,6 @@ export default defineConfig(() => {
         },
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          v2: path.resolve(__dirname, 'src/features/v2/v2-standalone.html'),
         },
       },
       chunkSizeWarningLimit: 800,

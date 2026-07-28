@@ -32,6 +32,8 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
+  /** Workspace scope. Legacy sessions without this field are treated as default. */
+  workspaceId?: string;
   title: string;
   messages: ChatMessage[];
   contextItems: ContextItem[]; // current attached context
@@ -52,7 +54,25 @@ const MAX_SESSIONS = 50;
 export function loadChatStore(): ChatStore {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<ChatStore>;
+      const sessions = Array.isArray(parsed.sessions)
+        ? parsed.sessions
+            .filter((session): session is ChatSession =>
+              Boolean(session && typeof session.id === 'string' && Array.isArray(session.messages))
+            )
+            .map(session => ({
+              ...session,
+              workspaceId: session.workspaceId || 'default',
+              contextItems: Array.isArray(session.contextItems) ? session.contextItems : [],
+            }))
+            .slice(0, MAX_SESSIONS)
+        : [];
+      const activeSessionId = sessions.some(session => session.id === parsed.activeSessionId)
+        ? parsed.activeSessionId as string
+        : sessions[0]?.id || null;
+      return { sessions, activeSessionId };
+    }
   } catch (e) {
     console.error('Failed to load chat store:', e);
   }
@@ -63,15 +83,24 @@ export function saveChatStore(store: ChatStore): void {
   // Cap sessions to avoid localStorage bloat
   const trimmed: ChatStore = {
     ...store,
-    sessions: store.sessions.slice(0, MAX_SESSIONS),
+    // Empty drafts are runtime-only. Persisting them creates abandoned chats
+    // every time a Note opens the composer.
+    sessions: [...store.sessions]
+      .filter(s => s.messages.length > 0)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, MAX_SESSIONS),
   };
+  if (!trimmed.sessions.some(session => session.id === trimmed.activeSessionId)) {
+    trimmed.activeSessionId = trimmed.sessions[0]?.id || null;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
 }
 
-export function createNewSession(): ChatSession {
+export function createNewSession(workspaceId = 'default'): ChatSession {
   const now = new Date().toISOString();
   return {
     id: `chat_${Date.now()}`,
+    workspaceId,
     title: 'New Chat',
     messages: [],
     contextItems: [],

@@ -6,7 +6,7 @@
 /**
  * AI 会话上下文文本构造器 — 从 useAiSession 抽出, 纯函数 (无 React 依赖).
  * 集中维护 today-tasks / date-tasks / note / project / custom-text 五种 context item
- * 的 Markdown 序列化逻辑, 以及 FloatingAIPanel 的 focusedContext 自动注入文本.
+ * 的 Markdown 序列化逻辑，以及 focusedContext 自动注入文本.
  */
 
 import type { ContextItem } from '../types/chat';

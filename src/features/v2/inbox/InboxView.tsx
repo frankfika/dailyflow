@@ -20,6 +20,8 @@ import {
   applyProposal,
   rejectProposal,
   createCommitment,
+  listProposals,
+  listJobs,
   V2ApiError,
   type SourceItem,
   type Proposal,
@@ -28,18 +30,21 @@ import {
   type Evidence,
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
+import { queryKeys } from '../../../queryKeys';
+import { useWorkspaceScope } from '../../../workspaceScope';
 
 export function InboxView() {
+  const workspaceId = useWorkspaceScope();
   const qc = useQueryClient();
   const inbox = useQuery({
-    queryKey: ['v2-inbox'],
+    queryKey: queryKeys.inbox(workspaceId),
     queryFn: () => listInbox(),
   });
 
   const refresh = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ['v2-inbox'] });
-    qc.invalidateQueries({ queryKey: ['v2-proposals'] });
-  }, [qc]);
+    qc.invalidateQueries({ queryKey: queryKeys.inbox(workspaceId) });
+    qc.invalidateQueries({ queryKey: queryKeys.proposalsRoot(workspaceId) });
+  }, [qc, workspaceId]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -160,10 +165,31 @@ function SourcesList({
 }
 
 function SourceCard({ source, onChanged }: { source: SourceItem; onChanged: () => void }) {
+  const workspaceId = useWorkspaceScope();
+  const qc = useQueryClient();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [fallback, setFallback] = useState<{ reason?: string } | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
+  const persistedProposals = useQuery({
+    queryKey: queryKeys.proposals(workspaceId, { status: 'pending', sourceId: source.id }),
+    queryFn: () => listProposals({ status: 'pending' }),
+  });
+  const persistedJobs = useQuery({
+    queryKey: queryKeys.jobs(workspaceId, { entityType: 'source', entityId: source.id }),
+    queryFn: () => listJobs(),
+    refetchInterval: query => {
+      const job = query.state.data?.items.find(item => item.entityRef.type === 'source' && item.entityRef.id === source.id);
+      return job && ['queued', 'running'].includes(job.status) ? 1500 : false;
+    },
+  });
+  const sourceJob = persistedJobs.data?.items.find(item => item.entityRef.type === 'source' && item.entityRef.id === source.id);
+
+  useEffect(() => {
+    if (proposal) return;
+    const saved = persistedProposals.data?.items.find(item => item.sourceIds.includes(source.id));
+    if (saved) setProposal(saved);
+  }, [persistedProposals.data, proposal, source.id]);
 
   const process = useMutation({
     mutationFn: () => processSource(source.id),
@@ -171,6 +197,8 @@ function SourceCard({ source, onChanged }: { source: SourceItem; onChanged: () =
       setProposal(r.proposal);
       setEvidence(r.evidence);
       setFallback(r.fallback ? { reason: r.fallbackReason } : null);
+      qc.invalidateQueries({ queryKey: queryKeys.jobsRoot(workspaceId) });
+      qc.invalidateQueries({ queryKey: queryKeys.proposalsRoot(workspaceId) });
     },
     onError: (e: Error) => {
       if (e instanceof V2ApiError) setError(e.body);
@@ -197,15 +225,24 @@ function SourceCard({ source, onChanged }: { source: SourceItem; onChanged: () =
         </pre>
 
         {error && <div className="text-xs text-red-600">{error.code}: {error.message}</div>}
+        {sourceJob && (
+          <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <Badge tone={sourceJob.status === 'failed' ? 'danger' : sourceJob.status === 'waiting_review' ? 'warning' : 'info'}>
+              {sourceJob.status}
+            </Badge>
+            <span>Job {sourceJob.id}{sourceJob.progress !== undefined ? ` · ${sourceJob.progress}%` : ''}</span>
+            {sourceJob.error && <span className="text-red-600">{sourceJob.error.message}</span>}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="secondary"
             onClick={() => process.mutate()}
-            disabled={process.isPending}
+            disabled={process.isPending || sourceJob?.status === 'queued' || sourceJob?.status === 'running'}
           >
-            {process.isPending ? '处理中…' : proposal ? '重新分析' : 'AI 分析'}
+            {process.isPending || sourceJob?.status === 'queued' || sourceJob?.status === 'running' ? '处理中…' : proposal ? '查看建议' : 'AI 分析'}
           </Button>
           <ManualCreateButton sourceId={source.id} onCreated={onChanged} />
         </div>

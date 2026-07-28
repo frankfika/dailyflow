@@ -7,6 +7,11 @@ import {
   createNote,
   listInbox,
   processSource,
+  createJob,
+  listJobs,
+  getJob,
+  retryJob,
+  cancelJob,
   applyProposal,
   generatePlan,
   acceptPlan,
@@ -64,6 +69,28 @@ describe('v2/client', () => {
     await processSource('src_01');
     const call = (fetch as any).mock.calls[0];
     expect(call[0]).toContain('/api/v2/sources/src_01/process');
+  });
+
+  it('exposes the durable job lifecycle endpoints', async () => {
+    await createJob({
+      kind: 'import',
+      entityRef: { type: 'workspace', id: 'ws_01' },
+      idempotencyKey: 'import:ws_01:fixture',
+    });
+    expect((fetch as any).mock.calls.at(-1)[0]).toContain('/api/v2/jobs');
+    expect((fetch as any).mock.calls.at(-1)[1].method).toBe('POST');
+
+    await listJobs('failed');
+    expect((fetch as any).mock.calls.at(-1)[0]).toContain('/api/v2/jobs?status=failed');
+
+    await getJob('job_01');
+    expect((fetch as any).mock.calls.at(-1)[0]).toContain('/api/v2/jobs/job_01');
+
+    await retryJob('job_01');
+    expect((fetch as any).mock.calls.at(-1)[0]).toContain('/api/v2/jobs/job_01/retry');
+
+    await cancelJob('job_01');
+    expect((fetch as any).mock.calls.at(-1)[0]).toContain('/api/v2/jobs/job_01/cancel');
   });
 
   it('applyProposal POSTs to /proposals/:id/accept with selection', async () => {

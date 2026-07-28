@@ -54,6 +54,7 @@ vi.mock('../../api/client', () => ({
   loadSkillUsage: vi.fn().mockReturnValue({}),
   recordSkillUse: vi.fn(),
   sortSkillsByUsage: vi.fn().mockReturnValue([]),
+  DOMAIN_EVENTS: { aiProviderChanged: 'ai.providerChanged' },
 }));
 
 vi.mock('../../types/models', () => ({

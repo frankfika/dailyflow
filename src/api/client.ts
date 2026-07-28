@@ -44,6 +44,7 @@ export interface DailyNoteData {
 }
 
 export interface ConfigData {
+  version: string;
   workspaceRoot: string;
   workspaces?: Workspace[];
   activeWorkspaceId?: string;
@@ -61,6 +62,28 @@ export interface ConfigData {
   feishuSyncIntervalMinutes?: number;
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
+}
+
+export type ConfigPatch = Partial<Omit<ConfigData, 'version'>> & {
+  [K in keyof Omit<ConfigData, 'version'>]?: Omit<ConfigData, 'version'>[K] | null;
+};
+
+export const DOMAIN_EVENTS = {
+  calendarConnectionChanged: 'calendar.connectionChanged',
+  calendarEventsChanged: 'calendar.eventsChanged',
+  aiProviderChanged: 'ai.providerChanged',
+  workspaceChanged: 'workspace.changed',
+} as const;
+
+export type DomainEventName = typeof DOMAIN_EVENTS[keyof typeof DOMAIN_EVENTS];
+
+export function dispatchDomainEvent(
+  name: DomainEventName,
+  detail: Record<string, unknown> = {},
+): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+  }
 }
 
 export interface Workspace {
@@ -202,6 +225,22 @@ export const rolloverApi = {
   },
 };
 
+export const dailyApi = {
+  async initialize(date: string, context: 'work' | 'life'): Promise<{
+    commandId: string;
+    recurringCreated: number;
+    migratedCount: number;
+  }> {
+    const res = await fetch(`${API_BASE}/daily/${date}/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to initialize day');
+    return res.json();
+  },
+};
+
 /**
  * 配置管理 API
  */
@@ -212,13 +251,21 @@ export const configApi = {
     return res.json();
   },
 
-  async update(config: ConfigData): Promise<void> {
+  async update(
+    patchOrConfig: ConfigPatch | ConfigData,
+    expectedVersion?: string,
+  ): Promise<ConfigData> {
+    const embeddedVersion = 'version' in patchOrConfig ? patchOrConfig.version : undefined;
+    const version = expectedVersion || embeddedVersion;
+    if (!version) throw new Error('Config version is required');
+    const { version: _ignored, ...patch } = patchOrConfig as ConfigData;
     const res = await fetch(`${API_BASE}/config`, {
-      method: 'POST',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify({ version, patch }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to update config');
+    return res.json();
   },
 };
 
