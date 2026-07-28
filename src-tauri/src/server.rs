@@ -46,15 +46,20 @@ fn bundled_node_path(resource_dir: &Path) -> Option<PathBuf> {
 
 /// Locate the official lark-cli connector bundled with the desktop app.
 fn bundled_lark_cli_path(resource_dir: &Path) -> Option<PathBuf> {
-    let candidates = [
-        resource_dir.join("dist-server").join("lark-cli"),
-        resource_dir
-            .join("_up_")
-            .join("dist-server")
-            .join("lark-cli"),
-        resource_dir.join("lark-cli"),
+    let names: &[&str] = if cfg!(target_os = "windows") {
+        &["lark-cli.exe", "lark-cli"]
+    } else {
+        &["lark-cli"]
+    };
+    let directories = [
+        resource_dir.join("dist-server"),
+        resource_dir.join("_up_").join("dist-server"),
+        resource_dir.to_path_buf(),
     ];
-    candidates.into_iter().find(|path| path.exists())
+    directories
+        .into_iter()
+        .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
+        .find(|path| path.exists())
 }
 
 /// Locate the bundled server script (used as a development fallback).
