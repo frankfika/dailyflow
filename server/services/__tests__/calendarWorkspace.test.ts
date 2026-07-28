@@ -109,6 +109,25 @@ describe('calendar workspace aggregation', () => {
     });
   });
 
+  it('places delayed tasks on the day they were rolled to and marks them as delayed', async () => {
+    await writeDailyNote(
+      '2026-07-30',
+      '- [ ] Follow up contract #delayed #deadline:2026-07-01 ↗ migrated:2026-07-01 ^id-delayed-calendar\n',
+      config
+    );
+
+    const result = await getCalendarWorkspace('2026-07-27', '2026-08-02');
+
+    expect(result.items).toContainEqual(expect.objectContaining({
+      id: 'dailyflow:task:delayed-calendar',
+      title: 'Follow up contract',
+      start: '2026-07-30',
+      localDate: '2026-07-30',
+      delayed: true,
+      originalDate: '2026-07-01',
+    }));
+  });
+
   it('rejects calendar-looking strings that are not real dates', async () => {
     await expect(getCalendarWorkspace('2026-02-30', '2026-03-01')).rejects.toMatchObject({
       status: 400,

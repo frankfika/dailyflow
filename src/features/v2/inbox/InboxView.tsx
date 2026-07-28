@@ -226,11 +226,15 @@ function SourceCard({ source, onChanged }: { source: SourceItem; onChanged: () =
               onChanged();
             }}
             onReject={() => {
+              setError(null);
               rejectProposal(proposal.id, 'user_rejected').then(() => {
                 setProposal(null);
                 setEvidence([]);
                 onChanged();
-              }).catch(() => {/* surface later */});
+              }).catch((e: Error) => {
+                if (e instanceof V2ApiError) setError(e.body);
+                else setError({ message: e.message });
+              });
             }}
           />
         )}

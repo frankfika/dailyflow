@@ -35,7 +35,6 @@ export interface Config {
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
   githubRepo?: string;
-  githubToken?: string;
   activeContext?: 'work' | 'life';
   // AI Configuration
   aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';
@@ -56,6 +55,7 @@ export interface Config {
   feishuSyncIntervalMinutes?: number;
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
+  googleCalendarClientId?: string;
   /** v2 (AI-Native) feature flags. Independent of the v1 config. */
   v2?: {
     enabled?: boolean;

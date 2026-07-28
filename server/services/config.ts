@@ -73,8 +73,10 @@ export async function loadConfig(): Promise<Config> {
     // File did not exist — that's a real first run, seed defaults.
   }
 
-  const merged: Config = { ...DEFAULT_CONFIG, ...raw };
+  const merged = { ...DEFAULT_CONFIG, ...raw } as Config & Record<string, unknown>;
+  delete merged.githubToken;
   const normalized = ensureWorkspaces(merged);
+  const hadLegacyGithubToken = Object.prototype.hasOwnProperty.call(raw, 'githubToken');
 
   // Only seed the file when it was missing entirely. If the file existed
   // but had no workspaces, the user either (a) explicitly deleted the last
@@ -86,10 +88,13 @@ export async function loadConfig(): Promise<Config> {
     try {
       const dir = path.dirname(configFile);
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(configFile, JSON.stringify(normalized, null, 2), 'utf-8');
+      await fs.writeFile(configFile, JSON.stringify(normalized, null, 2), { encoding: 'utf-8', mode: 0o600 });
     } catch {
       // best-effort; subsequent saveConfig will persist
     }
+  }
+  if (fileExisted && hadLegacyGithubToken) {
+    await saveConfig(normalized);
   }
 
   return normalized;
@@ -99,11 +104,14 @@ export async function saveConfig(config: Config): Promise<void> {
   const configFile = getConfigFile();
   const dir = path.dirname(configFile);
   await fs.mkdir(dir, { recursive: true });
-  const normalized = ensureWorkspaces({ ...config });
+  const sanitized = { ...(config as Config & Record<string, unknown>) };
+  delete sanitized.githubToken;
+  const normalized = ensureWorkspaces(sanitized);
   const tempFile = `${configFile}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   try {
-    await fs.writeFile(tempFile, JSON.stringify(normalized, null, 2), 'utf-8');
+    await fs.writeFile(tempFile, JSON.stringify(normalized, null, 2), { encoding: 'utf-8', mode: 0o600 });
     await fs.rename(tempFile, configFile);
+    await fs.chmod(configFile, 0o600);
   } finally {
     await fs.rm(tempFile, { force: true }).catch(() => undefined);
   }

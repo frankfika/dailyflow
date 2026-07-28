@@ -482,7 +482,11 @@ export const listLegacyTasks = () =>
   request<{ items: LegacyTaskView[] }>('GET', '/legacy/tasks');
 
 export const migrateLegacyTask = (date: string, line: number, body?: Partial<Commitment>) =>
-  request<{ commitmentId: string; legacyTaskId: string }>('POST', `/legacy/tasks/${date}#${line}/migrate`, body ?? {});
+  request<{ commitmentId: string; legacyTaskId: string }>(
+    'POST',
+    `/legacy/tasks/${encodeURIComponent(`${date}#${line}`)}/migrate`,
+    body ?? {},
+  );
 
 // ---------------------------------------------------------------------------
 // Status

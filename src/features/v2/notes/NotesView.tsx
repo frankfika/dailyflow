@@ -17,6 +17,7 @@
  * across sessions.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { NoteList } from './NoteList';
 import { NoteEditor } from './NoteEditor';
 import { useCreateNote } from '../hooks/useNotes';
@@ -61,10 +62,21 @@ function saveLayout(layout: NotesLayout) {
 export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layout, setLayout] = useState<NotesLayout>(() => loadLayout());
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const create = useCreateNote();
   useEffect(() => {
     saveLayout(layout);
   }, [layout]);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   const toggleLayout = () => setLayout((l) => (l === 'split' ? 'note' : 'split'));
 
@@ -107,17 +119,56 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
   }, []);
 
   const asideWidth = layout === 'split' ? '280px' : '56px';
-  const gridTemplate =
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
-      ? `${asideWidth} 1fr`
-      : '1fr';
+
+  if (isMobile) {
+    return (
+      <div
+        className="relative h-full min-h-0 overflow-hidden"
+        data-testid="v2-notes-view"
+        data-layout="mobile"
+      >
+        {selectedId ? (
+          <main className="h-full min-h-0 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="absolute left-3 top-3 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-sm font-medium text-text-heading shadow-sm"
+              aria-label={language === 'zh' ? '返回笔记列表' : 'Back to notes'}
+              data-testid="notes-mobile-back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {language === 'zh' ? '笔记' : 'Notes'}
+            </button>
+            <NoteEditor
+              noteId={selectedId}
+              language={language}
+              layout="note"
+              onCreateFromTemplate={createAndOpen}
+              onSelectNote={setSelectedId}
+              onDeleted={() => setSelectedId(null)}
+            />
+          </main>
+        ) : (
+          <aside className="h-full min-w-0 overflow-y-auto" data-testid="notes-aside">
+            <NoteList
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              layout="split"
+              language={language}
+              sidebarOpen={sidebarOpen}
+            />
+          </aside>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
       className="h-full grid overflow-hidden transition-[grid-template-columns] duration-200"
       data-testid="v2-notes-view"
       data-layout={layout}
-      style={{ gridTemplateColumns: gridTemplate, minHeight: 0 }}
+      style={{ gridTemplateColumns: `${asideWidth} 1fr`, minHeight: 0 }}
     >
       <aside
         className="border-r border-border overflow-y-auto min-w-0"
@@ -141,6 +192,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
           onToggleLayout={toggleLayout}
           onCreateFromTemplate={createAndOpen}
           onSelectNote={setSelectedId}
+          onDeleted={() => setSelectedId(null)}
         />
       </main>
     </div>

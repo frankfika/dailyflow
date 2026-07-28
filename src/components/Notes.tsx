@@ -7,6 +7,7 @@ import { getActiveAiConfig, loadProviderConfigs } from '../types/models';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
 import { NoteCard } from './NoteCard';
 import { NoteEditor } from './NoteEditor';
+import { getTodayStr } from '../utils/tagColors';
 
 interface NotesProps {
   activeContext: 'work' | 'life';
@@ -88,7 +89,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
         .then(data => setAvailableTasks(data.map((t: any) => ({ id: t.id, title: t.title }))))
         .catch(err => console.error('Failed to load tasks:', err));
     } else if (viewMode === 'edit') {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getTodayStr();
       tasksApi.getByDate(today)
         .then(data => setAvailableTasks(data.map((t: any) => ({ id: t.id, title: t.title }))))
         .catch(err => console.error('Failed to load tasks:', err));
@@ -202,7 +203,7 @@ export const Notes: React.FC<NotesProps> = ({ activeContext, language, aiApiKey,
   const saveSummaryAsNote = async () => {
     if (!generatedSummary.trim()) return;
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getTodayStr();
       const promptName = prompts.find(p => p.id === selectedPromptId)?.name || 'Summary';
       await notesApi.create({
         title: `${promptName} - ${today}`,

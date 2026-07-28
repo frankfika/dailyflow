@@ -9,6 +9,7 @@ import {
   ListTodo,
   Loader2,
   MapPin,
+  Plug,
   RefreshCw,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
@@ -26,6 +27,7 @@ interface CalendarWorkspaceProps {
   setDate: (date: string) => void;
   language: 'en' | 'zh';
   onOpenLocalDate: (date: string) => void;
+  onManageConnections: () => void;
 }
 
 const DAY_MS = 86_400_000;
@@ -132,6 +134,7 @@ export function CalendarWorkspace({
   setDate,
   language,
   onOpenLocalDate,
+  onManageConnections,
 }: CalendarWorkspaceProps) {
   const [mode, setMode] = useState<CalendarViewMode>(() => {
     try {
@@ -201,6 +204,7 @@ export function CalendarWorkspace({
     }).format(end);
     return `${startText} – ${endText}`;
   }, [date, language, mode, range.end, range.start]);
+  const feishuConnector = data.connectors.find(connector => connector.id === 'feishu');
 
   const openItem = async (item: CalendarWorkspaceItem) => {
     if (item.url) {
@@ -294,6 +298,32 @@ export function CalendarWorkspace({
           </span>
         </div>
       </header>
+
+      {!loading && feishuConnector && !feishuConnector.connected && (
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-blue-100 bg-blue-50/70 px-4 py-2.5 md:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span className="rounded-lg border border-blue-100 bg-white p-1.5 text-blue-600">
+              <Plug className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-text-heading">
+                {language === 'zh' ? '飞书日历尚未连接' : 'Feishu Calendar is not connected'}
+              </p>
+              <p className="mt-0.5 text-[10px] text-text-muted">
+                {language === 'zh'
+                  ? '连接企业账号后，飞书日程会直接显示在这里，任务可双向同步。'
+                  : 'Connect your enterprise account to show Feishu events here and sync tasks both ways.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onManageConnections}
+            className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            {language === 'zh' ? '连接飞书' : 'Connect Feishu'}
+          </button>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto">
         {error ? (
@@ -505,10 +535,22 @@ function CalendarPill({
         item.status === 'done' ? 'opacity-50' : ''
       }`}
       style={{ backgroundColor: `${color}16`, color }}
-      title={`${item.title} · ${sourceLabel(item.source, language)}`}
+      title={[
+        item.title,
+        item.delayed ? (language === 'zh' ? 'Delay（延期）' : 'Delayed') : '',
+        item.originalDate
+          ? `${language === 'zh' ? '原日期' : 'Original date'}: ${item.originalDate}`
+          : '',
+        sourceLabel(item.source, language),
+      ].filter(Boolean).join(' · ')}
     >
       {item.kind === 'task' ? <ListTodo className="h-3 w-3 shrink-0" /> : <CalendarDays className="h-3 w-3 shrink-0" />}
       {!item.allDay && !compact && <span className="shrink-0">{timeText(item.start, language)}</span>}
+      {item.delayed && (
+        <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[8px] font-bold uppercase leading-none text-amber-700">
+          Delay
+        </span>
+      )}
       <span className={`truncate font-medium ${item.status === 'done' ? 'line-through' : ''}`}>{item.title}</span>
       {item.url && <ExternalLink className="ml-auto h-2.5 w-2.5 shrink-0 opacity-0 group-hover:opacity-70" />}
     </button>

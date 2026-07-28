@@ -34,7 +34,6 @@ pub struct Config {
     pub rollover_skip_tags: Vec<String>,
     pub last_rollover_date: Option<String>,
     pub github_repo: Option<String>,
-    pub github_token: Option<String>,
     pub active_context: Option<String>,
     pub ai_provider: Option<String>,
     pub ai_api_key: Option<String>,

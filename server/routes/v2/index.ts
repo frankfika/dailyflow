@@ -1231,16 +1231,15 @@ v2Router.post('/import', async (req, res) => {
       mode: z.enum(['merge', 'overwrite']).optional(),
     });
     const parsed = schema.parse(req.body ?? {});
-    // Tolerant aliasing: the client export shape also puts notes and
-    // commitments at the top level of the payload. Pull those into the
-    // canonical `entities` map so we don't silently drop a third of the
-    // payload because the import format predates the spec.
+    // Backward compatibility for old exports. Canonical exports now use only
+    // `entities`; aliases are used only when that kind is absent, preventing
+    // duplicated commitments from being imported twice.
     const entities: Record<string, unknown[]> = { ...(parsed.entities as Record<string, unknown[]>) };
-    if (Array.isArray((req.body as any)?.notes)) {
-      entities.note = (entities.note ?? []).concat((req.body as any).notes);
+    if (!entities.note && Array.isArray((req.body as any)?.notes)) {
+      entities.note = (req.body as any).notes;
     }
-    if (Array.isArray((req.body as any)?.commitments)) {
-      entities.commitment = (entities.commitment ?? []).concat((req.body as any).commitments);
+    if (!entities.commitment && Array.isArray((req.body as any)?.commitments)) {
+      entities.commitment = (req.body as any).commitments;
     }
     const result = await importEntities(repo, workspaceId, {
       entities,

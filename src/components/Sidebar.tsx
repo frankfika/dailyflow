@@ -13,6 +13,7 @@ import {
   Briefcase,
   Heart,
   PanelLeftClose,
+  BrainCircuit,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
@@ -72,8 +73,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules';
-  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules') => void;
+  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native';
+  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -207,7 +208,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules') => {
+  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -459,6 +460,38 @@ export function Sidebar({
                         className="overflow-hidden whitespace-nowrap"
                       >
                         {language === 'zh' ? '笔记' : 'Notes'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavClick('ai-native')}
+                  data-testid="nav-ai-native"
+                  data-active={activeTab === 'ai-native'}
+                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
+                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    activeTab === 'ai-native'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                  title={isCompact ? (language === 'zh' ? '智能工作台' : 'AI Workspace') : undefined}
+                  aria-label={language === 'zh' ? '智能工作台' : 'AI Workspace'}
+                >
+                  <BrainCircuit className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <AnimatePresence initial={false}>
+                    {!isCompact && (
+                      <motion.span
+                        key="ai-native-label"
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {language === 'zh' ? '智能工作台' : 'AI Workspace'}
                       </motion.span>
                     )}
                   </AnimatePresence>

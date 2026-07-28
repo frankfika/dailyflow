@@ -79,6 +79,8 @@ export function MemoryView() {
         <div className="text-sm font-medium">已确认的 Commitment</div>
         {commitments.isLoading ? (
           <div className="text-sm text-[var(--color-text-muted)]">加载中…</div>
+        ) : commitments.error ? (
+          <div className="text-xs text-red-600">{(commitments.error as Error).message}</div>
         ) : (
           <ul className="mt-1 flex flex-col gap-1 text-sm">
             {(commitments.data?.items ?? []).slice(0, 20).map(c => (
@@ -100,9 +102,17 @@ export function MemoryView() {
           这些 checkbox 任务继续可读、可完成；你可以把任意一项迁移为 v2 Commitment，原文件不会被破坏。
         </div>
         <div className="mt-2 flex flex-col gap-1">
-          {(legacy.data?.items ?? []).slice(0, 30).map(t => (
-            <LegacyTaskRow key={t.id} task={t} onMigrated={() => legacy.refetch()} />
-          ))}
+          {legacy.isLoading ? (
+            <div className="text-sm text-[var(--color-text-muted)]">加载中…</div>
+          ) : legacy.error ? (
+            <div className="text-xs text-red-600">{(legacy.error as Error).message}</div>
+          ) : (legacy.data?.items.length ?? 0) === 0 ? (
+            <div className="text-sm text-[var(--color-text-muted)]">没有需要迁移的旧任务。</div>
+          ) : (
+            (legacy.data?.items ?? []).slice(0, 30).map(t => (
+              <LegacyTaskRow key={t.id} task={t} onMigrated={() => legacy.refetch()} />
+            ))
+          )}
         </div>
       </Card>
     </div>
@@ -127,23 +137,26 @@ function SearchHit({ hit }: { hit: MemoryHit }) {
 
 function LegacyTaskRow({ task, onMigrated }: { task: LegacyTaskView; onMigrated: () => void }) {
   const [migrating, setMigrating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] p-2 text-xs">
-      <div>
+    <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-border)] p-2 text-xs">
+      <div className="min-w-0">
         <span className="font-medium">{task.title}</span>
         <span className="ml-2 text-[var(--color-text-muted)]">({task.date}#{task.line})</span>
         {task.deadline && <Badge tone="info">@ {task.deadline}</Badge>}
+        {error && <div className="mt-1 text-red-600">{error}</div>}
       </div>
       <Button
         size="sm"
         variant="ghost"
         onClick={async () => {
           setMigrating(true);
+          setError(null);
           try {
             await migrateLegacyTask(task.date, task.line);
             onMigrated();
           } catch (e) {
-            // surface
+            setError(e instanceof Error ? e.message : String(e));
           } finally {
             setMigrating(false);
           }

@@ -1,5 +1,9 @@
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import crypto from 'crypto';
 import { loadConfig } from './config.js';
 
 const execAsync = promisify(exec);
@@ -165,7 +169,7 @@ export async function commitChanges(message: string): Promise<GitCommitResult> {
 /**
  * 推送到远程仓库
  */
-export async function pushToRemote(): Promise<GitPushResult> {
+export async function pushToRemote(token?: string): Promise<GitPushResult> {
   const config = await loadConfig();
   const workspaceRoot = config.workspaceRoot;
 
@@ -179,17 +183,46 @@ export async function pushToRemote(): Promise<GitPushResult> {
       branch = 'main';
     }
 
-    // 推送到远程（使用 -u 设置上游追踪）
-    const { stdout: pushOutput } = await execFileAsync(
-      'git',
-      ['push', '-u', 'origin', branch],
-      { cwd: workspaceRoot }
-    );
+    if (!/^[A-Za-z0-9._\-/]+$/.test(branch)) {
+      return { success: false, error: 'Invalid branch name' };
+    }
 
-    return {
-      success: true,
-      message: pushOutput.trim(),
-    };
+    let askPassPath: string | undefined;
+    try {
+      const env = { ...process.env };
+      if (token) {
+        askPassPath = path.join(os.tmpdir(), `dailyflow-git-askpass-${process.pid}-${crypto.randomBytes(6).toString('hex')}.sh`);
+        await fs.writeFile(
+          askPassPath,
+          `#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\\n' "x-access-token" ;;
+  *) printf '%s\\n' "$DAILYFLOW_GIT_TOKEN" ;;
+esac
+`,
+          { encoding: 'utf8', mode: 0o700 }
+        );
+        env.GIT_ASKPASS = askPassPath;
+        env.GIT_TERMINAL_PROMPT = '0';
+        env.DAILYFLOW_GIT_TOKEN = token;
+      }
+      // Token is passed only through the child environment and a generic
+      // askpass helper. It never appears in argv or .git/config.
+      const { stdout: pushOutput, stderr } = await execFileAsync(
+        'git',
+        ['push', '-u', 'origin', branch],
+        { cwd: workspaceRoot, env }
+      );
+
+      return {
+        success: true,
+        message: (pushOutput || stderr).trim(),
+      };
+    } finally {
+      if (askPassPath) {
+        await fs.rm(askPassPath, { force: true }).catch(() => undefined);
+      }
+    }
   } catch (error: any) {
     return {
       success: false,
@@ -237,7 +270,14 @@ export function isValidGitRemoteUrl(repoUrl: string): boolean {
     return false;
   }
   // 只允许 https://、http://、ssh://、git@ 三种形态
-  if (/^https?:\/\/[^\s]+$/i.test(repoUrl)) return true;
+  if (/^https?:\/\/[^\s]+$/i.test(repoUrl)) {
+    try {
+      const parsed = new URL(repoUrl);
+      return !parsed.username && !parsed.password;
+    } catch {
+      return false;
+    }
+  }
   if (/^ssh:\/\/[^\s]+$/i.test(repoUrl)) return true;
   if (/^git@[^\s]+:[^\s]+\.git$/i.test(repoUrl)) return true;
   return false;

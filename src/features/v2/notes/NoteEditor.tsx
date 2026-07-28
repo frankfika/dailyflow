@@ -15,9 +15,9 @@
  *   - flush() on unmount prevents the "edited → navigated → lost"
  *     race that the spec calls out.
  */
-import { useEffect, useState } from 'react';
-import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, PenLine, ArrowRight } from 'lucide-react';
-import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useUpdateNote, useArchiveNote, type AutosaveStatus } from '../hooks/useNotes';
+import { useEffect, useRef, useState } from 'react';
+import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, ArrowRight, Trash2 } from 'lucide-react';
+import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useUpdateNote, useArchiveNote, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
 import type { NoteBacklinks, NoteKind } from '../api/client';
 import { relativeTime } from './relativeTime';
@@ -42,6 +42,8 @@ export interface NoteEditorProps {
   /** Switch which note the editor is showing. Used by the recent-
    * notes list in the empty-state onboarding card. */
   onSelectNote?: (id: string) => void;
+  /** Called after the active note has been permanently deleted. */
+  onDeleted?: (id: string) => void;
 }
 
 const COPY = {
@@ -58,6 +60,8 @@ const COPY = {
     date: '日期',
     pinned: '置顶',
     archive: '归档',
+    delete: '删除笔记',
+    deleteConfirm: '确定永久删除这篇笔记吗？相关证据引用也会一并移除。',
     showList: '显示列表',
     focusMode: '专注模式',
     words: '字',
@@ -65,7 +69,7 @@ const COPY = {
     minRead: '分钟阅读',
     bodyEmpty: '空白',
     onboardingTitle: '开始你的第一篇笔记',
-    onboardingHint: '挑一个模板，或新建一篇空白笔记',
+    onboardingHint: '挑一个模板，或用左侧“新建笔记”打开空白页',
     templateDaily: '今日记录',
     templateIdea: '想法捕捉',
     templateMeeting: '会议纪要',
@@ -88,6 +92,8 @@ const COPY = {
     date: 'Date',
     pinned: 'Pinned',
     archive: 'Archive',
+    delete: 'Delete note',
+    deleteConfirm: 'Permanently delete this note? Its evidence references will also be removed.',
     showList: 'Show list',
     focusMode: 'Focus mode',
     words: 'words',
@@ -95,7 +101,7 @@ const COPY = {
     minRead: 'min read',
     bodyEmpty: 'Empty',
     onboardingTitle: 'Start your first note',
-    onboardingHint: 'Pick a template, or start with a blank note',
+    onboardingHint: 'Pick a template, or use “Add note” for a blank page',
     templateDaily: "Today's log",
     templateIdea: 'Idea capture',
     templateMeeting: 'Meeting notes',
@@ -129,12 +135,13 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
   }
 }
 
-export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote }: NoteEditorProps) {
+export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote, onDeleted }: NoteEditorProps) {
   const t = COPY[language];
   const q = useNote(noteId);
   const note = q.data?.note;
   const update = useUpdateNote();
   const archive = useArchiveNote();
+  const del = useDeleteNote();
   const backlinks = useNoteBacklinks(noteId);
   // Pull a small slice of recent notes so the empty-state card
   // can offer a "pick up where you left off" section — without it
@@ -150,10 +157,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // and only re-seed on noteId change.
   const [body, setBody] = useState<string>(note?.body ?? '');
   const [title, setTitle] = useState<string>(note?.title ?? '');
+  const seededNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
-    setBody(note?.body ?? '');
-    setTitle(note?.title ?? '');
-  }, [noteId, note?.body, note?.title]);
+    if (!note) {
+      if (!noteId) seededNoteIdRef.current = null;
+      return;
+    }
+    if (seededNoteIdRef.current === note.id) return;
+    seededNoteIdRef.current = note.id;
+    setBody(note.body ?? '');
+    setTitle(note.title ?? '');
+  }, [note, noteId]);
 
   const autosave = useNoteAutosave(note ?? null);
 
@@ -168,15 +182,16 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     autosave.schedule({ title: v === '' ? null : v });
   };
   // Flush on unmount or before navigation.
+  const latestFlushRef = useRef(autosave.flush);
+  useEffect(() => {
+    latestFlushRef.current = autosave.flush;
+  }, [autosave.flush]);
   useEffect(() => {
     return () => {
       // Fire-and-forget; the editor is going away and we want the
       // server to receive the last keystroke.
-      autosave.flush().catch(() => undefined);
+      latestFlushRef.current().catch(() => undefined);
     };
-    // We intentionally only re-subscribe when noteId changes — a
-    // flush on every render would be wasteful.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
   if (!noteId) {
@@ -192,7 +207,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             onCreateFromTemplate={onCreateFromTemplate}
             onSelectNote={onSelectNote}
             recentItems={recentItems}
-            onJustStartTyping={() => onCreateFromTemplate?.('general', '')}
           />
         </div>
       </div>
@@ -220,6 +234,12 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // markdown stripping — so a 200-word doc with frontmatter shows
   // the same count the user sees in their editor.
   const words = body.trim().split(/\s+/).filter(Boolean).length;
+  const deleteCurrentNote = async () => {
+    if (!confirm(t.deleteConfirm)) return;
+    await autosave.flush();
+    await del.mutateAsync(note.id);
+    onDeleted?.(note.id);
+  };
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
@@ -302,11 +322,23 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               ★
             </button>
             <button
-              onClick={() => archive.mutate(note.id)}
+              onClick={() => archive.mutate(note.id, {
+                onSuccess: () => onDeleted?.(note.id),
+              })}
               className="px-1.5 py-0.5 border border-border rounded text-text-muted"
               data-testid="note-archive"
             >
               {t.archive}
+            </button>
+            <button
+              onClick={deleteCurrentNote}
+              disabled={del.isPending}
+              className="inline-flex items-center justify-center rounded border border-border p-1 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-danger disabled:opacity-40"
+              data-testid="note-delete"
+              title={t.delete}
+              aria-label={t.delete}
+            >
+              <Trash2 size={14} />
             </button>
             {onToggleLayout && (
               <button
@@ -397,14 +429,12 @@ function OnboardingPanel({
   onCreateFromTemplate,
   onSelectNote,
   recentItems,
-  onJustStartTyping,
 }: {
   t: (typeof COPY)['en'];
   language: 'zh' | 'en';
   onCreateFromTemplate?: (kind: NoteKind, body: string) => void | Promise<void>;
   onSelectNote?: (id: string) => void;
   recentItems: { id: string; title?: string | null; body?: string | null; updatedAt: string }[];
-  onJustStartTyping?: () => void;
 }) {
   return (
     <div
@@ -417,7 +447,7 @@ function OnboardingPanel({
         </p>
         <p className="text-lg text-text-muted">{t.onboardingHint}</p>
         {onCreateFromTemplate && (
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
             <button
               type="button"
               onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
@@ -444,15 +474,6 @@ function OnboardingPanel({
             >
               <FileText size={20} />
               <span className="font-medium">{t.templateMeeting}</span>
-            </button>
-            <button
-              type="button"
-              onClick={onJustStartTyping}
-              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-dashed border-border text-base text-text-muted hover:text-text-heading hover:border-text-muted transition-colors"
-              data-testid="note-onboarding-blank"
-            >
-              <PenLine size={20} />
-              <span className="font-medium">{t.templateBlank}</span>
             </button>
           </div>
         )}

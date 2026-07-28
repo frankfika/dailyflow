@@ -30,9 +30,10 @@ import {
 } from '../api/client';
 import { Card, Button, Badge, StateView } from '../components/States';
 import { CommitmentContext } from '../commitments/CommitmentContext';
+import { getTodayStr } from '../../../utils/tagColors';
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayStr();
 }
 
 export function TodayView() {
@@ -68,9 +69,25 @@ export function TodayView() {
 
   const allCommitments = commitments.data?.items ?? [];
   const waiting = allCommitments.filter(c => c.state === 'waiting');
-  const completedRecently = allCommitments.filter(c => c.state === 'completed');
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+  const recentCutoff = new Date(startOfToday);
+  recentCutoff.setDate(recentCutoff.getDate() - 6);
+  const completedRecently = allCommitments.filter(
+    c => c.state === 'completed' && c.completedAt && new Date(c.completedAt) >= recentCutoff
+  );
+  const dueToday = allCommitments.filter(
+    c => c.dueAt
+      && !['completed', 'cancelled'].includes(c.state)
+      && new Date(c.dueAt) >= startOfToday
+      && new Date(c.dueAt) < endOfToday
+  );
   const overdue = allCommitments.filter(
-    c => c.dueAt && c.state !== 'completed' && c.state !== 'cancelled' && new Date(c.dueAt) < new Date()
+    c => c.dueAt
+      && !['completed', 'cancelled'].includes(c.state)
+      && new Date(c.dueAt) < startOfToday
   );
 
   // Spec §26 step 12: surface overdue waiting items so the user can
@@ -82,11 +99,16 @@ export function TodayView() {
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {commitments.error && (
+        <Card>
+          <div className="text-sm text-red-600">{(commitments.error as Error).message}</div>
+        </Card>
+      )}
       <MorningBrief
         overdue={overdue}
+        dueToday={dueToday}
         waiting={waiting}
         completedRecently={completedRecently}
-        onRefresh={refresh}
       />
 
       {overdueWaiting.data && overdueWaiting.data.items.length > 0 && (
@@ -103,6 +125,11 @@ export function TodayView() {
           }}
         />
       )}
+      {overdueWaiting.error && (
+        <Card>
+          <div className="text-sm text-red-600">{(overdueWaiting.error as Error).message}</div>
+        </Card>
+      )}
 
       <ReplanBar
         loading={replanMut.isPending}
@@ -112,9 +139,9 @@ export function TodayView() {
 
       <PlanSection
         plan={plan.data?.plan ?? null}
-        loading={plan.isLoading || generate.isPending || replanMut.isPending}
-        error={plan.error || generate.error || replanMut.error
-          ? { code: 'plan', message: (plan.error || generate.error || replanMut.error) instanceof Error ? (plan.error || generate.error || replanMut.error as Error).message : 'Failed' }
+        loading={plan.isLoading || generate.isPending || accept.isPending || replanMut.isPending}
+        error={plan.error || generate.error || accept.error || replanMut.error
+          ? { code: 'plan', message: (plan.error || generate.error || accept.error || replanMut.error) instanceof Error ? (plan.error || generate.error || accept.error || replanMut.error as Error).message : 'Failed' }
           : null}
         onGenerate={() => generate.mutate()}
         onAccept={(id) => accept.mutate(id)}
@@ -141,20 +168,15 @@ export function TodayView() {
 
 function MorningBrief({
   overdue,
+  dueToday,
   waiting,
   completedRecently,
-  onRefresh,
 }: {
   overdue: Commitment[];
+  dueToday: Commitment[];
   waiting: Commitment[];
   completedRecently: Commitment[];
-  onRefresh: () => void;
 }) {
-  const today = new Date();
-  const dueToday = overdue.filter(c => {
-    const d = new Date(c.dueAt!);
-    return d.toDateString() === today.toDateString();
-  });
   return (
     <Card>
       <div className="flex flex-col gap-2">
@@ -164,7 +186,7 @@ function MorningBrief({
             label="今天到期 / 已超期"
             value={dueToday.length + overdue.length}
             tone={overdue.length > 0 ? 'danger' : 'default'}
-            items={overdue.slice(0, 3).map(c => c.title)}
+            items={[...overdue, ...dueToday].slice(0, 3).map(c => c.title)}
           />
           <BriefStat
             label="等待中"
@@ -336,16 +358,7 @@ function PlanSection({
                   </div>
                   {c && (
                     <div className="mt-2 flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => completeCommitment(c.id, {
-                          outcomeKind: 'delivered',
-                          outcomeSummary: item.suggestedNextAction,
-                        })}
-                      >
-                        完成（记录 Outcome）
-                      </Button>
+                      <CompleteButton commitment={c} outcomeSummary={item.suggestedNextAction} onChanged={onChanged} />
                       <WaitButton commitment={c} onChanged={onChanged} />
                     </div>
                   )}
@@ -361,6 +374,28 @@ function PlanSection({
         )}
       </div>
     </Card>
+  );
+}
+
+function CompleteButton({ commitment, outcomeSummary, onChanged }: {
+  commitment: Commitment;
+  outcomeSummary: string;
+  onChanged: () => void;
+}) {
+  const complete = useMutation({
+    mutationFn: () => completeCommitment(commitment.id, {
+      outcomeKind: 'delivered',
+      outcomeSummary,
+    }),
+    onSuccess: onChanged,
+  });
+  return (
+    <div className="flex flex-col gap-1">
+      <Button size="sm" variant="primary" onClick={() => complete.mutate()} disabled={complete.isPending}>
+        {complete.isPending ? '完成中…' : '完成（记录 Outcome）'}
+      </Button>
+      {complete.error && <span className="text-xs text-red-600">{(complete.error as Error).message}</span>}
+    </div>
   );
 }
 
@@ -443,18 +478,27 @@ function WaitingSection({ waiting, onChanged }: { waiting: Commitment[]; onChang
                   )}
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => resumeCommitment(c.id).then(onChanged)}
-              >
-                恢复
-              </Button>
+              <ResumeButton commitmentId={c.id} onChanged={onChanged} />
             </div>
           );
         })}
       </div>
     </Card>
+  );
+}
+
+function ResumeButton({ commitmentId, onChanged }: { commitmentId: string; onChanged: () => void }) {
+  const resume = useMutation({
+    mutationFn: () => resumeCommitment(commitmentId),
+    onSuccess: onChanged,
+  });
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" variant="ghost" onClick={() => resume.mutate()} disabled={resume.isPending}>
+        {resume.isPending ? '恢复中…' : '恢复'}
+      </Button>
+      {resume.error && <span className="text-xs text-red-600">{(resume.error as Error).message}</span>}
+    </div>
   );
 }
 
@@ -511,13 +555,7 @@ function OverdueWaitingSection({
                 </div>
               </div>
               <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onResume(it.commitmentId)}
-                >
-                  恢复
-                </Button>
+                <OverdueResumeButton commitmentId={it.commitmentId} onResume={onResume} />
               </div>
             </li>
           ))}
@@ -525,5 +563,25 @@ function OverdueWaitingSection({
         <Button size="sm" variant="ghost" onClick={onChanged}>刷新</Button>
       </div>
     </Card>
+  );
+}
+
+function OverdueResumeButton({
+  commitmentId,
+  onResume,
+}: {
+  commitmentId: string;
+  onResume: (id: string) => Promise<void>;
+}) {
+  const resume = useMutation({
+    mutationFn: () => onResume(commitmentId),
+  });
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" variant="ghost" onClick={() => resume.mutate()} disabled={resume.isPending}>
+        {resume.isPending ? '恢复中…' : '恢复'}
+      </Button>
+      {resume.error && <span className="text-xs text-red-600">{(resume.error as Error).message}</span>}
+    </div>
   );
 }

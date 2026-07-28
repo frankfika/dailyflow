@@ -157,12 +157,12 @@ describe('API Client', () => {
         ok: true,
         json: () => Promise.resolve({ success: true, commitHash: 'abc123' }),
       });
-      await gitApi.sync('Test commit');
+      await gitApi.sync('Test commit', 'session-token');
       expect(fetch).toHaveBeenCalledWith(
         '/api/git/sync',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ message: 'Test commit' }),
+          body: JSON.stringify({ message: 'Test commit', token: 'session-token' }),
         })
       );
     });

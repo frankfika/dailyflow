@@ -338,7 +338,7 @@ export function TaskInputPanel({
                         tags.push('recurring');
                       }
 
-                      const finalDeadline = newTaskDeadline || currentFileDate;
+                      const finalDeadline = newTaskDeadline || undefined;
 
                       const newTask: Task = {
                         id: `t_${Date.now()}`,
@@ -367,20 +367,32 @@ export function TaskInputPanel({
                           setLastSyncedMD(data.content);
                           setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
                         }
+                        if (recurrence) {
+                          recurringApi.create({
+                            title,
+                            description,
+                            tags,
+                            recurrence,
+                          }).catch((e) => {
+                            console.error('Failed to create recurring task', e);
+                            showToast(
+                              language === 'zh' ? '任务已添加，但重复规则保存失败' : 'Task added, but recurrence could not be saved',
+                              'error',
+                            );
+                          });
+                        }
                         showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
                       }).catch((e) => {
                         console.error(e);
+                        setTasks(prev => prev.filter(task => task.id !== newTask.id));
+                        setNewTaskTitle([title, description].filter(Boolean).join('\n'));
+                        setNewTaskTagsList(newTaskTagsList);
+                        setTagInputValue(tagInputValue);
+                        setNewTaskDeadline(newTaskDeadline);
+                        setRecurrence(recurrence);
+                        setShowTaskInput(true);
                         showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
                       });
-                      // If recurrence is set, also create a recurring task definition
-                      if (recurrence) {
-                        recurringApi.create({
-                          title,
-                          description,
-                          tags,
-                          recurrence,
-                        }).catch(e => console.error('Failed to create recurring task', e));
-                      }
                       setNewTaskTitle('');
                       setNewTaskTagsList([]);
                       setTagInputValue('');

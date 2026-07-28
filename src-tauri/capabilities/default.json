@@ -12,7 +12,11 @@
       "identifier": "shell:allow-open",
       "allow": [
         { "url": "https://github.com/*" },
-        { "url": "https://*.github.com/*" }
+        { "url": "https://*.github.com/*" },
+        { "url": "https://feishu.cn/*" },
+        { "url": "https://*.feishu.cn/*" },
+        { "url": "https://accounts.google.com/*" },
+        { "url": "https://console.cloud.google.com/*" }
       ]
     }
   ]

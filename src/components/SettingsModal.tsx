@@ -6,9 +6,10 @@ import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, feishuApi, ipfsApi, type FeishuStatus, type IpfsBackupRecord } from '../api/client';
+import { configApi, feishuApi, googleCalendarApi, ipfsApi, type FeishuStatus, type GoogleCalendarStatus, type IpfsBackupRecord } from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
+import { getTodayStr } from '../utils/tagColors';
 
 declare const __APP_VERSION__: string;
 
@@ -49,6 +50,18 @@ interface SettingsModalProps {
   ipfsGateway: string;
   setIpfsGateway: (v: string) => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
+}
+
+function StepNumber({ value, done }: { value: string; done: boolean }) {
+  return (
+    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+      done
+        ? 'bg-green-100 text-green-700'
+        : 'border border-border bg-surface text-text-muted'
+    }`}>
+      {done ? <CheckCircle className="h-3.5 w-3.5" /> : value}
+    </span>
+  );
 }
 
 export function SettingsModal({
@@ -114,11 +127,17 @@ export function SettingsModal({
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
 
   // Sync sub-tab state
-  const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'github' | 'ipfs'>('feishu');
+  const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'google' | 'github' | 'ipfs'>('feishu');
   const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null);
+  const [feishuStatusLoading, setFeishuStatusLoading] = useState(false);
   const [feishuLoading, setFeishuLoading] = useState(false);
   const [feishuDeviceCode, setFeishuDeviceCode] = useState<string | null>(null);
+  const [feishuVerificationUrl, setFeishuVerificationUrl] = useState<string | null>(null);
   const [feishuMessage, setFeishuMessage] = useState('');
+  const [googleStatus, setGoogleStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState('');
 
   // IPFS local state
   const [showIpfsKey, setShowIpfsKey] = useState(false);
@@ -139,13 +158,56 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!showSettings || configTab !== 'sync') return;
+    setFeishuStatusLoading(true);
     feishuApi.status()
       .then(setFeishuStatus)
-      .catch(() => setFeishuStatus(null));
+      .catch((error: Error) => {
+        setFeishuStatus(null);
+        setFeishuMessage(error.message);
+      })
+      .finally(() => setFeishuStatusLoading(false));
+    googleCalendarApi.status().then(setGoogleStatus).catch(() => setGoogleStatus(null));
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
   }, [showSettings, configTab]);
+
+  const handleGoogleConnect = async () => {
+    setGoogleLoading(true);
+    setGoogleMessage('');
+    try {
+      if (!googleStatus?.configured) {
+        setGoogleStatus(await googleCalendarApi.configure(googleClientId));
+      }
+      const { authorizationUrl } = await googleCalendarApi.startAuth();
+      try { await open(authorizationUrl); }
+      catch {
+        const popup = window.open(authorizationUrl, '_blank', 'noopener,noreferrer');
+        if (!popup) setGoogleMessage(language === 'zh' ? '浏览器未打开，请允许系统打开 Google 授权页。' : 'The browser did not open. Allow DailyFlow to open the Google authorization page.');
+      }
+      setGoogleMessage(language === 'zh' ? '请在 Google 页面完成授权，然后回到这里点击“检查连接”。' : 'Complete authorization in Google, then return and choose Check connection.');
+    } catch (error: any) {
+      setGoogleMessage(error.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleCheck = async () => {
+    setGoogleLoading(true);
+    try {
+      const status = await googleCalendarApi.status();
+      setGoogleStatus(status);
+      setGoogleMessage(status.connected
+        ? (language === 'zh' ? 'Google Calendar 已连接，日程会显示在日历视图。' : 'Google Calendar connected. Events will appear in Calendar.')
+        : (language === 'zh' ? '尚未收到 Google 授权，请先完成浏览器中的确认。' : 'Authorization is not complete yet.'));
+      if (status.connected) window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+    } catch (error: any) {
+      setGoogleMessage(error.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleConnectFeishu = async () => {
     setFeishuLoading(true);
@@ -153,13 +215,19 @@ export function SettingsModal({
     try {
       const auth = await feishuApi.startAuth();
       setFeishuDeviceCode(auth.deviceCode);
+      setFeishuVerificationUrl(auth.verificationUrl);
       setFeishuMessage(language === 'zh'
-        ? '已打开飞书授权页。授权完成后回到这里点击“我已完成授权”。'
-        : 'Feishu authorization opened. Return here and click “Authorization completed”.');
+        ? '授权页已打开：请登录你的企业飞书账号并同意“日历 + 任务”权限，然后回到这里检查连接。'
+        : 'Authorization opened. Sign in with your enterprise Feishu account, approve Calendar + Tasks, then return here to check the connection.');
       try {
         await open(auth.verificationUrl);
       } catch {
-        window.open(auth.verificationUrl, '_blank', 'noopener,noreferrer');
+        const popup = window.open(auth.verificationUrl, '_blank', 'noopener,noreferrer');
+        if (!popup) {
+          setFeishuMessage(language === 'zh'
+            ? '授权链接已经生成，但系统浏览器没有自动打开。请点击“重新打开”或“复制链接”。'
+            : 'The authorization link is ready, but the browser did not open. Choose Open again or Copy link below.');
+        }
       }
     } catch (e: any) {
       setFeishuMessage(e.message);
@@ -175,6 +243,7 @@ export function SettingsModal({
       const status = await feishuApi.finishAuth(feishuDeviceCode);
       setFeishuStatus(status);
       setFeishuDeviceCode(null);
+      setFeishuVerificationUrl(null);
       setFeishuMessage(status.authorized
         ? (language === 'zh' ? '飞书企业账号已连接。' : 'Feishu enterprise account connected.')
         : (status.reason || 'Authorization failed'));
@@ -183,6 +252,26 @@ export function SettingsModal({
     } finally {
       setFeishuLoading(false);
     }
+  };
+
+  const reopenFeishuAuthorization = async () => {
+    if (!feishuVerificationUrl) return;
+    try {
+      await open(feishuVerificationUrl);
+    } catch {
+      const popup = window.open(feishuVerificationUrl, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        setFeishuMessage(language === 'zh'
+          ? '系统仍然无法打开授权页，请复制链接后粘贴到浏览器。'
+          : 'The authorization page still could not open. Copy the link and paste it into your browser.');
+      }
+    }
+  };
+
+  const copyFeishuAuthorization = async () => {
+    if (!feishuVerificationUrl) return;
+    await navigator.clipboard.writeText(feishuVerificationUrl);
+    setFeishuMessage(language === 'zh' ? '授权链接已复制。' : 'Authorization link copied.');
   };
 
   const handleFeishuSync = async () => {
@@ -312,12 +401,6 @@ export function SettingsModal({
   // Workspace Data: export / import / reset
   // ---------------------------------------------------------------------------
 
-  // Server endpoint discovery (verified at task time):
-  //   GET  /api/v2/export/entities?kind=...   — per-kind entity list (exists)
-  //   GET  /api/v2/notes                       — note list (exists)
-  //   GET  /api/v2/commitments                 — commitment list (exists)
-  //   POST /api/v2/import                      — NOT IMPLEMENTED (UI shows "coming soon")
-  //   POST /api/v2/reset                       — NOT IMPLEMENTED (UI shows "coming soon")
   const V2_BASE = `${API_BASE.api}/api/v2`;
 
   const formatRelativeTime = (iso: string): string => {
@@ -339,33 +422,27 @@ export function SettingsModal({
     setIsExporting(true);
     setDataStatus(null);
     try {
-      const kinds = ['source', 'commitment', 'outcome', 'project', 'person', 'decision', 'plan', 'evidence'] as const;
-      const [entitiesByKind, notesRes, commitmentsRes] = await Promise.all([
-        Promise.all(
-          kinds.map(async (kind) => {
-            const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
-            if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
-            const data = await r.json();
-            return [kind, data.items ?? []] as const;
-          })
-        ),
-        fetch(`${V2_BASE}/notes`).then(r => r.ok ? r.json() : { notes: [] }).catch(() => ({ notes: [] })),
-        fetch(`${V2_BASE}/commitments`).then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
-      ]);
+      const kinds = ['source', 'note', 'commitment', 'decision', 'outcome', 'project', 'person', 'organization', 'evidence'] as const;
+      const entitiesByKind = await Promise.all(
+        kinds.map(async (kind) => {
+          const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
+          if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
+          const data = await r.json();
+          return [kind, data.items ?? []] as const;
+        })
+      );
       const exportPayload = {
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         workspaceRoot,
         entities: Object.fromEntries(entitiesByKind),
-        notes: notesRes.notes ?? [],
-        commitments: commitmentsRes.items ?? [],
       };
       const totalEntities = entitiesByKind.reduce((s, [, items]) => s + items.length, 0);
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const wsSlug = workspaceRoot.split(/[\\/]/).filter(Boolean).pop() || 'workspace';
-      const date = new Date().toISOString().slice(0, 10);
+      const date = getTodayStr();
       a.href = url;
       a.download = `dailyflow-${wsSlug}-${date}.json`;
       document.body.appendChild(a);
@@ -376,8 +453,8 @@ export function SettingsModal({
       setLastExportTime(now);
       try { localStorage.setItem('df_last_export_time', now); } catch { /* ignore */ }
       const msg = language === 'zh'
-        ? `✓ 已导出 ${totalEntities} 个实体 + ${exportPayload.notes.length} 个笔记`
-        : `✓ Exported ${totalEntities} entities + ${exportPayload.notes.length} notes`;
+        ? `✓ 已导出 ${totalEntities} 个实体`
+        : `✓ Exported ${totalEntities} entities`;
       setDataStatus({ type: 'success', message: msg });
       showToast(msg, 'success');
     } catch (e: any) {
@@ -415,20 +492,28 @@ export function SettingsModal({
       const result = await r.json();
       const imported = result.imported ?? 0;
       const skipped = result.skipped ?? 0;
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      if (errors.length > 0) {
+        const first = errors[0];
+        const detail = typeof first === 'string'
+          ? first
+          : first?.message || JSON.stringify(first);
+        throw new Error(
+          language === 'zh'
+            ? `${errors.length} 项导入失败：${detail}`
+            : `${errors.length} item(s) failed to import: ${detail}`
+        );
+      }
       const msg = language === 'zh'
         ? `✓ 已导入 ${imported} 项, 跳过 ${skipped} 项重复`
         : `✓ Imported ${imported}, skipped ${skipped} duplicates`;
       setDataStatus({ type: 'success', message: msg });
       showToast(msg, 'success');
     } catch (e: any) {
-      // Server endpoint not yet implemented — surface a "coming soon" hint
-      // without breaking the UI. The file is still parsed so the user can
-      // see it was selected.
-      const msg = language === 'zh'
-        ? `已解析 ${file.name} (服务端 import 端点尚未实现, Coming soon)`
-        : `Parsed ${file.name} (server import endpoint not yet implemented, coming soon)`;
-      setDataStatus({ type: 'info', message: msg });
-      showToast(msg, 'info');
+      const detail = e instanceof Error ? e.message : String(e);
+      const msg = language === 'zh' ? `导入失败：${detail}` : `Import failed: ${detail}`;
+      setDataStatus({ type: 'error', message: msg });
+      showToast(msg, 'error');
     } finally {
       setIsImporting(false);
       e.target.value = '';
@@ -453,7 +538,11 @@ export function SettingsModal({
     setIsResetting(true);
     setDataStatus(null);
     try {
-      const r = await fetch(`${V2_BASE}/reset`, { method: 'POST' });
+      const r = await fetch(`${V2_BASE}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'RESET WORKSPACE' }),
+      });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${r.status}`);
@@ -463,12 +552,12 @@ export function SettingsModal({
       showToast(msg, 'success');
       setTimeout(() => window.location.reload(), 1200);
     } catch (e: any) {
-      // Server endpoint not yet implemented — surface a "coming soon" hint
+      const detail = e instanceof Error ? e.message : String(e);
       const msg = language === 'zh'
-        ? `重置 (服务端 reset 端点尚未实现, Coming soon)`
-        : `Reset (server reset endpoint not yet implemented, coming soon)`;
-      setDataStatus({ type: 'info', message: msg });
-      showToast(msg, 'info');
+        ? `重置失败：${detail}`
+        : `Reset failed: ${detail}`;
+      setDataStatus({ type: 'error', message: msg });
+      showToast(msg, 'error');
     } finally {
       setIsResetting(false);
     }
@@ -593,15 +682,19 @@ export function SettingsModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-surface-white border border-border shadow-sm rounded-md w-full max-w-2xl relative flex flex-col max-h-[90vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
       >
         {/* Header with Close Button */}
         <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
-          <h2 className="font-sans text-2xl text-text-heading italic">
+          <h2 id="settings-dialog-title" className="font-sans text-2xl text-text-heading italic">
             {language === 'zh' ? '全局设置' : 'Configuration'}
           </h2>
           <button
             onClick={() => setShowSettings(false)}
             className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-md hover:bg-surface"
+            aria-label={language === 'zh' ? '关闭设置' : 'Close settings'}
           >
             <X className="w-5 h-5" />
           </button>
@@ -924,6 +1017,12 @@ export function SettingsModal({
                   {language === 'zh' ? '飞书' : 'Feishu'}
                 </button>
                 <button
+                  onClick={() => setSyncSubTab('google')}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'google' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                >
+                  Google
+                </button>
+                <button
                   onClick={() => setSyncSubTab('github')}
                   className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'github' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
                 >
@@ -937,31 +1036,99 @@ export function SettingsModal({
                 </button>
               </div>
 
+              {syncSubTab === 'google' && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                    <div className="rounded-md bg-green-500/10 p-2 text-green-700"><CalendarDays className="h-5 w-5" /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-text-heading">Google Calendar</h3>
+                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${googleStatus?.connected ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {googleStatus?.connected ? (language === 'zh' ? '已连接' : 'Connected') : (language === 'zh' ? '未连接' : 'Not connected')}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        {language === 'zh' ? '授权后，Google 主日历会直接显示在 DailyFlow 的日、周、月视图中。' : 'After authorization, your primary Google calendar appears in DailyFlow day, week, and month views.'}
+                      </p>
+                      {googleStatus?.accountEmail && <p className="mt-1 text-[10px] text-text-muted">{googleStatus.accountEmail}</p>}
+                    </div>
+                  </div>
+                  {!googleStatus?.configured && (
+                    <div className="rounded-xl border border-border/70 bg-background p-3">
+                      <p className="text-xs font-semibold text-text-heading">{language === 'zh' ? '首次配置' : 'One-time setup'}</p>
+                      <p className="mt-1 text-[11px] text-text-muted">
+                        {language === 'zh' ? '填入 Google Cloud 中创建的“桌面应用”OAuth Client ID。这里只需要 Client ID，不需要密钥。' : 'Enter the Desktop app OAuth Client ID from Google Cloud. No client secret is required.'}
+                      </p>
+                      <input
+                        value={googleClientId}
+                        onChange={event => setGoogleClientId(event.target.value)}
+                        placeholder="1234567890-….apps.googleusercontent.com"
+                        className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-green-400"
+                      />
+                      <button
+                        onClick={async () => {
+                          const url = 'https://console.cloud.google.com/apis/credentials';
+                          try { await open(url); } catch { window.open(url, '_blank', 'noopener,noreferrer'); }
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-green-700"
+                      >
+                        <ExternalLink className="h-3 w-3" />{language === 'zh' ? '打开 Google Cloud 凭据页' : 'Open Google Cloud credentials'}
+                      </button>
+                    </div>
+                  )}
+                  {!googleStatus?.connected && (
+                    <button
+                      onClick={handleGoogleConnect}
+                      disabled={googleLoading || (!googleStatus?.configured && !googleClientId.trim())}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-green-800 disabled:opacity-40"
+                    >
+                      {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                      {language === 'zh' ? '打开 Google 授权页' : 'Open Google authorization'}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleGoogleCheck}
+                    disabled={googleLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-xs font-bold text-text-main disabled:opacity-40"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${googleLoading ? 'animate-spin' : ''}`} />
+                    {language === 'zh' ? '检查连接' : 'Check connection'}
+                  </button>
+                  {googleMessage && <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-700">{googleMessage}</div>}
+                </div>
+              )}
+
               {syncSubTab === 'feishu' && (
                 <div className="space-y-4">
-                  <div className="flex items-start gap-3 rounded-md border border-border bg-surface p-4">
+                  <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
                     <div className="rounded-md bg-blue-500/10 p-2 text-blue-600">
                       <CalendarDays className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-text-heading">
-                          {language === 'zh' ? '飞书企业版' : 'Feishu Enterprise'}
+                          {language === 'zh' ? '连接飞书到 DailyFlow' : 'Connect Feishu to DailyFlow'}
                         </h3>
                         <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
                           feishuStatus?.authorized
                             ? 'bg-green-50 text-green-700'
-                            : 'bg-stone-100 text-stone-600'
+                            : feishuStatusLoading
+                              ? 'bg-stone-100 text-stone-600'
+                              : 'bg-amber-50 text-amber-700'
                         }`}>
-                          {feishuStatus?.authorized
+                          {feishuStatusLoading
+                            ? (language === 'zh' ? '检查中' : 'Checking')
+                            : feishuStatus?.authorized
                             ? (language === 'zh' ? '已连接' : 'Connected')
-                            : (language === 'zh' ? '未连接' : 'Not connected')}
+                            : feishuStatus?.appConfigured === false
+                              ? (language === 'zh' ? '需要管理员配置' : 'Admin setup needed')
+                              : (language === 'zh' ? '等待账号授权' : 'Account authorization needed')}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
                         {language === 'zh'
-                          ? '任务双向同步标题、描述、截止日和完成状态；带开始/结束时间的会议笔记会同步到飞书日历，飞书日程显示在 DailyFlow 当天视图。'
-                          : 'Tasks sync both ways. Timed meeting notes sync to Feishu Calendar, and Feishu events appear in the DailyFlow day view.'}
+                          ? '只需授权你的企业账号，不需要在这里填写 App ID 或 App Secret。连接后再选择“立即同步”。'
+                          : 'Authorize your enterprise account here—no App ID or App Secret is entered in this screen. Then choose Sync now.'}
                       </p>
                       {feishuStatus?.userName && (
                         <p className="mt-1 truncate text-[10px] text-text-muted">
@@ -971,59 +1138,150 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-border/70 bg-background p-3 text-[11px] text-text-muted">
-                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                      <span>{language === 'zh' ? '任务' : 'Tasks'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? 'DailyFlow ↔ 飞书任务（双向）' : 'DailyFlow ↔ Feishu Tasks (two-way)'}
-                      </span>
-                      <span>{language === 'zh' ? '日程' : 'Calendar'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? '飞书 → 当天视图；定时会议笔记 → 飞书' : 'Feishu → day view; timed meeting notes → Feishu'}
-                      </span>
-                      <span>{language === 'zh' ? '冲突' : 'Conflicts'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? '两端同时修改时暂停覆盖，保留双方内容' : 'Concurrent edits pause overwrite and preserve both sides'}
-                      </span>
+                  <div className="space-y-2">
+                    <div className="flex gap-3 rounded-xl border border-border/70 bg-background p-3">
+                      <StepNumber value="1" done={Boolean(feishuStatus?.appConfigured)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold text-text-heading">
+                            {language === 'zh' ? '企业应用准备' : 'Enterprise app setup'}
+                          </p>
+                          {feishuStatus?.appConfigured && (
+                            <span className="text-[10px] font-medium text-green-700">
+                              {language === 'zh' ? '已就绪' : 'Ready'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                          {feishuStatusLoading
+                            ? (language === 'zh' ? '正在检查连接环境…' : 'Checking the connector environment…')
+                            : !feishuStatus?.cliAvailable
+                              ? (language === 'zh'
+                                ? '当前安装包缺少飞书连接组件（lark-cli），请更新或重新安装 DailyFlow。'
+                                : 'This build is missing the Feishu connector runtime (lark-cli). Update or reinstall DailyFlow.')
+                              : feishuStatus?.appConfigured
+                                ? (language === 'zh'
+                                  ? `企业应用已配置${feishuStatus.appName ? `：${feishuStatus.appName}` : ''}。你不需要准备密钥。`
+                                  : `Enterprise app ready${feishuStatus.appName ? `: ${feishuStatus.appName}` : ''}. You do not need to provide credentials.`)
+                                : (language === 'zh'
+                                  ? '需要企业管理员先创建飞书企业自建应用，并开通日历和任务权限。'
+                                  : 'An admin must first create a Feishu custom app and enable Calendar and Tasks permissions.')}
+                        </p>
+                        {!feishuStatusLoading && feishuStatus?.cliAvailable && !feishuStatus.appConfigured && (
+                          <button
+                            onClick={async () => {
+                              const url = 'https://open.feishu.cn/app';
+                              try {
+                                await open(url);
+                              } catch {
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              }
+                            }}
+                            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {language === 'zh' ? '打开飞书开发者后台' : 'Open Feishu Developer Console'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {!feishuStatus?.authorized ? (
-                    <div className="space-y-2">
-                      <button
-                        onClick={handleConnectFeishu}
-                        disabled={feishuLoading}
-                        className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                        {language === 'zh' ? '连接飞书企业账号' : 'Connect Feishu Enterprise'}
-                      </button>
-                      {feishuDeviceCode && (
+                    <div className={`flex gap-3 rounded-xl border p-3 ${
+                      feishuStatus?.appConfigured && !feishuStatus?.authorized
+                        ? 'border-blue-200 bg-blue-50/40'
+                        : 'border-border/70 bg-background'
+                    }`}>
+                      <StepNumber value="2" done={Boolean(feishuStatus?.authorized)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-text-heading">
+                          {language === 'zh' ? '授权我的飞书账号' : 'Authorize my Feishu account'}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                          {feishuStatus?.authorized
+                            ? (language === 'zh'
+                              ? `已连接${feishuStatus.userName ? `：${feishuStatus.userName}` : '企业账号'}。`
+                              : `Connected${feishuStatus.userName ? `: ${feishuStatus.userName}` : ' enterprise account'}.`)
+                            : (language === 'zh'
+                              ? '点击后会打开飞书官方授权页。请使用要同步日历的企业账号登录，并同意日历与任务权限。'
+                              : 'This opens Feishu’s authorization page. Sign in with the enterprise account whose calendar you want to sync.')}
+                        </p>
+                        {!feishuStatus?.authorized && feishuStatus?.appConfigured && !feishuDeviceCode && (
+                          <button
+                            onClick={handleConnectFeishu}
+                            disabled={feishuLoading}
+                            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                            {language === 'zh' ? '打开飞书授权页' : 'Open Feishu authorization'}
+                          </button>
+                        )}
+                        {feishuDeviceCode && (
+                          <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
+                            <ol className="space-y-1 text-[11px] leading-relaxed text-text-main">
+                              <li>{language === 'zh' ? '1. 在飞书页面登录企业账号并点击授权。' : '1. Sign in on Feishu and approve access.'}</li>
+                              <li>{language === 'zh' ? '2. 完成后回到 DailyFlow，点击下面的按钮。' : '2. Return to DailyFlow and click the button below.'}</li>
+                            </ol>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={reopenFeishuAuthorization}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                {language === 'zh' ? '重新打开' : 'Open again'}
+                              </button>
+                              <button
+                                onClick={copyFeishuAuthorization}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {language === 'zh' ? '复制链接' : 'Copy link'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {feishuDeviceCode && (
                         <button
                           onClick={handleFinishFeishu}
                           disabled={feishuLoading}
-                          className="flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                           {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                          {language === 'zh' ? '我已完成授权' : 'Authorization completed'}
+                          {language === 'zh' ? '我已授权，检查连接' : 'I approved—check connection'}
                         </button>
                       )}
+                      </div>
                     </div>
-                  ) : (
-                    <button
-                      onClick={handleFeishuSync}
-                      disabled={feishuLoading}
-                      className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {feishuLoading
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <RefreshCw className="h-4 w-4" />}
-                      {language === 'zh' ? '立即双向同步' : 'Sync both ways now'}
-                    </button>
-                  )}
+
+                    <div className={`flex gap-3 rounded-xl border p-3 ${
+                      feishuStatus?.authorized ? 'border-green-200 bg-green-50/30' : 'border-border/70 bg-background'
+                    }`}>
+                      <StepNumber value="3" done={Boolean(feishuStatus?.lastTaskSyncAt || feishuStatus?.lastCalendarSyncAt)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-text-heading">
+                          {language === 'zh' ? '同步任务与日程' : 'Sync tasks and calendar'}
+                        </p>
+                        <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-text-muted">
+                          <p><span className="font-semibold text-text-main">{language === 'zh' ? '任务：' : 'Tasks: '}</span>{language === 'zh' ? 'DailyFlow ↔ 飞书任务，双向同步标题、描述、截止日和完成状态。' : 'DailyFlow ↔ Feishu Tasks, including title, description, due date, and completion.'}</p>
+                          <p><span className="font-semibold text-text-main">{language === 'zh' ? '日程：' : 'Calendar: '}</span>{language === 'zh' ? '飞书日程显示在 DailyFlow；带时间的会议笔记可创建或更新飞书日程。' : 'Feishu events appear in DailyFlow; timed meeting notes can create or update Feishu events.'}</p>
+                        </div>
+                        {feishuStatus?.authorized && (
+                          <button
+                            onClick={handleFeishuSync}
+                            disabled={feishuLoading}
+                            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {feishuLoading
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <RefreshCw className="h-4 w-4" />}
+                            {language === 'zh' ? '立即同步' : 'Sync now'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   {feishuMessage && (
-                    <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs text-stone-700">
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-700">
                       {feishuMessage}
                     </div>
                   )}
@@ -1597,7 +1855,6 @@ export function SettingsModal({
                   ...config,
                   workspaceRoot: workspaceRoot.trim(),
                   githubRepo: githubRepoInput.trim() || undefined,
-                  githubToken: githubToken.trim() || undefined,
                   ipfsEnabled,
                   ipfsProvider: 'pinata',
                   ipfsApiKey: ipfsApiKey.trim() || undefined,
@@ -1636,7 +1893,7 @@ export function SettingsModal({
                     setFilesMap(newFilesMap);
 
                     // Switch to today's date
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = getTodayStr();
                     // Use currentFileDate setter via window reload or we need to pass it
                     // Actually we need to reload the page or use the passed setter
                     // For now, let's just reload the page to keep behavior consistent

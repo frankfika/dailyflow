@@ -19,7 +19,7 @@ test.describe('Notes focus mode (default layout)', () => {
     });
     let workspaceId: string;
     if (createRes.ok()) {
-      workspaceId = (await createRes.json()).id;
+      workspaceId = (await createRes.json()).workspace.id;
     } else {
       const listRes = await ctx.get('/api/config/workspaces');
       const list = await listRes.json();

@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { loadConfig, saveConfig } from '../config.js';
 import type { Config } from '../../types/task.js';
+import { normalizeWorkspacePath } from '../../routes/config.js';
 
 let testConfigDir: string;
 let previousConfigFile: string | undefined;
@@ -110,10 +111,49 @@ describe('loadConfig', () => {
     expect(loaded.workspaceRoot).toMatch(/^\/tmp\/concurrent-\d+$/);
   });
 
+  it('removes legacy GitHub tokens and stores config with owner-only permissions', async () => {
+    const configFile = process.env.DAILYFLOW_CONFIG_FILE!;
+    await fs.writeFile(configFile, JSON.stringify({
+      workspaceRoot: '/tmp/secure',
+      workspaces: [{
+        id: 'ws_secure',
+        name: 'Secure',
+        path: '/tmp/secure',
+        createdAt: new Date().toISOString(),
+      }],
+      activeWorkspaceId: 'ws_secure',
+      dailyPathTemplate: 'Daily/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: [],
+      githubRepo: 'https://github.com/user/repo',
+      githubToken: 'ghp_must_not_persist',
+    }), 'utf8');
+
+    const loaded = await loadConfig();
+    expect(loaded).not.toHaveProperty('githubToken');
+    const persisted = await fs.readFile(configFile, 'utf8');
+    expect(persisted).not.toContain('ghp_must_not_persist');
+    expect((await fs.stat(configFile)).mode & 0o777).toBe(0o600);
+  });
+
   it('does not turn a malformed existing config into first-run state', async () => {
     const configFile = process.env.DAILYFLOW_CONFIG_FILE!;
     await fs.writeFile(configFile, '{"workspaces":', 'utf8');
     await expect(loadConfig()).rejects.toBeInstanceOf(SyntaxError);
     expect(await fs.readFile(configFile, 'utf8')).toBe('{"workspaces":');
+  });
+});
+
+describe('normalizeWorkspacePath', () => {
+  it.each([
+    ['/Users/fangchen/Documents/DailyFlow/', '/Users/fangchen/Documents/DailyFlow'],
+    ['  /Users/fangchen/Documents/DailyFlow////  ', '/Users/fangchen/Documents/DailyFlow'],
+    ['/', '/'],
+    ['C:\\', 'C:\\'],
+    ['C:\\Users\\fangchen\\DailyFlow\\', 'C:\\Users\\fangchen\\DailyFlow'],
+    ['\\\\server\\share\\', '\\\\server\\share'],
+    ['', ''],
+  ])('normalizes %s as %s', (input, expected) => {
+    expect(normalizeWorkspacePath(input)).toBe(expected);
   });
 });

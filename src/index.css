@@ -349,9 +349,30 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 
 /* Focus ring */
 .native-focus:focus-visible {
-  outline: none;
-  ring: 2px;
-  ring-color: var(--color-accent-light);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .task-card-actions {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Divider with label */

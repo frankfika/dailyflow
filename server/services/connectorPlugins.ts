@@ -3,6 +3,7 @@ import {
   getFeishuAuthStatus,
   type FeishuAgendaEvent,
 } from './feishuSync.js';
+import { getGoogleCalendarEvents, getGoogleCalendarStatus } from './googleCalendarSync.js';
 
 export type ConnectorCapability =
   | 'tasks.read'
@@ -81,11 +82,6 @@ const feishuPlugin: ConnectorPlugin = {
   },
 };
 
-/**
- * Google intentionally starts as a manifest-only plugin. The calendar UI and
- * aggregation layer already understand it; OAuth + API transport can be
- * shipped independently without touching the calendar workspace.
- */
 const googlePlugin: ConnectorPlugin = {
   manifest: {
     id: 'google',
@@ -94,13 +90,28 @@ const googlePlugin: ConnectorPlugin = {
     icon: 'calendar-range',
     capabilities: ['tasks.read', 'tasks.write', 'calendar.read', 'calendar.write'],
     accountType: 'both',
-    status: 'coming_soon',
+    status: 'available',
   },
   async getStatus() {
+    const status = await getGoogleCalendarStatus();
     return {
-      connected: false,
-      reason: 'Google OAuth connector is not configured yet.',
+      connected: status.connected,
+      accountLabel: status.accountEmail,
+      reason: status.reason,
     };
+  },
+  async listCalendarEvents(start, end) {
+    return (await getGoogleCalendarEvents(start, end)).map(event => ({
+      externalId: event.id,
+      title: event.title,
+      description: event.description,
+      start: event.start,
+      end: event.end,
+      allDay: event.allDay,
+      status: event.status,
+      location: event.location,
+      url: event.url,
+    }));
   },
 };
 

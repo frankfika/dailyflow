@@ -81,7 +81,21 @@ export function useCreateNote(): UseMutationResult<{ note: NoteDocument }, V2Api
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input) => createNote(input),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Seed the detail cache before selecting the new note so the editor is
+      // immediately writable instead of flashing a loading spinner.
+      qc.setQueryData(['v2-notes', 'one', data.note.id], data);
+      qc.setQueryData<{ notes: NoteDocument[]; total: number }>(
+        ['v2-notes', null, null, null],
+        (current) => {
+          if (!current) return { notes: [data.note], total: 1 };
+          if (current.notes.some((note) => note.id === data.note.id)) return current;
+          return {
+            notes: [data.note, ...current.notes],
+            total: current.total + 1,
+          };
+        },
+      );
       qc.invalidateQueries({ queryKey: ['v2-notes'] });
     },
   });
@@ -98,7 +112,25 @@ export function useUpdateNote(): UseMutationResult<{ note: NoteDocument }, V2Api
     mutationFn: ({ id, input }) => updateNote(id, input),
     onSuccess: (data, vars) => {
       qc.setQueryData(['v2-notes', 'one', vars.id], data);
-      qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
+      const structuralChange = Object.keys(vars.input).some(
+        (key) => !['expectedAutoSaveVersion', 'body', 'title'].includes(key),
+      );
+      if (structuralChange) {
+        qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
+        return;
+      }
+      // Autosave runs while the user types. Patch cached list rows in place
+      // instead of refetching every Notes query after each debounce.
+      qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
+        { queryKey: ['v2-notes'], exact: false },
+        (current) => {
+          if (!current || !Array.isArray(current.notes)) return current;
+          return {
+            ...current,
+            notes: current.notes.map((note) => note.id === data.note.id ? data.note : note),
+          };
+        },
+      );
     },
   });
 }
@@ -109,6 +141,19 @@ export function useDeleteNote(): UseMutationResult<{ ok: boolean }, V2ApiError, 
     mutationFn: (id) => deleteNote(id),
     onSuccess: (_data, id) => {
       qc.removeQueries({ queryKey: ['v2-notes', 'one', id] });
+      qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
+        { queryKey: ['v2-notes'], exact: false },
+        (current) => {
+          if (!current || !Array.isArray(current.notes)) return current;
+          const notes = current.notes.filter((note) => note.id !== id);
+          if (notes.length === current.notes.length) return current;
+          return {
+            ...current,
+            notes,
+            total: Math.max(0, current.total - 1),
+          };
+        },
+      );
       qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
     },
   });
@@ -270,6 +315,22 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
     [note, update, qc],
   );
 
+  const enqueue = useCallback(
+    (vars: AutosaveVars): Promise<void> => {
+      const previous = inflightRef.current;
+      const run = (async () => {
+        if (previous) await previous;
+        await persist(vars);
+      })();
+      inflightRef.current = run;
+      void run.finally(() => {
+        if (inflightRef.current === run) inflightRef.current = null;
+      });
+      return run;
+    },
+    [persist],
+  );
+
   const schedule = useCallback(
     (vars: AutosaveVars) => {
       pendingRef.current = { ...pendingRef.current, ...vars };
@@ -278,10 +339,10 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
         timerRef.current = null;
         const next = pendingRef.current;
         pendingRef.current = {};
-        inflightRef.current = persist(next);
+        void enqueue(next);
       }, DEBOUNCE_MS);
     },
-    [persist],
+    [enqueue],
   );
 
   const flush = useCallback(async () => {
@@ -291,9 +352,8 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
     }
     const next = pendingRef.current;
     pendingRef.current = {};
-    inflightRef.current = persist(next);
-    if (inflightRef.current) await inflightRef.current;
-  }, [persist]);
+    await enqueue(next);
+  }, [enqueue]);
 
   return { status, lastSavedVersion, lastError, schedule, flush };
 }

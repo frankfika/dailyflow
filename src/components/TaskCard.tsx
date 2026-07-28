@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Briefcase, Calendar, Check, CornerUpRight, Edit2, FileText, MessageSquare, Trash2, X, BellOff } from 'lucide-react';
 import type { Task } from '../types/task';
-import { getTagColor } from '../utils/tagColors';
+import { getTagColor, getTodayStr } from '../utils/tagColors';
 import { TagInput } from './TagInput';
 
 const SUPPRESS_KEY = 'df_suppress_completion_comments';
@@ -115,8 +115,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         onClick={() => {
           onToggle();
         }}
-        className="mt-[3px] flex-shrink-0 hover:scale-110 active:scale-95 transition-all duration-200 focus:outline-none group/check"
+        className="mt-[3px] flex min-h-10 min-w-10 flex-shrink-0 items-center justify-center rounded-lg hover:scale-105 active:scale-95 transition-all duration-200 group/check"
         title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
+        aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
       >
         {isDone ? (
           <motion.div
@@ -261,7 +262,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
             {task.deadline && (() => {
               // 过期日期用 danger 色，未来日期用 info 色；从别的日期迁来的用 muted 色
-              const today = new Date().toISOString().slice(0, 10);
+              const today = getTodayStr();
               const isMigrated = task.status === 'migrated' || (task.source_date && task.source_date !== currentFileDate);
               const isOverdue = !isDone && !isMigrated && task.deadline < today;
               const cls = isMigrated
@@ -412,12 +413,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
       </div>
 
-      <div className="absolute top-3 right-3 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
+      <div className="task-card-actions absolute top-3 right-3 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200">
         {!isEditing && (
           <button
             onClick={() => setShowComment(true)}
             className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
             title={language === 'zh' ? '加备注（写在任务上）' : 'Add comment (on this task)'}
+            aria-label={language === 'zh' ? '添加任务备注' : 'Add task comment'}
           >
             <MessageSquare className="w-4 h-4" />
           </button>
@@ -427,12 +429,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             onClick={onCreateLinkedNote}
             className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
             title={language === 'zh' ? '关联一篇笔记（独立文件）' : 'Link a note (separate file)'}
+            aria-label={language === 'zh' ? '关联笔记' : 'Link a note'}
           >
             <FileText className="w-4 h-4" />
           </button>
         )}
         {!isDone && !isEditing && (
-          <button onClick={() => setIsEditing(true)} className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}
+          >
             <Edit2 className="w-4 h-4" />
           </button>
         )}
@@ -463,6 +470,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               setTimeout(() => setConfirmingDelete(false), 4000);
             }}
             className="p-1.5 text-text-muted hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-light)] transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            aria-label={language === 'zh' ? '删除任务' : 'Delete task'}
           >
             <Trash2 className="w-4 h-4" />
           </button>

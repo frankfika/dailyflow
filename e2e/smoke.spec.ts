@@ -10,11 +10,21 @@ test.describe('DailyFlow Smoke Tests', () => {
   });
 
   test('sidebar shows navigation items', async ({ page }) => {
+    const firstRun = page.getByRole('heading', { name: /Commit to three things a day|每天承诺三件事/i });
+    if (await firstRun.isVisible().catch(() => false)) {
+      await expect(page.getByRole('button', { name: /Get Started|开始使用/i })).toBeVisible();
+      return;
+    }
     await expect(page.getByTestId('nav-today')).toBeVisible();
     await expect(page.getByTestId('nav-notes')).toBeVisible();
   });
 
   test('settings panel opens', async ({ page }) => {
+    const firstRun = page.getByRole('heading', { name: /Commit to three things a day|每天承诺三件事/i });
+    if (await firstRun.isVisible().catch(() => false)) {
+      await expect(page.getByText(/Workspace Directory|工作区目录/i)).toBeVisible();
+      return;
+    }
     await page.getByTestId('settings-button').click();
     await expect(page.locator('text=/Settings|Configuration|Config|设置|全局设置/i').first()).toBeVisible();
   });

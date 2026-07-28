@@ -11,15 +11,15 @@ import promptsRouter from './routes/prompts.js';
 import aiRouter from './routes/ai.js';
 import recurringRouter from './routes/recurring.js';
 import ipfsRouter from './routes/ipfs.js';
-import capsuleRouter from './routes/capsule.js';
 import thinkingWorkspacesRouter from './routes/thinkingWorkspaces.js';
 import meetingsRouter from './routes/meetings.js';
 import feishuRouter from './routes/feishu.js';
 import calendarRouter from './routes/calendar.js';
+import googleCalendarRouter from './routes/googleCalendar.js';
 import { v2Router } from './routes/v2/index.js';
 
 const app = express();
-const PORT = process.env.PORT || 3003;
+const PORT = Number(process.env.PORT ?? 3003);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // 中间件
@@ -71,11 +71,11 @@ app.use('/api/prompts', promptsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/recurring', recurringRouter);
 app.use('/api/ipfs', ipfsRouter);
-app.use('/api/capsules', capsuleRouter);
 app.use('/api/thinking-workspaces', thinkingWorkspacesRouter);
 app.use('/api/meetings', meetingsRouter);
 app.use('/api/feishu', feishuRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/google-calendar', googleCalendarRouter);
 app.use('/api/v2', v2Router);
 
 // 健康检查
@@ -101,6 +101,6 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // 启动服务器
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`DailyFlow server running on http://localhost:${PORT}`);
 });

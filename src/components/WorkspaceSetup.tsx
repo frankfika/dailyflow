@@ -8,6 +8,15 @@ interface WorkspaceSetupProps {
   language: 'en' | 'zh';
 }
 
+// Keep roots intact while accepting paths copied from any supported OS.
+function normalizeWorkspacePath(input: string): string {
+  const value = input.trim();
+  if (!value || value === '/' || value === '\\') return value;
+  if (/^[A-Za-z]:[\\/]*$/.test(value)) return `${value[0]}:${value.includes('/') ? '/' : '\\'}`;
+  if (/^\\\\[^\\/]+[\\/][^\\/]+[\\/]*$/.test(value)) return value.replace(/[\\/]+$/, '');
+  return value.replace(/[\\/]+$/, '') || value;
+}
+
 export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   const [workspacePath, setWorkspacePath] = useState('');
   const [isPickingFolder, setIsPickingFolder] = useState(false);
@@ -56,7 +65,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleValidate = async (): Promise<boolean> => {
-    if (!workspacePath.trim()) {
+    const normalizedPath = normalizeWorkspacePath(workspacePath);
+    if (!normalizedPath) {
       setError(t.missingPath);
       return false;
     }
@@ -65,24 +75,14 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      const response = await fetch(`/api/config/validate-path`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: workspacePath, create: true }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
-      }
-
-      const result = await response.json();
+      const result = await workspacesApi.validatePath(normalizedPath);
       if (!result.valid) {
         setIsValid(false);
         setError(result.error || t.invalidPath);
         return false;
       }
       setIsValid(true);
+      if (normalizedPath !== workspacePath) setWorkspacePath(normalizedPath);
       setError('');
       return true;
     } catch (e: any) {
@@ -95,7 +95,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleContinue = async () => {
-    if (!workspacePath.trim()) {
+    const normalizedPath = normalizeWorkspacePath(workspacePath);
+    if (!normalizedPath) {
       setError(t.missingPath);
       return;
     }
@@ -107,8 +108,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      const name = workspacePath.split('/').filter(Boolean).pop() || 'Workspace';
-      await workspacesApi.create(name, workspacePath);
+      const name = normalizedPath.split(/[/\\]/).filter(Boolean).pop() || 'Workspace';
+      await workspacesApi.create(name, normalizedPath);
       onComplete();
     } catch (e: any) {
       setError(e.message || (language === 'zh' ? '保存失败，请重试' : 'Failed to save, please try again'));
