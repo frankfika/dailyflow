@@ -5,21 +5,21 @@
  * is a menu item, not a tab.
  *
  * This is an additive component to the existing app. The v1 today/notes
- * /ai-chat/capsules tabs continue to work; the v2 shell is mounted when
- * the user enters "AI-Native" mode (or the user can be transitioned
- * gradually per workspace flag).
+ * The shell is mounted from the main application's AI Workspace tab.
  */
 import React, { useState } from 'react';
 import { TodayView } from './today/TodayView';
 import { InboxView } from './inbox/InboxView';
 import { MemoryView } from './memory/MemoryView';
+import { ReviewView } from './review/ReviewView';
 
-type Tab = 'today' | 'inbox' | 'memory';
+type Tab = 'today' | 'inbox' | 'memory' | 'review';
 
 const TABS: { id: Tab; label: string; subtitle: string }[] = [
   { id: 'today', label: 'Today', subtitle: '今天最值得推进什么' },
   { id: 'inbox', label: 'Inbox', subtitle: '未解释或待重新决策的内容' },
   { id: 'memory', label: 'Memory', subtitle: '已确认的工作上下文' },
+  { id: 'review', label: 'Review', subtitle: '检查过期信息与待复查事项' },
 ];
 
 export function V2Shell() {
@@ -49,6 +49,7 @@ export function V2Shell() {
         {tab === 'today' && <TodayView />}
         {tab === 'inbox' && <InboxView />}
         {tab === 'memory' && <MemoryView />}
+        {tab === 'review' && <ReviewView />}
       </div>
     </div>
   );

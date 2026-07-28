@@ -10,12 +10,12 @@
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.12-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.13-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
-![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
+![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
 
-[Features](#-features) · [Screenshots](#-screenshots) · [Time Capsules](#-time-capsules) · [Quick Start](#-quick-start) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
+[Features](#-features) · [Screenshots](#-screenshots) · [Quick Start](#-quick-start) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
 
 [简体中文](./README.md) | __English__
 
@@ -43,7 +43,7 @@ Open the app and AI first reads your backlog, priorities, deadlines, and stale w
 
 ## 📖 Introduction
 
-DailyFlow is a **local-first daily focus tool for people with overloaded backlogs**. Markdown files are the single source of truth. AI, notes, and time capsules remain supporting tools; the core job is helping you choose and finish the three things that matter today.
+DailyFlow is a **local-first daily focus tool for people with overloaded backlogs**. Markdown files are the single source of truth. AI and notes remain supporting tools; the core job is helping you choose and finish the three things that matter today.
 
 ### Why DailyFlow?
 
@@ -82,18 +82,6 @@ DailyFlow is a **local-first daily focus tool for people with overloaded backlog
 - **Multiple sources**: combine local DailyFlow content and connected enterprise calendars on one timeline
 - **Feishu events**: read Feishu Calendar events, inspect their details, and open the original event from DailyFlow
 - **Extensible connectors**: the connector layer supports Feishu today, with a Google Calendar integration point reserved
-
-### ⏳ Time Capsules (Experimental tool)
-
-- **Three capsule types**: Commitment, Secret, Milestone
-- **Multi-chain EVM**: Base Sepolia, Optimism Sepolia, Arbitrum Sepolia, Sepolia, local Hardhat
-- **Wallet connect**: any injected wallet (MetaMask, Rabby, etc.)
-- **On-chain hashing**: content hashed with keccak256 and committed on-chain; plaintext stays local
-- **Time lock**: the smart contract guarantees content is invisible before `unlockAt`
-- **Verifiable**: every capsule surfaces a tx hash and a block-explorer link
-- **Delightful UI**: SVG illustrations, gradient backgrounds, live countdown
-
-![Capsule Detail](./docs/assets/capsules-detail.png)
 
 ### 🤖 AI Assistant
 
@@ -154,83 +142,6 @@ One-click configuration for 15+ AI providers:
 |:---:|:---:|
 | ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
 
-| Time Capsules list | Capsule detail |
-|:---:|:---:|
-| ![Capsules](./docs/assets/capsules-list.png) | ![Capsule Detail](./docs/assets/capsules-detail.png) |
-
----
-
-## ⏳ Time Capsules
-
-### What is it?
-
-**Time Capsules** is DailyFlow's third independent tab. You write **a commitment, a secret, or a life milestone**, lock its hash with a **real EVM smart contract**, and open it on a future date.
-
-> It is neither a public diary (privacy-sensitive) nor a plain memo (no ceremony) — it is a **sealed envelope to your future self**, witnessed by a decentralized network.
-
-### How does it work?
-
-```
-┌─────────────────┐         ┌──────────────────────┐         ┌─────────────────────┐
-│  Local: write    │  keccak256  │  On-chain: store     │  unlockAt  │  Local: open       │
-│  title / content │ ───────▶ │  contentHash + time   │ ───────▶ │  verify + reveal   │
-│  type / unlockAt │   hash    │  lock in capsules[id] │  trigger  │  optional reveal  │
-└─────────────────┘         └──────────────────────┘         └─────────────────────┘
-```
-
-- **Seal**: store full content locally, then call `seal(bytes32 contentHash, uint256 unlockAt, CapsuleType, bool isPublic)` on the contract
-- **On-chain**: the contract records `id → creator → hash → unlockAt → status`
-- **Wait**: the client marks a capsule as "openable" once `unlockAt <= now`
-- **Open**: show full content locally; optionally call `reveal(id, status)` on-chain
-
-### Capsule Types
-
-| Type | Meaning | Best for |
-|------|---------|---------|
-| 🎯 Commitment | A promise | New Year resolutions, habits to break, OKRs |
-| 🤫 Secret | A secret | A letter to your future self |
-| 🏆 Milestone | A milestone | Graduation, first home, promotion, baby |
-
-### Supported Chains
-
-| Chain | Chain ID | Explorer | Status |
-|-------|----------|----------|--------|
-| Base Sepolia | 84532 | https://sepolia.basescan.org | Fill address after deploy |
-| Optimism Sepolia | 11155420 | https://sepolia-optimism.etherscan.io | Fill address after deploy |
-| Arbitrum Sepolia | 421614 | https://sepolia.arbiscan.io | Fill address after deploy |
-| Sepolia | 11155111 | https://sepolia.etherscan.io | Fill address after deploy |
-| Hardhat (local) | 31337 | - | ✅ Pre-configured |
-
-### Deploy to a Testnet
-
-```bash
-cd contracts
-cp .env.example .env  # fill PRIVATE_KEY and RPC URLs
-
-# compile + test
-npm install --legacy-peer-deps
-npx hardhat compile
-npx hardhat test
-
-# deploy to a specific chain
-npx hardhat run scripts/deploy.ts --network baseSepolia
-npx hardhat run scripts/deploy.ts --network arbitrumSepolia
-
-# Results are saved in contracts/deployments.json
-# Plug the address for each chain into src/config/chains.ts -> CHAIN_CONTRACTS
-```
-
-### Technical References
-
-- **Contract**: [contracts/contracts/DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol)
-- **ABI**: [src/contracts/abi.ts](./src/contracts/abi.ts)
-- **Frontend hook**: [src/hooks/useCapsuleContract.ts](./src/hooks/useCapsuleContract.ts)
-- **Wallet button**: [src/components/WalletConnectButton.tsx](./src/components/WalletConnectButton.tsx)
-- **Chain config**: [src/config/chains.ts](./src/config/chains.ts)
-- **Backend service**: [server/services/capsule.ts](./server/services/capsule.ts) (persists real tx data)
-
----
-
 ## 🚀 Quick Start
 
 ### 📦 Download (Recommended)
@@ -272,23 +183,14 @@ npm run build:server
 npm run tauri build
 ```
 
-### Contracts (optional — only if you want to deploy your own)
-
-```bash
-cd contracts
-npm install --legacy-peer-deps
-npx hardhat compile
-npx hardhat test  # all green
-```
-
 ### First Use
 
 1. Launch the app and set your **workspace directory** (where Markdown files will be stored)
 2. App auto-creates today's journal file
 3. Write today's tasks on the Today page and tag projects with `#project:name`
 4. Switch to the **Notes** tab to create meeting notes or capture ideas
-5. Open **⏳ Time Capsules**, connect your wallet, and seal a promise for the future
-6. Open **AI Chat** and attach today's tasks or any note as context for your questions
+5. Open **AI Chat** and attach today's tasks or any note as context for your questions
+6. Enter **AI Workspace** to process Inbox, Commitments, Memory, and Review
 
 ---
 
@@ -304,32 +206,18 @@ npx hardhat test  # all green
 │  │ (Vite/TS/TSX)  │  HTTP   │   (Bundled Node + Server)    │         │
 │  └───────┬────────┘         └────────────┬────────────────┘         │
 │          │                               │                          │
-│          │ wagmi / viem                  │                           │
-│          ▼                               │                          │
-│  ┌────────────────┐                      │                          │
-│  │  Time Capsules │  keccak256   ┌──────▼──────────────┐           │
-│  │  (Tab 3)       │ ─────────▶   │  Markdown + Capsule │           │
-│  │                │              │  Storage            │           │
-│  └────────────────┘              └──────┬──────────────┘           │
+│                                          │                          │
+│                                  ┌───────▼──────────────┐           │
+│                                  │ Markdown + v2 Store │           │
+│                                  └──────┬──────────────┘           │
 │                                         │                          │
 │              ┌──────────────────────────┼───────────────────────┐ │
 │              ▼                          ▼                       ▼ │
 │      ┌──────────────┐            ┌────────────┐          ┌────────┐ │
-│      │ Git (GitHub) │            │ IPFS/Pinata│          │  EVM   │ │
-│      │              │            │            │          │ Chains │ │
+│      │ Git (GitHub) │            │ IPFS/Pinata│          │ AI API │ │
 │      └──────────────┘            └────────────┘          └────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
-### Key Architectural Changes in v1.0.6
-
-- **Real multi-chain EVM integration**: capsule `seal` / `reveal` go to real contracts across 5 chains
-- **Wallet abstraction layer**: wagmi + viem provide a unified API for connect, sign, switch chain
-- **Privacy-first design**: content is keccak256-hashed on-chain; plaintext stays 100% local
-- **Backend persistence**: local service records `txHash` / `chainId` / `contractAddress` / `onChainId` for list display
-- **Decoupled contracts**: Hardhat project lives under [contracts/](./contracts/), independent of the front-end
-
----
 
 ## 🛠 Tech Stack
 
@@ -342,11 +230,9 @@ npx hardhat test  # all green
 | Runtime | **Bundled Node.js 20+** (auto-downloaded with permission handling) |
 | Data | Markdown files + YAML frontmatter (single source of truth) |
 | AI | 15+ providers (B.AI / Claude / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen etc.) |
-| Blockchain | wagmi 3 + viem 2 + Solidity 0.8.24 + Hardhat + @nomicfoundation/hardhat-toolbox-viem |
-| Multi-chain | Base / Optimism / Arbitrum / Sepolia / Hardhat |
 | Sync | Git + GitHub API |
 | Backup | IPFS + Pinata |
-| Tests | Vitest + Testing Library + Hardhat tests |
+| Tests | Vitest + Testing Library |
 
 ---
 
@@ -361,11 +247,6 @@ git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
 npm install
 npm run dev:all
-
-# contracts
-cd contracts
-npm install --legacy-peer-deps
-npx hardhat test
 ```
 
 ### Code Standards
@@ -395,6 +276,15 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 
 ## 📜 Changelog
 
+### v1.1.13 (2026-07-28)
+
+**🧹 UX cleanup and focused workspace release**
+
+- Removed Time Capsule code, contracts, wallet integration, and chain dependencies
+- Added the AI-Native workspace with Today / Inbox / Memory / Review
+- Fixed task rollback, import/export, note state handling, and GitHub Token security
+- Full tests, E2E Smoke checks, and production builds pass
+
 ### v1.1.12 (2026-07-27)
 
 **📅 Calendar workspace and Feishu Enterprise sync**
@@ -416,29 +306,7 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 
 ### v1.0.6 (2026-07-13)
 
-**⏳ Time Capsules live: real multi-chain EVM integration**
-
-#### ✨ New
-
-- ⏳ **Time Capsules tab**: a third independent tab with Commitment / Secret / Milestone
-- ⛓ **Real EVM sealing**: wagmi + viem call `seal(bytes32, uint256, CapsuleType, bool)` on a smart contract; content is keccak256-hashed on-chain
-- 🦊 **Wallet connect**: any injected wallet (MetaMask, Rabby, …) with one-click chain switching across 5 chains
-- 🌐 **Multi-chain**: Base Sepolia / Optimism Sepolia / Arbitrum Sepolia / Sepolia / local Hardhat
-- 🔐 **Privacy-first**: 100% plaintext stays local; only the hash lives on-chain
-- 🎨 **Delightful UI**: SVG capsule illustrations, gradient backgrounds, live countdown, block-explorer links
-
-#### 📦 Contracts
-
-- 🏗 Brand-new [contracts/](./contracts) Hardhat project (independent `package.json`)
-- 📜 [DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol): `seal` / `reveal` / `getCapsule` / `getCreatorCapsules`, with `CapsuleSealed` / `CapsuleRevealed` events
-- 🧪 8 Hardhat tests, all passing
-- 🚀 [deploy.ts](./contracts/scripts/deploy.ts): auto-saves addresses to `deployments.json`
-- 🔍 Etherscan API key config (for verify)
-
-#### 🔧 Backend
-
-- [server/services/capsule.ts](./server/services/capsule.ts): persists real `txHash` / `chainId` / `contractAddress` / `onChainId` / `contentHash`
-- [server/routes/capsule.ts](./server/routes/capsule.ts): new `POST /capsules/:id/seal/evm` accepts the front-end's on-chain proof
+This release once contained an on-chain experiment. The feature, contracts, wallet dependencies, and APIs have been removed from the current version.
 
 ### v1.0.5 (2026-07)
 
@@ -483,7 +351,7 @@ See the [full changelog](https://github.com/frankfika/dailyflow/releases).
 
 ## 🙏 Acknowledgments
 
-Thanks to all contributors and users for their feedback. DailyFlow started as a small wish — "I don't want to manually organize my todos every day" — and has grown into a complete system that includes tasks, notes, AI chat, and **on-chain time capsules**.
+Thanks to all contributors and users for their feedback. DailyFlow started as a small wish — "I don't want to manually organize my todos every day" — and has grown into a complete system for tasks, notes, calendar, and an AI workspace.
 
 <div align="center">
 

@@ -16,6 +16,7 @@ import {
   searchMemory,
   listConnectors,
   listLegacyTasks,
+  migrateLegacyTask,
   getStatus,
   V2ApiError,
 } from './client';
@@ -118,6 +119,13 @@ describe('v2/client', () => {
     await listLegacyTasks();
     const call = (fetch as any).mock.calls[0];
     expect(call[0]).toContain('/api/v2/legacy/tasks');
+  });
+
+  it('migrateLegacyTask encodes the legacy date and line as one path segment', async () => {
+    await migrateLegacyTask('2026-07-28', 42);
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain('/legacy/tasks/2026-07-28%2342/migrate');
+    expect(call[1].method).toBe('POST');
   });
 
   it('getStatus GETs /status', async () => {

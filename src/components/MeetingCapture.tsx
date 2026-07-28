@@ -28,6 +28,7 @@ import { Mic, Users, Clock, FileText, X, Loader2, Sparkles, Plus, Check, ListChe
 import { meetingsApi, notesApi, tasksApi, type MeetingActionItem, type MeetingSegment } from '../api/client';
 import { getActiveAiConfig as getActiveAiConfigShared } from '../types/models';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
+import { getTodayStr } from '../utils/tagColors';
 
 type Step = 'input' | 'record' | 'organize' | 'review' | 'saving';
 type InputMode = 'paste' | 'record';
@@ -47,7 +48,7 @@ function pad2(n: number): string {
 }
 
 function nowDateStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayStr();
 }
 
 function nowTimeStr(): string {

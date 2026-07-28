@@ -12,6 +12,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../hooks/useNotes', () => ({
   useNotes: hooks.notes,
   useCreateNote: () => ({ isPending: false, mutateAsync: hooks.create }),
+  useUpdateNote: () => ({ isPending: false, mutate: vi.fn() }),
   useArchiveNote: () => ({ mutate: hooks.archive }),
   useDeleteNote: () => ({ mutate: hooks.remove }),
 }));

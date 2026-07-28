@@ -35,7 +35,6 @@ export interface Config {
   rolloverTrigger: 'manual' | 'on_app_open';
   rolloverSkipTags: string[];
   githubRepo?: string;
-  githubToken?: string;
   activeContext?: 'work' | 'life';
   // AI Configuration
   aiProvider?: 'deepseek' | 'anthropic' | 'openai' | 'custom';

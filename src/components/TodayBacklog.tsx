@@ -23,6 +23,8 @@ type Filter = 'all' | 'overdue' | 'today' | 'week' | 'later';
 
 interface TodayBacklogProps {
   tasks: Task[];
+  selectedDate: string;
+  categories: string[];
   focusTaskIds: string[];
   onFocusTaskIdsChange: (ids: string[]) => void;
   onToggleTask: (id: string) => void;
@@ -42,6 +44,8 @@ interface TodayBacklogProps {
    *  one in-context. The parent decides whether to wire this up. */
   dailyNotes?: NoteData[];
   onOpenNotesTab?: () => void;
+  completionPromptTaskIds?: Set<string>;
+  onCompletionPromptClosed?: (taskId: string) => void;
 }
 
 const FOCUS_LIMIT = 3;
@@ -91,6 +95,8 @@ function compareTasks(a: Task, b: Task, today: string): number {
 
 export function TodayBacklog({
   tasks,
+  selectedDate,
+  categories,
   focusTaskIds,
   onFocusTaskIdsChange,
   onToggleTask,
@@ -107,6 +113,8 @@ export function TodayBacklog({
   onConfigureAI,
   dailyNotes,
   onOpenNotesTab,
+  completionPromptTaskIds = new Set<string>(),
+  onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [showFocus, setShowFocus] = useState(true);
@@ -115,7 +123,7 @@ export function TodayBacklog({
   // want to focus on dated work.
   const [hideNoDeadline, setHideNoDeadline] = useState(false);
 
-  const today = useMemo(() => startOfTodayIso(), []);
+  const today = selectedDate || startOfTodayIso();
 
   // Open (non-done) tasks; migrated tasks are excluded (they live in source_date).
   const openTasks = useMemo(
@@ -125,9 +133,9 @@ export function TodayBacklog({
 
   const focusTasks = useMemo(
     () => focusTaskIds
-      .map(id => openTasks.find(t => t.id === id))
+      .map(id => tasks.find(t => t.id === id && t.status !== 'migrated'))
       .filter((t): t is Task => Boolean(t)),
-    [focusTaskIds, openTasks],
+    [focusTaskIds, tasks],
   );
 
   const backlog = useMemo(
@@ -194,6 +202,10 @@ export function TodayBacklog({
   // the Today view doesn't open with a tall empty gap.
   const completedToday = useMemo(
     () => tasks.filter(t => t.status === 'done').length,
+    [tasks],
+  );
+  const completedTasks = useMemo(
+    () => tasks.filter(t => t.status === 'done'),
     [tasks],
   );
   const dueTodayCount = groups.buckets.today.length;
@@ -410,7 +422,7 @@ export function TodayBacklog({
                       <TaskCard
                         task={task}
                         language={language}
-                        categories={[]}
+                        categories={categories}
                         currentFileDate={today}
                         linkedNotesCount={linkedNotesCount(task.id)}
                         onToggle={() => onToggleTask(task.id)}
@@ -418,8 +430,8 @@ export function TodayBacklog({
                         onDelete={() => onDeleteTask(task.id)}
                         onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
                         onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                        showCompletionPrompt={false}
-                        onCompletionPromptClosed={() => {}}
+                        showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                        onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
                       />
                       {!isInFocus(task.id) ? (
                         <button
@@ -498,7 +510,7 @@ export function TodayBacklog({
                   <TaskCard
                     task={task}
                     language={language}
-                    categories={[]}
+                    categories={categories}
                     currentFileDate={today}
                     linkedNotesCount={linkedNotesCount(task.id)}
                     onToggle={() => onToggleTask(task.id)}
@@ -506,8 +518,8 @@ export function TodayBacklog({
                     onDelete={() => onDeleteTask(task.id)}
                     onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
                     onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                    showCompletionPrompt={false}
-                    onCompletionPromptClosed={() => {}}
+                    showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                    onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
                   />
                   {!isInFocus(task.id) ? (
                     <button
@@ -619,6 +631,41 @@ export function TodayBacklog({
                 })}
               </ul>
             )}
+          </section>
+        )}
+
+        {completedTasks.length > 0 && (
+          <section className="today-group is-completed" data-testid="today-group-completed">
+            <header className="today-group-header">
+              <span className="today-group-mark"><Check className="w-3.5 h-3.5" /></span>
+              <h3 className="today-group-title">
+                {language === 'zh' ? '已完成' : 'Completed'}
+              </h3>
+              <span className="today-group-count">{completedTasks.length}</span>
+              <p className="today-group-sub">
+                {language === 'zh' ? '可以随时撤销完成' : 'Available to review or reopen'}
+              </p>
+            </header>
+            <ul className="today-group-list">
+              {completedTasks.map(task => (
+                <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
+                  <TaskCard
+                    task={task}
+                    language={language}
+                    categories={categories}
+                    currentFileDate={today}
+                    linkedNotesCount={linkedNotesCount(task.id)}
+                    onToggle={() => onToggleTask(task.id)}
+                    onEdit={updates => onEditTask(task.id, updates)}
+                    onDelete={() => onDeleteTask(task.id)}
+                    onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
+                    onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+                    showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                    onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
+                  />
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 

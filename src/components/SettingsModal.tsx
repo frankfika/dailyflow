@@ -9,6 +9,7 @@ import { open } from '@tauri-apps/plugin-shell';
 import { configApi, feishuApi, ipfsApi, type FeishuStatus, type IpfsBackupRecord } from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
+import { getTodayStr } from '../utils/tagColors';
 
 declare const __APP_VERSION__: string;
 
@@ -312,12 +313,6 @@ export function SettingsModal({
   // Workspace Data: export / import / reset
   // ---------------------------------------------------------------------------
 
-  // Server endpoint discovery (verified at task time):
-  //   GET  /api/v2/export/entities?kind=...   — per-kind entity list (exists)
-  //   GET  /api/v2/notes                       — note list (exists)
-  //   GET  /api/v2/commitments                 — commitment list (exists)
-  //   POST /api/v2/import                      — NOT IMPLEMENTED (UI shows "coming soon")
-  //   POST /api/v2/reset                       — NOT IMPLEMENTED (UI shows "coming soon")
   const V2_BASE = `${API_BASE.api}/api/v2`;
 
   const formatRelativeTime = (iso: string): string => {
@@ -339,33 +334,27 @@ export function SettingsModal({
     setIsExporting(true);
     setDataStatus(null);
     try {
-      const kinds = ['source', 'commitment', 'outcome', 'project', 'person', 'decision', 'plan', 'evidence'] as const;
-      const [entitiesByKind, notesRes, commitmentsRes] = await Promise.all([
-        Promise.all(
-          kinds.map(async (kind) => {
-            const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
-            if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
-            const data = await r.json();
-            return [kind, data.items ?? []] as const;
-          })
-        ),
-        fetch(`${V2_BASE}/notes`).then(r => r.ok ? r.json() : { notes: [] }).catch(() => ({ notes: [] })),
-        fetch(`${V2_BASE}/commitments`).then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
-      ]);
+      const kinds = ['source', 'note', 'commitment', 'decision', 'outcome', 'project', 'person', 'organization', 'evidence'] as const;
+      const entitiesByKind = await Promise.all(
+        kinds.map(async (kind) => {
+          const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
+          if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
+          const data = await r.json();
+          return [kind, data.items ?? []] as const;
+        })
+      );
       const exportPayload = {
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         workspaceRoot,
         entities: Object.fromEntries(entitiesByKind),
-        notes: notesRes.notes ?? [],
-        commitments: commitmentsRes.items ?? [],
       };
       const totalEntities = entitiesByKind.reduce((s, [, items]) => s + items.length, 0);
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const wsSlug = workspaceRoot.split(/[\\/]/).filter(Boolean).pop() || 'workspace';
-      const date = new Date().toISOString().slice(0, 10);
+      const date = getTodayStr();
       a.href = url;
       a.download = `dailyflow-${wsSlug}-${date}.json`;
       document.body.appendChild(a);
@@ -376,8 +365,8 @@ export function SettingsModal({
       setLastExportTime(now);
       try { localStorage.setItem('df_last_export_time', now); } catch { /* ignore */ }
       const msg = language === 'zh'
-        ? `✓ 已导出 ${totalEntities} 个实体 + ${exportPayload.notes.length} 个笔记`
-        : `✓ Exported ${totalEntities} entities + ${exportPayload.notes.length} notes`;
+        ? `✓ 已导出 ${totalEntities} 个实体`
+        : `✓ Exported ${totalEntities} entities`;
       setDataStatus({ type: 'success', message: msg });
       showToast(msg, 'success');
     } catch (e: any) {
@@ -415,20 +404,28 @@ export function SettingsModal({
       const result = await r.json();
       const imported = result.imported ?? 0;
       const skipped = result.skipped ?? 0;
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      if (errors.length > 0) {
+        const first = errors[0];
+        const detail = typeof first === 'string'
+          ? first
+          : first?.message || JSON.stringify(first);
+        throw new Error(
+          language === 'zh'
+            ? `${errors.length} 项导入失败：${detail}`
+            : `${errors.length} item(s) failed to import: ${detail}`
+        );
+      }
       const msg = language === 'zh'
         ? `✓ 已导入 ${imported} 项, 跳过 ${skipped} 项重复`
         : `✓ Imported ${imported}, skipped ${skipped} duplicates`;
       setDataStatus({ type: 'success', message: msg });
       showToast(msg, 'success');
     } catch (e: any) {
-      // Server endpoint not yet implemented — surface a "coming soon" hint
-      // without breaking the UI. The file is still parsed so the user can
-      // see it was selected.
-      const msg = language === 'zh'
-        ? `已解析 ${file.name} (服务端 import 端点尚未实现, Coming soon)`
-        : `Parsed ${file.name} (server import endpoint not yet implemented, coming soon)`;
-      setDataStatus({ type: 'info', message: msg });
-      showToast(msg, 'info');
+      const detail = e instanceof Error ? e.message : String(e);
+      const msg = language === 'zh' ? `导入失败：${detail}` : `Import failed: ${detail}`;
+      setDataStatus({ type: 'error', message: msg });
+      showToast(msg, 'error');
     } finally {
       setIsImporting(false);
       e.target.value = '';
@@ -453,7 +450,11 @@ export function SettingsModal({
     setIsResetting(true);
     setDataStatus(null);
     try {
-      const r = await fetch(`${V2_BASE}/reset`, { method: 'POST' });
+      const r = await fetch(`${V2_BASE}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'RESET WORKSPACE' }),
+      });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${r.status}`);
@@ -463,12 +464,12 @@ export function SettingsModal({
       showToast(msg, 'success');
       setTimeout(() => window.location.reload(), 1200);
     } catch (e: any) {
-      // Server endpoint not yet implemented — surface a "coming soon" hint
+      const detail = e instanceof Error ? e.message : String(e);
       const msg = language === 'zh'
-        ? `重置 (服务端 reset 端点尚未实现, Coming soon)`
-        : `Reset (server reset endpoint not yet implemented, coming soon)`;
-      setDataStatus({ type: 'info', message: msg });
-      showToast(msg, 'info');
+        ? `重置失败：${detail}`
+        : `Reset failed: ${detail}`;
+      setDataStatus({ type: 'error', message: msg });
+      showToast(msg, 'error');
     } finally {
       setIsResetting(false);
     }
@@ -593,15 +594,19 @@ export function SettingsModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-surface-white border border-border shadow-sm rounded-md w-full max-w-2xl relative flex flex-col max-h-[90vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
       >
         {/* Header with Close Button */}
         <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
-          <h2 className="font-sans text-2xl text-text-heading italic">
+          <h2 id="settings-dialog-title" className="font-sans text-2xl text-text-heading italic">
             {language === 'zh' ? '全局设置' : 'Configuration'}
           </h2>
           <button
             onClick={() => setShowSettings(false)}
             className="p-2 text-text-muted hover:text-text-heading transition-colors rounded-md hover:bg-surface"
+            aria-label={language === 'zh' ? '关闭设置' : 'Close settings'}
           >
             <X className="w-5 h-5" />
           </button>
@@ -1597,7 +1602,6 @@ export function SettingsModal({
                   ...config,
                   workspaceRoot: workspaceRoot.trim(),
                   githubRepo: githubRepoInput.trim() || undefined,
-                  githubToken: githubToken.trim() || undefined,
                   ipfsEnabled,
                   ipfsProvider: 'pinata',
                   ipfsApiKey: ipfsApiKey.trim() || undefined,
@@ -1636,7 +1640,7 @@ export function SettingsModal({
                     setFilesMap(newFilesMap);
 
                     // Switch to today's date
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = getTodayStr();
                     // Use currentFileDate setter via window reload or we need to pass it
                     // Actually we need to reload the page or use the passed setter
                     // For now, let's just reload the page to keep behavior consistent

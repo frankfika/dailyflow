@@ -92,6 +92,8 @@ export function ReviewView() {
         <div className="text-sm font-medium">陈旧 Commitment（{stale.data?.items.length ?? 0}）</div>
         {stale.isLoading ? (
           <div className="text-sm text-[var(--color-text-muted)]">加载中…</div>
+        ) : stale.error ? (
+          <div className="text-xs text-red-600">{(stale.error as Error).message}</div>
         ) : (stale.data?.items.length ?? 0) === 0 ? (
           <div className="text-sm text-[var(--color-text-muted)]">没有超过 14 天未推进的 Commitment。</div>
         ) : (

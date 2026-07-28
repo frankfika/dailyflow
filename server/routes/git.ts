@@ -47,7 +47,8 @@ router.post('/commit', async (req, res) => {
  */
 router.post('/push', async (req, res) => {
   try {
-    const result = await pushToRemote();
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : undefined;
+    const result = await pushToRemote(token);
     res.json(result);
   } catch (error: any) {
     console.error('Error pushing to remote:', error);
@@ -61,6 +62,7 @@ router.post('/push', async (req, res) => {
 router.post('/sync', async (req, res) => {
   try {
     const { message } = req.body;
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : undefined;
 
     if (!message) {
       return res.status(400).json({ error: 'Commit message is required' });
@@ -78,9 +80,16 @@ router.post('/sync', async (req, res) => {
       });
     }
 
-    if (config.githubRepo && config.githubToken) {
+    if (config.githubRepo) {
       const repoPath = config.githubRepo.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
-      const remoteUrl = `https://${config.githubToken}@github.com/${repoPath}.git`;
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repoPath)) {
+        return res.json({
+          success: false,
+          error: 'Invalid GitHub repository URL',
+          stage: 'remote',
+        });
+      }
+      const remoteUrl = `https://github.com/${repoPath}.git`;
       const remoteResult = await setRemoteRepo(remoteUrl);
       if (!remoteResult.success) {
         return res.json({
@@ -102,7 +111,7 @@ router.post('/sync', async (req, res) => {
     }
 
     // 2. 推送到远程
-    const pushResult = await pushToRemote();
+    const pushResult = await pushToRemote(token);
     if (!pushResult.success) {
       return res.json({
         success: false,

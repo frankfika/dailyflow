@@ -24,9 +24,9 @@ import { TodayBacklog } from './components/TodayBacklog';
 import { FeishuAgenda } from './components/FeishuAgenda';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
-import { Capsules } from './components/Capsules';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import { NotesView } from './features/v2/notes/NotesView';
+import { V2Shell } from './features/v2/V2Shell';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -86,7 +86,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'capsules'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native'>('today');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
@@ -109,10 +109,15 @@ export default function App() {
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showTaskInput, setShowTaskInput] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), type === 'error' ? 5000 : 3500);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, type === 'error' ? 5000 : 3500);
   };
   const [brainDumpText, setBrainDumpText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -127,7 +132,13 @@ export default function App() {
 
   const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
-  const [language, setLanguage] = useState<'en' | 'zh'>('en');
+  const [language, setLanguage] = useState<'en' | 'zh'>(() => {
+    try {
+      return localStorage.getItem('df_language') === 'zh' ? 'zh' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
   const [syncInterval, setSyncInterval] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -185,6 +196,18 @@ export default function App() {
     }
   }, [focusStorageKey]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('df_language', language);
+    } catch {
+      // Language persistence is a progressive enhancement.
+    }
+  }, [language]);
+
+  useEffect(() => () => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+  }, []);
+
   // Check first run on mount
   useEffect(() => {
     const checkFirstRun = async () => {
@@ -203,7 +226,9 @@ export default function App() {
         const config = await configApi.get();
         setGithubRepo(config.githubRepo || null);
         setGithubRepoInput(config.githubRepo || '');
-        setGithubToken(config.githubToken || '');
+        // GitHub tokens are intentionally session-only and never loaded from
+        // DailyFlow's plaintext config file.
+        setGithubToken('');
         setWorkspaceRoot(config.workspaceRoot || '');
         const configuredWorkspaces = config.workspaces || [];
         setWorkspaces(configuredWorkspaces);
@@ -962,6 +987,8 @@ export default function App() {
               toast.type === 'info' ? 'text-[var(--color-info)]' :
               'text-[var(--color-success)]'
             }`}
+            role={toast.type === 'error' ? 'alert' : 'status'}
+            aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
           >
             {toast.type === 'success' && <Check className="w-4 h-4" />}
             {toast.type === 'error' && <AlertCircle className="w-4 h-4" />}
@@ -1033,18 +1060,19 @@ export default function App() {
             onClick={() => setIsSidebarOpen(true)}
             className="absolute top-3.5 left-3.5 z-20 p-2 rounded-lg text-text-muted hover:text-text-heading hover:bg-black/5 transition-all active:scale-95"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
+            aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
           >
             <Menu className="w-5 h-5" />
           </button>
         )}
 
         {/* Every primary workspace uses the available pane width. Notes,
-            AI Chat, and Capsules own their internal scrolling; Today keeps
+            AI Chat, Calendar and AI-Native own their internal scrolling; Today keeps
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'capsules' || activeTab === 'notes' || activeTab === 'calendar' ? 'w-full h-full' : 'w-full'}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'ai-native' || activeTab === 'notes' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'ai-native' || activeTab === 'notes' || activeTab === 'calendar' ? 'w-full h-full' : 'w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1170,6 +1198,8 @@ export default function App() {
 
                   <TodayBacklog
                     tasks={todayTasks}
+                    selectedDate={currentFileDate}
+                    categories={categories}
                     focusTaskIds={focusTaskIds}
                     onFocusTaskIdsChange={updateFocusTaskIds}
                     onToggleTask={handleToggleTask}
@@ -1197,6 +1227,14 @@ export default function App() {
                     // was deleted in 1.1.5 — see CHANGELOG).
                     dailyNotes={filterNotesByContext(dailyNotes, activeContext)}
                     onOpenNotesTab={() => setActiveTab('notes')}
+                    completionPromptTaskIds={completionPromptTaskIds}
+                    onCompletionPromptClosed={(taskId) => {
+                      setCompletionPromptTaskIds(prev => {
+                        const next = new Set(prev);
+                        next.delete(taskId);
+                        return next;
+                      });
+                    }}
                   />
 
                 </motion.div>
@@ -1229,7 +1267,7 @@ export default function App() {
                     onDraftConsumed={() => setChatDraft(null)}
                     onOpenMeetingCapture={openMeetingCapture}
                     onNoteCreated={() => {
-                      const today = new Date().toISOString().slice(0, 10);
+                      const today = getTodayStr();
                       notesApi.getByDate(today).then(dateNotes => {
                         setDailyNotes(prev => {
                           const others = prev.filter(n => n.date !== today);
@@ -1240,15 +1278,15 @@ export default function App() {
                     }}
                   />
                 </motion.div>
-              ) : activeTab === 'capsules' ? (
+              ) : activeTab === 'ai-native' ? (
                 <motion.div
-                  key="capsules"
+                  key="ai-native"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                   className="h-full"
                 >
-                  <Capsules language={language} showToast={showToast} />
+                  <V2Shell />
                 </motion.div>
               ) : (
                 <NotesView language={language} sidebarOpen={isSidebarOpen} />
@@ -1435,7 +1473,7 @@ export default function App() {
         onSaved={() => {
           // Refresh daily notes so a meeting saved for today shows up
           // immediately in the Today tab.
-          const today = new Date().toISOString().slice(0, 10);
+          const today = getTodayStr();
           notesApi.getByDate(today).then(dateNotes => {
             setDailyNotes(prev => {
               const others = prev.filter(n => n.date !== today);

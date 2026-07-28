@@ -11,7 +11,7 @@ import remarkGfm from 'remark-gfm';
 import type { NoteData, PromptTemplateData } from '../api/client';
 import { promptsApi, aiApi } from '../api/client';
 import { getActiveAiConfig } from '../types/models';
-import { getTagColor } from '../utils/tagColors';
+import { getTagColor, getTodayStr } from '../utils/tagColors';
 import { TagInput } from './TagInput';
 
 interface AvailableTask {
@@ -68,7 +68,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onDelete,
   onSendToChat,
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStr();
   const nowTime = new Date().toTimeString().slice(0, 5);
 
   // Resolve AI config live from the active provider store; fall back to props.

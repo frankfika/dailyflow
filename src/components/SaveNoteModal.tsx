@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { notesApi } from '../api/client';
+import { getTodayStr } from '../utils/tagColors';
 
 export interface SaveNoteModalProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export function SaveNoteModal({
           title: title.trim(),
           body: content,
           type: type as any,
-          date: new Date().toISOString().slice(0, 10),
+          date: getTodayStr(),
           context: activeContext,
           tags,
           linkedTaskIds: initialLinkedTaskIds,

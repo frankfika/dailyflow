@@ -322,7 +322,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               ★
             </button>
             <button
-              onClick={() => archive.mutate(note.id)}
+              onClick={() => archive.mutate(note.id, {
+                onSuccess: () => onDeleted?.(note.id),
+              })}
               className="px-1.5 py-0.5 border border-border rounded text-text-muted"
               data-testid="note-archive"
             >

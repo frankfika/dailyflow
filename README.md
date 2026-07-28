@@ -10,12 +10,12 @@
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.12-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.13-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
-![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Solidity-purple?style=flat-square)
+![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
 
-[核心功能](#-核心功能) · [界面预览](#-界面预览) · [时间胶囊](#-时间胶囊) · [快速开始](#-快速开始) · [技术栈](#-技术栈) · [贡献](#-贡献)
+[核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [技术栈](#-技术栈) · [贡献](#-贡献)
 
 __简体中文__ | [English](./README_EN.md)
 
@@ -43,7 +43,7 @@ __简体中文__ | [English](./README_EN.md)
 
 ## 📖 项目简介
 
-DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first）每日聚焦工具**。Markdown 文件是唯一数据源；AI、笔记和时间胶囊是辅助工具，核心始终是帮助你决定并完成今天最重要的三件事。
+DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first）每日聚焦工具**。Markdown 文件是唯一数据源；AI 和笔记是辅助工具，核心始终是帮助你决定并完成今天最重要的三件事。
 
 ### 为什么选择 DailyFlow？
 
@@ -82,18 +82,6 @@ DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first�
 - **多来源聚合**：将 DailyFlow 本地内容与已连接的企业日历汇总到同一时间轴
 - **飞书日程**：读取飞书日历并显示日程详情，可从 DailyFlow 跳转到原始日程
 - **可扩展连接器**：连接器插件层已支持飞书，Google Calendar 接口预留中
-
-### ⏳ 时间胶囊（实验性工具）
-
-- **三种胶囊类型**：Commitment（承诺）、Secret（秘密）、Milestone（里程碑）
-- **多链 EVM**：Base Sepolia、Optimism Sepolia、Arbitrum Sepolia、Sepolia、本地 Hardhat
-- **钱包连接**：支持 MetaMask / Rabby 等任何 injected 钱包
-- **链上哈希**：内容用 keccak256 哈希上链，原文留在本地（隐私可控）
-- **时间锁**：智能合约在 unlockAt 之前保证内容不可见
-- **可验证**：每条胶囊都带 tx hash + 区块浏览器链接
-- **趣味 UI**：SVG 插画 + 渐变背景 + 倒计时动效
-
-![Capsule Detail](./docs/assets/capsules-detail.png)
 
 ### 🤖 AI 助手
 
@@ -154,83 +142,6 @@ DailyFlow 是一个为「待办过载」设计的 **本地优先（local-first�
 |:---:|:---:|
 | ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
 
-| 时间胶囊列表 | 时间胶囊详情 |
-|:---:|:---:|
-| ![Capsules](./docs/assets/capsules-list.png) | ![Capsule Detail](./docs/assets/capsules-detail.png) |
-
----
-
-## ⏳ 时间胶囊
-
-### 是什么？
-
-**时间胶囊（Time Capsule）** 是 DailyFlow 的第三个独立标签页。它让你把 **承诺、秘密、人生里程碑** 写下来，用 **真实 EVM 智能合约** 把内容哈希锁在区块链上，等到了未来的某一天再打开。
-
-> 这不是公开日记（隐私敏感），也不是普通备忘录（缺乏仪式感）—— 它是「写给未来的自己/朋友」的密封信封，由去中心化网络见证。
-
-### 怎么工作？
-
-```
-┌─────────────────┐         ┌──────────────────────┐         ┌─────────────────────┐
-│  本地：写胶囊     │  keccak256  │  EVM 链上：存哈希     │  unlockAt  │  本地：解锁打开       │
-│  title / content │ ───────▶ │  contentHash + 时间锁  │ ───────▶ │  验证 + 全文展示     │
-│  type / unlockAt │   哈希    │  capsules[id]        │   触发    │  可链上 reveal      │
-└─────────────────┘         └──────────────────────┘         └─────────────────────┘
-```
-
-- **写胶囊**：在本地存全文 + 元数据，同时调用合约 `seal(bytes32 contentHash, uint256 unlockAt, CapsuleType, bool isPublic)`
-- **存链上**：智能合约记录 `id → creator → hash → unlockAt → status`
-- **等解锁**：客户端检测 `unlockAt <= now` 后把胶囊标记为「可打开」
-- **拆胶囊**：本地展示全文；可选调用合约 `reveal(id, status)` 公开状态
-
-### 三种胶囊类型
-
-| 类型 | 含义 | 推荐场景 |
-|------|------|---------|
-| 🎯 Commitment | 承诺 | 立 flag、戒断目标、年度计划 |
-| 🤫 Secret | 秘密 | 给未来某天的自己写一封信 |
-| 🏆 Milestone | 里程碑 | 毕业、买房、升职、宝宝出生 |
-
-### 多链支持
-
-| 链 | Chain ID | 浏览器 | 状态 |
-|----|---------|--------|------|
-| Base Sepolia | 84532 | https://sepolia.basescan.org | 部署后填入 |
-| Optimism Sepolia | 11155420 | https://sepolia-optimism.etherscan.io | 部署后填入 |
-| Arbitrum Sepolia | 421614 | https://sepolia.arbiscan.io | 部署后填入 |
-| Sepolia | 11155111 | https://sepolia.etherscan.io | 部署后填入 |
-| Hardhat (本地) | 31337 | - | ✅ 内置 |
-
-### 部署合约到测试网
-
-```bash
-cd contracts
-cp .env.example .env  # 填入 PRIVATE_KEY 和 RPC URL
-
-# 编译 + 测试
-npm install --legacy-peer-deps
-npx hardhat compile
-npx hardhat test
-
-# 部署到指定链
-npx hardhat run scripts/deploy.ts --network baseSepolia
-npx hardhat run scripts/deploy.ts --network arbitrumSepolia
-
-# 部署结果保存在 contracts/deployments.json
-# 把链 ID 对应的合约地址填到 src/config/chains.ts 的 CHAIN_CONTRACTS
-```
-
-### 技术细节
-
-- **合约**：[contracts/contracts/DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol)
-- **ABI**：[src/contracts/abi.ts](./src/contracts/abi.ts)
-- **前端 hook**：[src/hooks/useCapsuleContract.ts](./src/hooks/useCapsuleContract.ts)
-- **钱包连接**：[src/components/WalletConnectButton.tsx](./src/components/WalletConnectButton.tsx)
-- **链配置**：[src/config/chains.ts](./src/config/chains.ts)
-- **后端服务**：[server/services/capsule.ts](./server/services/capsule.ts)（落库真实 tx 数据）
-
----
-
 ## 🚀 快速开始
 
 ### 📦 下载安装（推荐）
@@ -272,23 +183,14 @@ npm run build:server
 npm run tauri build
 ```
 
-### 合约项目（可选，仅当你要部署自己的合约时）
-
-```bash
-cd contracts
-npm install --legacy-peer-deps
-npx hardhat compile
-npx hardhat test  # 全部通过
-```
-
 ### 首次使用
 
 1. 启动应用，设置**工作区目录**（存放 Markdown 文件的位置）
 2. 应用自动创建今天的日记文件
 3. 在 Today 页面写下今天的任务，用 `#project:名称` 标记项目
 4. 切换到 **笔记** 标签，创建会议记录或想法笔记
-5. 打开 **⏳ 时间胶囊**，连接钱包，写下你给未来的承诺 → 上链
-6. 打开 **AI Chat**，挂载今日任务或任意笔记作为上下文提问
+5. 打开 **AI Chat**，挂载今日任务或任意笔记作为上下文提问
+6. 进入 **智能工作台**，处理 Inbox、Commitment、Memory 和 Review
 
 ---
 
@@ -304,32 +206,18 @@ npx hardhat test  # 全部通过
 │  │ (Vite/TS/TSX)  │  HTTP   │   (Bundled Node + Server)    │         │
 │  └───────┬────────┘         └────────────┬────────────────┘         │
 │          │                               │                          │
-│          │ wagmi / viem                  │                           │
-│          ▼                               │                          │
-│  ┌────────────────┐                      │                          │
-│  │  Time Capsules │  keccak256   ┌──────▼──────────────┐           │
-│  │  (Tab 3)       │ ─────────▶   │  Markdown + Capsule │           │
-│  │                │              │  Storage            │           │
-│  └────────────────┘              └──────┬──────────────┘           │
+│                                          │                          │
+│                                  ┌───────▼──────────────┐           │
+│                                  │ Markdown + v2 Store │           │
+│                                  └──────┬──────────────┘           │
 │                                         │                          │
 │              ┌──────────────────────────┼───────────────────────┐ │
 │              ▼                          ▼                       ▼ │
 │      ┌──────────────┐            ┌────────────┐          ┌────────┐ │
-│      │ Git (GitHub) │            │ IPFS/Pinata│          │  EVM   │ │
-│      │              │            │            │          │ Chains │ │
+│      │ Git (GitHub) │            │ IPFS/Pinata│          │ AI API │ │
 │      └──────────────┘            └────────────┘          └────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
-### v1.0.6 关键架构变更
-
-- **真实 EVM 多链集成**：时间胶囊的 `seal` / `reveal` 写入真实合约，支持 5 条链切换
-- **钱包抽象层**：wagmi + viem 提供钱包连接、签名、链切换的统一 API
-- **隐私优先设计**：内容用 keccak256 哈希上链，原文 100% 本地存储；不上链明文
-- **后端落库**：本地服务记录 txHash / chainId / contractAddress / onChainId，用于列表展示
-- **合约项目独立**：Hardhat 项目位于 [contracts/](./contracts/)，与前端解耦
-
----
 
 ## 🛠 技术栈
 
@@ -342,11 +230,9 @@ npx hardhat test  # 全部通过
 | 运行时 | **内置 Node.js 20+**（自动下载与权限处理） |
 | 数据 | Markdown 文件 + YAML frontmatter（单一数据源） |
 | AI | 15+ 供应商（B.AI / Claude / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen 等） |
-| 区块链 | wagmi 3 + viem 2 + Solidity 0.8.24 + Hardhat + @nomicfoundation/hardhat-toolbox-viem |
-| 多链 | Base / Optimism / Arbitrum / Sepolia / Hardhat |
 | 同步 | Git + GitHub API |
 | 备份 | IPFS + Pinata |
-| 测试 | Vitest + Testing Library + Hardhat tests |
+| 测试 | Vitest + Testing Library |
 
 ---
 
@@ -361,11 +247,6 @@ git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
 npm install
 npm run dev:all
-
-# 合约开发
-cd contracts
-npm install --legacy-peer-deps
-npx hardhat test
 ```
 
 ### 代码规范
@@ -395,6 +276,15 @@ npx hardhat test
 
 ## 📜 更新日志
 
+### v1.1.13 (2026-07-28)
+
+**🧹 UX cleanup and focused workspace release**
+
+- 移除时间胶囊及其合约、钱包和链依赖
+- 接入 AI-Native 工作台，完善 Today / Inbox / Memory / Review
+- 修复任务回滚、导入导出、笔记状态和 GitHub Token 安全问题
+- 全量测试、E2E Smoke 和生产构建通过
+
 ### v1.1.12 (2026-07-27)
 
 **📅 日历工作区与飞书企业同步**
@@ -416,29 +306,7 @@ npx hardhat test
 
 ### v1.0.6 (2026-07-13)
 
-**⏳ 时间胶囊上线：真实多链 EVM 集成**
-
-#### ✨ 新功能
-
-- ⏳ **Time Capsules 标签页**：第三个独立 tab，支持 Commitment / Secret / Milestone 三种胶囊类型
-- ⛓ **真实 EVM 上链**：通过 wagmi + viem 调用智能合约 `seal(bytes32, uint256, CapsuleType, bool)`，内容用 keccak256 哈希上链
-- 🦊 **钱包连接**：支持 MetaMask / Rabby 等任何 injected 钱包，一键切换 5 条链
-- 🌐 **多链支持**：Base Sepolia / Optimism Sepolia / Arbitrum Sepolia / Sepolia / 本地 Hardhat
-- 🔐 **隐私优先**：明文 100% 留在本地，链上仅存哈希
-- 🎨 **趣味 UI**：SVG 胶囊插画 + 渐变背景 + 倒计时动效 + 区块浏览器跳转
-
-#### 📦 合约项目
-
-- 🏗 [contracts/](./contracts) 全新 Hardhat 项目（独立 package.json）
-- 📜 [DailyFlowCapsule.sol](./contracts/contracts/DailyFlowCapsule.sol)：实现 `seal` / `reveal` / `getCapsule` / `getCreatorCapsules`，事件 `CapsuleSealed` / `CapsuleRevealed`
-- 🧪 8 个 Hardhat 合约测试，全部通过
-- 🚀 [deploy.ts](./contracts/scripts/deploy.ts)：自动保存部署地址到 `deployments.json`
-- 🔍 Etherscan API key 配置（支持 verify）
-
-#### 🔧 后端
-
-- [server/services/capsule.ts](./server/services/capsule.ts)：支持记录真实 txHash / chainId / contractAddress / onChainId / contentHash
-- [server/routes/capsule.ts](./server/routes/capsule.ts)：新增 `POST /capsules/:id/seal/evm` 接受前端真实链上证明
+此版本曾包含一个链上实验功能；该功能及其合约、钱包依赖和接口已从当前版本移除。
 
 ### v1.0.5 (2026-07)
 
@@ -483,7 +351,7 @@ chore: 版本号与依赖更新
 
 ## 🙏 致谢
 
-感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为包含任务、笔记、AI 对话、**链上时间胶囊**的完整系统。
+感谢所有贡献者和用户的反馈。DailyFlow 始于「不想每天手动整理待办」的小愿望，现在已经成长为包含任务、笔记、日历和 AI 工作台的完整系统。
 
 <div align="center">
 

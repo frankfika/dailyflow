@@ -110,6 +110,31 @@ describe('loadConfig', () => {
     expect(loaded.workspaceRoot).toMatch(/^\/tmp\/concurrent-\d+$/);
   });
 
+  it('removes legacy GitHub tokens and stores config with owner-only permissions', async () => {
+    const configFile = process.env.DAILYFLOW_CONFIG_FILE!;
+    await fs.writeFile(configFile, JSON.stringify({
+      workspaceRoot: '/tmp/secure',
+      workspaces: [{
+        id: 'ws_secure',
+        name: 'Secure',
+        path: '/tmp/secure',
+        createdAt: new Date().toISOString(),
+      }],
+      activeWorkspaceId: 'ws_secure',
+      dailyPathTemplate: 'Daily/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: [],
+      githubRepo: 'https://github.com/user/repo',
+      githubToken: 'ghp_must_not_persist',
+    }), 'utf8');
+
+    const loaded = await loadConfig();
+    expect(loaded).not.toHaveProperty('githubToken');
+    const persisted = await fs.readFile(configFile, 'utf8');
+    expect(persisted).not.toContain('ghp_must_not_persist');
+    expect((await fs.stat(configFile)).mode & 0o777).toBe(0o600);
+  });
+
   it('does not turn a malformed existing config into first-run state', async () => {
     const configFile = process.env.DAILYFLOW_CONFIG_FILE!;
     await fs.writeFile(configFile, '{"workspaces":', 'utf8');

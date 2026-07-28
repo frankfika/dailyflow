@@ -7,10 +7,6 @@ describe('isValidGitRemoteUrl', () => {
       expect(isValidGitRemoteUrl('https://github.com/frankfika/dailyflow.git')).toBe(true);
     });
 
-    it('accepts github https url with embedded token', () => {
-      expect(isValidGitRemoteUrl('https://ghp_abc123@github.com/frankfika/dailyflow.git')).toBe(true);
-    });
-
     it('accepts http url', () => {
       expect(isValidGitRemoteUrl('http://git.internal.example.com/team/repo.git')).toBe(true);
     });
@@ -43,6 +39,10 @@ describe('isValidGitRemoteUrl', () => {
   });
 
   describe('rejects malformed input', () => {
+    it('rejects credentials embedded in remote URLs', () => {
+      expect(isValidGitRemoteUrl('https://ghp_abc123@github.com/frankfika/dailyflow.git')).toBe(false);
+    });
+
     it('rejects empty string', () => {
       expect(isValidGitRemoteUrl('')).toBe(false);
     });

@@ -15,6 +15,7 @@ import { MeetingCapture } from './MeetingCapture';
 import { SaveNoteModal } from './SaveNoteModal';
 import { MessageBubble } from './MessageBubble';
 import { ChatInputArea } from './ChatInputArea';
+import { getTodayStr } from '../utils/tagColors';
 
 interface AIChatProps {
   language: 'en' | 'zh';
@@ -462,7 +463,7 @@ export function AIChat({ language, activeContext = 'work', tasks, notes, filesMa
             activeContext={activeContext}
             showToast={showToast}
             onSaved={() => {
-              const today = new Date().toISOString().slice(0, 10);
+              const today = getTodayStr();
               notesApi.getByDate(today).then(() => onNoteCreated?.()).catch(() => onNoteCreated?.());
             }}
             onClose={() => setShowMeetingCapture(false)}

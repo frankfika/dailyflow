@@ -27,7 +27,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useNotes, useCreateNote, useArchiveNote, useDeleteNote } from '../hooks/useNotes';
+import { useNotes, useCreateNote, useUpdateNote, useArchiveNote, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
 import { Minimize2 } from 'lucide-react';
@@ -74,7 +74,7 @@ export interface NoteListProps {
   /** Currently-selected note id; the list highlights it. */
   selectedId?: string | null;
   /** When the user picks a note, this is called. */
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   /** Layout mode from the parent. `note` collapses the list to a 56px icon strip. */
   layout?: 'split' | 'note';
   /** Toggle between `split` and `note`. The list shows a small button when not collapsed. */
@@ -95,6 +95,7 @@ export function NoteList({
 }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const create = useCreateNote();
+  const update = useUpdateNote();
   const archive = useArchiveNote();
   const del = useDeleteNote();
 
@@ -124,10 +125,15 @@ export function NoteList({
   // Keep the selection valid as data/views change instead of leaving a
   // populated list beside an onboarding panel that requires another click.
   useEffect(() => {
-    if (filtered.length === 0) return;
+    if (filtered.length === 0) {
+      if (selectedId) onSelect(null);
+      return;
+    }
     // Do not replace a fresh selection merely because the list query has
     // not incorporated a newly-created note yet.
-    if (!selectedId) onSelect(filtered[0].id);
+    if (!selectedId || !filtered.some(note => note.id === selectedId)) {
+      onSelect(filtered[0].id);
+    }
   }, [filtered, onSelect, selectedId]);
 
   const createAndOpen = async (kind: NoteKind = 'general') => {
@@ -146,7 +152,7 @@ export function NoteList({
       <FocusStrip
         notes={filtered}
         selectedId={selectedId ?? null}
-        onSelect={onSelect}
+        onSelect={(id) => onSelect(id)}
         onCreate={() => createAndOpen('general')}
         onToggleLayout={onToggleLayout}
         reserveSidebarToggleSpace={!sidebarOpen}
@@ -257,7 +263,23 @@ export function NoteList({
                       </div>
                     </button>
                     <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-                      {n.state !== 'archived' && (
+                      {n.state === 'archived' ? (
+                        <button
+                          onClick={() => update.mutate({
+                            id: n.id,
+                            input: {
+                              state: 'active',
+                              expectedAutoSaveVersion: n.autoSaveVersion,
+                            },
+                          })}
+                          disabled={update.isPending}
+                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
+                          title="Restore"
+                          aria-label={`Restore ${title}`}
+                        >
+                          restore
+                        </button>
+                      ) : (
                         <button
                           onClick={() => archive.mutate(n.id)}
                           className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
