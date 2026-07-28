@@ -2,11 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   finishFeishuAuthorization,
+  finishFeishuSetup,
   getFeishuAgenda,
   getFeishuAuthStatus,
   getFeishuSyncState,
+  logoutFeishuAuthorization,
   pushTimedNotesToFeishu,
   startFeishuAuthorization,
+  startFeishuSetup,
   syncFeishuTasks,
 } from '../services/feishuSync.js';
 
@@ -39,10 +42,34 @@ router.post('/auth/start', async (_req, res) => {
   }
 });
 
+router.post('/setup/start', async (_req, res) => {
+  try {
+    res.json(await startFeishuSetup());
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.post('/setup/finish', async (_req, res) => {
+  try {
+    res.json(await finishFeishuSetup());
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 router.post('/auth/finish', async (req, res) => {
   try {
     const { deviceCode } = z.object({ deviceCode: z.string().min(1).max(512) }).parse(req.body);
     res.json(await finishFeishuAuthorization(deviceCode));
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.post('/auth/logout', async (_req, res) => {
+  try {
+    res.json(await logoutFeishuAuthorization());
   } catch (error) {
     sendError(res, error);
   }

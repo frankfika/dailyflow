@@ -12,6 +12,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.1.18] - 2026-07-28
+
+### Added
+
+- **In-app Feishu onboarding** — DailyFlow now guides first-time app preparation and account authorization from Settings, including official links, QR codes, automatic result checks, retry controls, and local disconnect.
+- **Bundled Feishu connector** — every desktop installer now includes the official platform-specific `@larksuite/cli` runtime; users no longer need Homebrew, npm, or a separate CLI installation.
+
+### Fixed
+
+- **Packaged server startup** — corrected Tauri resource discovery so production builds use the bundled Node runtime from `_up_/dist-server` instead of silently depending on a system Node installation.
+- **Desktop process cleanup** — the bundled local server is terminated and reaped when DailyFlow exits.
+- **Feishu authorization handoff** — the app retains the live device flow, displays a QR/link fallback, waits for confirmation, and refreshes the connected account automatically.
+
+### Verified
+
+- Packaged macOS `.app` starts with the bundled Node runtime.
+- Packaged Feishu connector reports `cliAvailable`, configured application, and authorized account.
+- Settings → Sync → Feishu displays the connected account and sync controls in the native desktop window.
+- `npm run lint` ✅
+- `npm test` ✅ 37 files / 336 tests
+- `cargo check` ✅
+
 ## [1.1.17] - 2026-07-28
 
 ### Fixed
