@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, recurringApi, workspacesApi } from './api/client';
+import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig } from './types/models';
@@ -26,11 +26,15 @@ import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import { NotesView } from './features/v2/notes/NotesView';
-import { V2Shell } from './features/v2/V2Shell';
+import { MemoryView } from './features/v2/memory/MemoryView';
+import { InboxView } from './features/v2/inbox/InboxView';
+import { ReviewView } from './features/v2/review/ReviewView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 import { useMeetingCapture } from './hooks/useMeetingCapture';
+import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
+import { WorkspaceScopeProvider } from './workspaceScope';
 
 type Task = {
   id: string;
@@ -86,7 +90,9 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat' | 'memory'>('today');
+  const [todaySurface, setTodaySurface] = useState<'focus' | 'plan' | 'needs'>('focus');
+  const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
@@ -103,12 +109,15 @@ export default function App() {
     return map;
   }, [dailyNotes]);
   const [lastSyncedMD, setLastSyncedMD] = useState('');
-  const [, setIsSyncing] = useState(false);
+  // Background sync is intentionally disabled until it has version-aware
+  // writes. Saving a captured date/content pair on a timer can overwrite a
+  // different date after the user navigates.
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showTaskInput, setShowTaskInput] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [entityDrawerRef, setEntityDrawerRef] = useState<EntityRef | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -139,9 +148,10 @@ export default function App() {
       return 'en';
     }
   });
-  const [syncInterval, setSyncInterval] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const loadRevisionRef = useRef(0);
+  const initializedDaysRef = useRef(new Set<string>());
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
@@ -170,7 +180,6 @@ export default function App() {
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [ipfsApiKey, setIpfsApiKey] = useState<string>('');
   const [ipfsGateway, setIpfsGateway] = useState<string>('');
-  const markdownRef = React.useRef(markdown);
 
   const focusStorageKey = `df_focus_${activeWorkspaceId || 'default'}_${activeContext}_${currentFileDate}`;
   useEffect(() => {
@@ -206,6 +215,35 @@ export default function App() {
 
   useEffect(() => () => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+  }, []);
+
+  useEffect(() => {
+    const open = (event: Event) => setEntityDrawerRef((event as CustomEvent<EntityRef>).detail || null);
+    const close = () => setEntityDrawerRef(null);
+    const openOriginal = (event: Event) => {
+      const entity = (event as CustomEvent<EntityRef>).detail;
+      if (!entity) return;
+      setEntityDrawerRef(null);
+      if (entity.type === 'note') {
+        setActiveTab('notes');
+        setNotesSurface('notes');
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent('df:select-note', { detail: { id: entity.id } })), 0);
+      } else if (entity.type === 'source' || entity.type === 'proposal' || entity.type === 'job') {
+        setActiveTab('notes');
+        setNotesSurface('inbox');
+      } else {
+        setActiveTab('today');
+        setTodaySurface(entity.type === 'calendar_event' ? 'plan' : 'focus');
+      }
+    };
+    window.addEventListener('df:open-entity', open);
+    window.addEventListener('df:close-entity', close);
+    window.addEventListener('df:entity-open-original', openOriginal);
+    return () => {
+      window.removeEventListener('df:open-entity', open);
+      window.removeEventListener('df:close-entity', close);
+      window.removeEventListener('df:entity-open-original', openOriginal);
+    };
   }, []);
 
   // Check first run on mount
@@ -263,7 +301,7 @@ export default function App() {
               setAiModel(activeCfg.model || '');
               setAiBaseUrl(activeCfg.baseUrl || '');
             }
-            window.dispatchEvent(new CustomEvent('df:provider-changed'));
+            dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'config-load' });
           } catch { /* ignore */ }
         } else {
           setAiApiKey('');
@@ -323,8 +361,8 @@ export default function App() {
       setAiModel(active.model);
       setAiBaseUrl(active.baseUrl);
     };
-    window.addEventListener('df:provider-changed', sync);
-    return () => window.removeEventListener('df:provider-changed', sync);
+    window.addEventListener(DOMAIN_EVENTS.aiProviderChanged, sync);
+    return () => window.removeEventListener(DOMAIN_EVENTS.aiProviderChanged, sync);
   }, []);
 
   // Auto-check for updates on app start (silently, only for Settings badge)
@@ -366,10 +404,7 @@ export default function App() {
         // first GET returns the new list).
         const list = Array.isArray(config.workspaces) ? config.workspaces : [];
         if (list.length === 0) return;
-        await configApi.update({
-          ...config,
-          activeContext,
-        });
+        await configApi.update({ activeContext }, config.version);
       } catch (e) {
         console.error('Failed to save activeContext', e);
       }
@@ -413,24 +448,12 @@ export default function App() {
 
   // Load current date's tasks from API
   const loadTasksForDate = useCallback(async (date: string) => {
+    const revision = ++loadRevisionRef.current;
     setIsLoading(true);
     setLoadError(null);
     try {
-      // Auto rollover: only when loading today's date
-      if (date === getTodayStr()) {
-        try {
-          await recurringApi.instantiate(date);
-        } catch (e) {
-          console.error('Recurring instantiation failed', e);
-        }
-        try {
-          await rolloverApi.apply(date, activeContext);
-        } catch (rolloverErr) {
-          console.error('Auto-rollover failed', rolloverErr);
-        }
-      }
-
       const data = await filesApi.get(date);
+      if (revision !== loadRevisionRef.current) return;
       if (data) {
         setMarkdown(data.content);
         setTasks(data.tasks as Task[]);
@@ -445,21 +468,41 @@ export default function App() {
       // Load notes for this date
       try {
         const dateNotes = await notesApi.getByDate(date);
+        if (revision !== loadRevisionRef.current) return;
         setDailyNotes(dateNotes);
       } catch {
+        if (revision !== loadRevisionRef.current) return;
         setDailyNotes([]);
       }
     } catch (e) {
+      if (revision !== loadRevisionRef.current) return;
       console.error('Failed to load tasks', e);
       setLoadError('Failed to load tasks. Is the backend running?');
     } finally {
-      setIsLoading(false);
+      if (revision === loadRevisionRef.current) setIsLoading(false);
     }
-  }, [language]);
+  }, []);
 
   useEffect(() => {
     loadTasksForDate(currentFileDate);
   }, [currentFileDate, loadTasksForDate]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId || isFirstRun !== false || currentFileDate !== getTodayStr()) return;
+    const key = `${activeWorkspaceId}:${currentFileDate}:${activeContext}`;
+    if (initializedDaysRef.current.has(key)) return;
+    initializedDaysRef.current.add(key);
+    dailyApi.initialize(currentFileDate, activeContext)
+      .then(result => {
+        if (result.recurringCreated > 0 || result.migratedCount > 0) {
+          return loadTasksForDate(currentFileDate);
+        }
+      })
+      .catch(error => {
+        initializedDaysRef.current.delete(key);
+        console.error('Daily initialization failed', error);
+      });
+  }, [activeContext, activeWorkspaceId, currentFileDate, isFirstRun, loadTasksForDate]);
 
   // Remember the last opened date per workspace
   useEffect(() => {
@@ -555,24 +598,6 @@ export default function App() {
       setIsSwitchingWorkspace(false);
     }
   }, [activeWorkspaceId, language, reloadFileList]);
-
-  useEffect(() => {
-    markdownRef.current = markdown;
-  }, [markdown]);
-
-  useEffect(() => {
-    if (syncInterval > 0) {
-      const intervalId = setInterval(() => {
-        setIsSyncing(true);
-        setTimeout(() => {
-          setLastSyncedMD(markdownRef.current);
-          filesApi.update(currentFileDate, markdownRef.current).catch(console.error);
-          setIsSyncing(false);
-        }, 1500);
-      }, syncInterval * 60000);
-      return () => clearInterval(intervalId);
-    }
-  }, [syncInterval, currentFileDate]);
 
   // Keyboard shortcuts: Cmd/Ctrl+N to toggle task input, ⌘⇧R to open
   // Meeting Capture (Granola Phase 2), Escape to close. The ⌘⇧R handler
@@ -933,11 +958,25 @@ export default function App() {
   };
 
   // Handle workspace setup completion
-  const handleWorkspaceSetupComplete = () => {
+  const handleWorkspaceSetupComplete = async () => {
     setShowWorkspaceSetup(false);
     setIsFirstRun(false);
-    // Reload the app
-    window.location.reload();
+    try {
+      const config = await configApi.get();
+      setWorkspaceRoot(config.workspaceRoot || '');
+      setWorkspaces(config.workspaces || []);
+      setActiveWorkspaceId(config.activeWorkspaceId || '');
+      setActiveContext(config.activeContext === 'life' ? 'life' : 'work');
+      await reloadFileList();
+      await loadTasksForDate(currentFileDate);
+      dispatchDomainEvent(DOMAIN_EVENTS.workspaceChanged, {
+        workspaceId: config.activeWorkspaceId || '',
+        reason: 'setup-complete',
+      });
+    } catch (error) {
+      console.error('Failed to refresh workspace after setup', error);
+      showToast(language === 'zh' ? '工作区已创建，但刷新失败' : 'Workspace created, but refresh failed', 'error');
+    }
   };
 
   // Handle update actions
@@ -969,6 +1008,7 @@ export default function App() {
   }
 
   return (
+    <WorkspaceScopeProvider value={activeWorkspaceId || 'default'}>
     <div
       className="h-screen w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-transparent"
     >
@@ -1050,6 +1090,9 @@ export default function App() {
         activeContext={activeContext}
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenTodaySurface={(surface) => { setActiveTab('today'); setTodaySurface(surface); }}
+        activeTodaySurface={todaySurface}
+        onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
       />
 
       {/* Main Content Area */}
@@ -1071,8 +1114,8 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'ai-native' || activeTab === 'notes' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'ai-native' || activeTab === 'notes' || activeTab === 'calendar' ? 'w-full h-full' : 'w-full'}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className={activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'w-full h-full' : 'w-full'}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1099,6 +1142,29 @@ export default function App() {
             )}
             {!isLoading && !loadError && (
               activeTab === 'today' ? (
+                <div className="h-full overflow-y-auto">
+                  <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2 backdrop-blur">
+                    {([
+                      ['focus', language === 'zh' ? '专注' : 'Focus'],
+                      ['plan', language === 'zh' ? '计划 / 日历' : 'Plan / Calendar'],
+                      ['needs', language === 'zh' ? '待决策' : 'Needs decision'],
+                    ] as const).map(([surface, label]) => (
+                      <button key={surface} onClick={() => setTodaySurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${todaySurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {todaySurface === 'plan' ? (
+                    <CalendarWorkspace
+                      date={currentFileDate}
+                      setDate={setCurrentFileDate}
+                      language={language}
+                      onOpenLocalDate={(date) => { setCurrentFileDate(date); setTodaySurface('focus'); }}
+                      onManageConnections={() => { setConfigTab('sync'); setShowSettings(true); }}
+                    />
+                  ) : todaySurface === 'needs' ? (
+                    <ReviewView />
+                  ) : (
                 <motion.div
                   key="visual-today"
                   initial={{ opacity: 0, y: 10 }}
@@ -1238,20 +1304,8 @@ export default function App() {
                   />
 
                 </motion.div>
-              ) : activeTab === 'calendar' ? (
-                <CalendarWorkspace
-                  date={currentFileDate}
-                  setDate={setCurrentFileDate}
-                  language={language}
-                  onOpenLocalDate={(date) => {
-                    setCurrentFileDate(date);
-                    setActiveTab('today');
-                  }}
-                  onManageConnections={() => {
-                    setConfigTab('sync');
-                    setShowSettings(true);
-                  }}
-                />
+                  )}
+                </div>
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
                   key="ai-chat"
@@ -1261,6 +1315,7 @@ export default function App() {
                   className="h-full"
                 >
                   <AIChat
+                    workspaceId={activeWorkspaceId || 'default'}
                     language={language}
                     activeContext={activeContext}
                     tasks={contextFilteredTasks}
@@ -1282,18 +1337,32 @@ export default function App() {
                     }}
                   />
                 </motion.div>
-              ) : activeTab === 'ai-native' ? (
+              ) : activeTab === 'memory' ? (
                 <motion.div
-                  key="ai-native"
+                  key="memory"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="h-full"
+                  className="h-full overflow-y-auto"
                 >
-                  <V2Shell />
+                  <MemoryView workspaceId={activeWorkspaceId || 'default'} />
                 </motion.div>
               ) : (
-                <NotesView language={language} sidebarOpen={isSidebarOpen} />
+                <div className="flex h-full min-h-0 flex-col">
+                  <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
+                    {([
+                      ['notes', language === 'zh' ? '笔记' : 'Notes'],
+                      ['inbox', 'Inbox'],
+                    ] as const).map(([surface, label]) => (
+                      <button key={surface} onClick={() => setNotesSurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    {notesSurface === 'inbox' ? <InboxView /> : <NotesView language={language} sidebarOpen={isSidebarOpen} />}
+                  </div>
+                </div>
               )
             )}
           </div>
@@ -1346,7 +1415,8 @@ export default function App() {
             setLastAddedCategory={setLastAddedCategory}
           />
         )}
-       </main>
+      </main>
+      <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
       <SettingsModal
         showSettings={showSettings}
@@ -1357,8 +1427,6 @@ export default function App() {
         workspaceRoot={workspaceRoot}
         setWorkspaceRoot={setWorkspaceRoot}
         setLanguage={setLanguage}
-        syncInterval={syncInterval}
-        setSyncInterval={setSyncInterval}
         githubRepoInput={githubRepoInput}
         setGithubRepoInput={setGithubRepoInput}
         githubToken={githubToken}
@@ -1489,5 +1557,6 @@ export default function App() {
         onClose={closeMeetingCapture}
       />
       </div>
+    </WorkspaceScopeProvider>
    );
 }

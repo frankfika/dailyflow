@@ -30,6 +30,20 @@ const DEFAULT_CONFIG: Config = {
   activeContext: 'work'
 };
 
+export interface VersionedConfig extends Config {
+  version: string;
+}
+
+export type ConfigPatch = {
+  [K in keyof Config]?: Config[K] | null;
+};
+
+export type ConfigPatchResult =
+  | { ok: true; config: VersionedConfig }
+  | { ok: false; config: VersionedConfig };
+
+let configWriteQueue: Promise<void> = Promise.resolve();
+
 function newWorkspaceId(): string {
   return 'ws_' + crypto.randomBytes(6).toString('hex');
 }
@@ -94,13 +108,25 @@ export async function loadConfig(): Promise<Config> {
     }
   }
   if (fileExisted && hadLegacyGithubToken) {
-    await saveConfig(normalized);
+    await writeConfig(normalized);
   }
 
   return normalized;
 }
 
-export async function saveConfig(config: Config): Promise<void> {
+function configVersion(config: Config): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(config))
+    .digest('hex');
+}
+
+export async function loadVersionedConfig(): Promise<VersionedConfig> {
+  const config = await loadConfig();
+  return { ...config, version: configVersion(config) };
+}
+
+async function writeConfig(config: Config): Promise<Config> {
   const configFile = getConfigFile();
   const dir = path.dirname(configFile);
   await fs.mkdir(dir, { recursive: true });
@@ -115,6 +141,50 @@ export async function saveConfig(config: Config): Promise<void> {
   } finally {
     await fs.rm(tempFile, { force: true }).catch(() => undefined);
   }
+  return normalized;
+}
+
+function enqueueConfigWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const result = configWriteQueue.then(operation, operation);
+  configWriteQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+export async function saveConfig(config: Config): Promise<void> {
+  await enqueueConfigWrite(async () => {
+    await writeConfig(config);
+  });
+}
+
+/**
+ * Apply a partial config update only when the caller's version still matches.
+ * Serializing the read/compare/write sequence prevents two concurrent PATCH
+ * requests from both observing the same version and silently overwriting one
+ * another.
+ */
+export async function patchConfig(
+  patch: ConfigPatch,
+  expectedVersion: string,
+): Promise<ConfigPatchResult> {
+  return enqueueConfigWrite(async () => {
+    const current = await loadConfig();
+    const currentVersioned = { ...current, version: configVersion(current) };
+    if (expectedVersion !== currentVersioned.version) {
+      return { ok: false, config: currentVersioned };
+    }
+
+    const next = { ...current } as Config & Record<string, unknown>;
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === 'version') continue;
+      if (value === null) delete next[key];
+      else if (value !== undefined) next[key] = value;
+    }
+    const normalized = await writeConfig(next);
+    return {
+      ok: true,
+      config: { ...normalized, version: configVersion(normalized) },
+    };
+  });
 }
 
 export function generateWorkspaceId(): string {

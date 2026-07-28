@@ -1,10 +1,9 @@
 /**
- * Shared chat action utilities for AIChat and FloatingAIPanel.
+ * Shared AI Chat action utilities.
  */
 
-import { tasksApi } from '../api/client';
-import { generateTaskId } from './idGenerator';
-import { getTodayStr } from './tagColors';
+import { createProposalDraft } from '../features/v2/api/client';
+import { generateShortId } from './idGenerator';
 
 export interface CreateTasksOptions {
   activeContext: 'work' | 'life';
@@ -16,7 +15,7 @@ export interface CreateTasksOptions {
  * Extract todo items from a message and create tasks.
  * Reports both successes and failures to the user.
  */
-export async function createTasksFromMessage(
+export async function createTaskProposalsFromMessage(
   content: string,
   options: CreateTasksOptions
 ): Promise<void> {
@@ -33,46 +32,37 @@ export async function createTasksFromMessage(
     return;
   }
 
-  const today = getTodayStr();
-  let created = 0;
-  let failed = 0;
-  const failures: string[] = [];
-
-  for (const title of titles.slice(0, 10)) {
-    if (!title) continue;
-    try {
-      await tasksApi.create(today, {
-        id: generateTaskId(),
-        title,
-        status: 'todo',
-        tags: [activeContext],
-        source_date: today,
-      });
-      created++;
-    } catch (err: any) {
-      failed++;
-      failures.push(title);
-      console.error('Task creation failed:', title, err);
-    }
-  }
-
-  if (created > 0 && failed === 0) {
+  const proposals = titles.slice(0, 10).filter(Boolean);
+  try {
+    await createProposalDraft({
+      kind: 'extract_commitments',
+      changes: proposals.map(title => ({
+        op: 'create',
+        entity: 'commitment',
+        draft: {
+          title,
+          outcome: title,
+          nextAction: title,
+          state: 'inbox',
+          createdBy: 'ai',
+          context: activeContext,
+        },
+        evidenceIds: [],
+        confidence: 0.75,
+        reason: language === 'zh' ? '从 AI 回复提取，等待用户确认' : 'Extracted from an AI response; waiting for confirmation',
+        changeId: generateShortId('change'),
+      })),
+    });
     showToast(
-      language === 'zh' ? `已创建 ${created} 个任务` : `Created ${created} task(s)`,
+      language === 'zh'
+        ? `已生成 ${proposals.length} 个待确认事项建议`
+        : `Created ${proposals.length} item proposal(s) for review`,
       'success'
     );
-  } else if (created > 0 && failed > 0) {
+  } catch (err) {
+    console.error('Task proposal creation failed:', err);
     showToast(
-      language === 'zh'
-        ? `已创建 ${created} 个任务，${failed} 个失败`
-        : `Created ${created}, ${failed} failed`,
-      'info'
-    );
-  } else if (failed > 0) {
-    showToast(
-      language === 'zh'
-        ? `${failed} 个任务创建失败`
-        : `Failed to create ${failed} task(s)`,
+      language === 'zh' ? '事项建议生成失败，未写入任何数据' : 'Could not create proposals; no data was written',
       'error'
     );
   }

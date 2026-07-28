@@ -78,6 +78,15 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
     return () => query.removeEventListener('change', update);
   }, []);
 
+  useEffect(() => {
+    const select = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (id) setSelectedId(id);
+    };
+    window.addEventListener('df:select-note', select);
+    return () => window.removeEventListener('df:select-note', select);
+  }, []);
+
   const toggleLayout = () => setLayout((l) => (l === 'split' ? 'note' : 'split'));
 
   // Open a new note with a starter body (used by the editor's empty-

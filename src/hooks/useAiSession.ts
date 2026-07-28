@@ -4,11 +4,10 @@
  */
 
 /**
- * useAiSession — 抽离 AIChat + FloatingAIPanel 共有的 AI 会话状态机.
+ * useAiSession — AI Chat 会话状态机.
  *
  * 设计要点 (R3 重构, 2026-07-12):
- * - 状态共享: 走 `useAiSessionStore` 模块级 store, 跨 AIChat / FloatingAIPanel 实例同步
- *   (修两个 session 列表互不可见的 bug).
+ * - 状态共享: 走 `useAiSessionStore` 模块级 store.
  * - localStorage key 保持 `df_ai_chat_store` 不变, 老用户 session 不丢.
  * - 把 buildContextText / handleSend / handleStop / handleRetryMessage / resolveSlashCommand
  *   / switchProvider / createSession / deleteSession / renameSession 全部下沉.
@@ -26,13 +25,14 @@ import { useSendPipeline } from './useAiSessionSend';
 import { buildContextText as buildContextTextImpl, buildAutoContextText as buildAutoContextTextImpl } from './aiContextBuilders';
 
 export interface UseAiSessionOptions {
+  workspaceId?: string;
   language: 'en' | 'zh';
   tasks: any[];
   notes: any[];
   filesMap: Record<string, string>;
   activeContext?: 'work' | 'life';
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
-  /** FloatingAIPanel 专属: 从 NoteEditor / Today 自动注入上下文 */
+  /** 从 NoteEditor / Today 自动注入的上下文 */
   focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
 }
 
@@ -43,6 +43,7 @@ export interface UseAiSessionReturn {
   activeSession: ChatSession | null;
   setActiveSessionId: (id: string) => void;
   createSession: (prefill?: { contextItems?: ContextItem[] }) => ChatSession;
+  prepareSessionForDraft: (contextItems: ContextItem[]) => ChatSession;
   deleteSession: (id: string) => void;
   renameSession: (id: string, title: string) => void;
 
@@ -85,19 +86,56 @@ function useSharedSnapshot(): SharedStore {
   return snapshot;
 }
 
+export function findReusableDraftSession(
+  sessions: ChatSession[],
+  activeSessionId: string | null,
+  contextItems: ContextItem[]
+): ChatSession | null {
+  const current = sessions.find(session => session.id === activeSessionId) || sessions[0] || null;
+  const noteIds = new Set(
+    contextItems.map(item => item.data.noteId).filter((id): id is string => Boolean(id))
+  );
+  if (noteIds.size > 0) {
+    const matching = [...sessions]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .find(session =>
+        session.contextItems.some(item => item.data.noteId && noteIds.has(item.data.noteId))
+      );
+    if (matching) return matching;
+  }
+  return current?.messages.length === 0 ? current : null;
+}
+
 export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
-  const { language, tasks, notes, filesMap, activeContext = 'work', showToast, focusedContext } = opts;
+  const { language, tasks, notes, filesMap, activeContext = 'work', showToast, focusedContext, workspaceId = 'default' } = opts;
   const snapshot = useSharedSnapshot();
+  const scopedSessions = useMemo(
+    () => snapshot.sessions.filter(s => (s.workspaceId || 'default') === workspaceId),
+    [snapshot.sessions, workspaceId]
+  );
 
   // Send pipeline (per-instance, 跟原行为一致)
   const { isStreaming, sendMessage, stopMessage, retryMessage } = useSendPipeline({
-    language, tasks, notes, filesMap, activeContext, showToast, focusedContext,
+    workspaceId, language, tasks, notes, filesMap, activeContext, showToast, focusedContext,
   });
 
   const activeSession = useMemo(
-    () => snapshot.sessions.find(s => s.id === snapshot.activeSessionId) || null,
-    [snapshot.sessions, snapshot.activeSessionId]
+    () => scopedSessions.find(s => s.id === snapshot.activeSessionId) || scopedSessions[0] || null,
+    [scopedSessions, snapshot.activeSessionId]
   );
+  useEffect(() => {
+    if (activeSession && snapshot.activeSessionId !== activeSession.id) {
+      setStore({ activeSessionId: activeSession.id });
+    }
+  }, [activeSession, snapshot.activeSessionId]);
+  useEffect(() => {
+    if (scopedSessions.length > 0) return;
+    const newSession = createNewSessionImpl(workspaceId);
+    setStore(prev => ({
+      sessions: [newSession, ...prev.sessions],
+      activeSessionId: newSession.id,
+    }));
+  }, [scopedSessions.length, workspaceId]);
   const activeProvider = useMemo(
     () => snapshot.providers.find(p => p.id === snapshot.activeProviderId) || null,
     [snapshot.providers, snapshot.activeProviderId]
@@ -111,29 +149,63 @@ export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
   const setActiveSessionId = useCallback((id: string) => setStore({ activeSessionId: id }), []);
 
   const createSession = useCallback((prefill?: { contextItems?: ContextItem[] }): ChatSession => {
-    const newSession = createNewSessionImpl();
+    const newSession = createNewSessionImpl(workspaceId);
     if (prefill?.contextItems) newSession.contextItems = prefill.contextItems;
     setStore({
-      sessions: [newSession, ...snapshot.sessions],
+      sessions: [newSession, ...getStore().sessions],
       activeSessionId: newSession.id,
       pendingSkillId: null,
     });
     return newSession;
-  }, [snapshot.sessions]);
+  }, [workspaceId]);
+
+  const prepareSessionForDraft = useCallback((contextItems: ContextItem[]): ChatSession => {
+    const live = getStore();
+    const workspaceSessions = live.sessions.filter(
+      s => (s.workspaceId || 'default') === workspaceId
+    );
+    const target = findReusableDraftSession(workspaceSessions, live.activeSessionId, contextItems);
+
+    if (!target) return createSession({ contextItems });
+
+    const mergedContext = [
+      ...target.contextItems.filter(existing =>
+        !contextItems.some(item =>
+          item.id === existing.id ||
+          (item.data.noteId && item.data.noteId === existing.data.noteId)
+        )
+      ),
+      ...contextItems,
+    ];
+    const updated = {
+      ...target,
+      contextItems: mergedContext,
+      updatedAt: new Date().toISOString(),
+    };
+    setStore({
+      sessions: live.sessions.map(s => s.id === target.id ? updated : s),
+      activeSessionId: target.id,
+      pendingSkillId: null,
+    });
+    return updated;
+  }, [createSession, workspaceId]);
 
   const deleteSession = useCallback((id: string) => {
     setStore(prev => {
       const filtered = prev.sessions.filter(s => s.id !== id);
-      if (filtered.length === 0) {
-        const newSession = createNewSessionImpl();
-        return { sessions: [newSession], activeSessionId: newSession.id };
+      const remainingInWorkspace = filtered.filter(
+        s => (s.workspaceId || 'default') === workspaceId
+      );
+      if (remainingInWorkspace.length === 0) {
+        const newSession = createNewSessionImpl(workspaceId);
+        return { sessions: [newSession, ...filtered], activeSessionId: newSession.id };
       }
       return {
         sessions: filtered,
-        activeSessionId: prev.activeSessionId === id ? filtered[0].id : prev.activeSessionId,
+        activeSessionId: prev.activeSessionId === id ? remainingInWorkspace[0].id : prev.activeSessionId,
       };
     });
-  }, []);
+  }, [workspaceId]);
 
   const renameSession = useCallback((id: string, title: string) => {
     const trimmed = title.trim();
@@ -169,7 +241,7 @@ export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
     setStore({ activeProviderId: id });
     const ps = loadProviderConfigs();
     ps.activeId = id;
-    saveProviderConfigs(ps); // 持久化 + emit df:provider-changed
+    saveProviderConfigs(ps); // 持久化并发布 ai.providerChanged
     return getStore().providers.find(p => p.id === id) || null;
   }, []);
 
@@ -208,11 +280,12 @@ export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
 
   return {
     // Sessions
-    sessions: snapshot.sessions,
-    activeSessionId: snapshot.activeSessionId,
+    sessions: scopedSessions,
+    activeSessionId: activeSession?.id || null,
     activeSession,
     setActiveSessionId,
     createSession,
+    prepareSessionForDraft,
     deleteSession,
     renameSession,
 

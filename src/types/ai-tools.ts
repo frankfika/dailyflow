@@ -30,19 +30,8 @@ export interface AIToolResult {
 
 export const AVAILABLE_TOOLS: AITool[] = [
   {
-    name: 'create_note',
-    description: 'Create a new note in the note system. Use this when the user asks you to save something as a note, create a note, or write down information.',
-    parameters: {
-      title: { type: 'string', description: 'Note title (required)' },
-      body: { type: 'string', description: 'Note body content in Markdown (required)' },
-      type: { type: 'string', description: 'Note type', enum: ['note', 'meeting_note', 'summary'] },
-      tags: { type: 'array', description: 'Array of tag strings' },
-    },
-    required: ['title', 'body'],
-  },
-  {
     name: 'create_task',
-    description: 'Create a new task for today. Use this when the user asks you to create a task, add a todo, or remind them of something.',
+    description: 'Create a reviewable proposal for a new item. This does not directly create or modify user data.',
     parameters: {
       title: { type: 'string', description: 'Task title (required)' },
       tags: { type: 'array', description: 'Array of tag strings, e.g. ["work", "urgent"]' },
@@ -50,15 +39,6 @@ export const AVAILABLE_TOOLS: AITool[] = [
       description: { type: 'string', description: 'Optional task description' },
     },
     required: ['title'],
-  },
-  {
-    name: 'mark_task_done',
-    description: 'Mark a task as completed by its title or ID. Use when the user says a task is done.',
-    parameters: {
-      taskId: { type: 'string', description: 'Exact task ID (preferred)' },
-      title: { type: 'string', description: 'Task title (fallback if ID unknown)' },
-    },
-    required: ['taskId'],
   },
   {
     name: 'search_tasks',
@@ -92,8 +72,8 @@ export function buildToolInstructions(language: 'en' | 'zh'): string {
   }
   lines.push('');
   lines.push(language === 'zh'
-    ? '重要提示：只有在用户明确要求你执行操作时才使用工具。不要猜测用户的意图。'
-    : 'Important: only use tools when the user explicitly asks you to perform an action. Do not guess intent.');
+    ? '重要提示：只有在用户明确要求时才使用工具。写操作只会生成待用户确认的 Proposal；不得声称数据已经创建、修改或完成。'
+    : 'Important: only use tools when explicitly requested. Write tools only create a Proposal for user confirmation; never claim data was created, changed, or completed.');
   return lines.join('\n');
 }
 

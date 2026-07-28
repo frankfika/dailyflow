@@ -24,12 +24,13 @@ export class V2ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const url = `${API_BASE.api}/api/v2${path}`;
   const resp = await fetch(url, {
     method,
     headers: { 'content-type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
   const text = await resp.text();
   let json: unknown = null;
@@ -77,11 +78,46 @@ export const getSource = (id: string) =>
   request<{ source: SourceItem }>('GET', `/sources/${id}`);
 
 export const processSource = (id: string) =>
-  request<{ proposal: Proposal; evidence: Evidence[]; agentRun: AgentRun; fallback: boolean; fallbackReason?: string; empty: boolean }>(
+  request<{ proposal?: Proposal; evidence?: Evidence[]; agentRun?: AgentRun | null; fallback?: boolean; fallbackReason?: string; empty?: boolean; resumed?: boolean; job: JobRecord }>(
     'POST',
     `/sources/${id}/process`,
     {}
   );
+
+export interface JobRecord {
+  id: string;
+  workspaceId: string;
+  kind: string;
+  entityRef: { type: string; id: string };
+  idempotencyKey: string;
+  status: 'queued' | 'running' | 'waiting_review' | 'succeeded' | 'failed' | 'cancelled';
+  progress?: number;
+  resultRef?: { type: string; id: string };
+  error?: { code: string; message: string; retryable: boolean };
+  attempt: number;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+export interface CreateJobInput {
+  kind: 'source_analysis' | 'transcription' | 'calendar_sync' | 'import';
+  entityRef: { type: string; id: string };
+  idempotencyKey: string;
+}
+
+export const createJob = (input: CreateJobInput) =>
+  request<{ job: JobRecord }>('POST', '/jobs', input);
+
+export const listJobs = (status?: JobRecord['status']) =>
+  request<{ items: JobRecord[]; total: number }>('GET', `/jobs${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+
+export const getJob = (id: string) => request<{ job: JobRecord }>('GET', `/jobs/${id}`);
+
+export const retryJob = (id: string) => request<{ job: JobRecord }>('POST', `/jobs/${id}/retry`, {});
+
+export const cancelJob = (id: string) => request<{ job: JobRecord }>('POST', `/jobs/${id}/cancel`, {});
 
 export const deleteSource = (id: string) => request<{ ok: boolean }>('DELETE', `/sources/${id}`);
 
@@ -358,6 +394,12 @@ export interface Outcome {
 export const listProposals = (opts?: { status?: string }) =>
   request<{ items: Proposal[]; total: number }>('GET', `/proposals${opts?.status ? `?status=${opts.status}` : ''}`);
 
+export const createProposalDraft = (body: {
+  kind: Proposal['kind'];
+  sourceIds?: string[];
+  changes: ProposedChange[];
+}) => request<{ proposal: Proposal }>('POST', '/proposals/draft', body);
+
 export const getProposal = (id: string) =>
   request<{ proposal: Proposal }>('GET', `/proposals/${id}`);
 
@@ -423,8 +465,8 @@ export interface MemoryHit {
   evidenceIds: string[];
 }
 
-export const searchMemory = (q: string) =>
-  request<{ query: string; hits: MemoryHit[]; usedSourceIds: string[] }>('GET', `/memory/search?q=${encodeURIComponent(q)}`);
+export const searchMemory = (q: string, signal?: AbortSignal) =>
+  request<{ query: string; hits: MemoryHit[]; usedSourceIds: string[] }>('GET', `/memory/search?q=${encodeURIComponent(q)}`, undefined, signal);
 
 export const getContext = (commitmentId: string) =>
   request<{

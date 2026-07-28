@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { loadConfig, saveConfig } from '../config.js';
+import { loadConfig, loadVersionedConfig, patchConfig, saveConfig } from '../config.js';
 import type { Config } from '../../types/task.js';
 import { normalizeWorkspacePath } from '../../routes/config.js';
 
@@ -109,6 +109,53 @@ describe('loadConfig', () => {
     const loaded = await loadConfig();
     expect(loaded.workspaces).toHaveLength(1);
     expect(loaded.workspaceRoot).toMatch(/^\/tmp\/concurrent-\d+$/);
+  });
+
+  it('applies partial updates without dropping unrelated settings', async () => {
+    await saveConfig({
+      workspaceRoot: '/tmp/versioned',
+      workspaces: [{
+        id: 'ws_versioned',
+        name: 'Versioned',
+        path: '/tmp/versioned',
+        createdAt: new Date().toISOString(),
+      }],
+      activeWorkspaceId: 'ws_versioned',
+      dailyPathTemplate: 'Daily/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: ['keep'],
+      githubRepo: 'https://github.com/example/dailyflow',
+    });
+    const before = await loadVersionedConfig();
+
+    const result = await patchConfig({ activeContext: 'life' }, before.version);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected patch to succeed');
+    expect(result.config.activeContext).toBe('life');
+    expect(result.config.githubRepo).toBe('https://github.com/example/dailyflow');
+    expect(result.config.rolloverSkipTags).toEqual(['keep']);
+    expect(result.config.version).not.toBe(before.version);
+  });
+
+  it('rejects a stale config version and preserves the winning update', async () => {
+    const before = await loadVersionedConfig();
+    const winningContext = before.activeContext === 'work' ? 'life' : 'work';
+    const first = await patchConfig({ activeContext: winningContext }, before.version);
+    expect(first.ok).toBe(true);
+
+    const stale = await patchConfig({ githubRepo: 'https://github.com/stale/write' }, before.version);
+    expect(stale.ok).toBe(false);
+    const persisted = await loadConfig();
+    expect(persisted.activeContext).toBe(winningContext);
+    expect(persisted.githubRepo).not.toBe('https://github.com/stale/write');
+  });
+
+  it('treats null in a patch as removing an optional setting', async () => {
+    const before = await loadVersionedConfig();
+    const result = await patchConfig({ githubRepo: null }, before.version);
+    expect(result.ok).toBe(true);
+    expect((await loadConfig()).githubRepo).toBeUndefined();
   });
 
   it('removes legacy GitHub tokens and stores config with owner-only permissions', async () => {

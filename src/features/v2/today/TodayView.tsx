@@ -31,28 +31,31 @@ import {
 import { Card, Button, Badge, StateView } from '../components/States';
 import { CommitmentContext } from '../commitments/CommitmentContext';
 import { getTodayStr } from '../../../utils/tagColors';
+import { queryKeys } from '../../../queryKeys';
+import { useWorkspaceScope } from '../../../workspaceScope';
 
 function todayStr() {
   return getTodayStr();
 }
 
 export function TodayView() {
+  const workspaceId = useWorkspaceScope();
   const today = useMemo(() => todayStr(), []);
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const plan = useQuery({
-    queryKey: ['v2-plan', today],
+    queryKey: queryKeys.plan(workspaceId, today),
     queryFn: () => getPlan(today),
   });
   const commitments = useQuery({
-    queryKey: ['v2-commitments'],
+    queryKey: queryKeys.commitments(workspaceId),
     queryFn: () => listCommitments(),
   });
 
   const refresh = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ['v2-plan'] });
-    qc.invalidateQueries({ queryKey: ['v2-commitments'] });
-  }, [qc]);
+    qc.invalidateQueries({ queryKey: queryKeys.plan(workspaceId, today) });
+    qc.invalidateQueries({ queryKey: queryKeys.commitmentsRoot(workspaceId) });
+  }, [qc, today, workspaceId]);
 
   const generate = useMutation({
     mutationFn: () => generatePlan({ date: today }),
@@ -93,7 +96,7 @@ export function TodayView() {
   // Spec §26 step 12: surface overdue waiting items so the user can
   // review them. The system must NOT auto-resume or auto-send.
   const overdueWaiting = useQuery({
-    queryKey: ['v2-waiting-overdue'],
+    queryKey: queryKeys.commitments(workspaceId, { state: 'waiting_overdue' }),
     queryFn: () => getWaitingOverdue(),
   });
 

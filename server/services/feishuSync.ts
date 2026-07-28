@@ -84,6 +84,13 @@ export interface FeishuAgendaEvent {
   url?: string;
 }
 
+export interface CreateFeishuCalendarEventInput {
+  title: string;
+  description?: string;
+  start: string;
+  end: string;
+}
+
 export interface FeishuTaskSyncResult {
   ok: boolean;
   pushed: number;
@@ -545,7 +552,7 @@ async function updateLocalTask(date: string, id: string, remote: JsonObject): Pr
   return result!;
 }
 
-export async function syncFeishuTasks(): Promise<FeishuTaskSyncResult> {
+export async function syncFeishuTasks(options: { taskIds?: string[] } = {}): Promise<FeishuTaskSyncResult> {
   const status = await getFeishuAuthStatus();
   if (!status.authorized || !status.openId) throw Object.assign(new Error('请先连接飞书企业账号。'), { status: 401 });
 
@@ -562,7 +569,16 @@ export async function syncFeishuTasks(): Promise<FeishuTaskSyncResult> {
     syncedAt: new Date().toISOString(),
   };
   const state = await loadState();
-  const [localRows, remoteRows] = await Promise.all([loadLocalTasks(), getRemoteTasks()]);
+  const selectedIds = options.taskIds?.length ? new Set(options.taskIds) : null;
+  const [allLocalRows, remoteRows] = await Promise.all([loadLocalTasks(), getRemoteTasks()]);
+  const localRows = selectedIds
+    ? allLocalRows.filter(row => selectedIds.has(row.task.id))
+    : allLocalRows;
+  if (selectedIds && localRows.length !== selectedIds.size) {
+    const found = new Set(localRows.map(row => row.task.id));
+    const missing = [...selectedIds].filter(id => !found.has(id));
+    throw Object.assign(new Error(`找不到要同步的任务：${missing.join(', ')}`), { status: 404 });
+  }
   const localById = new Map(localRows.map(r => [r.task.id, r]));
   const remoteByGuid = new Map<string, JsonObject>(
     remoteRows
@@ -644,7 +660,9 @@ export async function syncFeishuTasks(): Promise<FeishuTaskSyncResult> {
     }
   }
 
-  for (const remote of remoteRows) {
+  // A selective push is initiated from one task row in Calendar. It must not
+  // unexpectedly pull every unrelated Feishu task into the local workspace.
+  for (const remote of selectedIds ? [] : remoteRows) {
     const guid = taskGuid(remote);
     if (!guid || usedRemote.has(guid)) continue;
     try {
@@ -683,13 +701,20 @@ export async function syncFeishuTasks(): Promise<FeishuTaskSyncResult> {
   return result;
 }
 
-function normalizeCalendarTime(value: any): { iso: string; allDay: boolean } | null {
+export function normalizeCalendarTime(value: any): { iso: string; allDay: boolean } | null {
   if (!value) return null;
   if (typeof value === 'string') {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : { iso: d.toISOString(), allDay: false };
   }
   if (value.date) return { iso: `${value.date}T00:00:00+08:00`, allDay: true };
+  // Current lark-cli agenda responses use
+  // { datetime: "2026-07-28T09:30:00+08:00", timezone: "Asia/Shanghai" }.
+  // Treat it as a timed event instead of silently dropping the whole entry.
+  if (value.datetime) {
+    const d = new Date(value.datetime);
+    return Number.isNaN(d.getTime()) ? null : { iso: d.toISOString(), allDay: false };
+  }
   if (value.timestamp) {
     const n = Number(value.timestamp);
     const ms = n < 10_000_000_000 ? n * 1000 : n;
@@ -729,6 +754,55 @@ export async function getFeishuAgenda(start: string, end: string): Promise<Feish
       url: event.event_link || event.url || event.app_link,
     }];
   }).filter(e => e.status !== 'cancelled').sort((a, b) => a.start.localeCompare(b.start));
+}
+
+export async function createFeishuCalendarEvent(
+  input: CreateFeishuCalendarEventInput,
+): Promise<FeishuAgendaEvent> {
+  const status = await getFeishuAuthStatus();
+  if (!status.authorized) {
+    throw Object.assign(new Error('请先连接飞书企业账号。'), { status: 401 });
+  }
+  const startDate = new Date(input.start);
+  const endDate = new Date(input.end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    throw Object.assign(new Error('日程时间格式无效。'), { status: 400 });
+  }
+  if (endDate <= startDate) {
+    throw Object.assign(new Error('结束时间必须晚于开始时间。'), { status: 400 });
+  }
+  if (endDate.getTime() <= Date.now()) {
+    throw Object.assign(new Error('不能创建已经结束的日程。'), { status: 400 });
+  }
+
+  const args = [
+    'calendar', '+create',
+    '--as', 'user',
+    '--summary', input.title.trim(),
+    '--start', input.start,
+    '--end', input.end,
+    '--json',
+  ];
+  if (input.description?.trim()) {
+    args.push('--description', input.description.trim());
+  }
+  const data = await runLark(args);
+  const event = data.event || data;
+  const id = event.event_id || event.id;
+  if (!id) throw new Error('飞书没有返回日程 ID。');
+  const start = normalizeCalendarTime(event.start_time || event.start)?.iso || startDate.toISOString();
+  const end = normalizeCalendarTime(event.end_time || event.end)?.iso || endDate.toISOString();
+  return {
+    id,
+    title: event.summary || event.title || input.title.trim(),
+    description: event.description || input.description?.trim() || undefined,
+    start,
+    end,
+    allDay: false,
+    status: event.status === 'tentative' ? 'tentative' : 'confirmed',
+    location: event.location?.name || event.location,
+    url: event.event_link || event.url || event.app_link,
+  };
 }
 
 export async function pushTimedNotesToFeishu(): Promise<{

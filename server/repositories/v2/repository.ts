@@ -60,6 +60,16 @@ import {
 } from '../../domain/v2/types.js';
 import type { ZodTypeAny } from 'zod';
 import { ZodError } from 'zod';
+import { newId } from '../../domain/v2/ulid.js';
+import {
+  JobRecordSchema,
+  assertJobTransition,
+  canCancelJob,
+  canRetryJob,
+  type JobRecord,
+  type JobStatus,
+} from '../../domain/v2/jobs.js';
+export type { JobRecord, JobStatus } from '../../domain/v2/jobs.js';
 
 export interface WorkspaceContext {
   root: string;
@@ -85,6 +95,159 @@ export class V2Repository {
   constructor(private readonly ctx: WorkspaceContext) {
     this.layout = deriveLayout(ctx.root);
     this.audit = new AuditLog(this.layout, ctx.workspaceId);
+  }
+
+  private jobPath(id: string): string {
+    if (!/^job_[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) {
+      throw new Error('Invalid job id.');
+    }
+    return path.join(this.layout.internal.jobs, `${id}.json`);
+  }
+
+  async listJobs(): Promise<JobRecord[]> {
+    try {
+      const names = await fs.readdir(this.layout.internal.jobs);
+      const out: JobRecord[] = [];
+      for (const name of names.filter(n => n.endsWith('.json'))) {
+        try {
+          const parsed = JobRecordSchema.safeParse(JSON.parse(await fs.readFile(path.join(this.layout.internal.jobs, name), 'utf8')));
+          if (parsed.success && parsed.data.workspaceId === this.ctx.workspaceId) out.push(parsed.data);
+        } catch { /* skip corrupt or foreign-workspace job */ }
+      }
+      return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    } catch { return []; }
+  }
+
+  async getJob(id: string): Promise<JobRecord | null> {
+    try {
+      const parsed = JobRecordSchema.safeParse(JSON.parse(await fs.readFile(this.jobPath(id), 'utf8')));
+      return parsed.success && parsed.data.workspaceId === this.ctx.workspaceId ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async createOrGetJob(
+    input: Omit<JobRecord, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt' | 'attempt'> & { attempt?: number },
+  ): Promise<JobRecord> {
+    return this.withJobLock(`key:${input.idempotencyKey}`, async () => {
+      const existing = (await this.listJobs()).find(j => j.idempotencyKey === input.idempotencyKey);
+      if (existing) return existing;
+      const now = new Date().toISOString();
+      const job = JobRecordSchema.parse({
+        ...input,
+        id: newId('job'),
+        workspaceId: this.ctx.workspaceId,
+        attempt: input.attempt ?? 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await atomicWrite({ filePath: this.jobPath(job.id), content: `${JSON.stringify(job, null, 2)}\n` });
+      return job;
+    });
+  }
+
+  async updateJob(
+    id: string,
+    patch: Partial<Pick<JobRecord, 'status' | 'progress' | 'resultRef' | 'error' | 'startedAt' | 'finishedAt' | 'attempt'>>,
+  ): Promise<JobRecord | null> {
+    return this.withJobLock(`id:${id}`, async () => {
+      const current = await this.getJob(id);
+      if (!current) return null;
+      if (patch.status) assertJobTransition(current.status, patch.status);
+      const updated = JobRecordSchema.parse({ ...current, ...patch, updatedAt: new Date().toISOString() });
+      const prior = await readWithHash(this.jobPath(id));
+      await atomicWrite({
+        filePath: this.jobPath(id),
+        content: `${JSON.stringify(updated, null, 2)}\n`,
+        expectedHash: prior?.hash,
+      });
+      return updated;
+    });
+  }
+
+  async startJob(id: string, progress = 0): Promise<{ job: JobRecord | null; started: boolean }> {
+    return this.withJobLock(`id:${id}`, async () => {
+      const current = await this.getJob(id);
+      if (!current) return { job: null, started: false };
+      if (current.status !== 'queued') return { job: current, started: false };
+      const updated = JobRecordSchema.parse({
+        ...current,
+        status: 'running',
+        progress,
+        startedAt: new Date().toISOString(),
+        finishedAt: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      const prior = await readWithHash(this.jobPath(id));
+      await atomicWrite({
+        filePath: this.jobPath(id),
+        content: `${JSON.stringify(updated, null, 2)}\n`,
+        expectedHash: prior?.hash,
+      });
+      return { job: updated, started: true };
+    });
+  }
+
+  async retryJob(id: string): Promise<JobRecord | null> {
+    const job = await this.getJob(id);
+    if (!job) return null;
+    if (!canRetryJob(job)) {
+      const error = new Error('Only failed retryable jobs can be retried.');
+      Object.assign(error, { code: 'job_not_retryable' });
+      throw error;
+    }
+    return this.updateJob(id, {
+      status: 'queued',
+      progress: 0,
+      error: undefined,
+      resultRef: undefined,
+      startedAt: undefined,
+      finishedAt: undefined,
+      attempt: job.attempt + 1,
+    });
+  }
+
+  async cancelJob(id: string): Promise<JobRecord | null> {
+    const job = await this.getJob(id);
+    if (!job) return null;
+    if (!canCancelJob(job.status)) {
+      const error = new Error(`Job in ${job.status} cannot be cancelled.`);
+      Object.assign(error, { code: 'job_not_cancellable' });
+      throw error;
+    }
+    return this.updateJob(id, {
+      status: 'cancelled',
+      finishedAt: new Date().toISOString(),
+    });
+  }
+
+  private async withJobLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    await fs.mkdir(this.layout.internal.jobs, { recursive: true });
+    const lockPath = path.join(this.layout.internal.jobs, `.lock-${sha256(key)}`);
+    let handle: fs.FileHandle | undefined;
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      try {
+        handle = await fs.open(lockPath, 'wx');
+        break;
+      } catch (err: any) {
+        if (err?.code !== 'EEXIST') throw err;
+        try {
+          const stat = await fs.stat(lockPath);
+          if (Date.now() - stat.mtimeMs > 30_000) await fs.unlink(lockPath);
+        } catch {
+          // Another request released the lock between stat and unlink.
+        }
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    }
+    if (!handle) throw new Error('Timed out waiting for job persistence lock.');
+    try {
+      return await operation();
+    } finally {
+      await handle.close();
+      await fs.unlink(lockPath).catch(() => {});
+    }
   }
 
   // -------------------------------------------------------------------------

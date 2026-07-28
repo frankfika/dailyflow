@@ -6,7 +6,7 @@
 /**
  * SaveNoteModal — AI 消息「保存为笔记」对话框.
  *
- * 从 AIChat / FloatingAIPanel 抽出来, 内部管自己的表单 state, 父组件只控制 open/close.
+ * AIChat 的保存笔记弹窗；内部管理表单 state，父组件只控制 open/close.
  * R3 重构 (2026-07-12): 抽重复 UI, AIChat 命中 < 700 行目标.
  */
 

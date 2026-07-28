@@ -6,7 +6,17 @@ import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, feishuApi, googleCalendarApi, ipfsApi, type FeishuStatus, type GoogleCalendarStatus, type IpfsBackupRecord } from '../api/client';
+import {
+  configApi,
+  dispatchDomainEvent,
+  DOMAIN_EVENTS,
+  feishuApi,
+  googleCalendarApi,
+  ipfsApi,
+  type FeishuStatus,
+  type GoogleCalendarStatus,
+  type IpfsBackupRecord,
+} from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 import { getTodayStr } from '../utils/tagColors';
@@ -22,8 +32,6 @@ interface SettingsModalProps {
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
-  syncInterval: number;
-  setSyncInterval: (v: number) => void;
   githubRepoInput: string;
   setGithubRepoInput: (v: string) => void;
   githubToken: string;
@@ -72,8 +80,6 @@ export function SettingsModal({
   setConfigTab,
   workspaceRoot,
   setLanguage,
-  syncInterval,
-  setSyncInterval,
   githubRepoInput,
   setGithubRepoInput,
   githubToken,
@@ -204,7 +210,12 @@ export function SettingsModal({
       setGoogleMessage(status.connected
         ? (language === 'zh' ? 'Google Calendar 已连接，日程会显示在日历视图。' : 'Google Calendar connected. Events will appear in Calendar.')
         : (language === 'zh' ? '尚未收到 Google 授权，请先完成浏览器中的确认。' : 'Authorization is not complete yet.'));
-      if (status.connected) window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+      if (status.connected) {
+        dispatchDomainEvent(DOMAIN_EVENTS.calendarConnectionChanged, {
+          provider: 'google',
+          connected: true,
+        });
+      }
     } catch (error: any) {
       setGoogleMessage(error.message);
     } finally {
@@ -242,7 +253,10 @@ export function SettingsModal({
         setFeishuMessage(language === 'zh'
           ? `飞书账号已连接${status.userName ? `：${status.userName}` : ''}。`
           : `Feishu connected${status.userName ? `: ${status.userName}` : ''}.`);
-        window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+        dispatchDomainEvent(DOMAIN_EVENTS.calendarConnectionChanged, {
+          provider: 'feishu',
+          connected: true,
+        });
       } else {
         setFeishuMessage(status.reason || (language === 'zh' ? '尚未完成授权。' : 'Authorization is not complete.'));
       }
@@ -328,7 +342,10 @@ export function SettingsModal({
         setFeishuQrDataUrl(null);
         setFeishuSetupUrl(null);
         setFeishuSetupQrDataUrl(null);
-        window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+        dispatchDomainEvent(DOMAIN_EVENTS.calendarConnectionChanged, {
+          provider: 'feishu',
+          connected: true,
+        });
       }
       setFeishuMessage(status.authorized
         ? (language === 'zh' ? '飞书企业账号已连接。' : 'Feishu enterprise account connected.')
@@ -378,7 +395,10 @@ export function SettingsModal({
       setFeishuMessage(language === 'zh'
         ? '已断开本机飞书账号。需要时可在这里重新授权。'
         : 'The local Feishu account is disconnected. Reauthorize here whenever needed.');
-      window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+      dispatchDomainEvent(DOMAIN_EVENTS.calendarConnectionChanged, {
+        provider: 'feishu',
+        connected: false,
+      });
     } catch (e: any) {
       setFeishuMessage(e.message);
     } finally {
@@ -401,7 +421,10 @@ export function SettingsModal({
         ? `同步完成：任务上传 ${tasks.pushed + tasks.updatedRemote}，下载 ${tasks.pulled + tasks.updatedLocal}；日程新建 ${calendar.created}，更新 ${calendar.updated}${conflictText}`
         : `Synced: ${tasks.pushed + tasks.updatedRemote} tasks pushed, ${tasks.pulled + tasks.updatedLocal} pulled; ${calendar.created} events created, ${calendar.updated} updated${conflictText}`);
       setFeishuStatus(await feishuApi.status());
-      window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+      dispatchDomainEvent(DOMAIN_EVENTS.calendarEventsChanged, {
+        provider: 'feishu',
+        reason: 'manual-sync',
+      });
     } catch (e: any) {
       setFeishuMessage(e.message);
     } finally {
@@ -452,12 +475,11 @@ export function SettingsModal({
       // Persist current IPFS settings before triggering the backup
       const config = await configApi.get();
       await configApi.update({
-        ...config,
         ipfsEnabled: true,
         ipfsProvider: 'pinata',
         ipfsApiKey: ipfsApiKey.trim(),
-        ipfsGateway: ipfsGateway.trim() || undefined,
-      });
+        ipfsGateway: ipfsGateway.trim() || null,
+      }, config.version);
       setIpfsEnabled(true);
 
       const result = await ipfsApi.backup();
@@ -659,10 +681,14 @@ export function SettingsModal({
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${r.status}`);
       }
-      const msg = language === 'zh' ? '✓ 工作区已重置, 即将刷新...' : '✓ Workspace reset, refreshing...';
+      setFilesMap({});
+      setTasks([]);
+      setMarkdown('');
+      setLastSyncedMD('');
+      dispatchDomainEvent(DOMAIN_EVENTS.workspaceChanged, { reason: 'reset' });
+      const msg = language === 'zh' ? '✓ 工作区已重置' : '✓ Workspace reset';
       setDataStatus({ type: 'success', message: msg });
       showToast(msg, 'success');
-      setTimeout(() => window.location.reload(), 1200);
     } catch (e: any) {
       const detail = e instanceof Error ? e.message : String(e);
       const msg = language === 'zh'
@@ -1585,15 +1611,17 @@ export function SettingsModal({
                     <label className="text-xs text-text-muted mb-1 block">
                       {language === 'zh' ? '同步频率' : 'Sync Frequency'}
                     </label>
+                    <p className="text-[11px] text-text-muted mb-1">
+                      {language === 'zh'
+                        ? '自动同步正在升级为带版本校验的保存机制，当前仅支持手动同步。'
+                        : 'Automatic sync is being upgraded to version-aware saves; manual sync is currently available.'}
+                    </p>
                     <select
-                      value={syncInterval}
-                      onChange={e => setSyncInterval(Number(e.target.value))}
+                      value={0}
+                      disabled
                       className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
                     >
                       <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
-                      <option value={1}>{language === 'zh' ? '每 1 分钟' : 'Every 1 minute'}</option>
-                      <option value={5}>{language === 'zh' ? '每 5 分钟' : 'Every 5 minutes'}</option>
-                      <option value={10}>{language === 'zh' ? '每 10 分钟' : 'Every 10 minutes'}</option>
                     </select>
                   </div>
 
@@ -2088,14 +2116,13 @@ export function SettingsModal({
                 const workspaceChanged = oldWorkspaceRoot !== config.workspaceRoot;
 
                 await configApi.update({
-                  ...config,
                   workspaceRoot: workspaceRoot.trim(),
-                  githubRepo: githubRepoInput.trim() || undefined,
+                  githubRepo: githubRepoInput.trim() || null,
                   ipfsEnabled,
                   ipfsProvider: 'pinata',
-                  ipfsApiKey: ipfsApiKey.trim() || undefined,
-                  ipfsGateway: ipfsGateway.trim() || undefined,
-                });
+                  ipfsApiKey: ipfsApiKey.trim() || null,
+                  ipfsGateway: ipfsGateway.trim() || null,
+                }, config.version);
                 setGithubRepo(githubRepoInput.trim() || null);
                 // Auto-verify connection on save instead of relying on manual Test Connection click
                 const trimmedRepo = githubRepoInput.trim();
@@ -2109,7 +2136,8 @@ export function SettingsModal({
                   setGithubConnected(false);
                 }
 
-                // If workspace path changed, reload everything
+                // If workspace path changed, reload the in-memory workspace
+                // without reloading the browser or losing unrelated UI state.
                 if (workspaceChanged) {
                   // Clear current state
                   setFilesMap({});
@@ -2128,12 +2156,14 @@ export function SettingsModal({
                     }
                     setFilesMap(newFilesMap);
 
-                    // Switch to today's date
-                    const today = getTodayStr();
-                    // Use currentFileDate setter via window reload or we need to pass it
-                    // Actually we need to reload the page or use the passed setter
-                    // For now, let's just reload the page to keep behavior consistent
-                    window.location.reload();
+                    const selected = await filesApi.get(currentFileDate);
+                    setMarkdown(selected?.content || '');
+                    setLastSyncedMD(selected?.content || '');
+                    setTasks(selected?.tasks || []);
+                    dispatchDomainEvent(DOMAIN_EVENTS.workspaceChanged, {
+                      reason: 'path-changed',
+                      workspaceRoot: workspaceRoot.trim(),
+                    });
                   } catch (e) {
                     console.error('Failed to reload workspace:', e);
                     alert(language === 'zh'

@@ -6,7 +6,7 @@
 /**
  * MessageBubble — 单条 AI/用户消息气泡 + 底部操作栏.
  *
- * 从 AIChat 抽出 (R3 重构, 2026-07-12). 共享给 AIChat 和 FloatingAIPanel.
+ * 从 AIChat 抽出的单条消息展示。
  */
 
 import { motion } from 'motion/react';
@@ -14,7 +14,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Copy, Bookmark, PlusCircle, RotateCcw, User, Bot, Zap } from 'lucide-react';
 import type { ChatMessage } from '../types/chat';
-import { copyMessageContent, createTasksFromMessage } from '../utils/chatActions';
+import { copyMessageContent, createTaskProposalsFromMessage } from '../utils/chatActions';
 
 export interface MessageBubbleProps {
   message: ChatMessage;
@@ -25,12 +25,10 @@ export interface MessageBubbleProps {
   onRetry: () => void;
   onSaveAsNote: (msg: ChatMessage) => void;
   onOpenSettings: () => void;
-  /** 给 FloatingAIPanel 用, 跟 AIChat 的 px 间距略小 */
-  compact?: boolean;
 }
 
 export function MessageBubble({
-  message, language, activeContext, notes, showToast, onRetry, onSaveAsNote, onOpenSettings, compact,
+  message, language, activeContext, notes, showToast, onRetry, onSaveAsNote, onOpenSettings,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
@@ -95,18 +93,18 @@ export function MessageBubble({
               </div>
             </div>
           ) : (
-            <div className={`text-text-heading leading-[1.7] ${compact ? 'text-sm' : 'text-[15px]'}`}>
+            <div className="text-text-heading leading-[1.7] text-[15px]">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                p: ({ children }) => <p className={compact ? 'mb-1.5 last:mb-0' : 'mb-2 last:mb-0'}>{children}</p>,
-                ul: ({ children }) => <ul className={`list-disc ${compact ? 'pl-4 mb-1.5' : 'pl-5 mb-2'}`}>{children}</ul>,
-                ol: ({ children }) => <ol className={`list-decimal ${compact ? 'pl-4 mb-1.5' : 'pl-5 mb-2'}`}>{children}</ol>,
+                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc pl-5 mb-2">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal pl-5 mb-2">{children}</ol>,
                 li: ({ children }) => <li className="mb-0.5">{children}</li>,
-                h1: ({ children }) => <h1 className={`${compact ? 'text-base' : 'text-lg'} font-bold mt-3 mb-2`}>{children}</h1>,
-                h2: ({ children }) => <h2 className={`${compact ? 'text-sm' : 'text-base'} font-bold mt-3 mb-2`}>{children}</h2>,
-                h3: ({ children }) => <h3 className={`${compact ? 'text-xs' : 'text-sm'} font-bold mt-2 mb-1`}>{children}</h3>,
+                h1: ({ children }) => <h1 className="text-lg font-bold mt-3 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
                 hr: () => <hr className="my-3 border-border/50" />,
                 code: ({ children, className }) => (
-                  <code className={`${className ? `block bg-surface ${compact ? 'p-1.5' : 'p-2'} rounded ${compact ? 'text-[11px]' : 'text-xs'} overflow-x-auto my-2` : `bg-surface px-1 py-0.5 rounded ${compact ? 'text-[11px]' : 'text-xs'}`}`}>
+                  <code className={`${className ? 'block bg-surface p-2 rounded text-xs overflow-x-auto my-2' : 'bg-surface px-1 py-0.5 rounded text-xs'}`}>
                     {children}
                   </code>
                 ),
@@ -120,30 +118,30 @@ export function MessageBubble({
             <div className="flex items-center gap-1 mt-2">
               <button
                 onClick={() => copyMessageContent(message.content, { language, showToast })}
-                className={`flex items-center gap-1 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[11px]'} text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors`}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
-                <Copy className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+                <Copy className="w-3 h-3" />
                 {language === 'zh' ? '复制' : 'Copy'}
               </button>
               <button
                 onClick={() => onSaveAsNote(message)}
-                className={`flex items-center gap-1 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[11px]'} text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors`}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
-                <Bookmark className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+                <Bookmark className="w-3 h-3" />
                 {language === 'zh' ? '保存为笔记' : 'Save as note'}
               </button>
               <button
-                onClick={() => createTasksFromMessage(message.content, { activeContext, language, showToast })}
-                className={`flex items-center gap-1 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[11px]'} text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors`}
+                onClick={() => createTaskProposalsFromMessage(message.content, { activeContext, language, showToast })}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
-                <PlusCircle className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
-                {language === 'zh' ? '创建任务' : 'Create tasks'}
+                <PlusCircle className="w-3 h-3" />
+                {language === 'zh' ? '生成事项建议' : 'Propose items'}
               </button>
               <button
                 onClick={onRetry}
-                className={`flex items-center gap-1 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[11px]'} text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors`}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
-                <RotateCcw className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+                <RotateCcw className="w-3 h-3" />
                 {language === 'zh' ? '重复提问' : 'Retry'}
               </button>
             </div>

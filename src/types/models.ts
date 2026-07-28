@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { configApi } from '../api/client';
+import { configApi, dispatchDomainEvent, DOMAIN_EVENTS } from '../api/client';
 
 export interface ProviderConfig {
   id: string;
@@ -192,7 +192,7 @@ export function loadProviderConfigs(): ProviderConfigStore {
 export function saveProviderConfigs(store: ProviderConfigStore): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   try {
-    window.dispatchEvent(new CustomEvent('df:provider-changed'));
+    dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'provider-store' });
   } catch { /* ignore */ }
 }
 
@@ -204,10 +204,7 @@ export async function persistProviderConfigsToBackend(): Promise<void> {
   try {
     const store = loadProviderConfigs();
     const config = await configApi.get();
-    await configApi.update({
-      ...config,
-      providerConfigs: JSON.stringify(store),
-    });
+    await configApi.update({ providerConfigs: JSON.stringify(store) }, config.version);
   } catch {
     // Best-effort persistence to backend
   }

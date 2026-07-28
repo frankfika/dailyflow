@@ -32,6 +32,8 @@ export interface CalendarWorkspaceResult {
     displayName: string;
     connected: boolean;
     color: string;
+    accountLabel?: string;
+    reason?: string;
     error?: string;
   }>;
 }
@@ -129,6 +131,8 @@ export async function getCalendarWorkspace(start: string, end: string): Promise<
       displayName: plugin.manifest.displayName,
       connected: status.connected,
       color: SOURCE_COLORS[plugin.manifest.provider] || '#8b5cf6',
+      accountLabel: status.accountLabel,
+      reason: status.reason,
     });
     if (!status.connected || !plugin.listCalendarEvents) continue;
     try {

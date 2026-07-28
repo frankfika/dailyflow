@@ -4,7 +4,7 @@
  * The hooks wrap the `client.ts` API with a small set of opinionated
  * defaults:
  *
- *  - List keys are namespaced `['v2-notes', state, kind, q]` so the
+ *  - List keys are workspace-scoped through the shared `queryKeys` factory so the
  *    Inbox / Recent / Daily / etc. views can mount independently and
  *    evict on a single mutation without invalidating the world.
  *  - Mutations return the server's response and the React Query
@@ -39,6 +39,8 @@ import {
   type NoteState,
   type UpdateNoteInput,
 } from '../api/client';
+import { queryKeys } from '../../../queryKeys';
+import { useWorkspaceScope } from '../../../workspaceScope';
 
 // ---------------------------------------------------------------------------
 // List
@@ -51,8 +53,9 @@ export interface UseNotesOpts {
 }
 
 export function useNotes(opts: UseNotesOpts = {}): UseQueryResult<{ notes: NoteDocument[]; total: number }> {
+  const workspaceId = useWorkspaceScope();
   return useQuery({
-    queryKey: ['v2-notes', opts.state ?? null, opts.kind ?? null, opts.q ?? null],
+    queryKey: queryKeys.notes(workspaceId, { state: opts.state ?? null, kind: opts.kind ?? null, q: opts.q ?? null }),
     queryFn: () => listNotes(opts),
     staleTime: 15_000,
     retry: 1,
@@ -64,8 +67,9 @@ export function useNotes(opts: UseNotesOpts = {}): UseQueryResult<{ notes: NoteD
 // ---------------------------------------------------------------------------
 
 export function useNote(id: string | null | undefined): UseQueryResult<{ note: NoteDocument }> {
+  const workspaceId = useWorkspaceScope();
   return useQuery({
-    queryKey: ['v2-notes', 'one', id],
+    queryKey: queryKeys.note(workspaceId, id ?? ''),
     queryFn: () => getNote(id as string),
     enabled: Boolean(id),
     staleTime: 10_000,
@@ -79,14 +83,15 @@ export function useNote(id: string | null | undefined): UseQueryResult<{ note: N
 
 export function useCreateNote(): UseMutationResult<{ note: NoteDocument }, V2ApiError, CreateNoteInput> {
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   return useMutation({
     mutationFn: (input) => createNote(input),
     onSuccess: (data) => {
       // Seed the detail cache before selecting the new note so the editor is
       // immediately writable instead of flashing a loading spinner.
-      qc.setQueryData(['v2-notes', 'one', data.note.id], data);
+      qc.setQueryData(queryKeys.note(workspaceId, data.note.id), data);
       qc.setQueryData<{ notes: NoteDocument[]; total: number }>(
-        ['v2-notes', null, null, null],
+        queryKeys.notes(workspaceId, { state: null, kind: null, q: null }),
         (current) => {
           if (!current) return { notes: [data.note], total: 1 };
           if (current.notes.some((note) => note.id === data.note.id)) return current;
@@ -96,7 +101,7 @@ export function useCreateNote(): UseMutationResult<{ note: NoteDocument }, V2Api
           };
         },
       );
-      qc.invalidateQueries({ queryKey: ['v2-notes'] });
+      qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId) });
     },
   });
 }
@@ -108,21 +113,22 @@ export interface UpdateNoteVars {
 
 export function useUpdateNote(): UseMutationResult<{ note: NoteDocument }, V2ApiError, UpdateNoteVars> {
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   return useMutation({
     mutationFn: ({ id, input }) => updateNote(id, input),
     onSuccess: (data, vars) => {
-      qc.setQueryData(['v2-notes', 'one', vars.id], data);
+      qc.setQueryData(queryKeys.note(workspaceId, vars.id), data);
       const structuralChange = Object.keys(vars.input).some(
         (key) => !['expectedAutoSaveVersion', 'body', 'title'].includes(key),
       );
       if (structuralChange) {
-        qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
+        qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
         return;
       }
       // Autosave runs while the user types. Patch cached list rows in place
       // instead of refetching every Notes query after each debounce.
       qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
-        { queryKey: ['v2-notes'], exact: false },
+        { queryKey: queryKeys.notesRoot(workspaceId), exact: false },
         (current) => {
           if (!current || !Array.isArray(current.notes)) return current;
           return {
@@ -137,12 +143,13 @@ export function useUpdateNote(): UseMutationResult<{ note: NoteDocument }, V2Api
 
 export function useDeleteNote(): UseMutationResult<{ ok: boolean }, V2ApiError, string> {
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   return useMutation({
     mutationFn: (id) => deleteNote(id),
     onSuccess: (_data, id) => {
-      qc.removeQueries({ queryKey: ['v2-notes', 'one', id] });
+      qc.removeQueries({ queryKey: queryKeys.note(workspaceId, id) });
       qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
-        { queryKey: ['v2-notes'], exact: false },
+        { queryKey: queryKeys.notesRoot(workspaceId), exact: false },
         (current) => {
           if (!current || !Array.isArray(current.notes)) return current;
           const notes = current.notes.filter((note) => note.id !== id);
@@ -154,18 +161,19 @@ export function useDeleteNote(): UseMutationResult<{ ok: boolean }, V2ApiError, 
           };
         },
       );
-      qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
+      qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
     },
   });
 }
 
 export function useArchiveNote(): UseMutationResult<{ note: NoteDocument }, V2ApiError, string> {
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   return useMutation({
     mutationFn: (id) => archiveNote(id),
     onSuccess: (data, id) => {
-      qc.setQueryData(['v2-notes', 'one', id], data);
-      qc.invalidateQueries({ queryKey: ['v2-notes'], exact: false });
+      qc.setQueryData(queryKeys.note(workspaceId, id), data);
+      qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
     },
   });
 }
@@ -175,8 +183,9 @@ export function useArchiveNote(): UseMutationResult<{ note: NoteDocument }, V2Ap
 // ---------------------------------------------------------------------------
 
 export function useNoteBacklinks(id: string | null | undefined): UseQueryResult<{ backlinks: NoteBacklinks }> {
+  const workspaceId = useWorkspaceScope();
   return useQuery({
-    queryKey: ['v2-notes', 'backlinks', id],
+    queryKey: [...queryKeys.note(workspaceId, id ?? ''), 'backlinks'],
     queryFn: () => getNoteBacklinks(id as string),
     enabled: Boolean(id),
     staleTime: 30_000,
@@ -232,6 +241,7 @@ const DEBOUNCE_MS = 800;
 export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteAutosaveResult {
   const update = useUpdateNote();
   const qc = useQueryClient();
+  const workspaceId = useWorkspaceScope();
   const [status, setStatus] = useState<AutosaveStatus>('idle');
   const [lastSavedVersion, setLastSavedVersion] = useState<number>(note?.autoSaveVersion ?? 0);
   const [lastError, setLastError] = useState<string | undefined>();
@@ -282,7 +292,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
           // Re-read the note, adopt its autoSaveVersion, then retry once.
           try {
             const fresh = await qc.fetchQuery({
-              queryKey: ['v2-notes', 'one', note.id],
+              queryKey: queryKeys.note(workspaceId, note.id),
               queryFn: () => getNote(note.id),
             });
             expectedRef.current = fresh.note.autoSaveVersion;
@@ -312,7 +322,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
         }
       }
     },
-    [note, update, qc],
+    [note, update, qc, workspaceId],
   );
 
   const enqueue = useCallback(

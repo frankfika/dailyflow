@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, Clock3, MapPin, RefreshCw } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
-import { feishuApi, type FeishuAgendaEvent } from '../api/client';
+import { DOMAIN_EVENTS, feishuApi, type FeishuAgendaEvent } from '../api/client';
 
 interface FeishuAgendaProps {
   date: string;
@@ -50,8 +50,12 @@ export function FeishuAgenda({ date, language }: FeishuAgendaProps) {
   useEffect(() => {
     load();
     const refresh = () => load();
-    window.addEventListener('df:feishu-synced', refresh);
-    return () => window.removeEventListener('df:feishu-synced', refresh);
+    window.addEventListener(DOMAIN_EVENTS.calendarConnectionChanged, refresh);
+    window.addEventListener(DOMAIN_EVENTS.calendarEventsChanged, refresh);
+    return () => {
+      window.removeEventListener(DOMAIN_EVENTS.calendarConnectionChanged, refresh);
+      window.removeEventListener(DOMAIN_EVENTS.calendarEventsChanged, refresh);
+    };
   }, [load]);
 
   if (!authorized && !loading) return null;

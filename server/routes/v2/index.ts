@@ -86,6 +86,7 @@ import {
   MobileCaptureInputSchema,
 } from '../../services/v2/mobileService.js';
 import { ConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
+import { JobKindSchema, JobStatusSchema } from '../../domain/v2/jobs.js';
 
 export const v2Router = Router();
 
@@ -119,6 +120,61 @@ function getV2(res: Response): { repo: import('../../repositories/v2/repository.
   return res.locals.v2;
 }
 
+// Durable background jobs. The UI can resume these by ID after navigation or
+// reload; the idempotency key prevents duplicate work.
+v2Router.post('/jobs', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const input = z.object({
+      kind: JobKindSchema,
+      entityRef: z.object({
+        type: z.string().trim().min(1).max(64),
+        id: z.string().trim().min(1).max(256),
+      }),
+      idempotencyKey: z.string().trim().min(1).max(512),
+    }).parse(req.body);
+    const job = await repo.createOrGetJob({ ...input, status: 'queued' });
+    res.status(job.status === 'queued' && job.attempt === 1 ? 201 : 200).json({ job });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.get('/jobs', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const status = req.query.status ? JobStatusSchema.parse(req.query.status) : undefined;
+    let items = await repo.listJobs();
+    if (status) items = items.filter(j => j.status === status);
+    res.json({ items, total: items.length });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.get('/jobs/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const job = await repo.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } });
+    res.json({ job });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.post('/jobs/:id/retry', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const job = await repo.retryJob(req.params.id);
+    if (!job) return res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } });
+    res.json({ job });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.post('/jobs/:id/cancel', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const job = await repo.cancelJob(req.params.id);
+    if (!job) return res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } });
+    res.json({ job });
+  } catch (err) { handleError(err, res); }
+});
+
 function handleError(err: unknown, res: Response): void {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: { code: 'validation', message: 'Invalid input.', issues: err.issues } });
@@ -136,6 +192,10 @@ function handleError(err: unknown, res: Response): void {
     }
     if (e.code === 'commitment_invalid') {
       res.status(400).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'invalid_job_transition' || e.code === 'job_not_retryable' || e.code === 'job_not_cancellable') {
+      res.status(409).json({ error: { code: e.code, message: e.message, from: e.from, to: e.to } });
       return;
     }
   }
@@ -352,6 +412,54 @@ v2Router.post('/sources/:id/process', async (req, res) => {
     const workspaceId = ctx.workspaceId;
     const source = await repo.getSourceItem(req.params.id);
     if (!source) return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
+    const job = await repo.createOrGetJob({
+      kind: 'source_analysis',
+      entityRef: { type: 'source', id: source.id },
+      idempotencyKey: `source-analysis:${workspaceId}:${source.id}:${source.contentHash}:extractor@1`,
+      status: source.processingStatus === 'processing' ? 'running' : 'queued',
+    });
+    if (job.status === 'succeeded' || job.status === 'waiting_review') {
+      const existing = (await repo.listProposals()).find(p => p.sourceIds.includes(source.id));
+      if (existing) return res.json({ proposal: existing, evidence: [], agentRun: null, fallback: false, empty: false, resumed: true, job });
+    }
+    if (job.status === 'failed' || job.status === 'cancelled') {
+      return res.status(409).json({
+        error: {
+          code: job.status === 'failed' ? 'job_requires_retry' : 'job_cancelled',
+          message: job.status === 'failed'
+            ? 'Retry the failed job before processing this source again.'
+            : 'This source processing job was cancelled.',
+          jobId: job.id,
+        },
+      });
+    }
+    // Processing is a durable state transition. A second click must not
+    // create another AgentRun/Evidence/Proposal for the same source.
+    if (source.processingStatus === 'processing') {
+      return res.status(202).json({ job, resumed: true });
+    }
+    if (source.processingStatus === 'needs_review' || source.processingStatus === 'processed') {
+      const existing = (await repo.listProposals()).find(p => p.sourceIds.includes(source.id));
+      if (existing) {
+        return res.json({
+          proposal: existing,
+          evidence: [],
+          agentRun: null,
+          fallback: false,
+          empty: source.processingStatus === 'processed',
+          resumed: true,
+          job,
+        });
+      }
+    }
+    source.processingStatus = 'processing';
+    const claim = await repo.startJob(job.id, 10);
+    if (!claim.started) return res.status(202).json({ job: claim.job, resumed: true });
+    let latestJob = claim.job;
+    await repo.saveSourceItem(source, {
+      auditKind: 'process',
+      auditEntity: { type: 'source', id: source.id },
+    });
     const extractorOutput = await runExtractor({ source });
     const built = buildExtractorProposal({ source, extractorOutput, workspaceId, actorId: 'user' });
 
@@ -382,6 +490,12 @@ v2Router.post('/sources/:id/process', async (req, res) => {
       auditKind: 'process',
       auditEntity: { type: 'source', id: source.id },
     });
+    latestJob = await repo.updateJob(job.id, {
+      status: built.empty ? 'succeeded' : 'waiting_review',
+      progress: 100,
+      resultRef: { type: 'proposal', id: proposal.id },
+      finishedAt: new Date().toISOString(),
+    });
 
     res.json({
       proposal,
@@ -390,8 +504,28 @@ v2Router.post('/sources/:id/process', async (req, res) => {
       fallback: built.fallback,
       fallbackReason: built.fallbackReason,
       empty: built.empty,
+      job: latestJob,
     });
   } catch (err) {
+    try {
+      const { repo } = getV2(res);
+      const failedSource = await repo.getSourceItem(req.params.id);
+      if (failedSource?.processingStatus === 'processing') {
+        failedSource.processingStatus = 'failed';
+        await repo.saveSourceItem(failedSource, {
+          auditKind: 'agent.error',
+          auditEntity: { type: 'source', id: failedSource.id },
+        });
+      }
+      const failedJob = (await repo.listJobs()).find(j => j.entityRef.id === req.params.id && j.status === 'running');
+      if (failedJob) await repo.updateJob(failedJob.id, {
+        status: 'failed',
+        error: { code: 'source_processing_failed', message: err instanceof Error ? err.message : String(err), retryable: true },
+        finishedAt: new Date().toISOString(),
+      });
+    } catch {
+      // Preserve the original processing error if failure bookkeeping fails.
+    }
     handleError(err, res);
   }
 });
@@ -542,6 +676,21 @@ v2Router.get('/commitments/:id/history', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Proposal (DF2-004)
 // ---------------------------------------------------------------------------
+
+v2Router.post('/proposals/draft', async (req, res) => {
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const input = {
+      kind: req.body?.kind ?? 'extract_commitments',
+      sourceIds: Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [],
+      changes: Array.isArray(req.body?.changes) ? req.body.changes : [],
+    };
+    const proposal = await createProposal(repo, workspaceId, input);
+    res.status(201).json({ proposal });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
 
 v2Router.get('/proposals', async (req, res) => {
   try {
@@ -926,6 +1075,7 @@ v2Router.post('/connectors/sync-once', async (req, res) => {
 // ---------------------------------------------------------------------------
 
 v2Router.post('/meetings/process', async (req, res) => {
+  let activeJob: Awaited<ReturnType<import('../../repositories/v2/repository.js').V2Repository['getJob']>> = null;
   try {
     const { repo, ctx } = getV2(res);
     const workspaceId = ctx.workspaceId;
@@ -933,9 +1083,41 @@ v2Router.post('/meetings/process', async (req, res) => {
     const { sourceId } = schema.parse(req.body);
     const source = await repo.getSourceItem(sourceId);
     if (!source) return res.status(404).json({ error: { code: 'not_found', message: 'Source not found' } });
+    activeJob = await repo.createOrGetJob({
+      kind: 'transcription',
+      entityRef: { type: 'source', id: source.id },
+      idempotencyKey: `meeting-process:${workspaceId}:${source.id}:${source.contentHash}:meeting@1`,
+      status: 'queued',
+    });
+    if (activeJob.status === 'succeeded') {
+      return res.json({ resumed: true, job: activeJob });
+    }
+    if (activeJob.status === 'running') {
+      return res.status(202).json({ resumed: true, job: activeJob });
+    }
+    if (activeJob.status !== 'queued') {
+      return res.status(409).json({ error: { code: 'job_not_runnable', message: `Job is ${activeJob.status}.`, jobId: activeJob.id } });
+    }
+    const claim = await repo.startJob(activeJob.id, 10);
+    if (!claim.started) return res.status(202).json({ resumed: true, job: claim.job });
+    activeJob = claim.job;
     const out = await processMeeting(repo, { source, workspaceId, autoAcceptDecisions: false });
-    res.json(out);
+    activeJob = activeJob && await repo.updateJob(activeJob.id, {
+      status: 'succeeded',
+      progress: 100,
+      resultRef: { type: 'source', id: source.id },
+      finishedAt: new Date().toISOString(),
+    });
+    res.json({ ...out, job: activeJob });
   } catch (err) {
+    if (activeJob?.status === 'running') {
+      const { repo } = getV2(res);
+      await repo.updateJob(activeJob.id, {
+        status: 'failed',
+        error: { code: 'transcription_failed', message: err instanceof Error ? err.message : String(err), retryable: true },
+        finishedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
     handleError(err, res);
   }
 });
@@ -1025,23 +1207,53 @@ v2Router.get('/calendar/connectors', async (_req, res) => {
 });
 
 v2Router.post('/calendar/sync', async (req, res) => {
+  let activeJob: Awaited<ReturnType<import('../../repositories/v2/repository.js').V2Repository['getJob']>> = null;
   try {
-    const { repo } = getV2(res);
+    const { repo, ctx } = getV2(res);
     const schema = z.object({
       connectorId: z.string(),
       cursor: z.string().optional(),
       timeMin: z.string().datetime({ offset: true }).optional(),
       timeMax: z.string().datetime({ offset: true }).optional(),
+      idempotencyKey: z.string().trim().min(1).max(512).optional(),
     });
     const input = schema.parse(req.body) as {
       connectorId: string;
       cursor?: string;
       timeMin?: string;
       timeMax?: string;
+      idempotencyKey?: string;
     };
-    const r = await syncCalendar(repo, input);
-    res.json(r);
+    activeJob = await repo.createOrGetJob({
+      kind: 'calendar_sync',
+      entityRef: { type: 'connector', id: input.connectorId },
+      idempotencyKey: input.idempotencyKey ?? `calendar-sync:${ctx.workspaceId}:${input.connectorId}:${newId('job')}`,
+      status: 'queued',
+    });
+    if (activeJob.status !== 'queued') {
+      return res.status(activeJob.status === 'running' ? 202 : 200).json({ resumed: true, job: activeJob });
+    }
+    const claim = await repo.startJob(activeJob.id, 10);
+    if (!claim.started) return res.status(202).json({ resumed: true, job: claim.job });
+    activeJob = claim.job;
+    const { idempotencyKey: _idempotencyKey, ...syncInput } = input;
+    const r = await syncCalendar(repo, syncInput);
+    activeJob = activeJob && await repo.updateJob(activeJob.id, {
+      status: 'succeeded',
+      progress: 100,
+      resultRef: { type: 'connector', id: input.connectorId },
+      finishedAt: new Date().toISOString(),
+    });
+    res.json({ ...r, job: activeJob });
   } catch (err) {
+    if (activeJob?.status === 'running') {
+      const { repo } = getV2(res);
+      await repo.updateJob(activeJob.id, {
+        status: 'failed',
+        error: { code: 'calendar_sync_failed', message: err instanceof Error ? err.message : String(err), retryable: true },
+        finishedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
     handleError(err, res);
   }
 });
@@ -1223,12 +1435,14 @@ v2Router.post('/mobile/capture', async (req, res) => {
 // ---------------------------------------------------------------------------
 
 v2Router.post('/import', async (req, res) => {
+  let activeJob: Awaited<ReturnType<import('../../repositories/v2/repository.js').V2Repository['getJob']>> = null;
   try {
     const { repo, ctx } = getV2(res);
     const workspaceId = ctx.workspaceId;
     const schema = z.object({
       entities: z.record(z.array(z.unknown())).default({}),
       mode: z.enum(['merge', 'overwrite']).optional(),
+      idempotencyKey: z.string().trim().min(1).max(512).optional(),
     });
     const parsed = schema.parse(req.body ?? {});
     // Backward compatibility for old exports. Canonical exports now use only
@@ -1241,12 +1455,38 @@ v2Router.post('/import', async (req, res) => {
     if (!entities.commitment && Array.isArray((req.body as any)?.commitments)) {
       entities.commitment = (req.body as any).commitments;
     }
+    activeJob = await repo.createOrGetJob({
+      kind: 'import',
+      entityRef: { type: 'workspace', id: workspaceId },
+      idempotencyKey: parsed.idempotencyKey ?? `import:${workspaceId}:${newId('job')}`,
+      status: 'queued',
+    });
+    if (activeJob.status !== 'queued') {
+      return res.status(activeJob.status === 'running' ? 202 : 200).json({ resumed: true, job: activeJob });
+    }
+    const claim = await repo.startJob(activeJob.id, 10);
+    if (!claim.started) return res.status(202).json({ resumed: true, job: claim.job });
+    activeJob = claim.job;
     const result = await importEntities(repo, workspaceId, {
       entities,
       mode: parsed.mode,
     });
-    res.status(200).json(result);
+    activeJob = activeJob && await repo.updateJob(activeJob.id, {
+      status: 'succeeded',
+      progress: 100,
+      resultRef: { type: 'workspace', id: workspaceId },
+      finishedAt: new Date().toISOString(),
+    });
+    res.status(200).json({ ...result, job: activeJob });
   } catch (err) {
+    if (activeJob?.status === 'running') {
+      const { repo } = getV2(res);
+      await repo.updateJob(activeJob.id, {
+        status: 'failed',
+        error: { code: 'import_failed', message: err instanceof Error ? err.message : String(err), retryable: true },
+        finishedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
     handleError(err, res);
   }
 });

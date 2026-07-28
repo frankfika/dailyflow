@@ -5,15 +5,15 @@
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CalendarDays,
-  CalendarRange,
   Clock3,
   X,
   FileText,
+  MessageCircle,
+  Search,
   Settings,
   Briefcase,
   Heart,
   PanelLeftClose,
-  BrainCircuit,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
@@ -73,8 +73,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native';
-  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native') => void;
+  activeTab: 'today' | 'notes' | 'ai-chat' | 'memory';
+  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat' | 'memory') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -88,6 +88,9 @@ interface SidebarProps {
   activeContext?: 'work' | 'life';
   onContextChange?: (ctx: 'work' | 'life') => void;
   onOpenSettings?: () => void;
+  onOpenTodaySurface?: (surface: 'focus' | 'plan' | 'needs') => void;
+  activeTodaySurface?: 'focus' | 'plan' | 'needs';
+  onOpenNotesSurface?: (surface: 'notes' | 'inbox') => void;
 }
 
 export function Sidebar({
@@ -106,6 +109,9 @@ export function Sidebar({
   activeContext,
   onContextChange,
   onOpenSettings,
+  onOpenTodaySurface,
+  activeTodaySurface,
+  onOpenNotesSurface,
 }: SidebarProps) {
   // --- Viewport detection ---
   const [viewport, setViewport] = useState<ViewportMode>(() =>
@@ -189,6 +195,7 @@ export function Sidebar({
   const goToToday = async () => {
     const today = getTodayStr();
     setActiveTab('today');
+    onOpenTodaySurface?.('focus');
     setCurrentFileDate(today);
     if (!filesMap[today]) {
       try {
@@ -208,7 +215,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'ai-native') => {
+  const handleNavClick = (tab: 'today' | 'notes' | 'ai-chat' | 'memory') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -373,11 +380,11 @@ export function Sidebar({
                 <button
                   onClick={goToToday}
                   data-testid="nav-today"
-                  data-active={activeTab === 'today' && currentFileDate === getTodayStr()}
+                  data-active={activeTab === 'today' && activeTodaySurface !== 'plan' && currentFileDate === getTodayStr()}
                   className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
                     isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
                   } ${
-                    activeTab === 'today' && currentFileDate === getTodayStr()
+                    activeTab === 'today' && activeTodaySurface !== 'plan' && currentFileDate === getTodayStr()
                       ? 'bg-accent/10 text-accent font-semibold'
                       : 'text-text-main hover:bg-black/[0.03]'
                   }`}
@@ -403,39 +410,7 @@ export function Sidebar({
               </li>
               <li>
                 <button
-                  onClick={() => handleNavClick('calendar')}
-                  data-testid="nav-calendar"
-                  data-active={activeTab === 'calendar'}
-                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
-                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
-                  } ${
-                    activeTab === 'calendar'
-                      ? 'bg-accent/10 text-accent font-semibold'
-                      : 'text-text-main hover:bg-black/[0.03]'
-                  }`}
-                  title={isCompact ? (language === 'zh' ? '日历' : 'Calendar') : undefined}
-                  aria-label={language === 'zh' ? '日历' : 'Calendar'}
-                >
-                  <CalendarRange className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <AnimatePresence initial={false}>
-                    {!isCompact && (
-                      <motion.span
-                        key="calendar-label"
-                        initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: 'auto' }}
-                        exit={{ opacity: 0, width: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="overflow-hidden whitespace-nowrap"
-                      >
-                        {language === 'zh' ? '日历' : 'Calendar'}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleNavClick('notes')}
+                  onClick={() => onOpenNotesSurface ? onOpenNotesSurface('notes') : handleNavClick('notes')}
                   data-testid="nav-notes"
                   data-active={activeTab === 'notes'}
                   className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
@@ -467,31 +442,63 @@ export function Sidebar({
               </li>
               <li>
                 <button
-                  onClick={() => handleNavClick('ai-native')}
-                  data-testid="nav-ai-native"
-                  data-active={activeTab === 'ai-native'}
+                  onClick={() => handleNavClick('ai-chat')}
+                  data-testid="nav-ai-chat"
+                  data-active={activeTab === 'ai-chat'}
                   className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
                     isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
                   } ${
-                    activeTab === 'ai-native'
+                    activeTab === 'ai-chat'
                       ? 'bg-accent/10 text-accent font-semibold'
                       : 'text-text-main hover:bg-black/[0.03]'
                   }`}
-                  title={isCompact ? (language === 'zh' ? '智能工作台' : 'AI Workspace') : undefined}
-                  aria-label={language === 'zh' ? '智能工作台' : 'AI Workspace'}
+                  title={isCompact ? (language === 'zh' ? 'AI 对话' : 'AI Chat') : undefined}
+                  aria-label={language === 'zh' ? 'AI 对话' : 'AI Chat'}
                 >
-                  <BrainCircuit className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <MessageCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <AnimatePresence initial={false}>
                     {!isCompact && (
                       <motion.span
-                        key="ai-native-label"
+                        key="ai-chat-label"
                         initial={{ opacity: 0, width: 0 }}
                         animate={{ opacity: 1, width: 'auto' }}
                         exit={{ opacity: 0, width: 0 }}
                         transition={{ duration: 0.18 }}
                         className="overflow-hidden whitespace-nowrap"
                       >
-                        {language === 'zh' ? '智能工作台' : 'AI Workspace'}
+                        {language === 'zh' ? 'AI 对话' : 'AI Chat'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavClick('memory')}
+                  data-testid="nav-memory"
+                  data-active={activeTab === 'memory'}
+                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
+                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    activeTab === 'memory'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                  title={isCompact ? (language === 'zh' ? '记忆' : 'Memory') : undefined}
+                  aria-label={language === 'zh' ? '记忆' : 'Memory'}
+                >
+                  <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <AnimatePresence initial={false}>
+                    {!isCompact && (
+                      <motion.span
+                        key="memory-label"
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {language === 'zh' ? '记忆' : 'Memory'}
                       </motion.span>
                     )}
                   </AnimatePresence>
