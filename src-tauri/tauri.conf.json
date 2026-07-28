@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "DailyFlow",
-  "version": "1.1.17",
+  "version": "1.1.18",
   "identifier": "com.dailyflow.app",
   "build": {
     "frontendDist": "../dist",
@@ -38,7 +38,8 @@
     ],
     "resources": [
       "../dist-server/index.cjs",
-      "../dist-server/node"
+      "../dist-server/node",
+      "../dist-server/lark-cli"
     ]
   },
   "plugins": {

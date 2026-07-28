@@ -10,14 +10,12 @@ use tauri_plugin_dialog::DialogExt;
 pub struct ServerProcess(pub Mutex<Option<Child>>);
 
 impl ServerProcess {
-    /// Signal that the managed child should be terminated. We currently
-    /// let the OS reap the child when the parent process exits, but the
-    /// hook is kept so future builds (Windows Job Object cleanup, log
-    /// forwarding, etc.) can plug in without a state-shape change.
-    #[allow(dead_code)]
-    pub fn mark_for_shutdown(&self) {
-        if let Some(child) = self.0.lock().ok().and_then(|mut g| g.take()) {
-            drop(child);
+    pub fn shutdown(&self) {
+        if let Some(mut child) = self.0.lock().ok().and_then(|mut guard| guard.take()) {
+            if let Err(error) = child.kill() {
+                eprintln!("Failed to stop local server process {}: {}", child.id(), error);
+            }
+            let _ = child.wait();
         }
     }
 }
@@ -25,18 +23,38 @@ impl ServerProcess {
 /// Locate the bundled Node runtime in the app resources directory.
 /// On Windows the binary has a `.exe` extension; on other platforms it has none.
 fn bundled_node_path(resource_dir: &Path) -> Option<PathBuf> {
-    let candidates = if cfg!(target_os = "windows") {
-        vec!["node", "node.exe"]
+    let names = if cfg!(target_os = "windows") {
+        ["node", "node.exe"].as_slice()
     } else {
-        vec!["node"]
+        ["node"].as_slice()
     };
-    for name in candidates {
-        let path = resource_dir.join(name);
-        if path.exists() {
-            return Some(path);
+    let directories = [
+        resource_dir.join("dist-server"),
+        resource_dir.join("_up_").join("dist-server"),
+        resource_dir.to_path_buf(),
+    ];
+    for directory in directories {
+        for name in names {
+            let path = directory.join(name);
+            if path.exists() {
+                return Some(path);
+            }
         }
     }
     None
+}
+
+/// Locate the official lark-cli connector bundled with the desktop app.
+fn bundled_lark_cli_path(resource_dir: &Path) -> Option<PathBuf> {
+    let candidates = [
+        resource_dir.join("dist-server").join("lark-cli"),
+        resource_dir
+            .join("_up_")
+            .join("dist-server")
+            .join("lark-cli"),
+        resource_dir.join("lark-cli"),
+    ];
+    candidates.into_iter().find(|path| path.exists())
 }
 
 /// Locate the bundled server script (used as a development fallback).
@@ -84,14 +102,20 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         )
     })?;
 
+    let bundled_lark_cli = bundled_lark_cli_path(&resource_path);
+    if let Some(path) = bundled_lark_cli.as_deref() {
+        ensure_executable(path)?;
+    }
+
     // 1. Prefer the Node runtime bundled with the app (production builds).
     if let Some(node_path) = bundled_node_path(&resource_path) {
         ensure_executable(&node_path)?;
-        match Command::new(&node_path)
-            .arg(&script_path)
-            .current_dir(&resource_path)
-            .spawn()
-        {
+        let mut command = Command::new(&node_path);
+        command.arg(&script_path).current_dir(&resource_path);
+        if let Some(path) = bundled_lark_cli.as_deref() {
+            command.env("LARK_CLI_PATH", path);
+        }
+        match command.spawn() {
             Ok(child) => {
                 println!("Server started with bundled Node runtime, PID: {}", child.id());
                 return Ok(child);
@@ -119,11 +143,12 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
 
     let mut last_err = String::new();
     for node_path in &node_candidates {
-        match Command::new(node_path)
-            .arg(&script_path)
-            .current_dir(&resource_path)
-            .spawn()
-        {
+        let mut command = Command::new(node_path);
+        command.arg(&script_path).current_dir(&resource_path);
+        if let Some(path) = bundled_lark_cli.as_deref() {
+            command.env("LARK_CLI_PATH", path);
+        }
+        match command.spawn() {
             Ok(child) => {
                 println!("Server started with system Node fallback, PID: {}", child.id());
                 return Ok(child);

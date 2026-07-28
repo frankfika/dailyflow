@@ -1,7 +1,9 @@
 import crypto from 'crypto';
+import { existsSync } from 'fs';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
-import { execFile } from 'child_process';
+import { execFile, spawn, type ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { loadConfig } from './config.js';
 import { listDailyNotes, readDailyNote, writeDailyNote } from './fileSystem.js';
@@ -15,14 +17,26 @@ import { withDateLock } from './lock.js';
 import type { Task } from '../types/task.js';
 
 const execFileAsync = promisify(execFile);
-const CLI = process.env.LARK_CLI_PATH || 'lark-cli';
+const CLI = process.env.LARK_CLI_PATH
+  || ['/opt/homebrew/bin/lark-cli', '/usr/local/bin/lark-cli'].find(existsSync)
+  || 'lark-cli';
+const CLI_BIN_DIR = path.dirname(CLI);
 const CLI_ENV = {
   ...process.env,
+  PATH: [CLI_BIN_DIR, process.env.PATH].filter(Boolean).join(path.delimiter),
   LARKSUITE_CLI_NO_UPDATE_NOTIFIER: '1',
   LARKSUITE_CLI_NO_SKILLS_NOTIFIER: '1',
 };
 
 type JsonObject = Record<string, any>;
+type PendingFeishuSetup = {
+  child: ChildProcess;
+  completion: Promise<void>;
+  verificationUrl?: string;
+  qrDataUrl?: string;
+};
+
+let pendingFeishuSetup: PendingFeishuSetup | null = null;
 
 export interface FeishuAuthStatus {
   cliAvailable: boolean;
@@ -103,10 +117,11 @@ function unwrapEnvelope(parsed: JsonObject): JsonObject {
   return parsed?.data ?? parsed;
 }
 
-async function runLark(args: string[], timeout = 60_000): Promise<JsonObject> {
+async function runLark(args: string[], timeout = 60_000, cwd?: string): Promise<JsonObject> {
   try {
     const { stdout } = await execFileAsync(CLI, args, {
       env: CLI_ENV,
+      cwd,
       timeout,
       maxBuffer: 16 * 1024 * 1024,
     });
@@ -126,6 +141,124 @@ async function runLark(args: string[], timeout = 60_000): Promise<JsonObject> {
       }
     }
     throw error;
+  }
+}
+
+async function createQrDataUrl(verificationUrl: string): Promise<string> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dailyflow-feishu-auth-'));
+  const qrFileName = 'feishu-auth.png';
+  try {
+    await runLark([
+      'auth', 'qrcode',
+      verificationUrl,
+      '--output', qrFileName,
+    ], 60_000, tempDir);
+    const qrImage = await fs.readFile(path.join(tempDir, qrFileName));
+    return `data:image/png;base64,${qrImage.toString('base64')}`;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+function setupUrlFromOutput(output: string): string | undefined {
+  return output.match(/https:\/\/open\.feishu\.cn\/page\/cli\?[^\s\u001b]+/)?.[0];
+}
+
+export async function startFeishuSetup(): Promise<{
+  verificationUrl: string;
+  qrDataUrl: string;
+}> {
+  if (pendingFeishuSetup?.verificationUrl && pendingFeishuSetup.qrDataUrl) {
+    return {
+      verificationUrl: pendingFeishuSetup.verificationUrl,
+      qrDataUrl: pendingFeishuSetup.qrDataUrl,
+    };
+  }
+
+  const child = spawn(CLI, ['config', 'init', '--new', '--lang', 'zh'], {
+    env: CLI_ENV,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  let resolveUrl!: (url: string) => void;
+  let rejectUrl!: (error: Error) => void;
+  const urlReady = new Promise<string>((resolve, reject) => {
+    resolveUrl = resolve;
+    rejectUrl = reject;
+  });
+  let urlResolved = false;
+
+  const inspectOutput = (chunk: Buffer) => {
+    output += chunk.toString('utf8');
+    const verificationUrl = setupUrlFromOutput(output);
+    if (verificationUrl && !urlResolved) {
+      urlResolved = true;
+      resolveUrl(verificationUrl);
+    }
+  };
+  child.stdout.on('data', inspectOutput);
+  child.stderr.on('data', inspectOutput);
+
+  const completion = new Promise<void>((resolve, reject) => {
+    child.once('error', (error) => {
+      if (!urlResolved) rejectUrl(error);
+      reject(error);
+    });
+    child.once('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const error = new Error(
+        code === null
+          ? '飞书连接准备已停止。'
+          : `飞书连接准备未完成（退出码 ${code}）。`,
+      );
+      if (!urlResolved) rejectUrl(error);
+      reject(error);
+    });
+  });
+  void completion.catch(() => {});
+  pendingFeishuSetup = { child, completion };
+
+  const startupTimeout = setTimeout(() => {
+    if (!urlResolved) rejectUrl(new Error('飞书连接准备页面生成超时，请重试。'));
+  }, 15_000);
+
+  try {
+    const verificationUrl = await urlReady;
+    const qrDataUrl = await createQrDataUrl(verificationUrl);
+    pendingFeishuSetup.verificationUrl = verificationUrl;
+    pendingFeishuSetup.qrDataUrl = qrDataUrl;
+    return { verificationUrl, qrDataUrl };
+  } catch (error) {
+    child.kill();
+    pendingFeishuSetup = null;
+    throw error;
+  } finally {
+    clearTimeout(startupTimeout);
+  }
+}
+
+export async function finishFeishuSetup(): Promise<FeishuAuthStatus> {
+  const setup = pendingFeishuSetup;
+  if (!setup) return getFeishuAuthStatus();
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      setup.completion,
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error('仍在等待飞书页面确认，请完成后点击“重新检查”。')),
+          120_000,
+        );
+      }),
+    ]);
+    pendingFeishuSetup = null;
+    return getFeishuAuthStatus();
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
@@ -157,6 +290,7 @@ export async function startFeishuAuthorization(): Promise<{
   verificationUrl: string;
   deviceCode: string;
   expiresIn?: number;
+  qrDataUrl: string;
 }> {
   const data = await runLark([
     'auth', 'login',
@@ -170,12 +304,23 @@ export async function startFeishuAuthorization(): Promise<{
   if (!verificationUrl || !deviceCode) {
     throw new Error('飞书授权命令没有返回授权链接。');
   }
-  return { verificationUrl, deviceCode, expiresIn: data.expires_in };
+
+  return {
+    verificationUrl,
+    deviceCode,
+    expiresIn: data.expires_in,
+    qrDataUrl: await createQrDataUrl(verificationUrl),
+  };
 }
 
 export async function finishFeishuAuthorization(deviceCode: string): Promise<FeishuAuthStatus> {
   if (!deviceCode || deviceCode.length > 512) throw new Error('无效的飞书授权码。');
   await runLark(['auth', 'login', '--device-code', deviceCode, '--json'], 120_000);
+  return getFeishuAuthStatus();
+}
+
+export async function logoutFeishuAuthorization(): Promise<FeishuAuthStatus> {
+  await runLark(['auth', 'logout', '--json']);
   return getFeishuAuthStatus();
 }
 

@@ -309,9 +309,21 @@ export const feishuApi = {
     return res.json();
   },
 
-  async startAuth(): Promise<{ verificationUrl: string; deviceCode: string; expiresIn?: number }> {
+  async startAuth(): Promise<{ verificationUrl: string; deviceCode: string; expiresIn?: number; qrDataUrl: string }> {
     const res = await fetch(`${API_BASE}/feishu/auth/start`, { method: 'POST' });
     if (!res.ok) throw await httpError(res, 'Failed to start Feishu authorization');
+    return res.json();
+  },
+
+  async startSetup(): Promise<{ verificationUrl: string; qrDataUrl: string }> {
+    const res = await fetch(`${API_BASE}/feishu/setup/start`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to prepare Feishu connection');
+    return res.json();
+  },
+
+  async finishSetup(): Promise<FeishuStatus> {
+    const res = await fetch(`${API_BASE}/feishu/setup/finish`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to finish Feishu connection setup');
     return res.json();
   },
 
@@ -322,6 +334,12 @@ export const feishuApi = {
       body: JSON.stringify({ deviceCode }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to finish Feishu authorization');
+    return res.json();
+  },
+
+  async logout(): Promise<FeishuStatus> {
+    const res = await fetch(`${API_BASE}/feishu/auth/logout`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to disconnect Feishu');
     return res.json();
   },
 

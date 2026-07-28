@@ -82,6 +82,18 @@ async function main() {
     : join(extractDir, extractedDir, 'bin', binName);
   const outputPath = join(distServerDir, binName);
 
+  if (existsSync(outputPath)) {
+    try {
+      const bundledVersion = execFileSync(outputPath, ['--version'], { encoding: 'utf8' }).trim();
+      if (bundledVersion === `v${NODE_VERSION}`) {
+        console.log(`Reusing bundled Node runtime ${bundledVersion}: ${outputPath}`);
+        return;
+      }
+    } catch {
+      // Replace an unreadable or incompatible runtime below.
+    }
+  }
+
   console.log(`Downloading Node ${NODE_VERSION} for ${platformId()}...`);
   console.log(url);
 
