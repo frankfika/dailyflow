@@ -357,6 +357,35 @@ export const feishuApi = {
   },
 };
 
+export interface GoogleCalendarStatus {
+  configured: boolean;
+  connected: boolean;
+  accountEmail?: string;
+  reason?: string;
+}
+
+export const googleCalendarApi = {
+  async status(): Promise<GoogleCalendarStatus> {
+    const res = await fetch(`${API_BASE}/google-calendar/status`);
+    if (!res.ok) throw await httpError(res, 'Failed to read Google Calendar status');
+    return res.json();
+  },
+  async configure(clientId: string): Promise<GoogleCalendarStatus> {
+    const res = await fetch(`${API_BASE}/google-calendar/configure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to configure Google Calendar');
+    return res.json();
+  },
+  async startAuth(): Promise<{ authorizationUrl: string }> {
+    const res = await fetch(`${API_BASE}/google-calendar/auth/start`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to start Google authorization');
+    return res.json();
+  },
+};
+
 export const workspacesApi = {
   async validatePath(path: string): Promise<{ valid: boolean; created?: boolean; error?: string }> {
     const res = await fetch(`${API_BASE}/config/validate-path`, {

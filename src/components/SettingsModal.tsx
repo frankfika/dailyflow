@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { configApi, feishuApi, ipfsApi, type FeishuStatus, type IpfsBackupRecord } from '../api/client';
+import { configApi, feishuApi, googleCalendarApi, ipfsApi, type FeishuStatus, type GoogleCalendarStatus, type IpfsBackupRecord } from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 import { getTodayStr } from '../utils/tagColors';
@@ -127,13 +127,17 @@ export function SettingsModal({
   const [lifeBrightness, setLifeBrightness] = useState(10); // 0-10, default 10 = 100%
 
   // Sync sub-tab state
-  const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'github' | 'ipfs'>('feishu');
+  const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'google' | 'github' | 'ipfs'>('feishu');
   const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null);
   const [feishuStatusLoading, setFeishuStatusLoading] = useState(false);
   const [feishuLoading, setFeishuLoading] = useState(false);
   const [feishuDeviceCode, setFeishuDeviceCode] = useState<string | null>(null);
   const [feishuVerificationUrl, setFeishuVerificationUrl] = useState<string | null>(null);
   const [feishuMessage, setFeishuMessage] = useState('');
+  const [googleStatus, setGoogleStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState('');
 
   // IPFS local state
   const [showIpfsKey, setShowIpfsKey] = useState(false);
@@ -162,10 +166,48 @@ export function SettingsModal({
         setFeishuMessage(error.message);
       })
       .finally(() => setFeishuStatusLoading(false));
+    googleCalendarApi.status().then(setGoogleStatus).catch(() => setGoogleStatus(null));
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
   }, [showSettings, configTab]);
+
+  const handleGoogleConnect = async () => {
+    setGoogleLoading(true);
+    setGoogleMessage('');
+    try {
+      if (!googleStatus?.configured) {
+        setGoogleStatus(await googleCalendarApi.configure(googleClientId));
+      }
+      const { authorizationUrl } = await googleCalendarApi.startAuth();
+      try { await open(authorizationUrl); }
+      catch {
+        const popup = window.open(authorizationUrl, '_blank', 'noopener,noreferrer');
+        if (!popup) setGoogleMessage(language === 'zh' ? '浏览器未打开，请允许系统打开 Google 授权页。' : 'The browser did not open. Allow DailyFlow to open the Google authorization page.');
+      }
+      setGoogleMessage(language === 'zh' ? '请在 Google 页面完成授权，然后回到这里点击“检查连接”。' : 'Complete authorization in Google, then return and choose Check connection.');
+    } catch (error: any) {
+      setGoogleMessage(error.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleCheck = async () => {
+    setGoogleLoading(true);
+    try {
+      const status = await googleCalendarApi.status();
+      setGoogleStatus(status);
+      setGoogleMessage(status.connected
+        ? (language === 'zh' ? 'Google Calendar 已连接，日程会显示在日历视图。' : 'Google Calendar connected. Events will appear in Calendar.')
+        : (language === 'zh' ? '尚未收到 Google 授权，请先完成浏览器中的确认。' : 'Authorization is not complete yet.'));
+      if (status.connected) window.dispatchEvent(new CustomEvent('df:feishu-synced'));
+    } catch (error: any) {
+      setGoogleMessage(error.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleConnectFeishu = async () => {
     setFeishuLoading(true);
@@ -975,6 +1017,12 @@ export function SettingsModal({
                   {language === 'zh' ? '飞书' : 'Feishu'}
                 </button>
                 <button
+                  onClick={() => setSyncSubTab('google')}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'google' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
+                >
+                  Google
+                </button>
+                <button
                   onClick={() => setSyncSubTab('github')}
                   className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${syncSubTab === 'github' ? 'bg-white shadow-sm text-text-heading' : 'text-text-muted hover:text-text-main'}`}
                 >
@@ -987,6 +1035,68 @@ export function SettingsModal({
                   IPFS
                 </button>
               </div>
+
+              {syncSubTab === 'google' && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                    <div className="rounded-md bg-green-500/10 p-2 text-green-700"><CalendarDays className="h-5 w-5" /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-text-heading">Google Calendar</h3>
+                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${googleStatus?.connected ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {googleStatus?.connected ? (language === 'zh' ? '已连接' : 'Connected') : (language === 'zh' ? '未连接' : 'Not connected')}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        {language === 'zh' ? '授权后，Google 主日历会直接显示在 DailyFlow 的日、周、月视图中。' : 'After authorization, your primary Google calendar appears in DailyFlow day, week, and month views.'}
+                      </p>
+                      {googleStatus?.accountEmail && <p className="mt-1 text-[10px] text-text-muted">{googleStatus.accountEmail}</p>}
+                    </div>
+                  </div>
+                  {!googleStatus?.configured && (
+                    <div className="rounded-xl border border-border/70 bg-background p-3">
+                      <p className="text-xs font-semibold text-text-heading">{language === 'zh' ? '首次配置' : 'One-time setup'}</p>
+                      <p className="mt-1 text-[11px] text-text-muted">
+                        {language === 'zh' ? '填入 Google Cloud 中创建的“桌面应用”OAuth Client ID。这里只需要 Client ID，不需要密钥。' : 'Enter the Desktop app OAuth Client ID from Google Cloud. No client secret is required.'}
+                      </p>
+                      <input
+                        value={googleClientId}
+                        onChange={event => setGoogleClientId(event.target.value)}
+                        placeholder="1234567890-….apps.googleusercontent.com"
+                        className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-green-400"
+                      />
+                      <button
+                        onClick={async () => {
+                          const url = 'https://console.cloud.google.com/apis/credentials';
+                          try { await open(url); } catch { window.open(url, '_blank', 'noopener,noreferrer'); }
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-green-700"
+                      >
+                        <ExternalLink className="h-3 w-3" />{language === 'zh' ? '打开 Google Cloud 凭据页' : 'Open Google Cloud credentials'}
+                      </button>
+                    </div>
+                  )}
+                  {!googleStatus?.connected && (
+                    <button
+                      onClick={handleGoogleConnect}
+                      disabled={googleLoading || (!googleStatus?.configured && !googleClientId.trim())}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-green-800 disabled:opacity-40"
+                    >
+                      {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                      {language === 'zh' ? '打开 Google 授权页' : 'Open Google authorization'}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleGoogleCheck}
+                    disabled={googleLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-xs font-bold text-text-main disabled:opacity-40"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${googleLoading ? 'animate-spin' : ''}`} />
+                    {language === 'zh' ? '检查连接' : 'Check connection'}
+                  </button>
+                  {googleMessage && <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-700">{googleMessage}</div>}
+                </div>
+              )}
 
               {syncSubTab === 'feishu' && (
                 <div className="space-y-4">

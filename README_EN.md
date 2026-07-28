@@ -81,7 +81,7 @@ DailyFlow is a **local-first daily focus tool for people with overloaded backlog
 - **Unified calendar**: open Calendar from the sidebar and browse tasks, timed notes, and external events by day, week, or month
 - **Multiple sources**: combine local DailyFlow content and connected enterprise calendars on one timeline
 - **Feishu events**: read Feishu Calendar events, inspect their details, and open the original event from DailyFlow
-- **Extensible connectors**: the connector layer supports Feishu today, with a Google Calendar integration point reserved
+- **Extensible connectors**: the connector layer supports Feishu and Google Calendar with desktop OAuth + PKCE
 
 ### 🤖 AI Assistant
 
