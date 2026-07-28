@@ -272,6 +272,8 @@ export interface CalendarWorkspaceData {
     displayName: string;
     connected: boolean;
     color: string;
+    accountLabel?: string;
+    reason?: string;
     error?: string;
   }>;
 }
@@ -343,7 +345,7 @@ export const feishuApi = {
     return res.json();
   },
 
-  async syncTasks(): Promise<{
+  async syncTasks(taskIds?: string[]): Promise<{
     ok: boolean;
     pushed: number;
     pulled: number;
@@ -355,7 +357,11 @@ export const feishuApi = {
     errors: string[];
     syncedAt: string;
   }> {
-    const res = await fetch(`${API_BASE}/feishu/sync/tasks`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/feishu/sync/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskIds?.length ? { taskIds } : {}),
+    });
     if (!res.ok) throw await httpError(res, 'Failed to sync Feishu tasks');
     return res.json();
   },
@@ -363,6 +369,21 @@ export const feishuApi = {
   async syncCalendar(): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
     const res = await fetch(`${API_BASE}/feishu/sync/calendar`, { method: 'POST' });
     if (!res.ok) throw await httpError(res, 'Failed to sync Feishu calendar');
+    return res.json();
+  },
+
+  async createCalendarEvent(input: {
+    title: string;
+    description?: string;
+    start: string;
+    end: string;
+  }): Promise<FeishuAgendaEvent> {
+    const res = await fetch(`${API_BASE}/feishu/calendar/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create Feishu calendar event');
     return res.json();
   },
 

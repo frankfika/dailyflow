@@ -99,7 +99,11 @@ describe('calendar workspace aggregation', () => {
       }),
     ]));
     expect(result.connectors).toEqual([
-      expect.objectContaining({ id: 'mock-calendar', connected: true }),
+      expect.objectContaining({
+        id: 'mock-calendar',
+        connected: true,
+        accountLabel: 'test@example.com',
+      }),
     ]);
   });
 

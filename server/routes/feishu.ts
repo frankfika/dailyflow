@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
+  createFeishuCalendarEvent,
   finishFeishuAuthorization,
   finishFeishuSetup,
   getFeishuAgenda,
@@ -75,9 +76,31 @@ router.post('/auth/logout', async (_req, res) => {
   }
 });
 
-router.post('/sync/tasks', async (_req, res) => {
+router.post('/sync/tasks', async (req, res) => {
   try {
-    res.json(await syncFeishuTasks());
+    const { taskIds } = z.object({
+      taskIds: z.array(z.string().min(1).max(128)).min(1).max(100).optional(),
+    }).parse(req.body || {});
+    res.json(await syncFeishuTasks({ taskIds }));
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.post('/calendar/events', async (req, res) => {
+  try {
+    const input = z.object({
+      title: z.string().trim().min(1).max(200),
+      description: z.string().max(5000).optional(),
+      start: z.string().datetime({ offset: true }),
+      end: z.string().datetime({ offset: true }),
+    }).parse(req.body);
+    res.status(201).json(await createFeishuCalendarEvent({
+      title: input.title!,
+      description: input.description,
+      start: input.start!,
+      end: input.end!,
+    }));
   } catch (error) {
     sendError(res, error);
   }
