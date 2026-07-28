@@ -10,7 +10,7 @@
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.15-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.16-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
@@ -275,6 +275,10 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 ---
 
 ## 📜 Changelog
+
+### v1.1.16 (2026-07-28)
+
+- Fixed desktop shell permissions for Feishu links so the installer matches the latest code.
 
 ### v1.1.15 (2026-07-28)
 

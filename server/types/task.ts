@@ -55,6 +55,7 @@ export interface Config {
   feishuSyncIntervalMinutes?: number;
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
+  googleCalendarClientId?: string;
   /** v2 (AI-Native) feature flags. Independent of the v1 config. */
   v2?: {
     enabled?: boolean;

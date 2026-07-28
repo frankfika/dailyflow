@@ -10,7 +10,7 @@
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.15-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.16-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
@@ -275,6 +275,10 @@ npm run dev:all
 ---
 
 ## 📜 更新日志
+
+### v1.1.16 (2026-07-28)
+
+- 修复桌面端 Feishu 链接打开权限，确保安装包与最新代码一致
 
 ### v1.1.15 (2026-07-28)
 
