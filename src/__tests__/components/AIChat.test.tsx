@@ -201,4 +201,13 @@ describe('AIChat initialDraft', () => {
     await act(async () => {});
     expect(onDraftConsumed).not.toHaveBeenCalled();
   });
+
+  it('keeps session and message panes independently scrollable', () => {
+    render(
+      <AIChat {...baseProps} initialDraft={null} onDraftConsumed={vi.fn()} />
+    );
+
+    expect(screen.getByTestId('chat-session-scroll-region')).toHaveClass('min-h-0', 'overflow-y-auto');
+    expect(screen.getByTestId('chat-message-scroll-region')).toHaveClass('min-h-0', 'overflow-y-auto', 'overscroll-contain');
+  });
 });

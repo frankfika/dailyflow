@@ -45,7 +45,10 @@ export function InboxView({ language = 'zh' }: { language?: 'zh' | 'en' }) {
   }, [qc, workspaceId]);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div
+      className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain p-4"
+      data-testid="inbox-scroll-region"
+    >
       <CaptureBox language={language} onSaved={refresh} />
       <SourcesList
         items={inbox.data?.items ?? []}

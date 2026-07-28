@@ -550,7 +550,7 @@ export function MeetingCapture({ isOpen, onClose, language, activeContext, showT
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.96, opacity: 0 }}
-          className="bg-background w-full max-w-3xl max-h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="flex max-h-[88dvh] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-background shadow-2xl"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -579,7 +579,7 @@ export function MeetingCapture({ isOpen, onClose, language, activeContext, showT
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
             {error && (
               <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 whitespace-pre-line">
                 {error}

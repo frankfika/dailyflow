@@ -206,7 +206,7 @@ export function NoteList({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto" data-testid="notes-list">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="notes-list">
         {all.isLoading ? (
           <div className="flex justify-center py-8">
             <Spinner />

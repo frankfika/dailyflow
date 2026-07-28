@@ -45,7 +45,7 @@ export function EntityContextDrawer({ ref, onClose }: { ref: EntityRef | null; o
           <X className="h-4 w-4" />
         </button>
       </header>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 text-sm">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 text-sm">
         <div className="rounded-lg border border-border bg-background/60 p-3">
           <div className="text-xs text-text-muted">实体 ID</div>
           <code className="mt-1 block break-all text-xs text-text-main">{ref.id}</code>

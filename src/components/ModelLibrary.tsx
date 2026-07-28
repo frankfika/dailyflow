@@ -203,7 +203,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   const formIsValid = !!(form.name?.trim() && form.apiKey?.trim() && form.baseUrl?.trim() && form.model?.trim());
 
   return (
-    <div className="h-full flex flex-col bg-surface relative">
+    <div className="relative flex h-full min-h-0 flex-col bg-surface">
       {!drawerOpen && (
         <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
           <p className="text-sm text-text-muted">
@@ -224,7 +224,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
       )}
 
       {!drawerOpen && (
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
           {configs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted">
             <Sparkles className="w-10 h-10 mb-3 opacity-20" />
@@ -339,7 +339,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
       )}
 
       {drawerOpen && (
-        <div className="flex-1 flex flex-col overflow-hidden bg-surface-white">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-white">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">
               {selectedTemplate && <ProviderIcon name={selectedTemplate} size="sm" />}
@@ -362,7 +362,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
             {!editingId && (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
@@ -604,4 +604,3 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     </div>
   );
 }
-

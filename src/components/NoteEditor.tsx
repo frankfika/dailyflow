@@ -879,7 +879,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 placeholder={language === 'zh'
                   ? '开始写作... 支持 Markdown 语法'
                   : 'Start writing... Markdown supported'}
-                className="w-full h-[calc(100vh-280px)] min-h-[300px] bg-transparent outline-none text-base text-text-main resize-none leading-relaxed"
+                className="w-full h-[calc(100dvh-280px)] min-h-[300px] bg-transparent outline-none text-base text-text-main resize-none leading-relaxed"
               />
             )}
           </div>

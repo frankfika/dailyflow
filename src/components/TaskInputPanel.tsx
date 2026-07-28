@@ -120,7 +120,7 @@ export function TaskInputPanel({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed inset-x-0 bottom-0 z-50 p-4 sm:sticky sm:bottom-6 sm:px-8 lg:px-12 space-y-4"
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[calc(100dvh-1rem)] space-y-4 overflow-y-auto overscroll-contain p-4 sm:sticky sm:bottom-6 sm:px-8 lg:px-12"
       >
         <div className="max-w-3xl mx-auto space-y-4">
           <div className="flex items-center justify-between">

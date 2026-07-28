@@ -158,7 +158,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
             />
           </main>
         ) : (
-          <aside className="h-full min-w-0 overflow-y-auto" data-testid="notes-aside">
+          <aside className="h-full min-w-0 overflow-hidden" data-testid="notes-aside">
             <NoteList
               selectedId={selectedId}
               onSelect={setSelectedId}
@@ -180,7 +180,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
       style={{ gridTemplateColumns: `${asideWidth} 1fr`, minHeight: 0 }}
     >
       <aside
-        className="border-r border-border overflow-y-auto min-w-0"
+        className="min-w-0 overflow-hidden border-r border-border"
         style={{ width: asideWidth }}
         data-testid="notes-aside"
       >

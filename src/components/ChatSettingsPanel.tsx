@@ -43,7 +43,7 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-background border-l border-border shadow-2xl flex flex-col overflow-hidden"
+        className="absolute bottom-0 right-0 top-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden border-l border-border bg-background shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header: back + tabs + close */}
@@ -83,7 +83,7 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {tab === 'providers' ? (
             <ModelLibrary language={language} />
           ) : (
@@ -94,4 +94,3 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
     </motion.div>
   );
 }
-

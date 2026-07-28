@@ -264,7 +264,7 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
   };
 
   return (
-    <div className="h-full flex flex-col bg-surface">
+    <div className="flex h-full min-h-0 flex-col bg-surface">
       {/* Header */}
       <div className="px-6 py-5 border-b border-border flex items-center justify-between">
         <div>
@@ -509,7 +509,7 @@ export function PromptLibrary({ language, activeAiConfigId = 'default', onAiConf
       </div>
 
       {/* Prompt list */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
         {isLoading ? (
           <div className="py-20 text-center text-text-muted">
             <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />

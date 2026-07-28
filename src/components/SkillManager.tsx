@@ -500,7 +500,7 @@ export function SkillManager({ language }: SkillManagerProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Top bar */}
       <div className="px-5 py-3 border-b border-border space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -630,7 +630,7 @@ export function SkillManager({ language }: SkillManagerProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.15 }}
-              className="bg-surface-white border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+              className="flex max-h-[80dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface-white shadow-xl"
               onClick={e => e.stopPropagation()}
             >
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
@@ -644,7 +644,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-5 space-y-3 overflow-y-auto">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
                     <label className="block text-[11px] font-bold text-text-muted mb-1">
@@ -799,7 +799,7 @@ export function SkillManager({ language }: SkillManagerProps) {
       </AnimatePresence>
 
       {/* Content Grid */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
         {isLoading ? (
           <div className="py-12 text-center text-text-muted">
             <Loader2 className="w-6 h-6 animate-spin mx-auto" />

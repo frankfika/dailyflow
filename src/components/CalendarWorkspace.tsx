@@ -490,7 +490,7 @@ export function CalendarWorkspace({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain" data-testid="calendar-scroll-region">
         {error ? (
           <StateMessage icon={<CalendarDays className="h-6 w-6" />} title={error} error />
         ) : loading && data.items.length === 0 ? (
@@ -624,7 +624,7 @@ function CreateEventDialog({
     >
       <form
         onSubmit={submit}
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-white/70 bg-surface/95 shadow-2xl backdrop-blur-2xl"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/70 bg-surface/95 shadow-2xl backdrop-blur-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-event-title"
@@ -652,7 +652,7 @@ function CreateEventDialog({
           </button>
         </div>
 
-        <div className="space-y-4 px-5 py-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
               {language === 'zh' ? '名称' : 'Title'}
@@ -913,7 +913,7 @@ function DayView({
             <Layers3 className="h-4 w-4 text-text-muted" />
           </div>
 
-          <div className="max-h-[calc(100vh-210px)] space-y-5 overflow-y-auto pr-1">
+          <div className="space-y-5 pr-1">
             <AgendaSection
               title={language === 'zh' ? '日程' : 'Events'}
               count={timed.length}

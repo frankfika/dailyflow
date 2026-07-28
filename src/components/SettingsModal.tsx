@@ -819,7 +819,7 @@ export function SettingsModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-surface-white border border-border shadow-sm rounded-md w-full max-w-2xl relative flex flex-col max-h-[90vh]"
+        className="relative flex max-h-[90dvh] min-h-0 w-full max-w-2xl flex-col rounded-md border border-border bg-surface-white shadow-sm"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
@@ -873,7 +873,7 @@ export function SettingsModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto p-6 space-y-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-5" data-testid="settings-scroll-region">
           {configTab === 'general' && (
             <div className="space-y-5">
               {/* Workspace Path (read-only — manage via sidebar switcher) */}

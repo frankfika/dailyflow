@@ -374,7 +374,7 @@ export function Sidebar({
           )}
 
           {/* Nav */}
-          <nav className="flex-1 overflow-y-auto">
+          <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <ul className="space-y-1 text-[13px]">
               <li>
                 <button

@@ -165,9 +165,9 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
   };
 
   return (
-    <div className="h-full flex bg-background">
+    <div className="flex h-full min-h-0 bg-background">
       {/* —— Left: sessions —— */}
-      <aside className={`flex flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-0 md:w-12 items-center overflow-hidden' : 'w-[260px]'}`}>
+      <aside className={`flex min-h-0 flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-0 md:w-12 items-center overflow-hidden' : 'w-[260px]'}`}>
         {!sidebarCollapsed ? (
           <>
             <div className="px-4 pt-5 pb-3 border-b border-border">
@@ -197,7 +197,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-0.5 w-full">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-0.5 w-full" data-testid="chat-session-scroll-region">
               <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wider text-text-muted/70 font-bold">
                 {language === 'zh' ? '历史对话' : 'Recent'}
               </div>
@@ -270,7 +270,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto py-2 space-y-1 flex flex-col items-center w-full">
+            <div className="min-h-0 flex-1 overflow-y-auto py-2 space-y-1 flex flex-col items-center w-full">
               {sessions.slice(0, 8).map(session => (
                 <button
                   key={session.id}
@@ -298,7 +298,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
       </aside>
 
       {/* —— Right: chat —— */}
-      <section className="flex-1 flex flex-col min-w-0">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="px-4 md:px-6 py-3 md:py-4 border-b border-border bg-background flex items-center justify-between shrink-0 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -334,7 +334,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="chat-message-scroll-region">
           {!activeSession || activeSession.messages.length === 0 ? (
             <div className="h-full flex items-center justify-center px-4 md:px-6">
               <div className="text-center max-w-xl w-full">

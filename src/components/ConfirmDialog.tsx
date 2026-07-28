@@ -38,7 +38,7 @@ export function ConfirmDialog({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-surface-white rounded-md shadow-sm border border-border w-full max-w-sm p-6"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-md border border-border bg-surface-white p-6 shadow-sm"
             onClick={e => e.stopPropagation()}
           >
             <h2 className="font-sans text-lg font-medium text-text-heading mb-1">{title}</h2>

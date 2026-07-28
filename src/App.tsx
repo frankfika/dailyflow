@@ -1010,7 +1010,7 @@ export default function App() {
   return (
     <WorkspaceScopeProvider value={activeWorkspaceId || 'default'}>
     <div
-      className="h-screen w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-transparent"
+      className="h-dvh w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-transparent"
     >
       <div className="ambient-bg" aria-hidden="true" />
 
@@ -1114,8 +1114,8 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'overflow-hidden' : activeTab === 'today' ? 'overflow-hidden p-4 md:p-8 lg:p-12 pb-32' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className={activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'w-full h-full' : 'w-full'}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'today' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+          <div className="h-full min-h-0 w-full">
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1142,8 +1142,8 @@ export default function App() {
             )}
             {!isLoading && !loadError && (
               activeTab === 'today' ? (
-                <div className="h-full overflow-y-auto">
-                  <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2 backdrop-blur">
+                <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="today-surface-shell">
+                  <div className="z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur md:px-8 lg:px-12">
                     {([
                       ['focus', language === 'zh' ? '专注' : 'Focus'],
                       ['plan', language === 'zh' ? '计划 / 日历' : 'Plan / Calendar'],
@@ -1155,22 +1155,27 @@ export default function App() {
                     ))}
                   </div>
                   {todaySurface === 'plan' ? (
-                    <CalendarWorkspace
-                      date={currentFileDate}
-                      setDate={setCurrentFileDate}
-                      language={language}
-                      onOpenLocalDate={(date) => { setCurrentFileDate(date); setTodaySurface('focus'); }}
-                      onManageConnections={() => { setConfigTab('sync'); setShowSettings(true); }}
-                    />
+                    <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4 md:px-8 md:pb-8 lg:px-12" data-testid="today-plan-scroll-region">
+                      <CalendarWorkspace
+                        date={currentFileDate}
+                        setDate={setCurrentFileDate}
+                        language={language}
+                        onOpenLocalDate={(date) => { setCurrentFileDate(date); setTodaySurface('focus'); }}
+                        onManageConnections={() => { setConfigTab('sync'); setShowSettings(true); }}
+                      />
+                    </div>
                   ) : todaySurface === 'needs' ? (
-                    <ReviewView
-                      language={language}
-                      onOpenPlan={() => {
-                        setCurrentFileDate(getTodayStr());
-                        setTodaySurface('plan');
-                      }}
-                    />
+                    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="today-needs-scroll-region">
+                      <ReviewView
+                        language={language}
+                        onOpenPlan={() => {
+                          setCurrentFileDate(getTodayStr());
+                          setTodaySurface('plan');
+                        }}
+                      />
+                    </div>
                   ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-4 md:px-8 md:pt-8 lg:px-12 lg:pt-12" data-testid="today-focus-scroll-region">
                 <motion.div
                   key="visual-today"
                   initial={{ opacity: 0, y: 10 }}
@@ -1310,6 +1315,7 @@ export default function App() {
                   />
 
                 </motion.div>
+                </div>
                   )}
                 </div>
               ) : activeTab === 'ai-chat' ? (
@@ -1349,7 +1355,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="h-full overflow-y-auto"
+                  className="h-full min-h-0 overflow-hidden"
                 >
                   <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
                 </motion.div>
@@ -1365,7 +1371,7 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="min-h-0 flex-1">
+                  <div className="min-h-0 flex-1 overflow-hidden">
                     {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} />}
                   </div>
                 </div>
@@ -1474,7 +1480,7 @@ export default function App() {
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
          <div className="fixed inset-0 z-50 bg-black/15 backdrop-blur-md flex items-center justify-center p-4 sm:p-8">
-           <div className={`w-full ${isNoteEditorMaximized ? 'max-w-none h-screen' : 'max-w-5xl h-[85vh]'} floating-card overflow-hidden flex flex-col transition-all duration-200`}>
+           <div className={`w-full min-h-0 ${isNoteEditorMaximized ? 'h-full max-w-none' : 'h-[85dvh] max-w-5xl'} floating-card overflow-hidden flex flex-col transition-all duration-200`}>
              <NoteEditor
              language={language}
              activeContext={activeContext}

@@ -102,7 +102,7 @@ export function SaveNoteModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[1px]"
       onClick={close}
     >
       <motion.div
@@ -110,7 +110,7 @@ export function SaveNoteModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.15 }}
-        className="bg-surface-white border border-border rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden"
+        className="flex max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-surface-white shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
@@ -121,7 +121,7 @@ export function SaveNoteModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
           {savedNoteId && (
             <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
               {language === 'zh'
