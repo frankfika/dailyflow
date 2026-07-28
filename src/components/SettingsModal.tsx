@@ -180,7 +180,12 @@ export function SettingsModal({
       try {
         await open(auth.verificationUrl);
       } catch {
-        window.open(auth.verificationUrl, '_blank', 'noopener,noreferrer');
+        const popup = window.open(auth.verificationUrl, '_blank', 'noopener,noreferrer');
+        if (!popup) {
+          setFeishuMessage(language === 'zh'
+            ? '授权链接已经生成，但系统浏览器没有自动打开。请点击“重新打开”或“复制链接”。'
+            : 'The authorization link is ready, but the browser did not open. Choose Open again or Copy link below.');
+        }
       }
     } catch (e: any) {
       setFeishuMessage(e.message);
@@ -212,7 +217,12 @@ export function SettingsModal({
     try {
       await open(feishuVerificationUrl);
     } catch {
-      window.open(feishuVerificationUrl, '_blank', 'noopener,noreferrer');
+      const popup = window.open(feishuVerificationUrl, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        setFeishuMessage(language === 'zh'
+          ? '系统仍然无法打开授权页，请复制链接后粘贴到浏览器。'
+          : 'The authorization page still could not open. Copy the link and paste it into your browser.');
+      }
     }
   };
 
