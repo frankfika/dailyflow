@@ -27,7 +27,7 @@ const sourcePath = join(
   'bin',
   sourceName,
 );
-const outputPath = join(distServerDir, 'lark-cli');
+const outputPath = join(distServerDir, sourceName);
 
 function versionOf(binary) {
   return execFileSync(binary, ['--version'], {
