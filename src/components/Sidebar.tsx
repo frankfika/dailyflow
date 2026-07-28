@@ -292,7 +292,7 @@ export function Sidebar({
         aria-expanded={isExpanded}
         data-viewport={viewport}
         data-state={isCompact ? 'compact' : isExpanded ? 'expanded' : 'hidden'}
-        className={`${asideBaseClass} flex flex-col bg-[var(--color-surface)] backdrop-blur-2xl border-r border-[var(--color-border)]`}
+        className={`${asideBaseClass} flex flex-col bg-[var(--color-surface)] border-r border-[var(--color-border)]`}
         initial={motionInitial}
         animate={motionAnimate}
         transition={motionTransition}

@@ -136,11 +136,9 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 
 /* Glass Panels — subtle depth for native feel */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.50);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  backdrop-filter: blur(24px) saturate(1.1);
-  -webkit-backdrop-filter: blur(24px) saturate(1.1);
 }
 
 :root[data-context="life"] .glass-panel {
@@ -153,9 +151,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), 0 0 0 1px rgba(0, 0, 0, 0.01);
-  transition: all 0.3s var(--ease-native);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  transition: transform 0.3s var(--ease-native), box-shadow 0.3s var(--ease-native), border-color 0.3s var(--ease-native);
 }
 .floating-card:hover {
   transform: translateY(-2px);
@@ -168,9 +164,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  transition: all 0.25s var(--ease-native);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  transition: transform 0.25s var(--ease-native), box-shadow 0.25s var(--ease-native), border-color 0.25s var(--ease-native), background-color 0.25s var(--ease-native);
 }
 .native-card:hover {
   background: var(--color-surface-elevated);
@@ -395,43 +389,14 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   pointer-events: none;
   z-index: -1;
   overflow: hidden;
-}
-.ambient-bg::before,
-.ambient-bg::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(140px);
-  opacity: 0.45;
-  animation: ambient-drift 20s ease-in-out infinite alternate;
-}
-.ambient-bg::before {
-  width: 65vw;
-  height: 65vw;
-  top: -20vw;
-  right: -15vw;
-  background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
-}
-.ambient-bg::after {
-  width: 55vw;
-  height: 55vw;
-  bottom: -15vw;
-  left: -10vw;
-  background: radial-gradient(circle, var(--color-accent-warm) 0%, transparent 70%);
-  animation-delay: -10s;
-  opacity: 0.35;
+  contain: strict;
+  background:
+    radial-gradient(65vw 65vw at 110% -10%, color-mix(in srgb, var(--color-accent) 13%, transparent), transparent 72%),
+    radial-gradient(55vw 55vw at -10% 110%, color-mix(in srgb, var(--color-accent-warm) 10%, transparent), transparent 72%);
 }
 
-:root[data-context="life"] .ambient-bg::before {
-  opacity: 0.3;
-}
-:root[data-context="life"] .ambient-bg::after {
-  opacity: 0.2;
-}
-
-@keyframes ambient-drift {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(2vw, 2vh) scale(1.05); }
+:root[data-context="life"] .ambient-bg {
+  opacity: 0.72;
 }
 
 /* Daily Reset — the product's primary loop */
@@ -771,8 +736,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem 1.1rem 0.95rem;
-  background: color-mix(in srgb, var(--color-surface-elevated) 92%, transparent);
-  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--color-surface-elevated) 97%, var(--color-background));
   border: 1px solid var(--color-border);
   border-radius: 1rem;
   box-shadow: 0 1px 0 var(--color-border);
