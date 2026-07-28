@@ -85,14 +85,14 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function ErrorBanner({ error, onRetry }: { error: { message: string; code?: string }; onRetry?: () => void }) {
+export function ErrorBanner({ error, onRetry, language = 'zh' }: { error: { message: string; code?: string }; onRetry?: () => void; language?: 'zh' | 'en' }) {
   return (
     <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm">
       <div className="font-medium text-red-600">{error.code ?? 'error'}</div>
       <div className="text-red-600/80">{error.message}</div>
       {onRetry && (
         <Button onClick={onRetry} variant="ghost" size="sm" className="mt-1">
-          重试
+          {language === 'zh' ? '重试' : 'Retry'}
         </Button>
       )}
     </div>
@@ -121,6 +121,7 @@ export function StateView({
   emptyBody,
   onRetry,
   children,
+  language = 'zh',
 }: {
   loading?: boolean;
   error?: { message: string; code?: string } | null;
@@ -129,16 +130,17 @@ export function StateView({
   emptyBody?: string;
   onRetry?: () => void;
   children: React.ReactNode;
+  language?: 'zh' | 'en';
 }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 p-6 text-sm text-[var(--color-text-muted)]">
         <Spinner />
-        加载中…
+        {language === 'zh' ? '加载中…' : 'Loading…'}
       </div>
     );
   }
-  if (error) return <ErrorBanner error={error} onRetry={onRetry} />;
+  if (error) return <ErrorBanner error={error} onRetry={onRetry} language={language} />;
   if (empty) return <EmptyState title={emptyTitle ?? '没有内容'} body={emptyBody} />;
   return <>{children}</>;
 }

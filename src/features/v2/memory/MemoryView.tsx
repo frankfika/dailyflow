@@ -22,7 +22,8 @@ import { Card, Button, Badge, StateView } from '../components/States';
 import { queryKeys } from '../../../queryKeys';
 import { openEntity } from '../../../components/EntityContextDrawer';
 
-export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }) {
+export function MemoryView({ workspaceId = 'default', language = 'zh' }: { workspaceId?: string; language?: 'zh' | 'en' }) {
+  const isZh = language === 'zh';
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   useEffect(() => {
@@ -47,35 +48,35 @@ export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }
     <div className="flex flex-col gap-4 p-4">
       <Card>
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-medium">搜索</div>
+          <div className="text-sm font-medium">{isZh ? '搜索' : 'Search'}</div>
           <input
             type="text"
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder='例如："为什么决定用两档定价" / "Zhang" / "Q3 计划"'
+            placeholder={isZh ? '例如：“为什么决定用两档定价” / “Q3 计划”' : 'For example: “Why did we choose two-tier pricing?” / “Q3 plan”'}
             className="rounded-lg border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-sm"
           />
           <div className="text-xs text-[var(--color-text-muted)]">
-            搜索结果会带原文片段和来源 ID；不会返回"只有文件路径"。
+            {isZh ? '搜索结果会带原文片段和来源，不会只返回文件路径。' : 'Results include source excerpts and references, not just file paths.'}
           </div>
         </div>
       </Card>
 
       {q.length > 0 && (
         <Card>
-          <div className="text-sm font-medium">结果（{search.data?.hits.length ?? 0}）</div>
+          <div className="text-sm font-medium">{isZh ? '结果' : 'Results'}（{search.data?.hits.length ?? 0}）</div>
           {search.isLoading ? (
-            <div className="text-sm text-[var(--color-text-muted)]">搜索中…</div>
+            <div className="text-sm text-[var(--color-text-muted)]">{isZh ? '搜索中…' : 'Searching…'}</div>
           ) : search.error ? (
             <div className="text-xs text-red-600">{(search.error as Error).message}</div>
           ) : (search.data?.hits.length ?? 0) === 0 ? (
             <div className="text-sm text-[var(--color-text-muted)]">
-              没有找到匹配。我不会假装知道 — 没有结果就是没有。
+              {isZh ? '没有找到匹配内容。' : 'No matching content found.'}
             </div>
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
               {(search.data?.hits ?? []).map((h, i) => (
-                <SearchHit key={i} hit={h} workspaceId={workspaceId} />
+                <SearchHit key={i} hit={h} workspaceId={workspaceId} isZh={isZh} />
               ))}
             </ul>
           )}
@@ -83,9 +84,9 @@ export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }
       )}
 
       <Card>
-        <div className="text-sm font-medium">已确认的 Commitment</div>
+        <div className="text-sm font-medium">{isZh ? '已确认事项' : 'Confirmed work items'}</div>
         {commitments.isLoading ? (
-          <div className="text-sm text-[var(--color-text-muted)]">加载中…</div>
+          <div className="text-sm text-[var(--color-text-muted)]">{isZh ? '加载中…' : 'Loading…'}</div>
         ) : commitments.error ? (
           <div className="text-xs text-red-600">{(commitments.error as Error).message}</div>
         ) : (
@@ -104,20 +105,22 @@ export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }
       </Card>
 
       <Card>
-        <div className="text-sm font-medium">旧工作区（v1 Daily）</div>
+        <div className="text-sm font-medium">{isZh ? '旧版每日任务' : 'Legacy daily tasks'}</div>
         <div className="text-xs text-[var(--color-text-muted)]">
-          这些 checkbox 任务继续可读、可完成；你可以把任意一项迁移为 v2 Commitment，原文件不会被破坏。
+          {isZh
+            ? '这些任务仍可读取和完成；也可以迁移为结构化事项，原文件不会被破坏。'
+            : 'These tasks remain readable and actionable. You can migrate one into a structured work item without damaging the original file.'}
         </div>
         <div className="mt-2 flex flex-col gap-1">
           {legacy.isLoading ? (
-            <div className="text-sm text-[var(--color-text-muted)]">加载中…</div>
+            <div className="text-sm text-[var(--color-text-muted)]">{isZh ? '加载中…' : 'Loading…'}</div>
           ) : legacy.error ? (
             <div className="text-xs text-red-600">{(legacy.error as Error).message}</div>
           ) : (legacy.data?.items.length ?? 0) === 0 ? (
-            <div className="text-sm text-[var(--color-text-muted)]">没有需要迁移的旧任务。</div>
+            <div className="text-sm text-[var(--color-text-muted)]">{isZh ? '没有需要迁移的旧任务。' : 'No legacy tasks to migrate.'}</div>
           ) : (
             (legacy.data?.items ?? []).slice(0, 30).map(t => (
-              <LegacyTaskRow key={t.id} task={t} onMigrated={() => legacy.refetch()} />
+              <LegacyTaskRow key={t.id} task={t} isZh={isZh} onMigrated={() => legacy.refetch()} />
             ))
           )}
         </div>
@@ -126,7 +129,7 @@ export function MemoryView({ workspaceId = 'default' }: { workspaceId?: string }
   );
 }
 
-function SearchHit({ hit, workspaceId }: { hit: MemoryHit; workspaceId: string }) {
+function SearchHit({ hit, workspaceId, isZh }: { hit: MemoryHit; workspaceId: string; isZh: boolean }) {
   return (
     <li
       className="cursor-pointer rounded-md border border-[var(--color-border)] p-2 text-sm hover:bg-black/[0.03]"
@@ -136,19 +139,19 @@ function SearchHit({ hit, workspaceId }: { hit: MemoryHit; workspaceId: string }
       role="button"
     >
       <div className="flex items-center gap-2">
-        <Badge>{hit.type}</Badge>
+        <Badge>{memoryTypeLabel(hit.type, isZh)}</Badge>
         <span className="font-medium">{hit.title}</span>
-        <span className="text-xs text-[var(--color-text-muted)]">score {hit.score}</span>
+        <span className="text-xs text-[var(--color-text-muted)]">{isZh ? '相关度' : 'score'} {hit.score}</span>
       </div>
       <div className="mt-1 text-xs italic">"{hit.snippet}"</div>
       <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
-        id: {hit.id} · sources: {hit.sourceIds.length} · evidence: {hit.evidenceIds.length}
+        {isZh ? '来源' : 'sources'}: {hit.sourceIds.length} · {isZh ? '证据' : 'evidence'}: {hit.evidenceIds.length}
       </div>
     </li>
   );
 }
 
-function LegacyTaskRow({ task, onMigrated }: { task: LegacyTaskView; onMigrated: () => void }) {
+function LegacyTaskRow({ task, onMigrated, isZh }: { task: LegacyTaskView; onMigrated: () => void; isZh: boolean }) {
   const [migrating, setMigrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -176,8 +179,21 @@ function LegacyTaskRow({ task, onMigrated }: { task: LegacyTaskView; onMigrated:
         }}
         disabled={migrating}
       >
-        {migrating ? '迁移中…' : '迁移为 Commitment'}
+        {migrating ? (isZh ? '迁移中…' : 'Migrating…') : (isZh ? '迁移为事项' : 'Migrate to work item')}
       </Button>
     </div>
   );
+}
+
+function memoryTypeLabel(type: string, isZh: boolean): string {
+  const labels: Record<string, [string, string]> = {
+    commitment: ['事项', 'Work item'],
+    project: ['项目', 'Project'],
+    person: ['联系人', 'Person'],
+    decision: ['决定', 'Decision'],
+    outcome: ['结果', 'Outcome'],
+    source: ['来源', 'Source'],
+    note: ['笔记', 'Note'],
+  };
+  return labels[type]?.[isZh ? 0 : 1] ?? type;
 }

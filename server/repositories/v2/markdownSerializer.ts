@@ -382,6 +382,7 @@ export function serializeProposal(p: Proposal): string {
     expires_at: p.expiresAt ?? '',
     rejected_reason: p.rejectedReason ?? '',
     accepted_change_ids: p.acceptedChangeIds ?? [],
+    apply_receipts: p.applyReceipts ?? [],
     created_at: p.createdAt,
     updated_at: p.updatedAt,
     created_by: p.createdBy,

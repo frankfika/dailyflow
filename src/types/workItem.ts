@@ -8,6 +8,7 @@ export interface WorkItem {
   title: string;
   status: WorkItemStatus;
   scheduledDate?: string;
+  dueAt?: string;
   reviewAt?: string;
   sourceRefs: Array<{ workspaceId: string; type: string; id: string; label?: string }>;
   version: number;
@@ -20,6 +21,9 @@ export interface LegacyTaskLike {
   title: string;
   status: 'todo' | 'done' | 'migrated' | string;
   source_date?: string;
+  deadline?: string;
+  date?: string;
+  line?: number;
 }
 
 export interface CommitmentLike {
@@ -31,6 +35,8 @@ export interface CommitmentLike {
   sourceIds?: string[];
   updatedAt: string;
   schemaVersion?: number;
+  dueAt?: string;
+  legacyTaskId?: string;
 }
 
 export function taskToWorkItem(task: LegacyTaskLike, workspaceId: string, date?: string): WorkItem {
@@ -40,7 +46,8 @@ export function taskToWorkItem(task: LegacyTaskLike, workspaceId: string, date?:
     workspaceId,
     title: task.title,
     status: task.status === 'done' ? 'done' : task.status === 'migrated' ? 'cancelled' : 'open',
-    scheduledDate: date ?? task.source_date,
+    scheduledDate: date ?? task.date ?? task.source_date,
+    dueAt: task.deadline,
     sourceRefs: [],
     version: 0,
     updatedAt: '',
@@ -62,6 +69,7 @@ export function commitmentToWorkItem(commitment: CommitmentLike): WorkItem {
     title: commitment.title,
     status,
     reviewAt: commitment.reviewAt,
+    dueAt: commitment.dueAt,
     sourceRefs: (commitment.sourceIds ?? []).map(id => ({
       workspaceId: commitment.workspaceId,
       type: 'source',
@@ -79,8 +87,11 @@ export function mergeWorkItems(
   workspaceId: string,
   date?: string,
 ): WorkItem[] {
+  const migratedLegacyIds = new Set(
+    commitments.map(commitment => commitment.legacyTaskId).filter((id): id is string => Boolean(id)),
+  );
   return [
-    ...tasks.map(task => taskToWorkItem(task, workspaceId, date)),
+    ...tasks.filter(task => !migratedLegacyIds.has(task.id)).map(task => taskToWorkItem(task, workspaceId, date)),
     ...commitments.map(commitmentToWorkItem),
   ];
 }

@@ -94,10 +94,10 @@ describe('v2/client', () => {
   });
 
   it('applyProposal POSTs to /proposals/:id/accept with selection', async () => {
-    await applyProposal('prop_01', { selection: ['a', 'b'] });
+    await applyProposal('prop_01', { idempotencyKey: 'test-proposal-apply', selection: ['a', 'b'] });
     const call = (fetch as any).mock.calls[0];
     expect(call[0]).toContain('/api/v2/proposals/prop_01/accept');
-    expect(JSON.parse(call[1].body)).toEqual({ selection: ['a', 'b'] });
+    expect(JSON.parse(call[1].body)).toEqual({ idempotencyKey: 'test-proposal-apply', selection: ['a', 'b'] });
   });
 
   it('generatePlan POSTs to /plans/generate', async () => {

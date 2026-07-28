@@ -21,7 +21,6 @@ import {
 import { V2Repository } from '../../repositories/v2/repository.js';
 
 const STALE_DAYS = 14;
-const WAITING_OVERDUE_DAYS = 7;
 
 export interface StaleCommitmentItem {
   commitmentId: string;
@@ -91,7 +90,10 @@ export async function getWaitingOverdue(repo: V2Repository): Promise<WaitingOver
     if (c.state !== 'waiting' || !c.reviewAt) continue;
     const reviewAt = new Date(c.reviewAt).getTime();
     const overdue = Math.floor((now - reviewAt) / 86_400_000);
-    if (overdue < WAITING_OVERDUE_DAYS) continue;
+    // reviewAt is the moment the item should return to the user's attention.
+    // Waiting another seven days made the queue look empty even though review
+    // was already due.
+    if (overdue < 0) continue;
     out.push({
       commitmentId: c.id,
       title: c.title,

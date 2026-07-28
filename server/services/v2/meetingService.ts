@@ -30,6 +30,7 @@ import {
   runExtractor,
   buildExtractorProposal,
 } from './ai/extractor.js';
+import type { AIProvider } from './ai/provider.js';
 import {
   createProposal,
   applyProposal,
@@ -39,8 +40,9 @@ import { createCommitment } from './commitmentService.js';
 export interface MeetingProcessInput {
   source: SourceItem;
   workspaceId: string;
-  /** When true, persist the resulting Decisions immediately. */
+  /** Legacy test-only path. User-facing routes always require review. */
   autoAcceptDecisions?: boolean;
+  provider?: AIProvider;
 }
 
 export interface MeetingProcessOutput {
@@ -62,7 +64,7 @@ export async function processMeeting(
   repo: V2Repository,
   input: MeetingProcessInput
 ): Promise<MeetingProcessOutput> {
-  const out = await runExtractor({ source: input.source });
+  const out = await runExtractor({ source: input.source, provider: input.provider });
   const built = buildExtractorProposal({
     source: input.source,
     extractorOutput: out,
@@ -89,41 +91,9 @@ export async function processMeeting(
     changes: built.changes,
   });
 
-  // Persist any Decision drafts directly (not as Proposal changes) so
-  // they appear in Memory even before the user reviews. Decisions are
-  // not user-acted; they're record-of-fact. The user can still edit /
-  // archive them in the Decisions page.
-  let decisionCount = 0;
-  const decisions: Decision[] = [];
-  for (const item of out.items) {
-    if (item.kind === 'decision' && item.confidence >= 0.6) {
-      const decision = DecisionSchema.parse({
-        id: newId('dec'),
-        schemaVersion: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: 'ai',
-        workspaceId: input.workspaceId,
-        title: item.title,
-        decision: item.decision ?? item.title,
-        rationale: item.rationale,
-        decidedAt: new Date().toISOString(),
-        participantIds: [],
-        evidenceIds: built.evidence
-          .filter(e => e.quote === item.quote)
-          .map(e => e.id),
-      });
-      decisions.push(decision);
-    }
-  }
-  for (const d of decisions) {
-    await repo.saveDecision(d, {
-      auditKind: 'process',
-      auditEntity: { type: 'decision', id: d.id },
-      auditData: { sourceId: input.source.id },
-    });
-    decisionCount++;
-  }
+  // AI-derived Decisions are proposed just like every other AI write. They
+  // are persisted only when the user accepts the corresponding change.
+  const decisionCount = proposal.changes.filter(change => change.entity === 'decision').length;
 
   // If auto-accept is on, apply non-decision changes immediately.
   let commitmentCount = 0;
@@ -134,6 +104,7 @@ export async function processMeeting(
   } else if (proposal.changes.length > 0) {
     try {
       const r = await applyProposal(repo, proposal.id, {
+        idempotencyKey: `meeting-auto-apply:${proposal.id}`,
         selection: proposal.changes
           .filter(c => c.confidence >= 0.85)
           .map(c => c.changeId),

@@ -69,6 +69,26 @@ describe('Reviewer service (Phase 7)', () => {
     expect(overdue.find(o => o.commitmentId === c.id)).toBeDefined();
   });
 
+  it('flags a Waiting item as soon as reviewAt is reached', async () => {
+    const c = await createCommitment(repo, workspaceId, {
+      title: 'Review today',
+      outcome: 'follow up',
+      state: 'active',
+    });
+    await transitionCommitment(repo, c.id, 'waiting');
+    const waiting = await repo.getCommitment(c.id);
+    await repo.saveCommitment({
+      ...waiting!,
+      reviewAt: new Date(Date.now() - 60_000).toISOString(),
+    }, {
+      auditKind: 'commitment.update',
+      auditEntity: { type: 'commitment', id: c.id },
+    });
+
+    const overdue = await getWaitingOverdue(repo);
+    expect(overdue.find(o => o.commitmentId === c.id)).toBeDefined();
+  });
+
   it('generates a weekly review digest', async () => {
     await createCommitment(repo, workspaceId, { title: 'A', outcome: 'A', state: 'active' });
     const r = await generateWeeklyReview(repo);

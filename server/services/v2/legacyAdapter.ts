@@ -163,29 +163,31 @@ interface ParsedTaskLine {
  * Parse a single markdown line as a task. The legacy DailyFlow format uses:
  *   - [ ] Task title
  *   - [x] Task title
- *   - [ ] Task title #tag1 #tag2 !high @2026-07-25 +project
+ *   - [ ] Task title #tag1 #tag2 #priority:high #deadline:2026-07-25
+ * Historical aliases (`!high`, `@2026-07-25`, `+project`) remain supported.
  */
 export function parseTaskLine(line: string): ParsedTaskLine | null {
   const m = /^\s*-\s*\[( |x|X)\]\s+(.+?)\s*$/.exec(line);
   if (!m) return null;
   const done = m[1]!.toLowerCase() === 'x';
   let rest = m[2]!;
+  const explicitlyMigrated = /^\[migrated→[^\]]+\]\s*/.test(rest);
   // strip leading "[migrated→...]" marker
   rest = rest.replace(/^\[migrated→[^\]]+\]\s*/, '');
-  const status: 'todo' | 'done' | 'migrated' = done ? 'done' : /migrated/i.test(line) ? 'migrated' : 'todo';
+  const status: 'todo' | 'done' | 'migrated' = done ? 'done' : explicitlyMigrated ? 'migrated' : 'todo';
 
-  // extract @YYYY-MM-DD
-  const dateMatch = rest.match(/@(\d{4}-\d{2}-\d{2})/);
+  // Current DailyFlow writes #deadline:YYYY-MM-DD; retain the historical @date alias.
+  const dateMatch = rest.match(/#deadline:(\d{4}-\d{2}-\d{2})|@(\d{4}-\d{2}-\d{2})/);
   let deadline: string | undefined;
   if (dateMatch) {
-    deadline = dateMatch[1];
+    deadline = dateMatch[1] ?? dateMatch[2];
     rest = rest.replace(dateMatch[0], '').trim();
   }
-  // extract !high/!medium/!low
+  // Current DailyFlow writes #priority:value; retain the historical !value alias.
   let priority: 'high' | 'medium' | 'low' | undefined;
-  const prioMatch = rest.match(/!(high|medium|low)\b/i);
+  const prioMatch = rest.match(/#priority:(high|medium|low)\b|!(high|medium|low)\b/i);
   if (prioMatch) {
-    priority = prioMatch[1]!.toLowerCase() as 'high' | 'medium' | 'low';
+    priority = (prioMatch[1] ?? prioMatch[2])!.toLowerCase() as 'high' | 'medium' | 'low';
     rest = rest.replace(prioMatch[0], '').trim();
   }
   // extract +project
@@ -195,6 +197,11 @@ export function parseTaskLine(line: string): ParsedTaskLine | null {
     project = projMatch[1];
     rest = rest.replace(projMatch[0], '').trim();
   }
+  // Rollover provenance and stable IDs are internal metadata, not part of the title.
+  rest = rest
+    .replace(/\s*↗\s*migrated:\S+/gi, '')
+    .replace(/\s*\^id-[\w-]+/gi, '')
+    .trim();
   // extract #tags
   const tags = Array.from(rest.matchAll(/#([\w一-龥-]+)/g)).map(m => m[1]!);
   for (const t of tags) {

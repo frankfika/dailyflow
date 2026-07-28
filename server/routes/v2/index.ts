@@ -39,6 +39,10 @@ import { generatePlan, acceptPlan, PlanConstraintsSchema } from '../../services/
 import { search, getContext } from '../../services/v2/memoryService.js';
 import { NoteService, NoteNotFoundError } from '../../services/v2/noteService.js';
 import { loadLegacyTasks, migrateLegacyTask } from '../../services/v2/legacyAdapter.js';
+import { loadConfig } from '../../services/config.js';
+import { readDailyNote, writeDailyNote } from '../../services/fileSystem.js';
+import { withDateLock } from '../../services/lock.js';
+import { editTaskFullInMarkdown, updateTaskInMarkdown } from '../../services/parser.js';
 import { getV2Flags } from '../../services/v2/featureFlags.js';
 import { listConnectors, getConnector, syncConnector, pauseConnector, deleteConnector, runConnectorSyncOnce } from '../../services/v2/connectors.js';
 import {
@@ -709,7 +713,9 @@ v2Router.get('/proposals/:id', async (req, res) => {
     const { repo } = getV2(res);
     const p = await repo.getProposal(req.params.id);
     if (!p) return res.status(404).json({ error: { code: 'not_found', message: 'Proposal not found' } });
-    res.json({ proposal: p });
+    const evidenceIds = new Set(p.changes.flatMap(change => change.evidenceIds));
+    const evidence = (await repo.listEvidence()).filter(item => evidenceIds.has(item.id));
+    res.json({ proposal: p, evidence });
   } catch (err) {
     handleError(err, res);
   }
@@ -718,9 +724,15 @@ v2Router.get('/proposals/:id', async (req, res) => {
 v2Router.post('/proposals/:id/accept', async (req, res) => {
   try {
     const { repo } = getV2(res);
+    const body = z.object({
+      idempotencyKey: z.string().trim().min(1).max(512),
+      selection: z.array(z.string()).optional(),
+      userOverride: z.record(z.record(z.unknown())).optional(),
+    }).parse(req.body);
     const result = await applyProposal(repo, req.params.id, {
-      selection: req.body?.selection,
-      userOverride: req.body?.userOverride,
+      idempotencyKey: body.idempotencyKey,
+      selection: body.selection,
+      userOverride: body.userOverride,
     });
     res.json(result);
   } catch (err) {
@@ -731,9 +743,15 @@ v2Router.post('/proposals/:id/accept', async (req, res) => {
 v2Router.post('/proposals/:id/apply-selection', async (req, res) => {
   try {
     const { repo } = getV2(res);
+    const body = z.object({
+      idempotencyKey: z.string().trim().min(1).max(512),
+      selection: z.array(z.string()).optional(),
+      userOverride: z.record(z.record(z.unknown())).optional(),
+    }).parse(req.body);
     const result = await applyProposal(repo, req.params.id, {
-      selection: req.body?.selection,
-      userOverride: req.body?.userOverride,
+      idempotencyKey: body.idempotencyKey,
+      selection: body.selection,
+      userOverride: body.userOverride,
     });
     res.json(result);
   } catch (err) {
@@ -986,6 +1004,49 @@ v2Router.get('/legacy/tasks', async (req, res) => {
     const { ctx } = getV2(res);
     const items = await loadLegacyTasks(ctx.root);
     res.json({ items });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.patch('/legacy/tasks/:dateLine', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const [date, lineStr] = req.params.dateLine.split('#');
+    const line = Number(lineStr);
+    if (!date || !line) {
+      return res.status(400).json({ error: { code: 'validation', message: 'Expected /legacy/tasks/:date#:line' } });
+    }
+    const body = z.object({
+      expectedTitle: z.string().min(1),
+      status: z.enum(['todo', 'done']).optional(),
+      deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(value => value.status !== undefined || value.deadline !== undefined, {
+      message: 'status or deadline is required',
+    }).parse(req.body);
+    const config = await loadConfig();
+    if (config.workspaceRoot !== ctx.root) {
+      return res.status(409).json({ error: { code: 'workspace_changed', message: 'Active workspace changed; refresh and retry.' } });
+    }
+    const updateError = await withDateLock(date, async () => {
+      const note = await readDailyNote(date, config);
+      if (!note) return { status: 404, code: 'not_found', message: 'Daily file not found' };
+      const task = note.tasks.find(item => item.line === line - 1 && item.title === body.expectedTitle);
+      if (!task || task.line === undefined) {
+        return { status: 409, code: 'concurrent_modification', message: 'Task moved or changed; refresh and retry.' };
+      }
+      let content = note.content;
+      if (body.status) content = updateTaskInMarkdown(content, task.line, body.status);
+      if (body.deadline) content = editTaskFullInMarkdown(content, task.line, { deadline: body.deadline }, date);
+      await writeDailyNote(date, content, config);
+      return null;
+    });
+    if (updateError) {
+      return res.status(updateError.status).json({
+        error: { code: updateError.code, message: updateError.message },
+      });
+    }
+    res.json({ ok: true });
   } catch (err) {
     handleError(err, res);
   }

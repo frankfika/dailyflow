@@ -224,6 +224,36 @@ describe('Proposal apply (DF2-004)', () => {
     expect(r.proposal.status).toBe('partially_accepted');
   });
 
+  it('does not replay an accepted change when the idempotency key is retried', async () => {
+    const prop = await createProposal(repo, workspaceId, {
+      kind: 'extract_commitments',
+      sourceIds: [],
+      modelRunId: 'run_idempotent',
+      changes: [{
+        op: 'create',
+        entity: 'commitment',
+        changeId: 'chg_once',
+        draft: { title: 'Create once', outcome: 'Only one item exists', state: 'inbox' },
+        evidenceIds: [],
+        confidence: 0.95,
+        reason: 'test idempotency',
+      }],
+    });
+
+    const first = await applyProposal(repo, prop.id, {
+      idempotencyKey: 'accept-once',
+      selection: ['chg_once'],
+    });
+    const second = await applyProposal(repo, prop.id, {
+      idempotencyKey: 'accept-once',
+      selection: ['chg_once'],
+    });
+
+    expect(first.created).toHaveLength(1);
+    expect(second.created).toHaveLength(0);
+    expect((await repo.listCommitments()).filter(item => item.title === 'Create once')).toHaveLength(1);
+  });
+
   it('rejects proposal that fails business rules', async () => {
     const { source } = await capture(repo, { kind: 'quick_capture', body: 'test' });
     const prop = await createProposal(repo, workspaceId, {
@@ -347,6 +377,26 @@ describe('Legacy adapter (DF2-012)', () => {
       project: 'Zhang',
     });
     expect(parseTaskLine('- [x] done task')).toMatchObject({ status: 'done' });
+    expect(parseTaskLine('- [ ] Current format #priority:medium #deadline:2026-07-23 #work')).toMatchObject({
+      title: 'Current format',
+      status: 'todo',
+      priority: 'medium',
+      deadline: '2026-07-23',
+      tags: ['work'],
+    });
+    expect(parseTaskLine('- [ ] Rolled forward ↗ migrated:2026-07-22 #deadline:2026-07-22')).toMatchObject({
+      title: 'Rolled forward',
+      status: 'todo',
+      deadline: '2026-07-22',
+    });
+    expect(parseTaskLine('- [ ] Stable title ^id-t_123_abc #deadline:2026-07-22')).toMatchObject({
+      title: 'Stable title',
+      status: 'todo',
+    });
+    expect(parseTaskLine('- [ ] [migrated→01ABC] Converted item')).toMatchObject({
+      title: 'Converted item',
+      status: 'migrated',
+    });
     expect(parseTaskLine('not a task')).toBeNull();
   });
 

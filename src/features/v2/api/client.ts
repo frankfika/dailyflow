@@ -262,6 +262,9 @@ export const createCommitment = (input: Partial<Commitment>) =>
 export const patchCommitment = (id: string, patch: Partial<Commitment>) =>
   request<{ commitment: Commitment }>('PATCH', `/commitments/${id}`, patch);
 
+export const moveCommitmentToSomeday = (id: string) =>
+  request<{ commitment: Commitment }>('POST', `/commitments/${id}/plan`, { targetState: 'someday' });
+
 export const waitOnCommitment = (id: string, body: { waitingOnId?: string; waitingOnText: string; reviewAt: string }) =>
   request<{ commitment: Commitment }>('POST', `/commitments/${id}/wait`, body);
 
@@ -333,6 +336,12 @@ export interface Proposal {
   expiresAt?: string;
   rejectedReason?: string;
   acceptedChangeIds?: string[];
+  applyReceipts?: Array<{
+    idempotencyKey: string;
+    requestHash: string;
+    acceptedChangeIds: string[];
+    appliedAt: string;
+  }>;
 }
 
 export interface Evidence {
@@ -401,13 +410,13 @@ export const createProposalDraft = (body: {
 }) => request<{ proposal: Proposal }>('POST', '/proposals/draft', body);
 
 export const getProposal = (id: string) =>
-  request<{ proposal: Proposal }>('GET', `/proposals/${id}`);
+  request<{ proposal: Proposal; evidence: Evidence[] }>('GET', `/proposals/${id}`);
 
-export const applyProposal = (id: string, body?: { selection?: string[]; userOverride?: Record<string, Record<string, unknown>> }) =>
+export const applyProposal = (id: string, body: { idempotencyKey: string; selection?: string[]; userOverride?: Record<string, Record<string, unknown>> }) =>
   request<{ proposal: Proposal; created: Array<{ commitment: Commitment; evidence?: Evidence[] }>; updated: Commitment[]; rejected: Array<{ changeId: string; reason: string }> }>(
     'POST',
     `/proposals/${id}/accept`,
-    body ?? {}
+    body
   );
 
 export const rejectProposal = (id: string, reason: string) =>
@@ -522,6 +531,16 @@ export interface LegacyTaskView {
 
 export const listLegacyTasks = () =>
   request<{ items: LegacyTaskView[] }>('GET', '/legacy/tasks');
+
+export const updateLegacyTask = (
+  date: string,
+  line: number,
+  body: { expectedTitle: string; status?: 'todo' | 'done'; deadline?: string },
+) => request<{ ok: true }>(
+  'PATCH',
+  `/legacy/tasks/${encodeURIComponent(`${date}#${line}`)}`,
+  body,
+);
 
 export const migrateLegacyTask = (date: string, line: number, body?: Partial<Commitment>) =>
   request<{ commitmentId: string; legacyTaskId: string }>(

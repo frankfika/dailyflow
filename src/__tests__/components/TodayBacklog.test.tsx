@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TodayBacklog } from '../../components/TodayBacklog';
 
@@ -54,5 +54,25 @@ describe('TodayBacklog completion flow', () => {
     expect(screen.getByTestId('today-group-completed')).toBeInTheDocument();
     expect(screen.getByText('Reviewed notes')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark as todo' })).toBeInTheDocument();
+  });
+
+  it('adds a task to focus when it is dragged onto the focus area', () => {
+    vi.clearAllMocks();
+    renderBacklog([{ id: 'drag-me', title: 'Drag this task', status: 'todo' }]);
+    const row = screen.getByText('Drag this task').closest('li');
+    expect(row).not.toBeNull();
+    const values: Record<string, string> = {};
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: (type: string, value: string) => { values[type] = value; },
+      getData: (type: string) => values[type] ?? '',
+    };
+
+    fireEvent.dragStart(row!, { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId('today-focus-bar'), { dataTransfer });
+    fireEvent.drop(screen.getByTestId('today-focus-bar'), { dataTransfer });
+
+    expect(noop).toHaveBeenCalledWith(['drag-me']);
   });
 });

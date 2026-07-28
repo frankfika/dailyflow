@@ -1096,7 +1096,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen bg-background/90 relative overflow-hidden min-w-0 w-full transition-colors duration-300">
+      <main className="flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-colors duration-300">
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button
@@ -1114,7 +1114,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'overflow-hidden' : activeTab === 'today' ? 'overflow-hidden p-4 md:p-8 lg:p-12 pb-32' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' ? 'w-full h-full' : 'w-full'}>
             {/* Loading state */}
             {isLoading && (
@@ -1147,7 +1147,7 @@ export default function App() {
                     {([
                       ['focus', language === 'zh' ? '专注' : 'Focus'],
                       ['plan', language === 'zh' ? '计划 / 日历' : 'Plan / Calendar'],
-                      ['needs', language === 'zh' ? '待决策' : 'Needs decision'],
+                      ['needs', language === 'zh' ? '待处理' : 'Needs attention'],
                     ] as const).map(([surface, label]) => (
                       <button key={surface} onClick={() => setTodaySurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${todaySurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
                         {label}
@@ -1163,7 +1163,13 @@ export default function App() {
                       onManageConnections={() => { setConfigTab('sync'); setShowSettings(true); }}
                     />
                   ) : todaySurface === 'needs' ? (
-                    <ReviewView />
+                    <ReviewView
+                      language={language}
+                      onOpenPlan={() => {
+                        setCurrentFileDate(getTodayStr());
+                        setTodaySurface('plan');
+                      }}
+                    />
                   ) : (
                 <motion.div
                   key="visual-today"
@@ -1345,14 +1351,14 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="h-full overflow-y-auto"
                 >
-                  <MemoryView workspaceId={activeWorkspaceId || 'default'} />
+                  <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">
                   <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
                     {([
                       ['notes', language === 'zh' ? '笔记' : 'Notes'],
-                      ['inbox', 'Inbox'],
+                      ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
                     ] as const).map(([surface, label]) => (
                       <button key={surface} onClick={() => setNotesSurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
                         {label}
@@ -1360,7 +1366,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="min-h-0 flex-1">
-                    {notesSurface === 'inbox' ? <InboxView /> : <NotesView language={language} sidebarOpen={isSidebarOpen} />}
+                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} />}
                   </div>
                 </div>
               )

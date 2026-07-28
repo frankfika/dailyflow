@@ -29,4 +29,20 @@ describe('WorkItem adapters', () => {
     );
     expect(items.map(item => `${item.kind}:${item.id}`)).toEqual(['task:t1', 'commitment:c1']);
   });
+
+  it('hides the legacy task once its linked commitment exists', () => {
+    const items = mergeWorkItems(
+      [{ id: '2026-07-28#4', title: 'Follow up', status: 'todo' }],
+      [{
+        id: 'c1',
+        workspaceId: 'ws1',
+        title: 'Follow up',
+        state: 'active',
+        updatedAt: '2026-07-28T00:00:00.000Z',
+        legacyTaskId: '2026-07-28#4',
+      }],
+      'ws1',
+    );
+    expect(items.map(item => `${item.kind}:${item.id}`)).toEqual(['commitment:c1']);
+  });
 });

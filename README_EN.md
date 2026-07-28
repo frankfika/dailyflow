@@ -10,7 +10,7 @@
 
 ![DailyFlow Today](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/version-1.1.20-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.21-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![Stack](https://img.shields.io/badge/stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)

@@ -9,6 +9,7 @@ import { bootstrapV2 } from '../workspaceContext';
 import { capture } from '../captureService';
 import { processMeeting, recordDecision, getMeetingStats } from '../meetingService';
 import { V2Repository } from '../../../repositories/v2/repository';
+import type { AIProvider } from '../ai/provider';
 
 let workspace: string;
 let repo: V2Repository;
@@ -54,6 +55,43 @@ describe('Meeting service (Phase 3)', () => {
     expect(d.id).toMatch(/^dec_/);
     const reloaded = await repo.listDecisions();
     expect(reloaded.find(x => x.id === d.id)).toBeDefined();
+  });
+
+  it('keeps AI-extracted Decisions inside the Proposal until accepted', async () => {
+    const { source } = await capture(repo, {
+      kind: 'meeting_transcript',
+      title: 'Pricing sync',
+      body: '决定：采用两档定价。',
+    });
+    const provider: AIProvider = {
+      name: 'scripted',
+      available: async () => ({ ready: true }),
+      complete: async () => ({
+        data: {
+          items: [{
+            kind: 'decision',
+            title: '采用两档定价',
+            decision: '采用两档定价',
+            quote: '决定：采用两档定价。',
+            confidence: 0.92,
+          }],
+        },
+        provider: 'scripted',
+        model: 'fixture',
+        fallback: false,
+      }),
+    };
+
+    const result = await processMeeting(repo, {
+      source,
+      workspaceId,
+      autoAcceptDecisions: false,
+      provider,
+    });
+
+    expect(result.decisionCount).toBe(1);
+    expect(await repo.listDecisions()).toHaveLength(0);
+    expect(result.proposal.changes.filter(change => change.entity === 'decision')).toHaveLength(1);
   });
 
   it('getMeetingStats returns counts', async () => {

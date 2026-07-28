@@ -299,19 +299,9 @@ export class V2Repository {
   }
 
   async listCommitments(): Promise<Commitment[]> {
-    const out: Commitment[] = [];
-    for (const dir of [
-      this.layout.commitments.active,
-      this.layout.commitments.planned,
-      this.layout.commitments.waiting,
-      this.layout.commitments.someday,
-      this.layout.commitments.completed,
-      this.layout.commitments.cancelled,
-      this.layout.commitments.archived,
-    ]) {
-      out.push(...(await this.listAll('commitment', CommitmentSchema, dir)));
-    }
-    return out;
+    // listAll walks recursively, so one scan of the root includes loose
+    // `inbox` files plus every state directory without duplicating entries.
+    return this.listAll('commitment', CommitmentSchema, this.layout.commitments.all);
   }
 
   async getCommitment(id: string): Promise<Commitment | null> {

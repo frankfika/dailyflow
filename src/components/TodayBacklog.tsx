@@ -118,6 +118,7 @@ export function TodayBacklog({
 }: TodayBacklogProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [showFocus, setShowFocus] = useState(true);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   // No-deadline tasks are visible by default so the Today view doesn't look
   // empty; the checkbox below lets the user collapse them entirely when they
   // want to focus on dated work.
@@ -223,7 +224,22 @@ export function TodayBacklog({
   return (
     <div className="today-backlog" data-testid="today-backlog">
       {/* Focus bar (sticky on desktop, collapsible on mobile) */}
-      <section className="today-focus-bar" data-testid="today-focus-bar">
+      <section
+        className={`today-focus-bar ${draggingTaskId ? 'ring-1 ring-accent/30 bg-accent/[0.03]' : ''}`}
+        data-testid="today-focus-bar"
+        onDragOver={event => {
+          if (!isToday || focusTaskIds.length >= FOCUS_LIMIT) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        }}
+        onDrop={event => {
+          event.preventDefault();
+          const taskId = event.dataTransfer.getData('text/dailyflow-task-id')
+            || event.dataTransfer.getData('text/plain');
+          if (taskId) addToFocus(taskId);
+          setDraggingTaskId(null);
+        }}
+      >
         <button
           className="today-focus-bar-toggle"
           onClick={() => setShowFocus(s => !s)}
@@ -269,8 +285,8 @@ export function TodayBacklog({
                 <>
                   <p className="today-focus-bar-empty">
                     {language === 'zh'
-                      ? '从下面挑任务加进今天 — 加号 / 拖动都可以，或者直接点 AI 帮你选。'
-                      : 'Add tasks below with + button, or let AI pick your 3.'}
+                      ? '从下面拖动任务到这里，或点击加号；也可以让 AI 帮你选。'
+                      : 'Drag tasks here, use the + button, or let AI pick your 3.'}
                   </p>
                   <p
                     className="today-focus-bar-anchor"
@@ -418,7 +434,19 @@ export function TodayBacklog({
               {items.length > 0 ? (
                 <ul className="today-group-list">
                   {items.map(task => (
-                    <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
+                    <li
+                      key={task.id}
+                      className={`today-group-item ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
+                      data-priority={task.priority || 'none'}
+                      draggable={isToday}
+                      onDragStart={event => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/dailyflow-task-id', task.id);
+                        event.dataTransfer.setData('text/plain', task.id);
+                        setDraggingTaskId(task.id);
+                      }}
+                      onDragEnd={() => setDraggingTaskId(null)}
+                    >
                       <TaskCard
                         task={task}
                         language={language}
@@ -506,7 +534,19 @@ export function TodayBacklog({
             </header>
             <ul className="today-group-list">
               {groups.noDeadline.map(task => (
-                <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
+                <li
+                  key={task.id}
+                  className={`today-group-item ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
+                  data-priority={task.priority || 'none'}
+                  draggable={isToday}
+                  onDragStart={event => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/dailyflow-task-id', task.id);
+                    event.dataTransfer.setData('text/plain', task.id);
+                    setDraggingTaskId(task.id);
+                  }}
+                  onDragEnd={() => setDraggingTaskId(null)}
+                >
                   <TaskCard
                     task={task}
                     language={language}

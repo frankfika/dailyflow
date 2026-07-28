@@ -17,6 +17,7 @@
  *   - Domain validation runs (state machine + waiting requires reviewAt etc).
  */
 import { z } from 'zod';
+import { createHash } from 'crypto';
 import { newId } from '../../domain/v2/ulid.js';
 import {
   ProposalSchema,
@@ -86,6 +87,7 @@ export async function createProposal(
 }
 
 export interface ApplyOptions {
+  idempotencyKey?: string;
   /** IDs of changes to apply; absent = apply all. */
   selection?: string[];
   expectedHash?: string;
@@ -93,13 +95,44 @@ export interface ApplyOptions {
   userOverride?: Record<string, Record<string, unknown>>;
 }
 
+const proposalApplyLocks = new Map<string, Promise<void>>();
+
 export async function applyProposal(
   repo: V2Repository,
   proposalId: string,
   options: ApplyOptions = {}
 ): Promise<ApplyResult> {
+  const previous = proposalApplyLocks.get(proposalId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const tail = previous.then(() => gate);
+  proposalApplyLocks.set(proposalId, tail);
+  await previous;
+  try {
+    return await applyProposalUnlocked(repo, proposalId, options);
+  } finally {
+    release();
+    if (proposalApplyLocks.get(proposalId) === tail) proposalApplyLocks.delete(proposalId);
+  }
+}
+
+async function applyProposalUnlocked(
+  repo: V2Repository,
+  proposalId: string,
+  options: ApplyOptions,
+): Promise<ApplyResult> {
   const proposal = await repo.getProposal(proposalId);
   if (!proposal) throw new Error('Proposal not found');
+  const requestHash = hashApplyRequest(options);
+  const receipt = options.idempotencyKey
+    ? proposal.applyReceipts?.find(item => item.idempotencyKey === options.idempotencyKey)
+    : undefined;
+  if (receipt) {
+    if (receipt.requestHash !== requestHash) {
+      throw new Error('Idempotency key was already used with a different proposal selection');
+    }
+    return { proposal, created: [], updated: [], rejected: [] };
+  }
   if (proposal.status === 'accepted' || proposal.status === 'rejected' || proposal.status === 'expired') {
     throw new Error(`Proposal is ${proposal.status}, cannot apply`);
   }
@@ -108,11 +141,13 @@ export async function applyProposal(
     throw new Error('Proposal expired');
   }
 
-  const selectedChanges = options.selection
+  const alreadyAccepted = new Set(proposal.acceptedChangeIds ?? []);
+  const requestedChanges = options.selection
     ? proposal.changes.filter(c => options.selection!.includes(c.changeId))
     : proposal.changes;
+  const selectedChanges = requestedChanges.filter(change => !alreadyAccepted.has(change.changeId));
 
-  const acceptedChangeIds: string[] = [];
+  const acceptedChangeIds: string[] = [...alreadyAccepted];
   const created: ApplyResult['created'] = [];
   const updated: Commitment[] = [];
   const rejected: ApplyResult['rejected'] = [];
@@ -126,7 +161,7 @@ export async function applyProposal(
       } else if (result.kind === 'updated' && result.commitment) {
         updated.push(result.commitment);
       }
-      acceptedChangeIds.push(change.changeId);
+      if (!acceptedChangeIds.includes(change.changeId)) acceptedChangeIds.push(change.changeId);
     } catch (err) {
       rejected.push({
         changeId: change.changeId,
@@ -146,6 +181,15 @@ export async function applyProposal(
     ...proposal,
     status,
     acceptedChangeIds,
+    applyReceipts: options.idempotencyKey ? [
+      ...(proposal.applyReceipts ?? []),
+      {
+        idempotencyKey: options.idempotencyKey,
+        requestHash,
+        acceptedChangeIds: [...acceptedChangeIds],
+        appliedAt: new Date().toISOString(),
+      },
+    ] : proposal.applyReceipts,
     updatedAt: new Date().toISOString(),
   };
   await repo.saveProposal(updatedProposal, {
@@ -155,6 +199,14 @@ export async function applyProposal(
   });
 
   return { proposal: updatedProposal, created, updated, rejected };
+}
+
+function hashApplyRequest(options: ApplyOptions): string {
+  const payload = JSON.stringify({
+    selection: [...(options.selection ?? [])].sort(),
+    userOverride: options.userOverride ?? {},
+  });
+  return createHash('sha256').update(payload).digest('hex');
 }
 
 async function applyChange(

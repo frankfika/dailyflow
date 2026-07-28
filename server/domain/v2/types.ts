@@ -396,6 +396,12 @@ export const ProposalSchema = EntityMetaSchema.extend({
   expiresAt: z.string().datetime({ offset: true }).optional(),
   rejectedReason: z.string().max(500).optional(),
   acceptedChangeIds: z.array(z.string()).optional(),
+  applyReceipts: z.array(z.object({
+    idempotencyKey: z.string().min(1).max(512),
+    requestHash: z.string().min(1),
+    acceptedChangeIds: z.array(z.string()),
+    appliedAt: z.string().datetime({ offset: true }),
+  })).optional(),
 });
 export type Proposal = z.infer<typeof ProposalSchema>;
 
