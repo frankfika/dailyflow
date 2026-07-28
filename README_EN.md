@@ -1,388 +1,194 @@
 <div align="center">
 
-<img src="./docs/assets/logo.svg" width="480" alt="DailyFlow Logo" />
+<img src="./docs/assets/logo.svg" width="420" alt="DailyFlow Logo" />
 
 # DailyFlow
 
-> **Turn an endless backlog into three things for today**
+> **Turn an endless backlog into the work that matters today**
 >
-> Commit to less. Actually finish more. Keep every task in local Markdown.
+> A local-first workspace for tasks, notes, calendars, and AI-assisted work.
 
-![Main Interface](./docs/assets/home.png)
+![DailyFlow Today](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.16-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
-![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
-![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.20-blue?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
+![Stack](https://img.shields.io/badge/stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
+![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
-[Features](#-features) · [Screenshots](#-screenshots) · [Quick Start](#-quick-start) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
+[Features](#-features) · [Screenshots](#-screenshots) · [Quick Start](#-quick-start) · [Development](#-development) · [Docs](#-docs)
 
 [简体中文](./README.md) | __English__
 
----
-
 </div>
 
-> [!IMPORTANT]
-> This README describes the current implementation and its transitional Today’s Three experience. The source of truth for the next AI-native product is [`docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md`](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md). Future product, data-model, and implementation decisions should follow that specification.
+## What is DailyFlow?
 
-## ✦ Next: Today’s Three
+DailyFlow is for people pulled in too many directions by backlogs, meetings, and loose ideas. It brings capture, planning, execution, and review into one desktop workspace while keeping Markdown files in a local folder you control.
 
-Most task managers help you **collect more**. DailyFlow now answers one narrower, more painful question:
+Its workflow is deliberately small:
 
-> When the backlog never ends, what should I actually do today?
+1. **Capture** tasks, ideas, and meeting inputs in Inbox or Notes.
+2. **Focus** on what to move today, including waiting and leftover work.
+3. **Review** confirmed context in Memory and Review.
 
-Open the app and AI first reads your backlog, priorities, deadlines, and stale work. Tell it what is different about today in one sentence; it proposes three commitments and explains the tradeoff. Re-plan in natural language or take over manually at any time.
-
-1. **Capture** everything that is pulling at your attention
-2. **Commit** to only three things worth moving today
-3. **Finish** one next action at a time
-4. **Close** the day without treating the remaining backlog as failure
-
----
-
-## 📖 Introduction
-
-DailyFlow is a **local-first daily focus tool for people with overloaded backlogs**. Markdown files are the single source of truth. AI and notes remain supporting tools; the core job is helping you choose and finish the three things that matter today.
-
-### Why DailyFlow?
-
-| Traditional | DailyFlow |
-|-------------|-----------|
-| Open the app to a wall of overdue work | Choose “Today’s Three”; everything else recedes |
-| Never feel finished, no matter how much you do | Three completed commitments create a clear stopping point |
-| Data locked in SaaS platforms | Local Markdown files, full ownership |
-| Requires internet and Node.js installed | Offline-first, **bundled Node.js runtime** |
-| Complex project tools manage everything | DailyFlow only helps you make today count |
-
----
+DailyFlow is a good fit if you want AI assistance and calendar connections without locking your working data inside a single SaaS platform.
 
 ## ✨ Features
 
-### 🎯 Today’s Three (vNext)
+### Today: start with a clear working surface
 
-- **AI daily planning**: describe your time, energy, and constraints in one sentence
-- **Explainable tradeoffs**: AI says why it chose these three and what can wait
-- **Natural-language re-planning**: tell AI when the day changes
-- **Human control**: switch to manual selection at any time
-- **One visual priority**: selected tasks leave the regular list instead of appearing twice
-- **A visible finish line**: progress moves from 0/3 to 3/3
-- **Local memory**: plans are stored separately by date, workspace, and Work/Life context
+- See today’s tasks, overdue items, completed count, and focus progress together.
+- Choose priorities manually or ask AI to propose a plan based on time, energy, and constraints.
+- Review or roll over unfinished work; waiting items are kept out of the active plan.
+- Switch between Work and Life contexts so different kinds of work stay separate.
 
-### 📋 Task Management
+### Inbox and AI workflow
 
-- **Auto Migration**: unfinished tasks auto-roll to the next day with source date tracking
-- **Card-based UI**: tasks grouped by tags, with comments and linked notes
-- **Work/Life Switch**: one-click context switching, tasks auto-filtered
-- **Tag System**: `#tag`, `#deadline:date`, `#priority:level`, `#project:name`
+- Quickly capture unprocessed tasks, information, and ideas.
+- Extract tasks, notes, and next actions from natural-language input.
+- Review AI changes as proposals before they are written to local data.
+- Use multi-session AI Chat, context attachments, Prompt Library, and Agent Skill / Slash Command support.
 
-### 📅 Calendar Workspace
+### Notes: document-first knowledge capture
 
-- **Unified calendar**: open Calendar from the sidebar and browse tasks, timed notes, and external events by day, week, or month
-- **Multiple sources**: combine local DailyFlow content and connected enterprise calendars on one timeline
-- **Feishu events**: read Feishu Calendar events, inspect their details, and open the original event from DailyFlow
-- **Extensible connectors**: the connector layer supports Feishu; Google Calendar desktop OAuth + PKCE is implemented, but production credentials are not configured yet
-
-#### Google Calendar follow-up
-
-- [ ] Create and maintain an official DailyFlow Google Cloud project
-- [ ] Configure the OAuth consent screen and complete sensitive-scope verification
-- [ ] Create a production Desktop OAuth Client ID and inject it into desktop builds
-- [ ] Validate callback handling, token refresh, and primary-calendar reads on macOS, Windows, and Linux installers
-
-> Current status: the Google Calendar connector code is on `main`, but it is not an out-of-the-box feature until the official OAuth Client ID is configured. The Settings field remains available for development and internal testing.
-
-### 🤖 AI Assistant
-
-- **AI Chat**: full chat interface with multi-session, context injection (today's tasks/notes/projects)
-- **AI Tool Use**: AI can directly create tasks and save notes
-- **Brain Dump**: pour in scattered thoughts, AI extracts and categorizes
-- **AI Summary**: generate structured daily/weekly reports
-- **Skill Marketplace**: slash commands and Agent Skills
-- **Prompt Library**: manage and test AI prompt templates
-
-![AI Chat](./docs/assets/ai-chat.png)
-
-### 🔌 AI Model Support
-
-One-click configuration for 15+ AI providers:
-
-| Type | Providers |
-|------|-----------|
-| Aggregator | **B.AI** (29+ models, one key), OpenRouter |
-| China | DeepSeek, Kimi, MiniMax, GLM, Doubao, Qwen, SiliconFlow |
-| Global | Anthropic Claude, OpenAI, Google Gemini, Groq |
-| Custom | Any OpenAI-compatible API |
-
-### 📝 Notes
-
-- **Multi-type**: regular notes, meeting notes, AI summaries
-- **Read-only Preview**: click a card for read-only view, hit Edit to modify — no accidental edits
-- **AI Assist**: polish, continue, extract todos, format meeting notes
-- **Send to Chat**: bind a note as context in AI chat
-- **@Mentions**: auto-parsed, filterable by person
-- **Task Linking**: bidirectional linking between notes and tasks
+- Manage regular notes, daily notes, meeting records, and AI summaries together.
+- Use a list + editor split layout or an optional focus mode.
+- Link notes to tasks, filter by people, and attach notes as AI Chat context.
+- Keep notes as readable, portable Markdown files.
 
 ![Notes](./docs/assets/notes.png)
 
-### 📚 Multi-notebook / Workspaces
+### Calendar: tasks and events on one timeline
 
-- Sidebar switcher for multiple Markdown folders
-- Auto-discovers local note folders
-- Each workspace remembers last visited date
-- Workspaces, notes, and tasks share the same file tree
+- Browse day, week, and month views.
+- Combine local tasks, timed notes, and external calendar events.
+- Authorize, view, sync, and create events in Feishu Calendar.
+- The Google Calendar connector is implemented, but needs a production OAuth Client ID before it is ready for out-of-the-box use.
 
-### 🔄 Sync & Backup
+### Memory and Review: preserve useful context
 
-- **Two-way Feishu sync**: sync task titles, descriptions, due dates, and completion state; send timed meeting notes to Feishu Calendar
-- **Git Sync**: one-click push to GitHub, status shown in sidebar
-- **IPFS Backup**: decentralized backup via Pinata with permanent CID
-- **In-app Updates**: auto-detect new versions, one-click install
+- Memory aggregates confirmed Commitments, projects, meetings, people, decisions, and outcomes.
+- Review surfaces weekly summaries, open work, and stale Commitments.
+- The v2 data model stores entities separately and includes audit plus import/export support.
 
----
+### Sync, backup, and desktop runtime
+
+- Sync local workspaces with Git / GitHub.
+- Back up through Pinata IPFS and receive a traceable CID.
+- Tauri desktop installers bundle Node.js and the Feishu CLI runtime; end users do not need Node, npm, or Homebrew installed.
+- macOS, Windows, and Linux installers support in-app updates.
+
+## 🤖 AI models
+
+Configure an AI provider in Settings. The current code covers B.AI, OpenRouter, OpenAI, Anthropic, Google Gemini, DeepSeek, Kimi, MiniMax, GLM, Doubao, Qwen, SiliconFlow, Groq, and other OpenAI-compatible APIs. Actual models depend on the provider configuration.
+
+![AI Chat](./docs/assets/ai-chat.png)
+
+> AI features require your own API key. DailyFlow does not host your model credentials and does not upload your local Markdown workspace to a DailyFlow service.
 
 ## 📸 Screenshots
 
-| Today (home) | Projects |
+| Today | AI Chat |
 |:---:|:---:|
-| ![Today](./docs/assets/home.png) | ![Projects](./docs/assets/projects.png) |
+| ![Today](./docs/assets/home.png) | ![AI Chat](./docs/assets/ai-chat.png) |
 
-| AI Chat | Notes |
+| Notes | Settings |
 |:---:|:---:|
-| ![AI Chat](./docs/assets/ai-chat.png) | ![Notes](./docs/assets/notes.png) |
+| ![Notes](./docs/assets/notes.png) | ![Settings](./docs/assets/settings.png) |
+
+These images are captured from the real local application. Run `node scripts/capture-screenshots.mjs` to refresh them after UI changes.
 
 ## 🚀 Quick Start
 
-### 📦 Download (Recommended)
+### Download the desktop app
 
-Grab the installer from [Releases](https://github.com/frankfika/dailyflow/releases/latest):
+Download the appropriate installer from the [latest Release](https://github.com/frankfika/dailyflow/releases/latest). Desktop installers bundle the Node.js runtime needed by the local server; on first launch, choose a Markdown workspace directory.
 
-| Platform | File | Size |
-|----------|------|------|
-| macOS (Apple Silicon) | `DailyFlow_x.x.x_aarch64.dmg` | ~33 MB |
-| macOS (Intel) | `DailyFlow_x.x.x_x64.dmg` | ~35 MB |
-| Windows | `DailyFlow_x.x.x_x64-setup.exe` | ~30 MB |
-| Linux | `DailyFlow_x.x.x_amd64.AppImage` | ~34 MB |
+| Platform | Typical installer |
+|:---|:---|
+| macOS Apple Silicon | `DailyFlow_*_aarch64.dmg` |
+| macOS Intel | `DailyFlow_*_x64.dmg` |
+| Windows | `DailyFlow_*_x64-setup.exe` |
+| Linux | `DailyFlow_*_amd64.AppImage` |
 
-> **macOS users**: If you see "damaged" / "cannot be opened":
-> ```bash
-> sudo xattr -rd com.apple.quarantine /Applications/DailyFlow.app
-> ```
->
-> **Truly self-contained**: the dmg bundles the Node.js runtime — **no system Node required**, just download and run.
+If macOS reports that the app is damaged, follow [MACOS_DAMAGED_FIX.md](./docs/MACOS_DAMAGED_FIX.md).
 
-### Run from Source
+### Run from source
 
-Requirements: **Node.js ≥ 20** (only needed for development, not at runtime)
+Development requires Node.js 20+.
 
 ```bash
 git clone https://github.com/frankfika/dailyflow.git
 cd dailyflow
 npm install
 
-# Dev mode (frontend + backend)
+# Frontend + local Express server
 npm run dev:all
 
-# Or run as a desktop app
+# Or run as a Tauri desktop app
 npm run tauri dev
+```
 
-# Full build (including Tauri desktop app)
+Open <http://localhost:3000>, then follow the workspace setup flow. Build a production desktop bundle with:
+
+```bash
 npm run build
 npm run build:server
 npm run tauri build
 ```
 
-### First Use
+## 🧭 Development
 
-1. Launch the app and set your **workspace directory** (where Markdown files will be stored)
-2. App auto-creates today's journal file
-3. Write today's tasks on the Today page and tag projects with `#project:name`
-4. Switch to the **Notes** tab to create meeting notes or capture ideas
-5. Open **AI Chat** and attach today's tasks or any note as context for your questions
-6. Enter **AI Workspace** to process Inbox, Commitments, Memory, and Review
+```bash
+npm run lint          # TypeScript type-check
+npm test              # Vitest unit and service tests
+npm run test:coverage # Coverage report
+npm run build         # Vite production build
+```
 
----
+Repository layout:
+
+```text
+src/                  React + TypeScript frontend
+server/               Express API, v2 domain, and Markdown repository
+src-tauri/            Tauri 2 desktop shell and bundled runtime
+scripts/              Build, bundling, screenshot, and acceptance scripts
+e2e/                  Playwright end-to-end tests
+docs/                 Product, architecture, data, and release docs
+```
 
 ## 🏗 Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                  Tauri Desktop Shell                                  │
-│           (Bundled Node.js runtime, zero external deps)              │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌────────────────┐         ┌─────────────────────────────┐         │
-│  │   React UI     │◀───────▶│   Express Backend (3003)     │         │
-│  │ (Vite/TS/TSX)  │  HTTP   │   (Bundled Node + Server)    │         │
-│  └───────┬────────┘         └────────────┬────────────────┘         │
-│          │                               │                          │
-│                                          │                          │
-│                                  ┌───────▼──────────────┐           │
-│                                  │ Markdown + v2 Store │           │
-│                                  └──────┬──────────────┘           │
-│                                         │                          │
-│              ┌──────────────────────────┼───────────────────────┐ │
-│              ▼                          ▼                       ▼ │
-│      ┌──────────────┐            ┌────────────┐          ┌────────┐ │
-│      │ Git (GitHub) │            │ IPFS/Pinata│          │ AI API │ │
-│      └──────────────┘            └────────────┘          └────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  UI[React + Vite] <-->|HTTP| API[Express + TypeScript]
+  API --> MD[Local Markdown + YAML frontmatter]
+  Shell[Tauri 2 Desktop Shell] --> UI
+  Shell --> API
+  API --> AI[Configured AI providers]
+  API --> Cal[Feishu / Google Calendar connectors]
+  API --> Sync[GitHub / IPFS backup]
 ```
 
-## 🛠 Tech Stack
+## 📚 Docs
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19 + TypeScript + Tailwind CSS 4 + Motion (Framer Motion) |
-| Build | Vite 6 + esbuild |
-| Backend | Express.js (TypeScript) |
-| Desktop | Tauri 2 (Rust) |
-| Runtime | **Bundled Node.js 20+** (auto-downloaded with permission handling) |
-| Data | Markdown files + YAML frontmatter (single source of truth) |
-| AI | 15+ providers (B.AI / Claude / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen etc.) |
-| Sync | Git + GitHub API |
-| Backup | IPFS + Pinata |
-| Tests | Vitest + Testing Library |
-
----
+- [AI-native product development spec](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md)
+- [Architecture](./docs/ARCHITECTURE.md)
+- [Data format](./docs/DATA_FORMAT.md)
+- [Calendar and Feishu sync](./docs/MAIL_WORKSPACE_PLAN.md)
+- [Release process](./docs/RELEASE_PROCESS.md)
+- [Full changelog](./CHANGELOG.md)
 
 ## 🤝 Contributing
 
-Contributions are welcome — code, bug reports, and feature ideas.
-
-### Local Development
-
-```bash
-git clone https://github.com/frankfika/dailyflow.git
-cd dailyflow
-npm install
-npm run dev:all
-```
-
-### Code Standards
-
-- TypeScript strict mode, all PRs must pass `npm run lint`
-- Test coverage: new features require tests; run `npm test` to confirm green
-- Component naming: PascalCase; utility functions: camelCase; types: PascalCase
-- Commit messages: follow Conventional Commits (`feat:` / `fix:` / `chore:` / `docs:` / `test:`)
-
-### Pull Request Flow
-
-1. Fork the repo and branch from `main`: `git checkout -b feat/your-feature`
-2. Commit your changes: `git commit -m "feat: add your feature"`
-3. Push: `git push origin feat/your-feature`
-4. Open a Pull Request on GitHub describing the change and tests
-
-### Bug Reports
-
-Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
-
-- Reproduction steps
-- Expected vs actual behavior
-- System info (macOS / Windows / Linux version)
-- App version (Settings → About)
-
----
-
-## 📜 Changelog
-
-### v1.1.16 (2026-07-28)
-
-- Fixed desktop shell permissions for Feishu links so the installer matches the latest code.
-
-### v1.1.15 (2026-07-28)
-
-- Generalized workspace path normalization for POSIX, Windows drive roots, and UNC paths.
-- Routed first-run validation through the shared API client with configurable `VITE_API_ORIGIN`.
-
-### v1.1.14 (2026-07-28)
-
-**🩹 First-run workspace path fix**
-
-- Fixed first-run workspace validation on macOS
-- Use `127.0.0.1` for local service connections to avoid IPv6 `localhost` resolution issues
-- Normalize trailing path separators and add regression coverage
-
-### v1.1.13 (2026-07-28)
-
-**🧹 UX cleanup and focused workspace release**
-
-- Removed Time Capsule code, contracts, wallet integration, and chain dependencies
-- Added the AI-Native workspace with Today / Inbox / Memory / Review
-- Fixed task rollback, import/export, note state handling, and GitHub Token security
-- Full tests, E2E Smoke checks, and production builds pass
-
-### v1.1.12 (2026-07-27)
-
-**📅 Calendar workspace and Feishu Enterprise sync**
-
-#### ✨ New
-
-- 📅 **New calendar workspace**: a dedicated sidebar destination with day, week, and month views
-- 🧩 **Connector plugin architecture**: aggregates local tasks, timed notes, and external calendars behind one interface
-- 🔄 **Two-way Feishu task sync**: syncs titles, descriptions, due dates, and completion state while reconciling updates on both sides
-- 🗓 **Feishu Calendar integration**: reads Feishu events and sends meeting notes with start/end times to Feishu Calendar
-- 🔐 **Enterprise account authorization**: connect Feishu, inspect connection state, and trigger sync from Settings
-- 📝 **Notes UX improvements**: refined note selection, preview, and workspace navigation
-
-#### 🧪 Quality
-
-- All 321 tests pass
-- TypeScript checks, the production front-end build, and the bundled server build all pass
-- Installers published for macOS Apple Silicon, macOS Intel, Windows, and Linux
-
-### v1.0.6 (2026-07-13)
-
-This release once contained an on-chain experiment. The feature, contracts, wallet dependencies, and APIs have been removed from the current version.
-
-### v1.0.5 (2026-07)
-
-chore: version bump and dependency updates
-
-### v1.0.1 (2026-06-19)
-
-**🧹 Tightened scope and fixed AI Chat note linking**
-
-#### ✨ Improvements
-
-- 🗑️ **Removed Thinking Workspaces**: rolled back the over-designed workspace feature to keep the app focused on tasks + notes + AI chat
-- 🔗 **AI Chat can attach any note**: the context picker now searches all notes in the current context, not just today's notes
-- 🧭 **Simplified sidebar**: removed the Workspaces nav item, leaving Today / Notes / AI Chat
-
-#### 🧪 Quality
-
-- 145 tests passing, TypeScript strict mode, 0 errors
-
-### v1.0.0 (2026-06)
-
-**🎉 Major milestone**
-
-- 🧠 Thinking Workspaces (rolled back in v1.0.1)
-- 🤖 AI Brief / Journey / Mind Map
-- ✅ AI Next Tasks breakdown
-- 📅 Timeline tracking
-- 🔒 Crypto-random IDs (prevents ID takeover)
-- 📦 Bundled Node.js runtime (zero external deps)
-
-### Earlier Versions
-
-See the [full changelog](https://github.com/frankfika/dailyflow/releases).
-
----
+Issues, product feedback, and pull requests are welcome. Before submitting, run `npm run lint`, `npm test`, and the relevant build. Use Conventional Commits such as `feat:`, `fix:`, `docs:`, and `test:`.
 
 ## 📄 License
 
-[Apache License 2.0](./LICENSE)
-
----
-
-## 🙏 Acknowledgments
-
-Thanks to all contributors and users for their feedback. DailyFlow started as a small wish — "I don't want to manually organize my todos every day" — and has grown into a complete system for tasks, notes, calendar, and an AI workspace.
+Apache License 2.0. Source files and release configuration use the Apache-2.0 SPDX identifier; when adding dependencies, please note their license compatibility in the pull request.
 
 <div align="center">
 
-If this project helps you, a ⭐ would be appreciated!
-
-[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 Download latest](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 Report a Bug](https://github.com/frankfika/dailyflow/issues)
+[⭐ Star on GitHub](https://github.com/frankfika/dailyflow) · [📥 Download latest](https://github.com/frankfika/dailyflow/releases/latest) · [🐛 Report an issue](https://github.com/frankfika/dailyflow/issues)
 
 </div>
