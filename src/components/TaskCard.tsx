@@ -105,17 +105,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ layout: { type: 'spring', stiffness: 500, damping: 40 }, duration: 0.22 }}
-      className={`group relative p-4 flex items-start space-x-3.5 rounded-xl transition-all duration-300
+      className={`group relative flex items-start gap-2.5 rounded-lg border p-3 transition-colors duration-200
         ${isDone
-          ? 'bg-gradient-to-br from-surface/40 to-background/60 border border-border/30 shadow-sm opacity-70'
-          : 'bg-gradient-to-br from-white/95 to-surface/90 border border-white/60 shadow-[0_2px_8px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_-4px_rgba(0,122,255,0.08),0_4px_12px_-2px_rgba(0,0,0,0.04)] hover:border-accent/20 hover:-translate-y-0.5'
+          ? 'border-border/40 bg-surface/45 opacity-65'
+          : 'border-border/70 bg-surface-elevated/75 hover:border-border-strong hover:bg-surface-elevated'
         }`}
     >
       <button
         onClick={() => {
           onToggle();
         }}
-        className="mt-[3px] flex min-h-10 min-w-10 flex-shrink-0 items-center justify-center rounded-lg hover:scale-105 active:scale-95 transition-all duration-200 group/check"
+        className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check"
         title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
         aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
       >
@@ -123,21 +123,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <motion.div
             initial={{ scale: 0.8, rotate: -45 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="w-5 h-5 rounded-lg flex items-center justify-center shadow-[0_4px_12px_rgba(52,199,89,0.25)] relative overflow-hidden"
-            style={{ background: 'var(--gradient-success)' }}
+            className="relative flex h-4.5 w-4.5 items-center justify-center overflow-hidden rounded-md bg-emerald-500"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
             <Check className="w-3 h-3 text-white relative z-10" strokeWidth={2.5} />
           </motion.div>
         ) : (
-          <div className="relative w-5 h-5 rounded-lg border-2 border-border-strong flex items-center justify-center text-transparent group-hover/check:border-accent group-hover/check:text-accent/70 bg-white/60 backdrop-blur-sm transition-all duration-200 group-hover/check:shadow-[0_0_12px_rgba(0,122,255,0.15)]">
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover/check:opacity-100 transition-opacity" />
+          <div className="relative flex h-4.5 w-4.5 items-center justify-center rounded-md border-[1.5px] border-border-strong bg-surface-elevated text-transparent transition-colors group-hover/check:border-accent group-hover/check:text-accent/70">
             <Check className="w-3 h-3 relative z-10" strokeWidth={2.5} />
           </div>
         )}
       </button>
 
-      <div className="flex-1 min-w-0 pr-[72px] sm:pr-16 xl:pr-8">
+      <div className="min-w-0 flex-1 pr-[72px] sm:pr-16 xl:pr-8">
         {isEditing ? (
           <div className="space-y-3">
             <textarea
@@ -222,7 +220,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <div>
             <h3
               onDoubleClick={() => !isDone && setIsEditing(true)}
-              className={`font-sans text-[15px] font-semibold leading-snug transition-all duration-200 cursor-text break-words ${isDone ? 'text-text-muted line-through' : 'text-text-heading group-hover:text-accent'}`}
+              className={`cursor-text break-words font-sans text-[14px] font-medium leading-snug transition-colors ${isDone ? 'text-text-muted line-through' : 'text-text-heading'}`}
               title={language === 'zh' ? '双击编辑' : 'Double-click to edit'}
             >
               {task.title}
@@ -230,7 +228,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.description && (
               <div
                 onDoubleClick={() => !isDone && setIsEditing(true)}
-                className={`mt-1 text-[13px] leading-relaxed cursor-text break-words ${isDone ? 'text-text-muted/60' : 'text-text-muted/80 max-w-[95%]'}`}
+                className={`mt-1 cursor-text break-words text-[12px] leading-relaxed ${isDone ? 'text-text-muted/60' : 'max-w-[95%] text-text-muted/80'}`}
               >
                 {task.description}
               </div>
@@ -239,7 +237,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {task.source_date && task.source_date !== currentFileDate && (
               // Demoted to a small inline annotation — was a bright accent pill
               // that read as a system notification. Now it sits with the rest
@@ -250,7 +248,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </span>
             )}
             {task.tags && task.tags.filter((t: string) => !['tasks', 'work', 'life'].includes(t)).map((tag: string) => (
-              <span key={tag} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border bg-transparent transition-colors cursor-default ${getTagColor(tag)}`}>
+              <span key={tag} className={`inline-flex cursor-default items-center rounded-md border bg-transparent px-1.5 py-0.5 text-[10px] font-medium transition-colors ${getTagColor(tag)}`}>
                 <span>#{tag}</span>
               </span>
             ))}
@@ -271,7 +269,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   ? 'bg-[var(--color-danger-light)] text-[var(--color-danger)] border-[var(--color-danger)]/15'
                   : 'bg-[var(--color-info-light)] text-[var(--color-info)] border-[var(--color-info)]/15';
               return (
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-medium ${cls}`}>
+                <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>
                   <Calendar className="w-3 h-3" />
                   <span>{task.deadline}</span>
                 </span>

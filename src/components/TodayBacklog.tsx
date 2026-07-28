@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Check, ChevronDown, Clock3, Eye, Flame, ListChecks, Sparkles, Target, WandSparkles, X } from 'lucide-react';
-import { Card } from '../features/v2/components/States';
-import type { NoteData } from '../api/client';
+import { motion } from 'motion/react';
+import { Calendar, Check, ChevronDown, Clock3, Eye, Flame, Sparkles, Target, WandSparkles, X } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 
 type Task = {
@@ -19,7 +17,7 @@ type Task = {
   source_date?: string;
 };
 
-type Filter = 'all' | 'overdue' | 'today' | 'week' | 'later';
+type Filter = 'all' | 'today' | 'overdue' | 'upcoming';
 
 interface TodayBacklogProps {
   tasks: Task[];
@@ -36,14 +34,6 @@ interface TodayBacklogProps {
   onAddTask: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
-  aiAvailable: boolean;
-  onGenerateAIPlan: (brief: string) => Promise<{ taskIds: string[]; summary: string }>;
-  onConfigureAI: () => void;
-  /** Today's notes (optional). When provided together with onOpenNotesTab,
-   *  the component renders a Today's Notes card so the user can capture
-   *  one in-context. The parent decides whether to wire this up. */
-  dailyNotes?: NoteData[];
-  onOpenNotesTab?: () => void;
   completionPromptTaskIds?: Set<string>;
   onCompletionPromptClosed?: (taskId: string) => void;
 }
@@ -108,17 +98,12 @@ export function TodayBacklog({
   onAddTask,
   language,
   isToday,
-  aiAvailable,
-  onGenerateAIPlan,
-  onConfigureAI,
-  dailyNotes,
-  onOpenNotesTab,
   completionPromptTaskIds = new Set<string>(),
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [filter, setFilter] = useState<Filter>('all');
-  const [showFocus, setShowFocus] = useState(true);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   // No-deadline tasks are visible by default so the Today view doesn't look
   // empty; the checkbox below lets the user collapse them entirely when they
   // want to focus on dated work.
@@ -167,16 +152,16 @@ export function TodayBacklog({
     return {
       overdue: filter === 'overdue' ? groups.buckets.overdue : [],
       today: filter === 'today' ? groups.buckets.today : [],
-      week: filter === 'week' ? groups.buckets.week : [],
-      later: filter === 'later' ? groups.buckets.later : [],
+      week: filter === 'upcoming' ? groups.buckets.week : [],
+      later: filter === 'upcoming' ? groups.buckets.later : [],
     };
   }, [groups, filter]);
 
-  const groupDefs: { key: Group | 'nodate'; label: string; sub: string; icon: typeof Flame; accent: string }[] = [
-    { key: 'overdue', label: language === 'zh' ? '已过期' : 'Overdue', sub: language === 'zh' ? '已经过了截止日期' : 'Past the deadline', icon: Flame, accent: 'overdue' },
-    { key: 'today',   label: language === 'zh' ? '今天截止' : 'Due today', sub: language === 'zh' ? '今天必须处理' : 'Must be handled today', icon: Target, accent: 'today' },
-    { key: 'week',    label: language === 'zh' ? '本周' : 'This week', sub: language === 'zh' ? '未来 7 天内截止' : 'Due in the next 7 days', icon: Calendar, accent: 'week' },
-    { key: 'later',   label: language === 'zh' ? '之后再说' : 'Later', sub: language === 'zh' ? '7 天以上' : 'Beyond 7 days', icon: Clock3, accent: 'later' },
+  const groupDefs: { key: Group; label: string; icon: typeof Flame; accent: string }[] = [
+    { key: 'overdue', label: language === 'zh' ? '已过期' : 'Overdue', icon: Flame, accent: 'overdue' },
+    { key: 'today',   label: language === 'zh' ? '今天截止' : 'Due today', icon: Target, accent: 'today' },
+    { key: 'week',    label: language === 'zh' ? '本周' : 'This week', icon: Calendar, accent: 'week' },
+    { key: 'later',   label: language === 'zh' ? '之后' : 'Later', icon: Clock3, accent: 'later' },
   ];
 
   const counts: Record<Group, number> = {
@@ -199,12 +184,6 @@ export function TodayBacklog({
   const completedFocus = focusTasks.filter(t => t.status === 'done').length;
   const progress = focusTasks.length === 0 ? 0 : Math.round((completedFocus / focusTasks.length) * 100);
 
-  // Stat strip: glanceable counts that fill the space above the filter row so
-  // the Today view doesn't open with a tall empty gap.
-  const completedToday = useMemo(
-    () => tasks.filter(t => t.status === 'done').length,
-    [tasks],
-  );
   const completedTasks = useMemo(
     () => tasks.filter(t => t.status === 'done'),
     [tasks],
@@ -215,10 +194,9 @@ export function TodayBacklog({
   // i18n for filter pills
   const labels: Record<string, string> = {
     all: language === 'zh' ? '全部' : 'All',
+    today: language === 'zh' ? '今天截止' : 'Due today',
     overdue: language === 'zh' ? '已过期' : 'Overdue',
-    today: language === 'zh' ? '今天' : 'Today',
-    week: language === 'zh' ? '本周' : 'This week',
-    later: language === 'zh' ? '之后' : 'Later',
+    upcoming: language === 'zh' ? '接下来' : 'Upcoming',
   };
 
   return (
@@ -240,152 +218,70 @@ export function TodayBacklog({
           setDraggingTaskId(null);
         }}
       >
-        <button
-          className="today-focus-bar-toggle"
-          onClick={() => setShowFocus(s => !s)}
-          aria-expanded={showFocus}
-        >
+        <div className="today-focus-bar-toggle">
           <span className="today-focus-bar-mark"><Target className="w-4 h-4" /></span>
           <div className="min-w-0 flex-1 text-left">
             <p className="today-focus-bar-eyebrow">
-              {language === 'zh' ? '今日承诺 · 最多 3 件' : "TODAY'S COMMITMENT · UP TO 3"}
+              {language === 'zh' ? '最多 3 件优先事项' : 'Up to 3 priorities'}
             </p>
             <h2 className="today-focus-bar-title">
-              {focusTasks.length === 0
-                ? (language === 'zh' ? '挑出今天最重要的 3 件事' : 'Pick the 3 things that matter today')
-                : (language === 'zh' ? `已选 ${focusTasks.length} 件` : `${focusTasks.length} picked`)}
+              {language === 'zh' ? '今日聚焦' : "Today's focus"}
             </h2>
           </div>
-          {focusTasks.length > 0 && (
-            <div className="today-focus-bar-progress" aria-label={`${progress}%`}>
-              <span>{completedFocus}/{focusTasks.length}</span>
-              <div className="today-focus-bar-progress-track">
-                <motion.div
-                  className="today-focus-bar-progress-value"
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.35 }}
-                />
-              </div>
+          <div className="today-focus-bar-progress" aria-label={`${progress}%`}>
+            <span>{completedFocus}/{focusTasks.length || FOCUS_LIMIT}</span>
+            <div className="today-focus-bar-progress-track">
+              <motion.div
+                className="today-focus-bar-progress-value"
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.35 }}
+              />
             </div>
-          )}
-          <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${showFocus ? 'rotate-180' : ''}`} />
-        </button>
+          </div>
+        </div>
 
-        <AnimatePresence initial={false}>
-          {showFocus && (
-            <motion.div
-              key="focus-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="overflow-hidden"
-            >
-              {focusTasks.length === 0 ? (
-                <>
-                  <p className="today-focus-bar-empty">
-                    {language === 'zh'
-                      ? '从下面拖动任务到这里，或点击加号；也可以让 AI 帮你选。'
-                      : 'Drag tasks here, use the + button, or let AI pick your 3.'}
-                  </p>
-                  <p
-                    className="today-focus-bar-anchor"
-                    data-testid="today-focus-bar-anchor"
+        {focusTasks.length === 0 ? (
+          <p className="today-focus-bar-empty" data-testid="today-focus-bar-anchor">
+            {language === 'zh'
+              ? `从下方任务右侧点击“+”加入聚焦 · ${dueTodayCount} 件今天截止，${overdueCount} 件已过期`
+              : `Use “+” on a task below to focus it · ${dueTodayCount} due today, ${overdueCount} overdue`}
+          </p>
+        ) : (
+          <ul className="today-focus-bar-list">
+            {focusTasks.map((task, index) => (
+              <li key={task.id} className={`today-focus-bar-item ${task.status === 'done' ? 'is-done' : ''}`}>
+                <button
+                  className="today-focus-bar-check"
+                  onClick={() => onToggleTask(task.id)}
+                  aria-label={task.status === 'done' ? 'Mark incomplete' : 'Mark complete'}
+                >
+                  {task.status === 'done' ? <Check className="w-3.5 h-3.5" /> : <span>{index + 1}</span>}
+                </button>
+                <span className="today-focus-bar-task-title">{task.title}</span>
+                {task.deadline && <span className="today-focus-bar-meta">{task.deadline}</span>}
+                {isToday && (
+                  <button
+                    className="today-focus-bar-remove"
+                    onClick={() => removeFromFocus(task.id)}
+                    title={language === 'zh' ? '移出今日聚焦' : "Remove from today's focus"}
                   >
-                    {language === 'zh'
-                      ? `↓ ${dueTodayCount} 件今天，${overdueCount} 件已过期`
-                      : `↓ ${dueTodayCount} today, ${overdueCount} overdue`}
-                  </p>
-                </>
-              ) : (
-                <ul className="today-focus-bar-list">
-                  {focusTasks.map((task, index) => (
-                    <li key={task.id} className={`today-focus-bar-item ${task.status === 'done' ? 'is-done' : ''}`}>
-                      <button
-                        className="today-focus-bar-check"
-                        onClick={() => onToggleTask(task.id)}
-                        aria-label={task.status === 'done' ? 'Mark incomplete' : 'Mark complete'}
-                      >
-                        {task.status === 'done' ? <Check className="w-3.5 h-3.5" /> : <span>{index + 1}</span>}
-                      </button>
-                      <span className="today-focus-bar-task-title">{task.title}</span>
-                      {task.deadline && <span className="today-focus-bar-meta">{task.deadline}</span>}
-                      {isToday && (
-                        <button
-                          className="today-focus-bar-remove"
-                          onClick={() => removeFromFocus(task.id)}
-                          title={language === 'zh' ? '移出今日三件事' : 'Remove from today’s three'}
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
-
-      {/* Stat strip: glanceable counts so the Today view opens with
-          something useful instead of a tall empty gap. */}
-      <div
-        className="today-stat-strip"
-        role="group"
-        aria-label={language === 'zh' ? '今日概览' : "Today's overview"}
-        data-testid="today-stat-strip"
-      >
-        <Card className="today-stat-card">
-          <div className="today-stat-eyebrow">
-            <ListChecks className="w-3 h-3" />
-            <span>{language === 'zh' ? '今日任务' : 'Tasks today'}</span>
-          </div>
-          <div className="today-stat-value" data-testid="today-stat-tasks-today">
-            {dueTodayCount}
-          </div>
-        </Card>
-        <Card className={`today-stat-card ${overdueCount > 0 ? 'is-danger' : ''}`}>
-          <div className="today-stat-eyebrow">
-            <Flame className="w-3 h-3" />
-            <span>{language === 'zh' ? '已过期' : 'Overdue'}</span>
-          </div>
-          <div className="today-stat-value" data-testid="today-stat-overdue">
-            {overdueCount}
-          </div>
-        </Card>
-        <Card className="today-stat-card">
-          <div className="today-stat-eyebrow">
-            <Check className="w-3 h-3" />
-            <span>{language === 'zh' ? '已完成' : 'Completed'}</span>
-          </div>
-          <div className="today-stat-value" data-testid="today-stat-completed">
-            {completedToday}
-          </div>
-        </Card>
-        <Card className="today-stat-card">
-          <div className="today-stat-eyebrow">
-            <Target className="w-3 h-3" />
-            <span>{language === 'zh' ? '聚焦' : 'Focus'}</span>
-          </div>
-          <div className="today-stat-value" data-testid="today-stat-focus">
-            {focusTasks.length}/{FOCUS_LIMIT}
-          </div>
-          <div className="today-stat-progress-track" aria-hidden="true">
-            <div
-              className="today-stat-progress-value"
-              style={{ width: `${(focusTasks.length / FOCUS_LIMIT) * 100}%` }}
-            />
-          </div>
-        </Card>
-      </div>
 
       {/* Filter pills */}
       <div className="today-filter-row" role="tablist">
-        {(['all', 'overdue', 'today', 'week', 'later'] as Filter[]).map(key => {
+        {(['all', 'today', 'overdue', 'upcoming'] as Filter[]).map(key => {
           const count = key === 'all'
             ? backlog.length
-            : counts[key as Group];
+            : key === 'upcoming'
+              ? counts.week + counts.later
+              : counts[key as 'today' | 'overdue'];
           const isActive = filter === key;
           return (
             <button
@@ -401,16 +297,6 @@ export function TodayBacklog({
             </button>
           );
         })}
-        {isToday && (
-          <button
-            onClick={onAddTask}
-            className="today-filter-add"
-            data-testid="today-add-task"
-          >
-            <WandSparkles className="w-3.5 h-3.5" />
-            {language === 'zh' ? '记下一件事' : 'Capture a task'}
-          </button>
-        )}
       </div>
 
       {/* Backlog groups */}
@@ -421,7 +307,8 @@ export function TodayBacklog({
           // Filtered view: only render the active group, even if empty
           // (so the "Nothing here" empty state stays visible).
           if (items.length === 0 && filter === 'all') return null;
-          if (filter !== 'all' && def.key !== filter) return null;
+          if (filter === 'upcoming' && def.key !== 'week' && def.key !== 'later') return null;
+          if (filter !== 'all' && filter !== 'upcoming' && def.key !== filter) return null;
           const Icon = def.icon;
           return (
             <section key={def.key} className={`today-group is-${def.accent}`} data-testid={`today-group-${def.key}`}>
@@ -429,7 +316,6 @@ export function TodayBacklog({
                 <span className="today-group-mark"><Icon className="w-3.5 h-3.5" /></span>
                 <h3 className="today-group-title">{def.label}</h3>
                 <span className="today-group-count">{items.length}</span>
-                <p className="today-group-sub">{def.sub}</p>
               </header>
               {items.length > 0 ? (
                 <ul className="today-group-list">
@@ -490,7 +376,7 @@ export function TodayBacklog({
                     </li>
                   ))}
                 </ul>
-              ) : filter === def.key ? (
+              ) : filter === def.key || filter === 'upcoming' ? (
                 <p className="today-group-empty">
                   {language === 'zh' ? '这一组没有任务' : 'Nothing here'}
                 </p>
@@ -503,7 +389,7 @@ export function TodayBacklog({
             into a collapsed bucket. The "Hide" toggle above the list lets
             the user collapse them entirely when they want to focus on
             dated work. */}
-        {groups.noDeadline.length > 0 && !hideNoDeadline && (
+        {filter === 'all' && groups.noDeadline.length > 0 && !hideNoDeadline && (
           <section
             className="today-group is-nodate is-expanded"
             data-testid="today-group-nodate"
@@ -528,9 +414,6 @@ export function TodayBacklog({
                   {language === 'zh' ? '隐藏没有截止日期的任务' : 'Hide tasks without deadline'}
                 </span>
               </label>
-              <p className="today-group-sub">
-                {language === 'zh' ? '可以稍后排进日程' : 'Can be scheduled later'}
-              </p>
             </header>
             <ul className="today-group-list">
               {groups.noDeadline.map(task => (
@@ -590,7 +473,7 @@ export function TodayBacklog({
 
         {/* When the user hides the no-deadline group, surface a small
             row of controls so they can bring it back. */}
-        {groups.noDeadline.length > 0 && hideNoDeadline && (
+        {filter === 'all' && groups.noDeadline.length > 0 && hideNoDeadline && (
           <section className="today-group is-nodate is-collapsed" data-testid="today-group-nodate-collapsed">
             <header className="today-group-header">
               <span className="today-group-mark"><Clock3 className="w-3.5 h-3.5" /></span>
@@ -612,100 +495,43 @@ export function TodayBacklog({
           </section>
         )}
 
-        {/* Today's notes card — only rendered when the parent opts in by
-            passing both dailyNotes and onOpenNotesTab. Shows up to
-            three recent notes as quick links; "View all" jumps to
-            the Notes tab. Keeps the section backward-compatible for
-            callers that don't have notes data. */}
-        {isToday && dailyNotes !== undefined && onOpenNotesTab && (
-          <section className="today-group is-notes" data-testid="today-notes-section">
-            <header className="today-group-header">
-              <span className="today-group-mark"><Sparkles className="w-3.5 h-3.5" /></span>
-              <h3 className="today-group-title">
-                {language === 'zh' ? '今日笔记' : "Today's notes"}
-              </h3>
-              <span className="today-group-count">{dailyNotes.length}</span>
-              <p className="today-group-sub">
-                {language === 'zh' ? '把今天的事写下来更清晰' : 'Writing things down clarifies today'}
-              </p>
-              {dailyNotes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onOpenNotesTab}
-                  className="today-group-view-all"
-                  data-testid="today-notes-view-all"
-                >
-                  {language === 'zh' ? '查看全部' : 'View all'}
-                </button>
-              )}
-            </header>
-            {dailyNotes.length === 0 ? (
-              <button
-                className="today-notes-empty"
-                onClick={onOpenNotesTab}
-                data-testid="today-capture-note"
-              >
-                <WandSparkles className="w-3.5 h-3.5" />
-                <span>
-                  {language === 'zh' ? '记一篇今日笔记' : "Capture today's note"}
-                </span>
-              </button>
-            ) : (
-              <ul className="today-group-list" data-testid="today-notes-list">
-                {dailyNotes.slice(0, 3).map((n) => {
-                  const title = n.title || n.body?.split('\n').find((l) => l.trim().length > 0)?.replace(/^#+\s*/, '').slice(0, 60) || (language === 'zh' ? '（无标题）' : '(untitled)');
-                  const preview = (n.body || '').replace(/\n+/g, ' ').slice(0, 90);
-                  return (
-                    <li key={n.id} className="today-group-item">
-                      <button
-                        type="button"
-                        onClick={onOpenNotesTab}
-                        className="today-note-quick"
-                        data-testid={`today-note-${n.id}`}
-                      >
-                        <span className="today-note-quick-title">{title}</span>
-                        {preview && <span className="today-note-quick-preview">{preview}</span>}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {completedTasks.length > 0 && (
+        {filter === 'all' && completedTasks.length > 0 && (
           <section className="today-group is-completed" data-testid="today-group-completed">
-            <header className="today-group-header">
+            <button
+              type="button"
+              className="today-group-header today-group-header-collapsible"
+              onClick={() => setShowCompleted(value => !value)}
+              aria-expanded={showCompleted}
+            >
               <span className="today-group-mark"><Check className="w-3.5 h-3.5" /></span>
               <h3 className="today-group-title">
                 {language === 'zh' ? '已完成' : 'Completed'}
               </h3>
               <span className="today-group-count">{completedTasks.length}</span>
-              <p className="today-group-sub">
-                {language === 'zh' ? '可以随时撤销完成' : 'Available to review or reopen'}
-              </p>
-            </header>
-            <ul className="today-group-list">
-              {completedTasks.map(task => (
-                <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
-                  <TaskCard
-                    task={task}
-                    language={language}
-                    categories={categories}
-                    currentFileDate={today}
-                    linkedNotesCount={linkedNotesCount(task.id)}
-                    onToggle={() => onToggleTask(task.id)}
-                    onEdit={updates => onEditTask(task.id, updates)}
-                    onDelete={() => onDeleteTask(task.id)}
-                    onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-                    onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                    showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                    onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
-                  />
-                </li>
-              ))}
-            </ul>
+              <ChevronDown className={`ml-auto h-3.5 w-3.5 text-text-muted transition-transform ${showCompleted ? 'rotate-180' : ''}`} />
+            </button>
+            {showCompleted && (
+              <ul className="today-group-list">
+                {completedTasks.map(task => (
+                  <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
+                    <TaskCard
+                      task={task}
+                      language={language}
+                      categories={categories}
+                      currentFileDate={today}
+                      linkedNotesCount={linkedNotesCount(task.id)}
+                      onToggle={() => onToggleTask(task.id)}
+                      onEdit={updates => onEditTask(task.id, updates)}
+                      onDelete={() => onDeleteTask(task.id)}
+                      onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
+                      onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+                      onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         )}
 

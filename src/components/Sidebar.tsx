@@ -8,6 +8,7 @@ import {
   Clock3,
   X,
   FileText,
+  ListTodo,
   MessageCircle,
   Search,
   Settings,
@@ -73,8 +74,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'notes' | 'ai-chat' | 'memory';
-  setActiveTab: (tab: 'today' | 'notes' | 'ai-chat' | 'memory') => void;
+  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory';
+  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -88,8 +89,6 @@ interface SidebarProps {
   activeContext?: 'work' | 'life';
   onContextChange?: (ctx: 'work' | 'life') => void;
   onOpenSettings?: () => void;
-  onOpenTodaySurface?: (surface: 'focus' | 'plan' | 'needs') => void;
-  activeTodaySurface?: 'focus' | 'plan' | 'needs';
   onOpenNotesSurface?: (surface: 'notes' | 'inbox') => void;
 }
 
@@ -109,8 +108,6 @@ export function Sidebar({
   activeContext,
   onContextChange,
   onOpenSettings,
-  onOpenTodaySurface,
-  activeTodaySurface,
   onOpenNotesSurface,
 }: SidebarProps) {
   // --- Viewport detection ---
@@ -195,7 +192,6 @@ export function Sidebar({
   const goToToday = async () => {
     const today = getTodayStr();
     setActiveTab('today');
-    onOpenTodaySurface?.('focus');
     setCurrentFileDate(today);
     if (!filesMap[today]) {
       try {
@@ -215,7 +211,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'notes' | 'ai-chat' | 'memory') => {
+  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -380,18 +376,18 @@ export function Sidebar({
                 <button
                   onClick={goToToday}
                   data-testid="nav-today"
-                  data-active={activeTab === 'today' && activeTodaySurface !== 'plan' && currentFileDate === getTodayStr()}
+                  data-active={activeTab === 'today' && currentFileDate === getTodayStr()}
                   className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
                     isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
                   } ${
-                    activeTab === 'today' && activeTodaySurface !== 'plan' && currentFileDate === getTodayStr()
+                    activeTab === 'today' && currentFileDate === getTodayStr()
                       ? 'bg-accent/10 text-accent font-semibold'
                       : 'text-text-main hover:bg-black/[0.03]'
                   }`}
                   title={isCompact ? (language === 'zh' ? '今天' : 'Today') : undefined}
                   aria-label={language === 'zh' ? '今天' : 'Today'}
                 >
-                  <CalendarDays className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <ListTodo className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <AnimatePresence initial={false}>
                     {!isCompact && (
                       <motion.span
@@ -403,6 +399,38 @@ export function Sidebar({
                         className="overflow-hidden whitespace-nowrap"
                       >
                         {language === 'zh' ? '今天' : 'Today'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavClick('calendar')}
+                  data-testid="nav-calendar"
+                  data-active={activeTab === 'calendar'}
+                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
+                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    activeTab === 'calendar'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                  title={isCompact ? (language === 'zh' ? '日历' : 'Calendar') : undefined}
+                  aria-label={language === 'zh' ? '日历' : 'Calendar'}
+                >
+                  <CalendarDays className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <AnimatePresence initial={false}>
+                    {!isCompact && (
+                      <motion.span
+                        key="calendar-label"
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {language === 'zh' ? '日历' : 'Calendar'}
                       </motion.span>
                     )}
                   </AnimatePresence>

@@ -21,14 +21,12 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { TodayBacklog } from './components/TodayBacklog';
-import { FeishuAgenda } from './components/FeishuAgenda';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
-import { ReviewView } from './features/v2/review/ReviewView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -90,8 +88,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'notes' | 'ai-chat' | 'memory'>('today');
-  const [todaySurface, setTodaySurface] = useState<'focus' | 'plan' | 'needs'>('focus');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
@@ -231,9 +228,10 @@ export default function App() {
       } else if (entity.type === 'source' || entity.type === 'proposal' || entity.type === 'job') {
         setActiveTab('notes');
         setNotesSurface('inbox');
+      } else if (entity.type === 'calendar_event') {
+        setActiveTab('calendar');
       } else {
         setActiveTab('today');
-        setTodaySurface(entity.type === 'calendar_event' ? 'plan' : 'focus');
       }
     };
     window.addEventListener('df:open-entity', open);
@@ -867,7 +865,6 @@ export default function App() {
   // Life context: only show life tasks
   const contextFilteredTasks = filterTasksByContext(tasks, activeContext);
   const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
-  const backlogTasks = todayTasks.filter(t => !focusTaskIds.includes(t.id));
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
@@ -875,67 +872,6 @@ export default function App() {
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
-
-  const handleGenerateDailyPlan = async (brief: string): Promise<{ taskIds: string[]; summary: string }> => {
-    if (!aiApiKey || !aiBaseUrl) {
-      throw new Error('AI provider not configured');
-    }
-    const openTasks = todayTasks
-      .filter(task => task.status !== 'done')
-      .map(task => ({
-        id: task.id,
-        title: task.title,
-        priority: task.priority || null,
-        deadline: task.deadline || null,
-        sourceDate: task.source_date || null,
-        tags: (task.tags || []).filter(tag => !systemTags.includes(tag)),
-      }))
-      .slice(0, 60);
-    if (openTasks.length === 0) {
-      throw new Error('No open tasks');
-    }
-
-    const outputLanguage = language === 'zh' ? 'Simplified Chinese' : 'English';
-    const { summary: raw } = await aiApi.summarize({
-      apiKey: aiApiKey,
-      model: aiModel || undefined,
-      baseUrl: aiBaseUrl,
-      maxTokens: 800,
-      systemPrompt: [
-        'You are the planning intelligence inside a daily focus product.',
-        'Choose at most 3 tasks that make a realistic, coherent day.',
-        'Respect the user brief above raw urgency. Prefer meaningful progress over clearing the oldest debt.',
-        'Use only exact task ids from the supplied list.',
-        `Write the summary in ${outputLanguage}, in one concise sentence explaining the tradeoff.`,
-        'Return ONLY JSON: {"taskIds":["id"],"summary":"why these, what can wait"}.',
-      ].join(' '),
-      userPrompt: JSON.stringify({
-        date: currentFileDate,
-        context: activeContext,
-        userBrief: brief || (language === 'zh' ? '没有额外限制，请给我一个现实可完成的计划。' : 'No extra constraints. Build a realistic plan.'),
-        openTasks,
-      }),
-    });
-
-    const jsonText = raw
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
-    const start = jsonText.indexOf('{');
-    const end = jsonText.lastIndexOf('}');
-    const parsed = JSON.parse(start >= 0 && end >= start ? jsonText.slice(start, end + 1) : jsonText);
-    const proposedIds: unknown[] = Array.isArray(parsed.taskIds) ? parsed.taskIds : [];
-    const validIds: string[] = Array.from(new Set(
-      proposedIds.filter((id): id is string => typeof id === 'string' && openTasks.some(task => task.id === id)),
-    )).slice(0, 3);
-    if (validIds.length === 0) throw new Error('AI returned no valid task ids');
-    return {
-      taskIds: validIds,
-      summary: typeof parsed.summary === 'string' && parsed.summary.trim()
-        ? parsed.summary.trim()
-        : (language === 'zh' ? '这是今天最现实的一组推进组合，其余事项可以等待。' : 'This is the most realistic combination for today; the rest can wait.'),
-    };
-  };
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1090,8 +1026,6 @@ export default function App() {
         activeContext={activeContext}
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenTodaySurface={(surface) => { setActiveTab('today'); setTodaySurface(surface); }}
-        activeTodaySurface={todaySurface}
         onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
       />
 
@@ -1114,7 +1048,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'today' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className="h-full min-h-0 w-full">
             {/* Loading state */}
             {isLoading && (
@@ -1142,50 +1076,18 @@ export default function App() {
             )}
             {!isLoading && !loadError && (
               activeTab === 'today' ? (
-                <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="today-surface-shell">
-                  <div className="z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur md:px-8 lg:px-12">
-                    {([
-                      ['focus', language === 'zh' ? '专注' : 'Focus'],
-                      ['plan', language === 'zh' ? '计划 / 日历' : 'Plan / Calendar'],
-                      ['needs', language === 'zh' ? '待处理' : 'Needs attention'],
-                    ] as const).map(([surface, label]) => (
-                      <button key={surface} onClick={() => setTodaySurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${todaySurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {todaySurface === 'plan' ? (
-                    <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4 md:px-8 md:pb-8 lg:px-12" data-testid="today-plan-scroll-region">
-                      <CalendarWorkspace
-                        date={currentFileDate}
-                        setDate={setCurrentFileDate}
-                        language={language}
-                        onOpenLocalDate={(date) => { setCurrentFileDate(date); setTodaySurface('focus'); }}
-                        onManageConnections={() => { setConfigTab('sync'); setShowSettings(true); }}
-                      />
-                    </div>
-                  ) : todaySurface === 'needs' ? (
-                    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="today-needs-scroll-region">
-                      <ReviewView
-                        language={language}
-                        onOpenPlan={() => {
-                          setCurrentFileDate(getTodayStr());
-                          setTodaySurface('plan');
-                        }}
-                      />
-                    </div>
-                  ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-4 md:px-8 md:pt-8 lg:px-12 lg:pt-12" data-testid="today-focus-scroll-region">
-                <motion.div
-                  key="visual-today"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="space-y-10"
-                >
-                  <div className="mb-8 border-b border-border/60 pb-6 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-0.5 mr-2 p-0.5 rounded-lg bg-surface/60 border border-border/60">
+                <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-32 pt-5 md:px-8 md:pt-7 lg:px-12" data-testid="today-focus-scroll-region">
+                  <motion.div
+                    key="visual-today"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mx-auto max-w-5xl space-y-6"
+                  >
+                    <header className="space-y-3 border-b border-border/60 pb-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface/60 p-0.5">
                         <button
                           onClick={() => {
                             const d = new Date(`${currentFileDate}T00:00:00Z`);
@@ -1214,42 +1116,62 @@ export default function App() {
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
+                              {currentFileDate === getTodayStr()
+                                ? (language === 'zh' ? '今天' : 'Today')
+                                : (language === 'zh' ? '历史任务' : 'Past tasks')}
+                            </p>
+                            <h1 className="truncate text-lg font-semibold tracking-tight text-text-heading md:text-xl">
+                              {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                                weekday: 'long',
+                                month: 'long',
+                                day: 'numeric',
+                                year: 'numeric',
+                                timeZone: 'UTC',
+                              }).format(new Date(`${currentFileDate}T00:00:00Z`))}
+                            </h1>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {currentFileDate === getTodayStr() ? (
+                            <button
+                              onClick={handleManualRollover}
+                              title={language === 'zh' ? '回顾并处理历史未完成事项' : 'Review unfinished items from earlier days'}
+                              className="flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1.5 text-[11px] font-medium text-text-muted transition-colors hover:border-accent/20 hover:bg-accent/10 hover:text-accent"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              {language === 'zh' ? '整理遗留' : 'Review leftovers'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setCurrentFileDate(getTodayStr())}
+                              className="flex items-center gap-1.5 rounded-lg border border-accent/20 px-2.5 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10"
+                            >
+                              <Calendar className="h-3 w-3" />
+                              {language === 'zh' ? '回到今天' : 'Back to today'}
+                            </button>
+                          )}
+                          {currentFileDate === getTodayStr() && (
+                            <button
+                              onClick={() => setShowTaskInput(true)}
+                              className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              {language === 'zh' ? '添加任务' : 'Add task'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <h1 className="text-xl font-sans font-semibold text-text-heading tracking-tight flex items-baseline gap-2">
-                        <span>{new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}{language === 'zh' ? '' : ','}</span>
-                        <span className="text-text-muted font-normal">
-                          {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${currentFileDate}T00:00:00Z`))}
-                        </span>
-                      </h1>
-                      {currentFileDate === getTodayStr() && (
-                      <button
-                        onClick={handleManualRollover}
-                        title={language === 'zh' ? '回顾并处理历史未完成事项' : 'Review unfinished items from earlier days'}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-accent hover:bg-accent/10 border border-border/60 hover:border-accent/20 transition-all active:scale-95"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        {language === 'zh' ? '整理遗留' : 'Review leftovers'}
-                      </button>
-                      )}
-                      {currentFileDate !== getTodayStr() && (
-                      <button
-                        onClick={() => setCurrentFileDate(getTodayStr())}
-                        title={language === 'zh' ? '回到今天' : 'Go to today'}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-accent hover:text-accent hover:bg-accent/10 border border-accent/20 transition-all active:scale-95"
-                      >
-                        <Calendar className="w-3 h-3" />
-                        {language === 'zh' ? '今天' : 'Today'}
-                      </button>
-                      )}
-                    </div>
                     {categories.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                         <button
                           onClick={() => setSelectedCategory(null)}
-                          className={`category-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          className={`category-chip shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
                             selectedCategory === null
-                              ? 'bg-text-heading text-white shadow-sm'
-                              : 'bg-surface text-text-muted hover:text-text-heading border border-border/60'
+                              ? 'bg-text-heading text-white'
+                              : 'border border-border/60 text-text-muted hover:text-text-heading'
                           }`}
                         >
                           {language === 'zh' ? '全部' : 'All'}
@@ -1258,10 +1180,10 @@ export default function App() {
                           <button
                             key={c}
                             onClick={() => setSelectedCategory(selectedCategory === c ? null : c)}
-                            className={`category-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`category-chip shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
                               selectedCategory === c
-                                ? 'bg-accent text-white shadow-sm'
-                                : 'bg-surface text-text-muted hover:text-text-heading border border-border/60'
+                                ? 'bg-accent text-white'
+                                : 'border border-border/60 text-text-muted hover:text-text-heading'
                             }`}
                           >
                             {c}
@@ -1269,9 +1191,7 @@ export default function App() {
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <FeishuAgenda date={currentFileDate} language={language} />
+                    </header>
 
                   <TodayBacklog
                     tasks={todayTasks}
@@ -1295,15 +1215,6 @@ export default function App() {
                     onAddTask={() => setShowTaskInput(true)}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
-                    aiAvailable={Boolean(aiApiKey && aiBaseUrl)}
-                    onGenerateAIPlan={handleGenerateDailyPlan}
-                    onConfigureAI={() => setActiveTab('ai-chat')}
-                    // 1.1.5: route the Today's Notes card into the
-                    // TodayBacklog footer so we stop rendering the
-                    // same section twice (this file's DailyNoteCards
-                    // was deleted in 1.1.5 — see CHANGELOG).
-                    dailyNotes={filterNotesByContext(dailyNotes, activeContext)}
-                    onOpenNotesTab={() => setActiveTab('notes')}
                     completionPromptTaskIds={completionPromptTaskIds}
                     onCompletionPromptClosed={(taskId) => {
                       setCompletionPromptTaskIds(prev => {
@@ -1313,11 +1224,31 @@ export default function App() {
                       });
                     }}
                   />
-
+                  </motion.div>
+                </div>
+              ) : activeTab === 'calendar' ? (
+                <motion.div
+                  key="calendar"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6 lg:px-12"
+                  data-testid="calendar-page"
+                >
+                  <CalendarWorkspace
+                    date={currentFileDate}
+                    setDate={setCurrentFileDate}
+                    language={language}
+                    onOpenLocalDate={(date) => {
+                      setCurrentFileDate(date);
+                      setActiveTab('today');
+                    }}
+                    onManageConnections={() => {
+                      setConfigTab('sync');
+                      setShowSettings(true);
+                    }}
+                  />
                 </motion.div>
-                </div>
-                  )}
-                </div>
               ) : activeTab === 'ai-chat' ? (
                 <motion.div
                   key="ai-chat"
@@ -1379,21 +1310,6 @@ export default function App() {
             )}
           </div>
         </div>
-
-        {/* FAB: Add Task */}
-        {activeTab === 'today' && !showTaskInput && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            whileHover={{ scale: 1.06 }}
-            whileTap={{ scale: 0.92 }}
-            onClick={() => setShowTaskInput(true)}
-            className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl bg-accent text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow active:shadow-md"
-            title={language === 'zh' ? '添加任务 (Cmd+N)' : 'Add Task (Cmd+N)'}
-          >
-            <Plus className="w-6 h-6" />
-          </motion.button>
-        )}
 
         {/* Task Input Panel */}
         {activeTab === 'today' && (

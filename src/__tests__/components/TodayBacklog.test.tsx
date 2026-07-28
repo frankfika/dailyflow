@@ -26,9 +26,6 @@ function renderBacklog(tasks: Array<{
       onAddTask={noop}
       language="en"
       isToday
-      aiAvailable={false}
-      onGenerateAIPlan={async () => ({ taskIds: [], summary: '' })}
-      onConfigureAI={noop}
     />,
   );
 }
@@ -40,7 +37,7 @@ describe('TodayBacklog completion flow', () => {
       ['focus-done'],
     );
 
-    expect(screen.getAllByText('Ship the release')).toHaveLength(2);
+    expect(screen.getByText('Ship the release')).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark incomplete' })).toBeInTheDocument();
   });
@@ -52,6 +49,7 @@ describe('TodayBacklog completion flow', () => {
     ]);
 
     expect(screen.getByTestId('today-group-completed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Completed 1/i }));
     expect(screen.getByText('Reviewed notes')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark as todo' })).toBeInTheDocument();
   });

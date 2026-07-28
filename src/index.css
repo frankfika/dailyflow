@@ -410,22 +410,18 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-backlog {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-/* ----- Focus bar (sticky) ----- */
+/* ----- Focus priorities ----- */
 .today-focus-bar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1rem 1.1rem 0.95rem;
-  background: color-mix(in srgb, var(--color-surface-elevated) 97%, var(--color-background));
+  padding: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--color-surface-elevated) 82%, transparent);
   border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  box-shadow: 0 1px 0 var(--color-border);
+  border-radius: 0.75rem;
 }
 .today-focus-bar-toggle {
   display: flex;
@@ -435,29 +431,28 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   background: transparent;
   border: 0;
   padding: 0;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
 }
 .today-focus-bar-mark {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.6rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 0.5rem;
   background: var(--color-accent-light);
   color: var(--color-accent);
   flex: 0 0 auto;
 }
 .today-focus-bar-eyebrow {
-  font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
   color: var(--color-text-muted);
   font-weight: 600;
   margin: 0;
 }
 .today-focus-bar-title {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 650;
   color: var(--color-text-heading);
   margin: 0.15rem 0 0;
@@ -485,14 +480,14 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .today-focus-bar-empty {
   margin: 0;
-  padding: 0.4rem 0 0;
+  padding: 0.25rem 0 0 2.55rem;
   font-size: 0.72rem;
   color: var(--color-text-muted);
   line-height: 1.45;
 }
 .today-focus-bar-list {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: 0.35rem 0 0 2.55rem;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -503,10 +498,10 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   grid-template-columns: 1.7rem minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.6rem;
-  min-height: 2.4rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.6rem;
-  background: var(--color-surface);
+  min-height: 2.2rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
   border: 1px solid var(--color-border);
   transition: opacity 0.2s;
 }
@@ -561,14 +556,14 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  padding: 0 0.1rem;
+  padding: 0.15rem 0;
 }
 .today-filter-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.42rem 0.7rem;
-  border-radius: 0.6rem;
+  padding: 0.36rem 0.65rem;
+  border-radius: 0.5rem;
   font-size: 0.72rem;
   font-weight: 600;
   background: var(--color-surface);
@@ -602,81 +597,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .today-filter-pill.is-overdue.is-active { background: var(--color-danger); border-color: var(--color-danger); }
 .today-filter-pill.is-today.is-active { background: var(--color-danger); border-color: var(--color-danger); }
-.today-filter-pill.is-week.is-active { background: var(--color-info); border-color: var(--color-info); }
-.today-filter-pill.is-later.is-active { background: var(--color-text-muted); border-color: var(--color-text-muted); }
-.today-filter-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-left: auto;
-  padding: 0.42rem 0.7rem;
-  border-radius: 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: var(--color-accent);
-  color: white;
-  border: 1px solid var(--color-accent);
-  cursor: pointer;
-}
-.today-filter-add:hover { filter: brightness(1.05); }
-
-/* ----- Stat strip (4-up glance counts above the filter row) ----- */
-.today-stat-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-.today-stat-card {
-  padding: 0.65rem 0.85rem 0.7rem !important;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  background: var(--color-surface-elevated, var(--color-surface)) !important;
-  border-color: var(--color-border) !important;
-}
-.today-stat-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.62rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-.today-stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--color-text-heading);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-.today-stat-card.is-danger .today-stat-eyebrow { color: var(--color-danger); }
-.today-stat-card.is-danger .today-stat-value { color: var(--color-danger); }
-.today-stat-card.is-danger { border-color: var(--color-danger) !important; background: var(--color-danger-light) !important; }
-.today-stat-progress-track {
-  margin-top: 0.35rem;
-  height: 3px;
-  background: var(--color-border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.today-stat-progress-value {
-  height: 100%;
-  background: var(--color-accent);
-  border-radius: 999px;
-  transition: width 0.2s ease;
-}
-
-/* Focus bar empty-state anchor (small line below empty focus bar) */
-.today-focus-bar-anchor {
-  margin: 0.35rem 0 0;
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
+.today-filter-pill.is-upcoming.is-active { background: var(--color-info); border-color: var(--color-info); }
 /* No-deadline toggle (inline checkbox in the section header) */
 .today-nodate-toggle {
   display: inline-flex;
@@ -704,24 +625,6 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   cursor: pointer;
 }
 
-/* Today's notes empty CTA inside TodayBacklog */
-.today-notes-empty {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: 0.6rem;
-  background: var(--color-accent-light);
-  color: var(--color-accent);
-  border: 1px solid transparent;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter 0.15s, background 0.15s;
-  align-self: flex-start;
-}
-.today-notes-empty:hover { filter: brightness(0.97); background: var(--color-accent-highlight, var(--color-accent-light)); }
-
 /* Modifiers that drive the no-deadline default rendering state. */
 .today-group.is-nodate.is-expanded { display: flex; }
 .today-group.is-nodate.is-collapsed { display: flex; }
@@ -731,12 +634,12 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-backlog-groups {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.1rem;
 }
 .today-group {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 .today-group-header {
   display: flex;
@@ -756,8 +659,8 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-group-mark {
   display: grid;
   place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 0.45rem;
   background: var(--color-border);
   color: var(--color-text-muted);
@@ -769,7 +672,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-group.is-later .today-group-mark { background: var(--color-border); color: var(--color-text-muted); }
 .today-group.is-nodate .today-group-mark { background: var(--color-border); color: var(--color-text-muted); }
 .today-group-title {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -792,30 +695,19 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-group.is-overdue .today-group-count { background: var(--color-danger-light); color: var(--color-danger); }
 .today-group.is-today .today-group-count { background: var(--color-danger-light); color: var(--color-danger); }
 .today-group.is-week .today-group-count { background: var(--color-info-light); color: var(--color-info); }
-.today-group-sub {
-  flex: 1 1 100%;
-  margin: 0;
-  font-size: 0.66rem;
-  color: var(--color-text-muted);
-}
 .today-group-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 .today-group-item {
   position: relative;
-  border-left: 3px solid var(--color-border);
-  border-radius: 0.6rem;
-  transition: border-color 0.15s, transform 0.15s;
+  border-radius: 0.55rem;
+  transition: transform 0.15s;
 }
-.today-group-item[data-priority="high"] { border-left-color: var(--color-danger); }
-.today-group-item[data-priority="medium"] { border-left-color: var(--color-info); }
-.today-group-item[data-priority="low"] { border-left-color: var(--color-text-muted); }
-.today-group.is-overdue .today-group-item { border-left-color: var(--color-danger); }
 .today-group-item:hover { transform: translateX(1px); }
 
 .today-group-add,
@@ -884,7 +776,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 
 /* ----- Responsive: stack on small screens ----- */
 @media (max-width: 768px) {
-  .today-backlog { gap: 1.1rem; }
+  .today-backlog { gap: 0.9rem; }
   .today-focus-bar { padding: 0.85rem 0.9rem 0.8rem; border-radius: 0.85rem; }
   .today-focus-bar-title { font-size: 0.85rem; }
   .today-focus-bar-progress { display: none; }
@@ -892,15 +784,11 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   .today-group-add,
   .today-group-remove { opacity: 1; }
   .today-filter-pill { padding: 0.38rem 0.6rem; font-size: 0.7rem; }
-  .today-filter-add { padding: 0.38rem 0.6rem; }
-  .today-stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
-  .today-stat-value { font-size: 1.1rem; }
 }
 @media (max-width: 480px) {
   .today-filter-pill-count { display: none; }
   .today-focus-bar-item { grid-template-columns: 1.5rem minmax(0, 1fr) auto; }
   .today-focus-bar-meta { display: none; }
-  .today-stat-eyebrow { font-size: 0.55rem; }
 }
 
 /* ==========================================================================
