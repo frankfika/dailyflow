@@ -11,13 +11,30 @@ const execAsync = promisify(exec);
 const router = Router();
 
 /**
+ * Trim user-entered workspace paths without corrupting filesystem roots.
+ * This deliberately accepts both slash styles so paths copied between
+ * platforms (or returned by a native folder picker) remain usable.
+ */
+export function normalizeWorkspacePath(input: string): string {
+  let value = String(input ?? '').trim();
+  if (!value) return '';
+  if (value === '/' || value === '\\') return value;
+  // Keep Windows drive and UNC roots intact (C:\\ and \\\\server\\share\\).
+  if (/^[A-Za-z]:[\\/]*$/.test(value)) return `${value[0]}:${value.includes('/') ? '/' : '\\'}`;
+  if (/^\\\\[^\\/]+[\\/][^\\/]+[\\/]*$/.test(value)) {
+    return value.replace(/[\\/]+$/, '');
+  }
+  return value.replace(/[\\/]+$/, '') || value;
+}
+
+/**
  * Normalize a workspace path so equivalent inputs compare equal:
  * expands ~, resolves to absolute, strips trailing slash, follows symlinks,
  * and on macOS/Windows lowercases for case-insensitive comparison.
  * Falls back to the absolute form if realpath fails (path may not exist yet).
  */
 async function canonicalizeWorkspacePath(input: string): Promise<string> {
-  let p = input.trim();
+  let p = normalizeWorkspacePath(input);
   if (p.startsWith('~')) p = path.join(os.homedir(), p.slice(1));
   let abs = path.resolve(p);
   try {
@@ -67,7 +84,7 @@ router.post('/', async (req, res) => {
  */
 router.post('/validate-path', async (req, res) => {
   try {
-    const { path: workspacePath } = req.body;
+    const workspacePath = normalizeWorkspacePath(req.body?.path);
 
     if (!workspacePath) {
       return res.json({ valid: false, error: 'Path is required' });
@@ -327,7 +344,7 @@ router.post('/workspaces', async (req, res) => {
     if (!wsPath || !wsPath.trim()) {
       return res.status(400).json({ error: 'Path is required' });
     }
-    const trimmedPath = wsPath.trim().replace(/[/\\]+$/, '') || wsPath.trim();
+    const trimmedPath = normalizeWorkspacePath(wsPath);
     const result = await ensureDirectory(trimmedPath);
     if (!result.ok) return res.status(400).json({ error: result.error });
 

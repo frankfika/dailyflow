@@ -8,6 +8,15 @@ interface WorkspaceSetupProps {
   language: 'en' | 'zh';
 }
 
+// Keep roots intact while accepting paths copied from any supported OS.
+function normalizeWorkspacePath(input: string): string {
+  const value = input.trim();
+  if (!value || value === '/' || value === '\\') return value;
+  if (/^[A-Za-z]:[\\/]*$/.test(value)) return `${value[0]}:${value.includes('/') ? '/' : '\\'}`;
+  if (/^\\\\[^\\/]+[\\/][^\\/]+[\\/]*$/.test(value)) return value.replace(/[\\/]+$/, '');
+  return value.replace(/[\\/]+$/, '') || value;
+}
+
 export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   const [workspacePath, setWorkspacePath] = useState('');
   const [isPickingFolder, setIsPickingFolder] = useState(false);
@@ -56,7 +65,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleValidate = async (): Promise<boolean> => {
-    const normalizedPath = workspacePath.trim().replace(/[/\\]+$/, '');
+    const normalizedPath = normalizeWorkspacePath(workspacePath);
     if (!normalizedPath) {
       setError(t.missingPath);
       return false;
@@ -66,18 +75,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      const response = await fetch(`/api/config/validate-path`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: normalizedPath, create: true }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
-      }
-
-      const result = await response.json();
+      const result = await workspacesApi.validatePath(normalizedPath);
       if (!result.valid) {
         setIsValid(false);
         setError(result.error || t.invalidPath);
@@ -97,7 +95,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleContinue = async () => {
-    const normalizedPath = workspacePath.trim().replace(/[/\\]+$/, '');
+    const normalizedPath = normalizeWorkspacePath(workspacePath);
     if (!normalizedPath) {
       setError(t.missingPath);
       return;

@@ -1247,6 +1247,10 @@ export default function App() {
                     setCurrentFileDate(date);
                     setActiveTab('today');
                   }}
+                  onManageConnections={() => {
+                    setConfigTab('sync');
+                    setShowSettings(true);
+                  }}
                 />
               ) : activeTab === 'ai-chat' ? (
                 <motion.div

@@ -26,6 +26,8 @@ type JsonObject = Record<string, any>;
 
 export interface FeishuAuthStatus {
   cliAvailable: boolean;
+  appConfigured: boolean;
+  appName?: string;
   authorized: boolean;
   userName?: string;
   openId?: string;
@@ -130,9 +132,12 @@ async function runLark(args: string[], timeout = 60_000): Promise<JsonObject> {
 export async function getFeishuAuthStatus(): Promise<FeishuAuthStatus> {
   try {
     const status = await runLark(['auth', 'status', '--json', '--verify']);
+    const bot = status.identities?.bot;
     const user = status.identities?.user;
     return {
       cliAvailable: true,
+      appConfigured: Boolean(status.appId && bot?.available && bot?.verified),
+      appName: bot?.appName,
       authorized: Boolean(user?.available && user?.verified),
       userName: user?.userName,
       openId: user?.openId,
@@ -141,6 +146,7 @@ export async function getFeishuAuthStatus(): Promise<FeishuAuthStatus> {
   } catch (error: any) {
     return {
       cliAvailable: error?.code !== 'cli_missing',
+      appConfigured: false,
       authorized: false,
       reason: error?.message || String(error),
     };

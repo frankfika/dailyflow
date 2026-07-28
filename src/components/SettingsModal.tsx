@@ -52,6 +52,18 @@ interface SettingsModalProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
 }
 
+function StepNumber({ value, done }: { value: string; done: boolean }) {
+  return (
+    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+      done
+        ? 'bg-green-100 text-green-700'
+        : 'border border-border bg-surface text-text-muted'
+    }`}>
+      {done ? <CheckCircle className="h-3.5 w-3.5" /> : value}
+    </span>
+  );
+}
+
 export function SettingsModal({
   showSettings,
   setShowSettings,
@@ -117,8 +129,10 @@ export function SettingsModal({
   // Sync sub-tab state
   const [syncSubTab, setSyncSubTab] = useState<'feishu' | 'github' | 'ipfs'>('feishu');
   const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null);
+  const [feishuStatusLoading, setFeishuStatusLoading] = useState(false);
   const [feishuLoading, setFeishuLoading] = useState(false);
   const [feishuDeviceCode, setFeishuDeviceCode] = useState<string | null>(null);
+  const [feishuVerificationUrl, setFeishuVerificationUrl] = useState<string | null>(null);
   const [feishuMessage, setFeishuMessage] = useState('');
 
   // IPFS local state
@@ -140,9 +154,14 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!showSettings || configTab !== 'sync') return;
+    setFeishuStatusLoading(true);
     feishuApi.status()
       .then(setFeishuStatus)
-      .catch(() => setFeishuStatus(null));
+      .catch((error: Error) => {
+        setFeishuStatus(null);
+        setFeishuMessage(error.message);
+      })
+      .finally(() => setFeishuStatusLoading(false));
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
@@ -154,9 +173,10 @@ export function SettingsModal({
     try {
       const auth = await feishuApi.startAuth();
       setFeishuDeviceCode(auth.deviceCode);
+      setFeishuVerificationUrl(auth.verificationUrl);
       setFeishuMessage(language === 'zh'
-        ? '已打开飞书授权页。授权完成后回到这里点击“我已完成授权”。'
-        : 'Feishu authorization opened. Return here and click “Authorization completed”.');
+        ? '授权页已打开：请登录你的企业飞书账号并同意“日历 + 任务”权限，然后回到这里检查连接。'
+        : 'Authorization opened. Sign in with your enterprise Feishu account, approve Calendar + Tasks, then return here to check the connection.');
       try {
         await open(auth.verificationUrl);
       } catch {
@@ -176,6 +196,7 @@ export function SettingsModal({
       const status = await feishuApi.finishAuth(feishuDeviceCode);
       setFeishuStatus(status);
       setFeishuDeviceCode(null);
+      setFeishuVerificationUrl(null);
       setFeishuMessage(status.authorized
         ? (language === 'zh' ? '飞书企业账号已连接。' : 'Feishu enterprise account connected.')
         : (status.reason || 'Authorization failed'));
@@ -184,6 +205,21 @@ export function SettingsModal({
     } finally {
       setFeishuLoading(false);
     }
+  };
+
+  const reopenFeishuAuthorization = async () => {
+    if (!feishuVerificationUrl) return;
+    try {
+      await open(feishuVerificationUrl);
+    } catch {
+      window.open(feishuVerificationUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const copyFeishuAuthorization = async () => {
+    if (!feishuVerificationUrl) return;
+    await navigator.clipboard.writeText(feishuVerificationUrl);
+    setFeishuMessage(language === 'zh' ? '授权链接已复制。' : 'Authorization link copied.');
   };
 
   const handleFeishuSync = async () => {
@@ -944,29 +980,35 @@ export function SettingsModal({
 
               {syncSubTab === 'feishu' && (
                 <div className="space-y-4">
-                  <div className="flex items-start gap-3 rounded-md border border-border bg-surface p-4">
+                  <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
                     <div className="rounded-md bg-blue-500/10 p-2 text-blue-600">
                       <CalendarDays className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-text-heading">
-                          {language === 'zh' ? '飞书企业版' : 'Feishu Enterprise'}
+                          {language === 'zh' ? '连接飞书到 DailyFlow' : 'Connect Feishu to DailyFlow'}
                         </h3>
                         <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
                           feishuStatus?.authorized
                             ? 'bg-green-50 text-green-700'
-                            : 'bg-stone-100 text-stone-600'
+                            : feishuStatusLoading
+                              ? 'bg-stone-100 text-stone-600'
+                              : 'bg-amber-50 text-amber-700'
                         }`}>
-                          {feishuStatus?.authorized
+                          {feishuStatusLoading
+                            ? (language === 'zh' ? '检查中' : 'Checking')
+                            : feishuStatus?.authorized
                             ? (language === 'zh' ? '已连接' : 'Connected')
-                            : (language === 'zh' ? '未连接' : 'Not connected')}
+                            : feishuStatus?.appConfigured === false
+                              ? (language === 'zh' ? '需要管理员配置' : 'Admin setup needed')
+                              : (language === 'zh' ? '等待账号授权' : 'Account authorization needed')}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
                         {language === 'zh'
-                          ? '任务双向同步标题、描述、截止日和完成状态；带开始/结束时间的会议笔记会同步到飞书日历，飞书日程显示在 DailyFlow 当天视图。'
-                          : 'Tasks sync both ways. Timed meeting notes sync to Feishu Calendar, and Feishu events appear in the DailyFlow day view.'}
+                          ? '只需授权你的企业账号，不需要在这里填写 App ID 或 App Secret。连接后再选择“立即同步”。'
+                          : 'Authorize your enterprise account here—no App ID or App Secret is entered in this screen. Then choose Sync now.'}
                       </p>
                       {feishuStatus?.userName && (
                         <p className="mt-1 truncate text-[10px] text-text-muted">
@@ -976,59 +1018,150 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-border/70 bg-background p-3 text-[11px] text-text-muted">
-                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                      <span>{language === 'zh' ? '任务' : 'Tasks'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? 'DailyFlow ↔ 飞书任务（双向）' : 'DailyFlow ↔ Feishu Tasks (two-way)'}
-                      </span>
-                      <span>{language === 'zh' ? '日程' : 'Calendar'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? '飞书 → 当天视图；定时会议笔记 → 飞书' : 'Feishu → day view; timed meeting notes → Feishu'}
-                      </span>
-                      <span>{language === 'zh' ? '冲突' : 'Conflicts'}</span>
-                      <span className="text-text-main">
-                        {language === 'zh' ? '两端同时修改时暂停覆盖，保留双方内容' : 'Concurrent edits pause overwrite and preserve both sides'}
-                      </span>
+                  <div className="space-y-2">
+                    <div className="flex gap-3 rounded-xl border border-border/70 bg-background p-3">
+                      <StepNumber value="1" done={Boolean(feishuStatus?.appConfigured)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold text-text-heading">
+                            {language === 'zh' ? '企业应用准备' : 'Enterprise app setup'}
+                          </p>
+                          {feishuStatus?.appConfigured && (
+                            <span className="text-[10px] font-medium text-green-700">
+                              {language === 'zh' ? '已就绪' : 'Ready'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                          {feishuStatusLoading
+                            ? (language === 'zh' ? '正在检查连接环境…' : 'Checking the connector environment…')
+                            : !feishuStatus?.cliAvailable
+                              ? (language === 'zh'
+                                ? '当前安装包缺少飞书连接组件（lark-cli），请更新或重新安装 DailyFlow。'
+                                : 'This build is missing the Feishu connector runtime (lark-cli). Update or reinstall DailyFlow.')
+                              : feishuStatus?.appConfigured
+                                ? (language === 'zh'
+                                  ? `企业应用已配置${feishuStatus.appName ? `：${feishuStatus.appName}` : ''}。你不需要准备密钥。`
+                                  : `Enterprise app ready${feishuStatus.appName ? `: ${feishuStatus.appName}` : ''}. You do not need to provide credentials.`)
+                                : (language === 'zh'
+                                  ? '需要企业管理员先创建飞书企业自建应用，并开通日历和任务权限。'
+                                  : 'An admin must first create a Feishu custom app and enable Calendar and Tasks permissions.')}
+                        </p>
+                        {!feishuStatusLoading && feishuStatus?.cliAvailable && !feishuStatus.appConfigured && (
+                          <button
+                            onClick={async () => {
+                              const url = 'https://open.feishu.cn/app';
+                              try {
+                                await open(url);
+                              } catch {
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              }
+                            }}
+                            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {language === 'zh' ? '打开飞书开发者后台' : 'Open Feishu Developer Console'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {!feishuStatus?.authorized ? (
-                    <div className="space-y-2">
-                      <button
-                        onClick={handleConnectFeishu}
-                        disabled={feishuLoading}
-                        className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                        {language === 'zh' ? '连接飞书企业账号' : 'Connect Feishu Enterprise'}
-                      </button>
-                      {feishuDeviceCode && (
+                    <div className={`flex gap-3 rounded-xl border p-3 ${
+                      feishuStatus?.appConfigured && !feishuStatus?.authorized
+                        ? 'border-blue-200 bg-blue-50/40'
+                        : 'border-border/70 bg-background'
+                    }`}>
+                      <StepNumber value="2" done={Boolean(feishuStatus?.authorized)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-text-heading">
+                          {language === 'zh' ? '授权我的飞书账号' : 'Authorize my Feishu account'}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                          {feishuStatus?.authorized
+                            ? (language === 'zh'
+                              ? `已连接${feishuStatus.userName ? `：${feishuStatus.userName}` : '企业账号'}。`
+                              : `Connected${feishuStatus.userName ? `: ${feishuStatus.userName}` : ' enterprise account'}.`)
+                            : (language === 'zh'
+                              ? '点击后会打开飞书官方授权页。请使用要同步日历的企业账号登录，并同意日历与任务权限。'
+                              : 'This opens Feishu’s authorization page. Sign in with the enterprise account whose calendar you want to sync.')}
+                        </p>
+                        {!feishuStatus?.authorized && feishuStatus?.appConfigured && !feishuDeviceCode && (
+                          <button
+                            onClick={handleConnectFeishu}
+                            disabled={feishuLoading}
+                            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                            {language === 'zh' ? '打开飞书授权页' : 'Open Feishu authorization'}
+                          </button>
+                        )}
+                        {feishuDeviceCode && (
+                          <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
+                            <ol className="space-y-1 text-[11px] leading-relaxed text-text-main">
+                              <li>{language === 'zh' ? '1. 在飞书页面登录企业账号并点击授权。' : '1. Sign in on Feishu and approve access.'}</li>
+                              <li>{language === 'zh' ? '2. 完成后回到 DailyFlow，点击下面的按钮。' : '2. Return to DailyFlow and click the button below.'}</li>
+                            </ol>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={reopenFeishuAuthorization}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                {language === 'zh' ? '重新打开' : 'Open again'}
+                              </button>
+                              <button
+                                onClick={copyFeishuAuthorization}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {language === 'zh' ? '复制链接' : 'Copy link'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {feishuDeviceCode && (
                         <button
                           onClick={handleFinishFeishu}
                           disabled={feishuLoading}
-                          className="flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                           {feishuLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                          {language === 'zh' ? '我已完成授权' : 'Authorization completed'}
+                          {language === 'zh' ? '我已授权，检查连接' : 'I approved—check connection'}
                         </button>
                       )}
+                      </div>
                     </div>
-                  ) : (
-                    <button
-                      onClick={handleFeishuSync}
-                      disabled={feishuLoading}
-                      className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {feishuLoading
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <RefreshCw className="h-4 w-4" />}
-                      {language === 'zh' ? '立即双向同步' : 'Sync both ways now'}
-                    </button>
-                  )}
+
+                    <div className={`flex gap-3 rounded-xl border p-3 ${
+                      feishuStatus?.authorized ? 'border-green-200 bg-green-50/30' : 'border-border/70 bg-background'
+                    }`}>
+                      <StepNumber value="3" done={Boolean(feishuStatus?.lastTaskSyncAt || feishuStatus?.lastCalendarSyncAt)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-text-heading">
+                          {language === 'zh' ? '同步任务与日程' : 'Sync tasks and calendar'}
+                        </p>
+                        <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-text-muted">
+                          <p><span className="font-semibold text-text-main">{language === 'zh' ? '任务：' : 'Tasks: '}</span>{language === 'zh' ? 'DailyFlow ↔ 飞书任务，双向同步标题、描述、截止日和完成状态。' : 'DailyFlow ↔ Feishu Tasks, including title, description, due date, and completion.'}</p>
+                          <p><span className="font-semibold text-text-main">{language === 'zh' ? '日程：' : 'Calendar: '}</span>{language === 'zh' ? '飞书日程显示在 DailyFlow；带时间的会议笔记可创建或更新飞书日程。' : 'Feishu events appear in DailyFlow; timed meeting notes can create or update Feishu events.'}</p>
+                        </div>
+                        {feishuStatus?.authorized && (
+                          <button
+                            onClick={handleFeishuSync}
+                            disabled={feishuLoading}
+                            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {feishuLoading
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <RefreshCw className="h-4 w-4" />}
+                            {language === 'zh' ? '立即同步' : 'Sync now'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   {feishuMessage && (
-                    <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs text-stone-700">
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-700">
                       {feishuMessage}
                     </div>
                   )}

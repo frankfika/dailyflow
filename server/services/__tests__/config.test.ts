@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { loadConfig, saveConfig } from '../config.js';
 import type { Config } from '../../types/task.js';
+import { normalizeWorkspacePath } from '../../routes/config.js';
 
 let testConfigDir: string;
 let previousConfigFile: string | undefined;
@@ -140,5 +141,19 @@ describe('loadConfig', () => {
     await fs.writeFile(configFile, '{"workspaces":', 'utf8');
     await expect(loadConfig()).rejects.toBeInstanceOf(SyntaxError);
     expect(await fs.readFile(configFile, 'utf8')).toBe('{"workspaces":');
+  });
+});
+
+describe('normalizeWorkspacePath', () => {
+  it.each([
+    ['/Users/fangchen/Documents/DailyFlow/', '/Users/fangchen/Documents/DailyFlow'],
+    ['  /Users/fangchen/Documents/DailyFlow////  ', '/Users/fangchen/Documents/DailyFlow'],
+    ['/', '/'],
+    ['C:\\', 'C:\\'],
+    ['C:\\Users\\fangchen\\DailyFlow\\', 'C:\\Users\\fangchen\\DailyFlow'],
+    ['\\\\server\\share\\', '\\\\server\\share'],
+    ['', ''],
+  ])('normalizes %s as %s', (input, expected) => {
+    expect(normalizeWorkspacePath(input)).toBe(expected);
   });
 });

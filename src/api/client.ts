@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
-const API_BASE = import.meta.env.DEV ? '/api' : 'http://127.0.0.1:3003/api';
+const API_BASE = import.meta.env.DEV
+  ? '/api'
+  : `${import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:3003'}/api`;
 
 /**
  * Build an Error that carries the HTTP status code so call sites can decide
@@ -222,6 +224,8 @@ export const configApi = {
 
 export interface FeishuStatus {
   cliAvailable: boolean;
+  appConfigured: boolean;
+  appName?: string;
   authorized: boolean;
   userName?: string;
   openId?: string;
@@ -354,6 +358,17 @@ export const feishuApi = {
 };
 
 export const workspacesApi = {
+  async validatePath(path: string): Promise<{ valid: boolean; created?: boolean; error?: string }> {
+    const res = await fetch(`${API_BASE}/config/validate-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, create: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw await httpError(res, data.error || 'Failed to validate workspace path');
+    return data;
+  },
+
   async list(): Promise<{ workspaces: Workspace[]; activeWorkspaceId: string }> {
     const res = await fetch(`${API_BASE}/config/workspaces`);
     if (!res.ok) throw await httpError(res, 'Failed to list workspaces');
