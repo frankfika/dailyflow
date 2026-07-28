@@ -41,7 +41,7 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3003',
+          target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:3003',
           changeOrigin: true,
         },
       },

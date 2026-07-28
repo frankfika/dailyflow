@@ -10,7 +10,7 @@
 
 ![Main Interface](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.13-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.14-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
@@ -275,6 +275,14 @@ Use [GitHub Issues](https://github.com/frankfika/dailyflow/issues) and include:
 ---
 
 ## 📜 Changelog
+
+### v1.1.14 (2026-07-28)
+
+**🩹 First-run workspace path fix**
+
+- Fixed first-run workspace validation on macOS
+- Use `127.0.0.1` for local service connections to avoid IPv6 `localhost` resolution issues
+- Normalize trailing path separators and add regression coverage
 
 ### v1.1.13 (2026-07-28)
 

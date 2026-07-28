@@ -10,7 +10,7 @@
 
 ![主界面](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/Version-1.1.13-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.14-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache--2.0-lightgrey?style=flat-square)
 ![Tech](https://img.shields.io/badge/Stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
@@ -275,6 +275,14 @@ npm run dev:all
 ---
 
 ## 📜 更新日志
+
+### v1.1.14 (2026-07-28)
+
+**🩹 首轮工作区路径修复**
+
+- 修复 macOS 首轮工作区路径校验失败
+- 统一使用 `127.0.0.1` 连接本地服务，避免 IPv6 `localhost` 解析问题
+- 规范化路径末尾斜杠并补充回归验证
 
 ### v1.1.13 (2026-07-28)
 

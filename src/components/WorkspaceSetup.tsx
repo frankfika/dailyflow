@@ -56,7 +56,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleValidate = async (): Promise<boolean> => {
-    if (!workspacePath.trim()) {
+    const normalizedPath = workspacePath.trim().replace(/[/\\]+$/, '');
+    if (!normalizedPath) {
       setError(t.missingPath);
       return false;
     }
@@ -68,7 +69,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       const response = await fetch(`/api/config/validate-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: workspacePath, create: true }),
+        body: JSON.stringify({ path: normalizedPath, create: true }),
       });
 
       if (!response.ok) {
@@ -83,6 +84,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
         return false;
       }
       setIsValid(true);
+      if (normalizedPath !== workspacePath) setWorkspacePath(normalizedPath);
       setError('');
       return true;
     } catch (e: any) {
@@ -95,7 +97,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
   };
 
   const handleContinue = async () => {
-    if (!workspacePath.trim()) {
+    const normalizedPath = workspacePath.trim().replace(/[/\\]+$/, '');
+    if (!normalizedPath) {
       setError(t.missingPath);
       return;
     }
@@ -107,8 +110,8 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
     setError('');
 
     try {
-      const name = workspacePath.split('/').filter(Boolean).pop() || 'Workspace';
-      await workspacesApi.create(name, workspacePath);
+      const name = normalizedPath.split(/[/\\]/).filter(Boolean).pop() || 'Workspace';
+      await workspacesApi.create(name, normalizedPath);
       onComplete();
     } catch (e: any) {
       setError(e.message || (language === 'zh' ? '保存失败，请重试' : 'Failed to save, please try again'));

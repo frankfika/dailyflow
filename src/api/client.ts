@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-const API_BASE = import.meta.env.DEV ? '/api' : 'http://localhost:3003/api';
+const API_BASE = import.meta.env.DEV ? '/api' : 'http://127.0.0.1:3003/api';
 
 /**
  * Build an Error that carries the HTTP status code so call sites can decide
