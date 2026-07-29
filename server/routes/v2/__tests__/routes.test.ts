@@ -99,6 +99,26 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       expect(inbox.status).toBe(200);
       expect(inbox.body.items.find((s: { id: string }) => s.id === sourceId)).toBeDefined();
 
+      // Reading a note must not trigger a detached whole-file write that can
+      // race and overwrite a subsequent autosave.
+      const saveProbeNote = await post('/notes', { body: 'autosave probe' });
+      expect(saveProbeNote.status).toBe(201);
+      const saveProbeCreatedAt = saveProbeNote.body.note.createdAt as string;
+      const saveProbePath = path.join(
+        workspace,
+        '.dailyflow',
+        'notes',
+        saveProbeCreatedAt.slice(0, 4),
+        saveProbeCreatedAt.slice(5, 7),
+        `${saveProbeNote.body.note.id}.md`,
+      );
+      const noteBeforeRead = await fs.readFile(saveProbePath, 'utf8');
+      const readOnlyNote = await get(`/notes/${saveProbeNote.body.note.id}`);
+      expect(readOnlyNote.status).toBe(200);
+      // Give any accidentally detached write enough time to finish.
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(await fs.readFile(saveProbePath, 'utf8')).toBe(noteBeforeRead);
+
       // 4. Process: AI returns a fallback (no provider)
       const processed = await post(`/sources/${sourceId}/process`, {});
       expect(processed.status).toBe(200);

@@ -352,8 +352,14 @@ v2Router.get('/notes/:id', async (req, res) => {
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
     const note = await svc.get(req.params.id);
-    // Side-effect: touch lastOpenedAt so Recent works.
-    svc.touchLastOpened(req.params.id).catch(() => undefined);
+    // Keep reads side-effect free. The former fire-and-forget
+    // touchLastOpened() rewrote the whole Markdown document without
+    // participating in the autosave version protocol. If that write
+    // completed after a PATCH, it could silently restore the stale body
+    // even though the editor had already shown "Saved".
+    //
+    // The Notes "Recent" view is based on updatedAt, so this write was
+    // unnecessary as well as unsafe.
     res.json({ note });
   } catch (err) {
     handleError(err, res);
