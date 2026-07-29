@@ -119,6 +119,19 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
       expect(await fs.readFile(saveProbePath, 'utf8')).toBe(noteBeforeRead);
 
+      // The compatibility archive endpoint must participate in the same
+      // autosave version protocol instead of performing an unguarded write.
+      const unversionedArchive = await post(`/notes/${saveProbeNote.body.note.id}/archive`, {});
+      expect(unversionedArchive.status).toBe(400);
+      const versionedArchive = await post(`/notes/${saveProbeNote.body.note.id}/archive`, {
+        expectedAutoSaveVersion: saveProbeNote.body.note.autoSaveVersion,
+      });
+      expect(versionedArchive.status).toBe(200);
+      expect(versionedArchive.body.note.state).toBe('archived');
+      expect(versionedArchive.body.note.autoSaveVersion).toBe(
+        saveProbeNote.body.note.autoSaveVersion + 1,
+      );
+
       // A meeting recording is captured natively under an existing Note.
       const meetingNote = await post('/notes', {
         body: '会议中的手写记录',

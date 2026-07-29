@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, ArrowRight, Trash2, Pencil, BookOpen, Tag, Link2, X } from 'lucide-react';
-import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useArchiveNote, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
+import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
 import { listCommitments, type Commitment, type NoteBacklinks, type NoteKind } from '../api/client';
 import { relativeTime } from './relativeTime';
@@ -48,7 +48,7 @@ export interface NoteEditorProps {
   /** Switch which note the editor is showing. Used by the recent-
    * notes list in the empty-state onboarding card. */
   onSelectNote?: (id: string) => void;
-  /** Called after the active note has been permanently deleted. */
+  /** Called after the active note is deleted or moved out of the current view. */
   onDeleted?: (id: string) => void;
 }
 
@@ -60,12 +60,14 @@ const COPY = {
     saved: '已保存',
     conflict: '有冲突，刷新中…',
     error: '保存失败',
+    localEditsKept: '本地修改仍保留在编辑器中。',
     empty: '选左边一篇笔记，或者新建一篇。',
     backlinks: '关联',
     kind: '类型',
     date: '日期',
     pinned: '置顶',
     archive: '归档',
+    restore: '恢复',
     delete: '删除笔记',
     deleteConfirm: '确定永久删除这篇笔记吗？相关证据引用也会一并移除。',
     showList: '显示列表',
@@ -102,12 +104,14 @@ const COPY = {
     saved: 'Saved',
     conflict: 'Resolving conflict…',
     error: 'Save failed',
+    localEditsKept: 'Your local edits remain in the editor.',
     empty: 'Pick a note from the left, or start a new one.',
     backlinks: 'Backlinks',
     kind: 'Kind',
     date: 'Date',
     pinned: 'Pinned',
     archive: 'Archive',
+    restore: 'Restore',
     delete: 'Delete note',
     deleteConfirm: 'Permanently delete this note? Its evidence references will also be removed.',
     showList: 'Show list',
@@ -167,7 +171,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   const queryClient = useQueryClient();
   const q = useNote(noteId);
   const note = q.data?.note;
-  const archive = useArchiveNote();
   const del = useDeleteNote();
   const backlinks = useNoteBacklinks(noteId);
   // Pull a small slice of recent notes so the empty-state card
@@ -277,13 +280,23 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   const words = body.trim().split(/\s+/).filter(Boolean).length;
   const deleteCurrentNote = async () => {
     if (!confirm(t.deleteConfirm)) return;
-    await autosave.flush();
+    const saved = await autosave.flush();
+    if (!saved) return;
     await del.mutateAsync(note.id);
     onDeleted?.(note.id);
   };
   const saveMetadata = async (patch: Parameters<typeof autosave.schedule>[0]) => {
     autosave.schedule(patch);
-    await autosave.flush();
+    return autosave.flush();
+  };
+  const toggleArchived = async () => {
+    // Queue the state change with any unsaved title/body edits. A single
+    // versioned PATCH then persists the complete latest note before the
+    // current view releases its selection.
+    const saved = await saveMetadata({
+      state: note.state === 'archived' ? 'active' : 'archived',
+    });
+    if (saved) onDeleted?.(note.id);
   };
   const tags = note.tagIds ?? [];
   const linkedCommitmentIds = note.commitmentIds ?? [];
@@ -339,6 +352,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               <Badge tone={statusTone(autosave.status)}>
                 {statusCopy(autosave.status, language)}
               </Badge>
+            )}
+            {autosave.lastError && (
+              <span
+                className="text-xs text-danger"
+                role="alert"
+                title={autosave.lastError}
+              >
+                {language === 'zh'
+                  ? `${autosave.status === 'conflict' ? t.conflict : t.error}，${t.localEditsKept}`
+                  : autosave.lastError}
+              </span>
             )}
             <select
               value={note.kind}
@@ -405,13 +429,14 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               ★
             </button>
             <button
-              onClick={() => archive.mutate(note.id, {
-                onSuccess: () => onDeleted?.(note.id),
-              })}
+              onClick={() => void toggleArchived()}
+              disabled={autosave.status === 'saving'}
               className="px-1.5 py-0.5 border border-border rounded text-text-muted"
-              data-testid="note-archive"
+              data-testid={note.state === 'archived' ? 'note-restore' : 'note-archive'}
+              aria-label={note.state === 'archived' ? t.restore : t.archive}
+              title={note.state === 'archived' ? t.restore : t.archive}
             >
-              {t.archive}
+              {note.state === 'archived' ? t.restore : t.archive}
             </button>
             <button
               onClick={deleteCurrentNote}

@@ -13,6 +13,11 @@ import { z } from 'zod';
 import { newId } from '../../domain/v2/ulid.js';
 import { SourceItemSchema, type SourceItem } from '../../domain/v2/types.js';
 import type { V2Repository } from '../../repositories/v2/repository.js';
+import {
+  ConcurrentModificationError,
+  sha256 as fileSha256,
+} from '../../repositories/v2/atomicWrite.js';
+import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
 
 export const LocalTranscriptionConfigSchema = z.object({
@@ -124,9 +129,29 @@ export async function transcribeMeetingAudio(
     meta: audio.meta,
   });
   await repo.saveSourceItem(source, { auditKind: 'capture', auditActor: 'user', auditEntity: { type: 'source', id: source.id }, auditData: { noteId, audioSourceId: sourceId, provider: 'local' }, occurredAt: now });
-  const current = await repo.getNoteDocument(noteId);
-  if (current && !current.sourceIds.includes(source.id)) {
-    await repo.saveNoteDocument({ ...current, sourceIds: [...current.sourceIds, source.id], updatedAt: now, autoSaveVersion: current.autoSaveVersion + 1 }, { auditKind: 'capture', auditActor: 'user', auditEntity: { type: 'note', id: current.id }, auditData: { sourceId: source.id } });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const current = await repo.getNoteDocument(noteId);
+    if (!current || current.sourceIds.includes(source.id)) break;
+    try {
+      await repo.saveNoteDocument(
+        {
+          ...current,
+          sourceIds: [...current.sourceIds, source.id],
+          updatedAt: now,
+          autoSaveVersion: current.autoSaveVersion + 1,
+        },
+        {
+          expectedHash: fileSha256(serializeNoteDocument(current)),
+          auditKind: 'capture',
+          auditActor: 'user',
+          auditEntity: { type: 'note', id: current.id },
+          auditData: { sourceId: source.id },
+        },
+      );
+      break;
+    } catch (err) {
+      if (!(err instanceof ConcurrentModificationError) || attempt === 1) throw err;
+    }
   }
   return { source, text };
 }

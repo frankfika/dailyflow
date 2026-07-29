@@ -5,15 +5,14 @@ import { NoteList } from './NoteList';
 const hooks = vi.hoisted(() => ({
   notes: vi.fn(),
   create: vi.fn(),
-  archive: vi.fn(),
+  setArchived: vi.fn(),
   remove: vi.fn(),
 }));
 
 vi.mock('../hooks/useNotes', () => ({
   useNotes: hooks.notes,
   useCreateNote: () => ({ isPending: false, mutateAsync: hooks.create }),
-  useUpdateNote: () => ({ isPending: false, mutate: vi.fn() }),
-  useArchiveNote: () => ({ mutate: hooks.archive }),
+  useSetNoteArchived: () => ({ isPending: false, mutate: hooks.setArchived, error: null }),
   useDeleteNote: () => ({ mutate: hooks.remove }),
 }));
 
@@ -65,6 +64,28 @@ describe('NoteList creation and selection flow', () => {
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith('note-1'));
     expect(container.querySelector('button button')).toBeNull();
+  });
+
+  it('keeps the mobile list visible until the user selects a note', async () => {
+    hooks.notes.mockReturnValue({
+      data: { notes: [note], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const onSelect = vi.fn();
+
+    render(
+      <NoteList
+        selectedId={null}
+        onSelect={onSelect}
+        language="en"
+        autoSelectFirst={false}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('Existing note')).toBeInTheDocument());
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('shows tag chips and filters notes without replacing the current view filter', async () => {
@@ -140,5 +161,39 @@ describe('NoteList creation and selection flow', () => {
 
     expect(screen.getByRole('group', { name: '按标签筛选' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '全部标签' })).toBeInTheDocument();
+  });
+
+  it('archives and restores through the same versioned state transition', () => {
+    hooks.notes.mockReturnValue({
+      data: { notes: [note], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <NoteList selectedId="note-1" onSelect={vi.fn()} language="en" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Archive Existing note' }));
+    expect(hooks.setArchived).toHaveBeenCalledWith({
+      id: 'note-1',
+      archived: true,
+      expectedAutoSaveVersion: 0,
+    });
+
+    hooks.notes.mockReturnValue({
+      data: { notes: [{ ...note, state: 'archived' }], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    rerender(<NoteList selectedId="note-1" onSelect={vi.fn()} language="en" />);
+    fireEvent.click(screen.getByTestId('notes-view-archived'));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore Existing note' }));
+    expect(hooks.setArchived).toHaveBeenLastCalledWith({
+      id: 'note-1',
+      archived: false,
+      expectedAutoSaveVersion: 0,
+    });
   });
 });

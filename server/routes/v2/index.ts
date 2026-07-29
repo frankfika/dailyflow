@@ -451,7 +451,10 @@ v2Router.post('/notes/:id/archive', async (req, res) => {
   try {
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
-    const note = await svc.archive(req.params.id);
+    const expectedAutoSaveVersion = z.number().int().nonnegative().parse(
+      req.body?.expectedAutoSaveVersion,
+    );
+    const note = await svc.archive(req.params.id, expectedAutoSaveVersion);
     res.json({ note });
   } catch (err) {
     handleError(err, res);

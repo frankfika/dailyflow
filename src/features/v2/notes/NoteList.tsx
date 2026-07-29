@@ -27,7 +27,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useNotes, useCreateNote, useUpdateNote, useArchiveNote, useDeleteNote } from '../hooks/useNotes';
+import { useNotes, useCreateNote, useSetNoteArchived, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
 import { Minimize2 } from 'lucide-react';
@@ -83,6 +83,8 @@ export interface NoteListProps {
   language?: 'zh' | 'en';
   /** Keeps the app-level sidebar reveal button clear of Notes controls. */
   sidebarOpen?: boolean;
+  /** Desktop opens the newest note automatically; mobile keeps the list visible until tapped. */
+  autoSelectFirst?: boolean;
 }
 
 export function NoteList({
@@ -92,12 +94,12 @@ export function NoteList({
   onToggleLayout,
   language = 'en',
   sidebarOpen = true,
+  autoSelectFirst = true,
 }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const create = useCreateNote();
-  const update = useUpdateNote();
-  const archive = useArchiveNote();
+  const setArchived = useSetNoteArchived();
   const del = useDeleteNote();
 
   // Fetch all working notes (active + draft) and bucket client-side.
@@ -158,10 +160,11 @@ export function NoteList({
     }
     // Do not replace a fresh selection merely because the list query has
     // not incorporated a newly-created note yet.
+    if (!selectedId && !autoSelectFirst) return;
     if (!selectedId || !filtered.some(note => note.id === selectedId)) {
       onSelect(filtered[0].id);
     }
-  }, [filtered, onSelect, selectedId]);
+  }, [autoSelectFirst, filtered, onSelect, selectedId]);
 
   const createAndOpen = async (kind: NoteKind = 'general') => {
     const { note } = await create.mutateAsync({
@@ -271,6 +274,14 @@ export function NoteList({
         </div>
       )}
 
+      {setArchived.error && (
+        <p className="text-xs text-danger" role="alert">
+          {language === 'zh'
+            ? '笔记状态更新失败，请重试。'
+            : 'Could not update the note. Please try again.'}
+        </p>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="notes-list">
         {all.isLoading ? (
           <div className="flex justify-center py-8">
@@ -345,28 +356,31 @@ export function NoteList({
                     <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
                       {n.state === 'archived' ? (
                         <button
-                          onClick={() => update.mutate({
+                          onClick={() => setArchived.mutate({
                             id: n.id,
-                            input: {
-                              state: 'active',
-                              expectedAutoSaveVersion: n.autoSaveVersion,
-                            },
+                            archived: false,
+                            expectedAutoSaveVersion: n.autoSaveVersion,
                           })}
-                          disabled={update.isPending}
+                          disabled={setArchived.isPending}
                           className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
-                          title="Restore"
-                          aria-label={`Restore ${title}`}
+                          title={language === 'zh' ? '恢复' : 'Restore'}
+                          aria-label={`${language === 'zh' ? '恢复' : 'Restore'} ${title}`}
                         >
-                          restore
+                          {language === 'zh' ? '恢复' : 'restore'}
                         </button>
                       ) : (
                         <button
-                          onClick={() => archive.mutate(n.id)}
-                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
-                          title="Archive"
-                          aria-label={`Archive ${title}`}
+                          onClick={() => setArchived.mutate({
+                            id: n.id,
+                            archived: true,
+                            expectedAutoSaveVersion: n.autoSaveVersion,
+                          })}
+                          disabled={setArchived.isPending}
+                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
+                          title={language === 'zh' ? '归档' : 'Archive'}
+                          aria-label={`${language === 'zh' ? '归档' : 'Archive'} ${title}`}
                         >
-                          archive
+                          {language === 'zh' ? '归档' : 'archive'}
                         </button>
                       )}
                       {!isSelected && (

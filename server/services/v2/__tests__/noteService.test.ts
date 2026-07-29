@@ -181,6 +181,24 @@ describe('update', () => {
     expect(reloaded?.tagIds).toEqual(['planning', 'customer']);
     expect(reloaded?.commitmentIds).toEqual(['com_01KBBBBBBBBBBBBBBBB']);
   });
+
+  it('keeps one stable file when the logical date moves across months', async () => {
+    const note = await svc.create({ body: 'dated note', date: '2026-07-29' });
+    const updated = await svc.update(note.id, {
+      expectedAutoSaveVersion: note.autoSaveVersion,
+      date: '2026-08-01',
+    });
+
+    expect(updated.date).toBe('2026-08-01');
+    const julyFiles = await fs.readdir(
+      path.join(workspace, '.dailyflow', 'notes', '2026', '07'),
+    );
+    expect(julyFiles.filter((file) => file === `${note.id}.md`)).toHaveLength(1);
+    await expect(
+      fs.access(path.join(workspace, '.dailyflow', 'notes', '2026', '08', `${note.id}.md`)),
+    ).rejects.toThrow();
+    expect((await repo.getNoteDocument(note.id))?.date).toBe('2026-08-01');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -262,10 +280,30 @@ describe('archive', () => {
   it('transitions state to archived and persists', async () => {
     const note = await svc.create({ body: 'x' });
     expect(note.state).toBe('draft');
-    const arch = await svc.archive(note.id);
+    const arch = await svc.archive(note.id, note.autoSaveVersion);
     expect(arch.state).toBe('archived');
+    expect(arch.autoSaveVersion).toBe(note.autoSaveVersion + 1);
     const reloaded = await repo.getNoteDocument(note.id);
     expect(reloaded?.state).toBe('archived');
+  });
+
+  it('allows only one concurrent writer for the same autosave version', async () => {
+    const note = await svc.create({ body: 'base' });
+    const results = await Promise.allSettled([
+      svc.update(note.id, {
+        expectedAutoSaveVersion: note.autoSaveVersion,
+        body: 'edited body',
+      }),
+      svc.update(note.id, {
+        expectedAutoSaveVersion: note.autoSaveVersion,
+        state: 'archived',
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const reloaded = await repo.getNoteDocument(note.id);
+    expect(reloaded?.autoSaveVersion).toBe(note.autoSaveVersion + 1);
   });
 });
 

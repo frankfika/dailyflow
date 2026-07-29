@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.2.2] - 2026-07-29
+
+### Fixed
+
+- **Reliable Note archive and restore** — archived Notes now show a clear Restore action, while working Notes show Archive; both paths use the same versioned state transition.
+- **Atomic Note autosaves** — per-file compare-and-swap serialization prevents concurrent body, metadata, recording, and transcription updates from silently overwriting each other.
+- **Conflict-safe editing** — field-level three-way checks preserve local text on genuine conflicts, retain failed edits for retry, and keep queued saves isolated when switching rapidly between Notes.
+- **Meeting recording associations** — recording and local transcription updates re-read and safely merge source links after concurrent edits instead of rewriting stale Note documents.
+- **Stable dated Notes** — changing a Note date across months keeps one physical file and no longer produces false conflicts or duplicate records.
+- **Mobile Notes navigation** — returning to the Note list no longer immediately reopens the first document.
+
+### Verified
+
+- `npm run lint` ✅
+- `npm test` ✅ 50 files / 396 tests
+- `npm run build` ✅
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅
+- Desktop Notes archive/restore UI inspected with no browser errors ✅
+
 ## [1.2.1] - 2026-07-29
 
 ### Fixed

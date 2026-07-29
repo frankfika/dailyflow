@@ -375,12 +375,25 @@ export class V2Repository {
   // They are persisted to `.dailyflow/notes/YYYY/MM/<id>.md` so the v2
   // notes tree is fully isolated from the v1 `Notes/` legacy tree.
 
+  private async findNoteDocumentPath(id: string): Promise<string | null> {
+    const files = await listFilesRecursive(this.layout.notes, ['.md']);
+    const filename = `${id}.md`;
+    return files.find(
+      (file) =>
+        path.basename(file) === filename
+        && !file.includes(`${path.sep}_evidence${path.sep}`),
+    ) ?? null;
+  }
+
   async saveNoteDocument(n: NoteDocument, opts: WriteOptions = {}): Promise<AtomicWriteResult> {
     const validated = NoteDocumentSchema.parse(n);
-    // Notes partition by their `date` when present, else fall back to
-    // createdAt. The YYYY/MM partition makes month-range scans cheap.
+    // Once created, a note keeps its physical file path even if its logical
+    // date changes. This avoids cross-month metadata edits creating a second
+    // file or comparing the old file's hash against an absent new path.
+    const existingPath = await this.findNoteDocumentPath(validated.id);
     const partitionDate = validated.date ?? validated.createdAt;
-    const filePath = entityPath(this.layout, 'note', '', validated.id, partitionDate);
+    const filePath = existingPath
+      ?? entityPath(this.layout, 'note', '', validated.id, partitionDate);
     const content = serializeNoteDocument(validated);
     const result = await atomicWrite({ filePath, content, expectedHash: opts.expectedHash });
     await this.appendAudit(opts, result);
@@ -433,8 +446,8 @@ export class V2Repository {
   async deleteNoteDocument(id: string): Promise<boolean> {
     const note = await this.getNoteDocument(id);
     if (!note) return false;
-    const partitionDate = note.date ?? note.createdAt;
-    const filePath = entityPath(this.layout, 'note', '', id, partitionDate);
+    const filePath = await this.findNoteDocumentPath(id);
+    if (!filePath) return false;
     await fs.unlink(filePath);
     // Also drop any evidence anchored to this note — orphans are
     // misleading and we have a backref (noteId) to find them.
