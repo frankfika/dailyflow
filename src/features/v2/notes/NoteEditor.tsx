@@ -15,12 +15,18 @@
  *   - flush() on unmount prevents the "edited → navigated → lost"
  *     race that the spec calls out.
  */
-import { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, ArrowRight, Trash2 } from 'lucide-react';
-import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useUpdateNote, useArchiveNote, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, ArrowRight, Trash2, Pencil, BookOpen, Tag, Link2, X } from 'lucide-react';
+import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useArchiveNote, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
-import type { NoteBacklinks, NoteKind } from '../api/client';
+import { listCommitments, type Commitment, type NoteBacklinks, type NoteKind } from '../api/client';
 import { relativeTime } from './relativeTime';
+import { useWorkspaceScope } from '../../../workspaceScope';
+import { queryKeys } from '../../../queryKeys';
+import { MeetingNotePanel } from './MeetingNotePanel';
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -78,6 +84,16 @@ const COPY = {
     tipsTitle: '小贴士',
     tipShortcut: '按 ⌘+\\ 切换专注模式',
     tipAutosave: '输入自动保存,800ms debounce',
+    edit: '编辑',
+    preview: '预览',
+    tags: '标签',
+    addTag: '输入标签后回车',
+    linkedTasks: '关联任务',
+    linkTask: '关联一个任务…',
+    noTasks: '暂无可关联任务',
+    removeTag: '移除标签',
+    unlinkTask: '取消关联任务',
+    emptyPreview: '还没有可预览的 Markdown 内容。',
   },
   en: {
     placeholder: 'Start writing…',
@@ -110,6 +126,16 @@ const COPY = {
     tipsTitle: 'Tips',
     tipShortcut: 'Press ⌘+\\ to toggle focus mode',
     tipAutosave: 'Edits auto-save (800ms debounce)',
+    edit: 'Edit',
+    preview: 'Preview',
+    tags: 'Tags',
+    addTag: 'Type a tag and press Enter',
+    linkedTasks: 'Linked tasks',
+    linkTask: 'Link a task…',
+    noTasks: 'No tasks available',
+    removeTag: 'Remove tag',
+    unlinkTask: 'Unlink task',
+    emptyPreview: 'There is no Markdown content to preview yet.',
   },
 };
 
@@ -137,9 +163,10 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
 
 export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote, onDeleted }: NoteEditorProps) {
   const t = COPY[language];
+  const workspaceId = useWorkspaceScope();
+  const queryClient = useQueryClient();
   const q = useNote(noteId);
   const note = q.data?.note;
-  const update = useUpdateNote();
   const archive = useArchiveNote();
   const del = useDeleteNote();
   const backlinks = useNoteBacklinks(noteId);
@@ -148,6 +175,16 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // the right pane is just the 4 template buttons floating in
   // ~700px of viewport whitespace on a 1080p screen.
   const recent = useNotes();
+  const commitments = useQuery({
+    queryKey: queryKeys.commitments(workspaceId),
+    queryFn: () => listCommitments(),
+    staleTime: 30_000,
+    enabled: Boolean(noteId),
+  });
+  const commitmentById = useMemo(
+    () => new Map((commitments.data?.items ?? []).map((item) => [item.id, item])),
+    [commitments.data?.items],
+  );
   const recentItems = (recent.data?.notes ?? [])
     .filter((n) => n.state !== 'archived' && n.id !== noteId && (n.body?.trim() || n.title))
     .slice(0, 3);
@@ -157,6 +194,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // and only re-seed on noteId change.
   const [body, setBody] = useState<string>(note?.body ?? '');
   const [title, setTitle] = useState<string>(note?.title ?? '');
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
+  const [tagDraft, setTagDraft] = useState('');
   const seededNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!note) {
@@ -167,6 +206,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     seededNoteIdRef.current = note.id;
     setBody(note.body ?? '');
     setTitle(note.title ?? '');
+    setViewMode('edit');
+    setTagDraft('');
   }, [note, noteId]);
 
   const autosave = useNoteAutosave(note ?? null);
@@ -240,6 +281,42 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     await del.mutateAsync(note.id);
     onDeleted?.(note.id);
   };
+  const saveMetadata = async (patch: Parameters<typeof autosave.schedule>[0]) => {
+    autosave.schedule(patch);
+    await autosave.flush();
+  };
+  const tags = note.tagIds ?? [];
+  const linkedCommitmentIds = note.commitmentIds ?? [];
+  const availableCommitments = (commitments.data?.items ?? []).filter(
+    (item) => !linkedCommitmentIds.includes(item.id),
+  );
+  const addTag = async () => {
+    const value = tagDraft.trim().replace(/^#/, '');
+    if (!value || tags.includes(value)) {
+      setTagDraft('');
+      return;
+    }
+    setTagDraft('');
+    await saveMetadata({ tagIds: [...tags, value] });
+  };
+  const onTagKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' && event.key !== ',') return;
+    event.preventDefault();
+    void addTag();
+  };
+  const insertTranscriptIntoNote = async (text: string) => {
+    const transcript = text.trim();
+    if (!transcript) return;
+    setViewMode('edit');
+    if (body.includes(transcript)) return;
+    const heading = language === 'zh' ? '## 录音转写' : '## Recording transcript';
+    const nextBody = body.trim()
+      ? `${body.trimEnd()}\n\n${heading}\n\n${transcript}\n`
+      : `${heading}\n\n${transcript}\n`;
+    setBody(nextBody);
+    autosave.schedule({ body: nextBody });
+    await autosave.flush();
+  };
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
@@ -256,7 +333,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           className="w-full bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
           data-testid="note-title"
         />
-        <div className="w-full flex items-center justify-between gap-2 text-xs text-text-muted">
+        <div className="w-full flex flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
           <div className="flex items-center gap-2">
             {autosave.status !== 'idle' && (
               <Badge tone={statusTone(autosave.status)}>
@@ -265,15 +342,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
             <select
               value={note.kind}
-              onChange={(e) =>
-                update.mutate({
-                  id: note.id,
-                  input: {
-                    expectedAutoSaveVersion: note.autoSaveVersion,
-                    kind: e.target.value as typeof note.kind,
-                  },
-                })
-              }
+              onChange={(e) => void saveMetadata({ kind: e.target.value as typeof note.kind })}
               className="bg-transparent border border-border rounded px-1.5 py-0.5"
               data-testid="note-kind"
             >
@@ -287,30 +356,44 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             <input
               type="date"
               value={note.date ?? ''}
-              onChange={(e) =>
-                update.mutate({
-                  id: note.id,
-                  input: {
-                    expectedAutoSaveVersion: note.autoSaveVersion,
-                    date: e.target.value || null,
-                  },
-                })
-              }
+              onChange={(e) => void saveMetadata({ date: e.target.value || null })}
               className="bg-transparent border border-border rounded px-1.5 py-0.5"
               data-testid="note-date"
             />
           </div>
           <div className="flex items-center gap-1">
+            <div
+              className="inline-flex items-center rounded-md border border-border bg-background/60 p-0.5"
+              role="group"
+              aria-label={language === 'zh' ? '笔记显示方式' : 'Note display mode'}
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode('edit')}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                  viewMode === 'edit' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
+                }`}
+                data-testid="note-mode-edit"
+                aria-pressed={viewMode === 'edit'}
+              >
+                <Pencil size={12} />
+                {t.edit}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('preview')}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                  viewMode === 'preview' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
+                }`}
+                data-testid="note-mode-preview"
+                aria-pressed={viewMode === 'preview'}
+              >
+                <BookOpen size={12} />
+                {t.preview}
+              </button>
+            </div>
             <button
-              onClick={() =>
-                update.mutate({
-                  id: note.id,
-                  input: {
-                    expectedAutoSaveVersion: note.autoSaveVersion,
-                    pinned: !note.pinned,
-                  },
-                })
-              }
+              onClick={() => void saveMetadata({ pinned: !note.pinned })}
               className={`px-1.5 py-0.5 border rounded ${
                 note.pinned
                   ? 'border-accent text-accent'
@@ -357,7 +440,90 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
           </div>
         </div>
+        <div className="flex flex-col gap-2 border-t border-border/70 pt-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="note-tags">
+            <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
+              <Tag size={12} />
+              {t.tags}
+            </span>
+            {tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-accent/15 bg-accent/5 px-2 py-0.5 text-[11px] text-accent">
+                #{tag}
+                <button
+                  type="button"
+                  onClick={() => void saveMetadata({ tagIds: tags.filter((item) => item !== tag) })}
+                  className="rounded-full p-0.5 hover:bg-accent/10"
+                  aria-label={`${t.removeTag} ${tag}`}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <input
+              value={tagDraft}
+              onChange={(event) => setTagDraft(event.target.value)}
+              onKeyDown={onTagKeyDown}
+              onBlur={() => void addTag()}
+              placeholder={tags.length === 0 ? t.addTag : '+ tag'}
+              className="min-w-32 flex-1 bg-transparent py-0.5 text-[11px] text-text-heading outline-none placeholder:text-text-muted"
+              data-testid="note-tag-input"
+            />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="note-linked-tasks">
+            <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
+              <Link2 size={12} />
+              {t.linkedTasks}
+            </span>
+            {linkedCommitmentIds.map((id) => {
+              const task = commitmentById.get(id);
+              return (
+                <LinkedTaskChip
+                  key={id}
+                  id={id}
+                  task={task}
+                  unlinkLabel={t.unlinkTask}
+                  onRemove={() => void saveMetadata({
+                    commitmentIds: linkedCommitmentIds.filter((item) => item !== id),
+                  })}
+                />
+              );
+            })}
+            <select
+              value=""
+              onChange={(event) => {
+                const id = event.target.value;
+                if (id) void saveMetadata({ commitmentIds: [...linkedCommitmentIds, id] });
+              }}
+              className="min-w-36 flex-1 bg-transparent py-0.5 text-[11px] text-text-muted outline-none"
+              aria-label={t.linkTask}
+              data-testid="note-task-picker"
+            >
+              <option value="">{commitments.isLoading ? '…' : availableCommitments.length ? t.linkTask : t.noTasks}</option>
+              {availableCommitments.map((item) => (
+                <option key={item.id} value={item.id}>{item.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </header>
+
+      {note.kind === 'meeting' && (
+        <div className="shrink-0 border-b border-border px-6 py-3">
+          <MeetingNotePanel
+            note={note}
+            language={language}
+            onNoteUpdated={(updated) => {
+              queryClient.setQueryData(
+                queryKeys.note(workspaceId, updated.id),
+                { note: updated },
+              );
+              void queryClient.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId) });
+              void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(workspaceId) });
+            }}
+            onInsertTranscript={insertTranscriptIntoNote}
+          />
+        </div>
+      )}
 
       {/* Once a note exists, always show the editor. Previously an empty
           newly-created note rendered the onboarding panel again, so
@@ -365,14 +531,24 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           a second "Just start typing" action. Templates belong to the
           no-selection state; a created note should be immediately writable. */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <textarea
-          autoFocus
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
-          placeholder={t.placeholder}
-          className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
-          data-testid="note-body"
-        />
+        {viewMode === 'edit' ? (
+          <textarea
+            autoFocus
+            value={body}
+            onChange={(e) => onBodyChange(e.target.value)}
+            placeholder={t.placeholder}
+            className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
+            data-testid="note-body"
+          />
+        ) : (
+          <article className="note-markdown min-h-full pl-6 pr-8 py-6 text-text-heading" data-testid="note-markdown-preview">
+            {body.trim() ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+            ) : (
+              <p className="text-sm text-text-muted">{t.emptyPreview}</p>
+            )}
+          </article>
+        )}
       </div>
 
       {/* Statusbar — word/char/read stats, right-aligned to the
@@ -413,6 +589,40 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
         />
       )}
     </div>
+  );
+}
+
+function LinkedTaskChip({
+  id,
+  task,
+  unlinkLabel,
+  onRemove,
+}: {
+  id: string;
+  task?: Commitment;
+  unlinkLabel: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span
+      className="inline-flex max-w-64 items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[11px] text-text-heading"
+      title={task?.title ?? id}
+    >
+      <span className="truncate">{task?.title ?? id}</span>
+      {task?.state && (
+        <span className="shrink-0 text-[9px] uppercase tracking-wide text-text-muted">
+          {task.state}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-full p-0.5 text-text-muted hover:bg-black/5 hover:text-text-heading dark:hover:bg-white/10"
+        aria-label={`${unlinkLabel}: ${task?.title ?? id}`}
+      >
+        <X size={10} />
+      </button>
+    </span>
   );
 }
 

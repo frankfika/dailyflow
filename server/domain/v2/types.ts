@@ -309,6 +309,9 @@ export const NoteDocumentSchema = EntityMetaSchema.extend({
   // note-local labels (e.g. "draft", "follow-up") that help the user find
   // things later without forcing a type or category at create time.
   tagIds: z.array(z.string()).optional(),
+  // Work items explicitly associated with this note. This is a direct,
+  // user-authored relationship (unlike evidence-derived backlinks).
+  commitmentIds: z.array(z.string()).default([]),
 });
 export type NoteDocument = z.infer<typeof NoteDocumentSchema>;
 
@@ -409,11 +412,13 @@ export type Proposal = z.infer<typeof ProposalSchema>;
 // AgentRun
 // ---------------------------------------------------------------------------
 
-export const AgentRoleSchema = z.enum(['extractor', 'resolver', 'planner', 'copilot', 'reviewer']);
+export const AgentRoleSchema = z.enum(['extractor', 'resolver', 'planner', 'copilot', 'reviewer', 'meeting_notes']);
 export type AgentRole = z.infer<typeof AgentRoleSchema>;
 
 export const AgentRunSchema = EntityMetaSchema.extend({
   agent: AgentRoleSchema,
+  /** Stable manifest id; keeps an AgentRun linked to an installable AgentDefinition. */
+  agentDefinitionId: z.string().min(1).optional(),
   modelProvider: z.string(),
   model: z.string(),
   promptVersion: z.string(),
@@ -429,8 +434,29 @@ export const AgentRunSchema = EntityMetaSchema.extend({
     })
     .optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  /** Agent-specific, reviewable output metadata. Raw source evidence remains separate. */
+  result: z.record(z.unknown()).optional(),
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
+
+// Agent manifests are intentionally declarative. Execution is provided by a
+// future agent runtime; this contract lets Notes/Transcript consumers discover
+// capabilities without coupling them to transcription or a chat provider.
+export const AgentDefinitionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  version: z.string().min(1),
+  acceptedInputs: z.array(z.enum(['note', 'meeting_transcript', 'source'])),
+  capabilities: z.array(z.enum(['summarize', 'rewrite', 'extract_tasks', 'extract_decisions', 'chat'])),
+  permissions: z.array(z.enum(['read_note', 'read_sources', 'update_note', 'create_tasks'])),
+  modelRequirements: z.object({
+    type: z.literal('chat'),
+    supportsLocal: z.boolean(),
+    supportsRemote: z.boolean(),
+  }),
+});
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
 // ---------------------------------------------------------------------------
 // Toplevel union for any persisted v2 entity

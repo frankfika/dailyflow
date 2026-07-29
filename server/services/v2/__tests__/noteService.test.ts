@@ -159,6 +159,28 @@ describe('update', () => {
     // title was cleared → stays cleared
     expect(again.title).toBeUndefined();
   });
+
+  it('persists note tags and direct task associations', async () => {
+    const note = await svc.create({
+      body: '# Launch notes',
+      tagIds: ['planning'],
+      commitmentIds: ['com_01KAAAAAAAAAAAAAAAA'],
+    });
+    expect(note.tagIds).toEqual(['planning']);
+    expect(note.commitmentIds).toEqual(['com_01KAAAAAAAAAAAAAAAA']);
+
+    const updated = await svc.update(note.id, {
+      expectedAutoSaveVersion: note.autoSaveVersion,
+      tagIds: ['planning', 'customer'],
+      commitmentIds: ['com_01KBBBBBBBBBBBBBBBB'],
+    });
+    expect(updated.tagIds).toEqual(['planning', 'customer']);
+    expect(updated.commitmentIds).toEqual(['com_01KBBBBBBBBBBBBBBBB']);
+
+    const reloaded = await repo.getNoteDocument(note.id);
+    expect(reloaded?.tagIds).toEqual(['planning', 'customer']);
+    expect(reloaded?.commitmentIds).toEqual(['com_01KBBBBBBBBBBBBBBBB']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -306,6 +328,15 @@ describe('delete and backlinks', () => {
     expect(bl.decisionIds).toEqual([]);
     expect(bl.outcomeIds).toEqual([]);
   });
+
+  it('backlinks includes tasks explicitly linked from the note', async () => {
+    const note = await svc.create({
+      body: 'Task context',
+      commitmentIds: ['com_01KAAAAAAAAAAAAAAAA'],
+    });
+    const bl = await svc.backlinks(note.id);
+    expect(bl.commitmentIds).toEqual(['com_01KAAAAAAAAAAAAAAAA']);
+  });
 });
 
 async function fileExists(p: string): Promise<boolean> {
@@ -334,6 +365,7 @@ describe('markdown round-trip', () => {
       title: 'Roundtrip',
       pinned: true,
       tagIds: ['demo'],
+      commitmentIds: ['com_01KAAAAAAAAAAAAAAAA'],
     });
 
     const all: NoteDocument[] = await repo.listNoteDocuments();
@@ -345,6 +377,7 @@ describe('markdown round-trip', () => {
     expect(found!.state).toBe('active');
     expect(found!.pinned).toBe(true);
     expect(found!.tagIds).toEqual(['demo']);
+    expect(found!.commitmentIds).toEqual(['com_01KAAAAAAAAAAAAAAAA']);
     expect(found!.autoSaveVersion).toBe(0);
     expect(found!.contentHash).toBe(created.contentHash);
 

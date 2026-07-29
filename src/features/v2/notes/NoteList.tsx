@@ -35,14 +35,14 @@ import { relativeTime } from './relativeTime';
 
 type ViewKey = 'all' | 'recent' | 'daily' | 'meeting' | 'project' | 'pinned' | 'archived';
 
-const VIEW_LABELS: Record<ViewKey, { label: string; sub: string }> = {
-  all: { label: 'All', sub: 'Every note in the workspace' },
-  recent: { label: 'Recent', sub: 'Edited in the last 7 days' },
-  daily: { label: 'Daily', sub: 'Notes bound to a date' },
-  meeting: { label: 'Meetings', sub: 'Captured from meeting minutes' },
-  project: { label: 'Projects', sub: 'Grouped by project' },
-  pinned: { label: 'Pinned', sub: 'Stickied to the top' },
-  archived: { label: 'Archived', sub: 'Soft-deleted, recoverable' },
+const VIEW_LABELS: Record<ViewKey, { en: string; zh: string }> = {
+  all: { en: 'All', zh: '全部' },
+  recent: { en: 'Recent', zh: '最近' },
+  daily: { en: 'Daily', zh: '每日' },
+  meeting: { en: 'Meetings', zh: '会议' },
+  project: { en: 'Projects', zh: '项目' },
+  pinned: { en: 'Pinned', zh: '置顶' },
+  archived: { en: 'Archived', zh: '归档' },
 };
 
 /** Max notes shown in the focus-mode strip before the "N+" overflow. */
@@ -94,6 +94,7 @@ export function NoteList({
   sidebarOpen = true,
 }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const create = useCreateNote();
   const update = useUpdateNote();
   const archive = useArchiveNote();
@@ -107,6 +108,18 @@ export function NoteList({
     (note) => view === 'archived' || note.state !== 'archived',
   );
 
+  const availableTags = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          items.flatMap((note) =>
+            (note.tagIds ?? []).map((tag) => tag.trim()).filter(Boolean),
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b, language)),
+    [items, language],
+  );
+
   const filtered = useMemo(() => {
     const cutoff = Date.now() - 7 * 86_400_000;
     const byKind: Record<ViewKey, (n: NoteDocument) => boolean> = {
@@ -118,8 +131,22 @@ export function NoteList({
       pinned: (n) => n.pinned,
       archived: () => true,
     };
-    return items.filter(byKind[view]);
-  }, [items, view]);
+    return items.filter(
+      (note) =>
+        byKind[view](note) &&
+        (tagFilter === null || (note.tagIds ?? []).includes(tagFilter)),
+    );
+  }, [items, tagFilter, view]);
+
+  // Archived and active notes come from separate queries. If switching
+  // between those views removes the selected tag from the available
+  // choices, return to the unfiltered list rather than keeping an
+  // invisible stale filter active.
+  useEffect(() => {
+    if (tagFilter !== null && !availableTags.includes(tagFilter)) {
+      setTagFilter(null);
+    }
+  }, [availableTags, tagFilter]);
 
   // A notes app should open directly into the most relevant document.
   // Keep the selection valid as data/views change instead of leaving a
@@ -201,10 +228,48 @@ export function NoteList({
             }`}
             data-testid={`notes-view-${key}`}
           >
-            {VIEW_LABELS[key].label}
+            {VIEW_LABELS[key][language]}
           </button>
         ))}
       </div>
+
+      {availableTags.length > 0 && (
+        <div
+          className="flex shrink-0 items-center gap-1 overflow-x-auto pb-0.5"
+          role="group"
+          aria-label={language === 'zh' ? '按标签筛选' : 'Filter by tag'}
+          data-testid="notes-tag-filter"
+        >
+          <button
+            type="button"
+            aria-pressed={tagFilter === null}
+            onClick={() => setTagFilter(null)}
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+              tagFilter === null
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border text-text-muted hover:text-text-heading'
+            }`}
+          >
+            {language === 'zh' ? '全部标签' : 'All tags'}
+          </button>
+          {availableTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={tagFilter === tag}
+              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                tagFilter === tag
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border text-text-muted hover:text-text-heading'
+              }`}
+              data-testid={`notes-tag-filter-${tag}`}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="notes-list">
         {all.isLoading ? (
@@ -248,6 +313,21 @@ export function NoteList({
                       </div>
                       {preview && (
                         <p className="mt-1 text-xs text-text-muted line-clamp-2">{preview}</p>
+                      )}
+                      {(n.tagIds?.length ?? 0) > 0 && (
+                        <div
+                          className="mt-2 flex flex-wrap gap-1"
+                          data-testid={`notes-item-tags-${n.id}`}
+                        >
+                          {n.tagIds?.map((tag) => (
+                            <span
+                              key={tag}
+                              className="max-w-full truncate rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
                       )}
                       <div className="mt-2 flex items-center gap-1.5">
                         <Badge tone={n.state === 'draft' ? 'warning' : 'default'}>

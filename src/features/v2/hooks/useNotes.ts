@@ -221,10 +221,7 @@ export function useNoteBacklinks(id: string | null | undefined): UseQueryResult<
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
-export interface AutosaveVars {
-  body?: string;
-  title?: string | null;
-}
+export type AutosaveVars = Omit<Partial<UpdateNoteInput>, 'expectedAutoSaveVersion'>;
 
 export interface UseNoteAutosaveResult {
   status: AutosaveStatus;
@@ -269,7 +266,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
     async (vars: AutosaveVars): Promise<void> => {
       if (!note) return;
       // Nothing to do? Don't ping the server.
-      const hasChange = vars.body !== undefined || vars.title !== undefined;
+      const hasChange = Object.keys(vars).length > 0;
       if (!hasChange) return;
 
       setStatus('saving');
@@ -280,8 +277,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
           id: note.id,
           input: {
             expectedAutoSaveVersion: expected,
-            body: vars.body,
-            title: vars.title,
+            ...vars,
           },
         });
         expectedRef.current = next.autoSaveVersion;
@@ -301,8 +297,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
               id: note.id,
               input: {
                 expectedAutoSaveVersion: fresh.note.autoSaveVersion,
-                body: vars.body,
-                title: vars.title,
+                ...vars,
               },
             });
             expectedRef.current = retried.note.autoSaveVersion;

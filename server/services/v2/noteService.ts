@@ -53,6 +53,7 @@ export const CreateNoteInputSchema = z.object({
   sourceIds: z.array(z.string()).optional(),
   pinned: z.boolean().optional(),
   tagIds: z.array(z.string()).optional(),
+  commitmentIds: z.array(z.string()).optional(),
   // workspaceId falls back to the repo's workspaceId.
   workspaceId: z.string().optional(),
 });
@@ -79,6 +80,7 @@ export const UpdateNoteInputSchema = z.object({
   sourceIds: z.array(z.string()).optional(),
   pinned: z.boolean().optional(),
   tagIds: z.array(z.string()).optional(),
+  commitmentIds: z.array(z.string()).optional(),
 });
 export type UpdateNoteInput = z.infer<typeof UpdateNoteInputSchema>;
 
@@ -178,6 +180,7 @@ export class NoteService {
       autoSaveVersion: 0,
       contentHash: sha256(parsed.body),
       tagIds: parsed.tagIds ?? [],
+      commitmentIds: parsed.commitmentIds ?? [],
     });
     await this.repo.saveNoteDocument(note);
     return note;
@@ -246,6 +249,7 @@ export class NoteService {
       sourceIds: parsed.sourceIds ?? existing.sourceIds,
       pinned: parsed.pinned ?? existing.pinned,
       tagIds: parsed.tagIds ?? existing.tagIds,
+      commitmentIds: parsed.commitmentIds ?? existing.commitmentIds,
       updatedAt: new Date().toISOString(),
       autoSaveVersion: existing.autoSaveVersion + 1,
     });
@@ -300,12 +304,13 @@ export class NoteService {
    * necessary joins — we just rebuild lazily.
    */
   async backlinks(id: string): Promise<NoteBacklinks> {
+    const note = await this.get(id);
     const noteEvidence = await this.repo.listEvidenceForNote(id);
     const evidenceIds = new Set(noteEvidence.map((e) => e.id));
     const out: NoteBacklinks = {
       noteId: id,
       evidenceIds: noteEvidence.map((e) => e.id),
-      commitmentIds: [],
+      commitmentIds: [...note.commitmentIds],
       decisionIds: [],
       outcomeIds: [],
     };
@@ -318,7 +323,10 @@ export class NoteService {
       this.repo.listDecisions(),
       this.repo.listOutcomes(),
     ]);
-    out.commitmentIds = commitments.filter((c) => intersects(c.evidenceIds)).map((c) => c.id);
+    out.commitmentIds = Array.from(new Set([
+      ...out.commitmentIds,
+      ...commitments.filter((c) => intersects(c.evidenceIds)).map((c) => c.id),
+    ]));
     out.decisionIds = decisions.filter((d) => intersects(d.evidenceIds)).map((d) => d.id);
     out.outcomeIds = outcomes.filter((o) => intersects(o.evidenceIds)).map((o) => o.id);
     return out;

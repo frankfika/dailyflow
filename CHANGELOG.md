@@ -12,6 +12,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.2.0] - 2026-07-29
+
+### Added
+
+- **Native meeting Notes** — an existing Note can be switched to `meeting` and remains the owner of its handwritten minutes, original recordings, and transcript sources.
+- **In-app recording** — start, stop, preview, discard, save, and replay multiple meeting recordings directly inside a meeting Note.
+- **Flexible transcription providers** — choose save-only, a remote OpenAI-compatible speech API, a loopback-only local OpenAI-compatible endpoint, or an advanced managed `whisper.cpp` executable.
+- **Editable transcript workflow** — preserved transcripts can be copied into the Note body with one action and then corrected or expanded in the normal editor.
+- **Note tags and filters** — add or remove multiple tags, show them in the Note list, and filter Notes by tag.
+- **Meeting Agent foundation** — declarative Agent definitions and reviewable AgentRun records keep future AI Chat summaries separate from literal transcription.
+- **Ollama Chat template** — local Ollama remains available for future Chat/Agent work without being treated as an audio transcription provider.
+
+### Security and reliability
+
+- The original recording is written atomically before any transcription request is attempted.
+- Remote transcription rejects localhost, private, and link-local destinations; local endpoints are restricted to `localhost`, `127.0.0.1`, and `::1`.
+- Recording and transcript files remain separate private SourceItems linked to their Note.
+- macOS packages declare microphone usage so the system can request recording permission correctly.
+
+### Verified
+
+- `npm run lint` ✅
+- `npm test` ✅ 49 files / 384 tests
+- `npm run build` ✅
+- `npm run build:server` ✅
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅
+- Meeting Note recording UI inspected in the local desktop webview workflow ✅
+
 ## [1.1.18] - 2026-07-28
 
 ### Added

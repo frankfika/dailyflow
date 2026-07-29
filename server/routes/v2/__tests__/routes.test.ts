@@ -119,6 +119,41 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
       expect(await fs.readFile(saveProbePath, 'utf8')).toBe(noteBeforeRead);
 
+      // A meeting recording is captured natively under an existing Note.
+      const meetingNote = await post('/notes', {
+        body: '会议中的手写记录',
+        tagIds: ['周会', '产品'],
+      });
+      expect(meetingNote.status).toBe(201);
+      const meetingCapture = await post(`/notes/${meetingNote.body.note.id}/meeting/capture`, {
+        audio: {
+          data: Buffer.from('route-test-audio').toString('base64'),
+          mimeType: 'audio/webm',
+          filename: 'weekly.webm',
+        },
+        durationSeconds: 12,
+        language: 'zh',
+      });
+      expect(meetingCapture.status).toBe(200);
+      expect(meetingCapture.body.transcriptionMode).toBe('saved-only');
+      expect(meetingCapture.body.note.kind).toBe('meeting');
+      expect(meetingCapture.body.note.tagIds).toEqual(['周会', '产品']);
+      expect(meetingCapture.body.note.sourceIds).toContain(meetingCapture.body.audioSource.id);
+      expect(meetingCapture.body.audioSource.filePath).toMatch(/^Attachments\/Notes\//);
+      expect(await fs.readFile(path.join(workspace, meetingCapture.body.audioSource.filePath), 'utf8'))
+        .toBe('route-test-audio');
+      const audioPlayback = await fetch(
+        `http://localhost:9999/api/v2/notes/${meetingNote.body.note.id}/meeting/audio/${meetingCapture.body.audioSource.id}`,
+      );
+      expect(audioPlayback.status).toBe(200);
+      expect(audioPlayback.headers.get('content-type')).toContain('audio/webm');
+      expect(Buffer.from(await audioPlayback.arrayBuffer()).toString('utf8')).toBe('route-test-audio');
+      const unrelatedAudio = await get(
+        `/notes/${meetingNote.body.note.id}/meeting/audio/src_DOESNOTEXIST`,
+      );
+      expect(unrelatedAudio.status).toBe(404);
+      expect(unrelatedAudio.body.error.code).toBe('audio_source_not_found');
+
       // 4. Process: AI returns a fallback (no provider)
       const processed = await post(`/sources/${sourceId}/process`, {});
       expect(processed.status).toBe(200);

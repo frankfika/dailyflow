@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   captureInput,
   createNote,
+  captureNoteMeeting,
+  getNoteMeetingAudioUrl,
   listInbox,
   processSource,
   createJob,
@@ -56,6 +58,32 @@ describe('v2/client', () => {
     const call = (fetch as any).mock.calls[0];
     expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes`);
     expect(call[1].method).toBe('POST');
+  });
+
+  it('captureNoteMeeting saves audio through the current note endpoint', async () => {
+    await captureNoteMeeting('note_01', {
+      audio: {
+        data: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/webm',
+        filename: 'meeting-note_01.webm',
+      },
+      durationSeconds: 42,
+      language: 'zh',
+    });
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes/note_01/meeting/capture`);
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(call[1].body)).toMatchObject({
+      audio: { mimeType: 'audio/webm' },
+      durationSeconds: 42,
+      language: 'zh',
+    });
+  });
+
+  it('getNoteMeetingAudioUrl builds a restart-safe streaming URL', () => {
+    expect(getNoteMeetingAudioUrl('note / 01', 'src / audio')).toBe(
+      `${API_BASE.api}/api/v2/notes/note%20%2F%2001/meeting/audio/src%20%2F%20audio`,
+    );
   });
 
   it('listInbox GETs /inbox', async () => {

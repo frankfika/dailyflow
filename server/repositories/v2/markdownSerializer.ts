@@ -319,6 +319,7 @@ export function serializeNoteDocument(n: NoteDocument): string {
     auto_save_version: n.autoSaveVersion,
     content_hash: n.contentHash,
     tag_ids: n.tagIds ?? [],
+    commitment_ids: n.commitmentIds ?? [],
     created_at: n.createdAt,
     updated_at: n.updatedAt,
     created_by: n.createdBy,

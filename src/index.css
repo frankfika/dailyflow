@@ -134,6 +134,55 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   line-height: 1.25;
 }
 
+/* Note Markdown preview — deliberately scoped so document typography does
+   not leak into the surrounding native-minimal application chrome. */
+.note-markdown {
+  font-size: 1rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.note-markdown > :first-child { margin-top: 0; }
+.note-markdown > :last-child { margin-bottom: 0; }
+.note-markdown h1 { margin: 0 0 1rem; font-size: 1.875rem; }
+.note-markdown h2 { margin: 1.75rem 0 0.75rem; font-size: 1.4rem; }
+.note-markdown h3 { margin: 1.5rem 0 0.625rem; font-size: 1.15rem; }
+.note-markdown p,
+.note-markdown ul,
+.note-markdown ol,
+.note-markdown blockquote,
+.note-markdown pre,
+.note-markdown table { margin: 0 0 1rem; }
+.note-markdown ul { list-style: disc; padding-left: 1.5rem; }
+.note-markdown ol { list-style: decimal; padding-left: 1.5rem; }
+.note-markdown li + li { margin-top: 0.25rem; }
+.note-markdown a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.note-markdown blockquote {
+  border-left: 3px solid var(--color-border-strong);
+  padding-left: 1rem;
+  color: var(--color-text-muted);
+}
+.note-markdown code {
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.10);
+  padding: 0.1rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+.note-markdown pre {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+  padding: 0.875rem 1rem;
+}
+.note-markdown pre code { background: transparent; padding: 0; }
+.note-markdown table { width: 100%; border-collapse: collapse; }
+.note-markdown th,
+.note-markdown td { border: 1px solid var(--color-border-strong); padding: 0.5rem 0.75rem; text-align: left; }
+.note-markdown th { background: rgba(127, 127, 127, 0.07); font-weight: 600; }
+.note-markdown hr { margin: 1.5rem 0; border: 0; border-top: 1px solid var(--color-border); }
+.note-markdown input[type="checkbox"] { margin-right: 0.5rem; accent-color: var(--color-accent); }
+
 /* Glass Panels — subtle depth for native feel */
 .glass-panel {
   background: rgba(255, 255, 255, 0.9);

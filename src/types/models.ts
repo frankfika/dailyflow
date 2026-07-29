@@ -43,6 +43,14 @@ export interface ProviderTemplate {
 export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
   // —— Official (first-party vendor endpoints) ——
   {
+    name: 'Ollama（本机）',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    model: 'qwen3',
+    category: 'official',
+    region: 'global',
+    hint: '用于本地 AI Chat/Agent。先在本机运行 Ollama 并下载模型；API Key 填 ollama 即可。它不负责会议音频转写。',
+  },
+  {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
     model: 'deepseek-chat',

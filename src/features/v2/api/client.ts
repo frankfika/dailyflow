@@ -148,6 +148,7 @@ export interface NoteDocument {
   autoSaveVersion: number;
   contentHash: string;
   tagIds?: string[];
+  commitmentIds: string[];
 }
 
 export interface CreateNoteInput {
@@ -161,6 +162,7 @@ export interface CreateNoteInput {
   sourceIds?: string[];
   pinned?: boolean;
   tagIds?: string[];
+  commitmentIds?: string[];
 }
 
 export interface UpdateNoteInput {
@@ -177,6 +179,7 @@ export interface UpdateNoteInput {
   sourceIds?: string[];
   pinned?: boolean;
   tagIds?: string[];
+  commitmentIds?: string[];
 }
 
 export interface NoteBacklinks {
@@ -213,6 +216,74 @@ export const archiveNote = (id: string) =>
 
 export const getNoteBacklinks = (id: string) =>
   request<{ backlinks: NoteBacklinks }>('GET', `/notes/${id}/backlinks`);
+
+export interface MeetingCaptureInput {
+  audio: {
+    /** A data URL (for example data:audio/webm;base64,...) */
+    data: string;
+    mimeType: string;
+    filename?: string;
+  };
+  durationSeconds?: number;
+  language?: 'zh' | 'en';
+  /** Explicit ASR mode. `transcriptionConfig` remains for backwards compatibility. */
+  transcription?: MeetingTranscriptionRequest;
+  /**
+   * Optional OpenAI-compatible transcription configuration. When omitted,
+   * the server still persists the original recording without transcribing it.
+   */
+  transcriptionConfig?: {
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+  };
+}
+
+export type MeetingTranscriptionMode = 'save-only' | 'saved-only' | 'remote' | 'local-managed' | 'local-endpoint';
+
+export interface MeetingTranscriptionRequest {
+  mode: MeetingTranscriptionMode;
+  engine?: 'whisper.cpp';
+  modelId?: 'base' | 'small' | 'medium' | string;
+  model?: string;
+  modelPath?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  language?: 'auto' | 'zh' | 'en';
+}
+
+export interface MeetingTranscriptSegment {
+  start?: number;
+  end?: number;
+  speaker?: string;
+  text: string;
+}
+
+export interface MeetingCaptureResult {
+  note: NoteDocument;
+  audioSource: SourceItem;
+  transcriptSource?: SourceItem;
+  segments?: MeetingTranscriptSegment[];
+  text?: string;
+  transcriptionMode: MeetingTranscriptionMode;
+  /** Future/local workers may return an async job rather than a transcript immediately. */
+  transcriptionJob?: JobRecord;
+  /** Present when the recording was saved but optional remote transcription failed. */
+  transcriptionError?: string;
+}
+
+export const captureNoteMeeting = (id: string, input: MeetingCaptureInput) =>
+  request<MeetingCaptureResult>('POST', `/notes/${id}/meeting/capture`, input);
+
+/** Typed seam for a local/async ASR worker. Older servers may return 404; the audio remains saved. */
+export const transcribeNoteMeeting = (noteId: string, input: {
+  sourceId: string;
+  transcription: MeetingTranscriptionRequest;
+}) => request<MeetingCaptureResult & { note?: NoteDocument; job?: JobRecord; source?: SourceItem }>('POST', `/notes/${noteId}/meeting/transcribe-local`, input);
+
+/** URL for streaming a persisted meeting recording after the app restarts. */
+export const getNoteMeetingAudioUrl = (noteId: string, sourceId: string) =>
+  `${API_BASE.api}/api/v2/notes/${encodeURIComponent(noteId)}/meeting/audio/${encodeURIComponent(sourceId)}`;
 
 // ---------------------------------------------------------------------------
 // Commitment
@@ -366,7 +437,8 @@ export interface AgentRun {
   updatedAt: string;
   createdBy: 'user' | 'ai' | 'connector' | 'migration';
   workspaceId: string;
-  agent: 'extractor' | 'resolver' | 'planner' | 'copilot' | 'reviewer';
+  agent: 'extractor' | 'resolver' | 'planner' | 'copilot' | 'reviewer' | 'meeting_notes';
+  agentDefinitionId?: string;
   modelProvider: string;
   model: string;
   promptVersion: string;
@@ -375,7 +447,24 @@ export interface AgentRun {
   errorCode?: string;
   errorMessage?: string;
   durationMs?: number;
+  result?: Record<string, unknown>;
 }
+
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  acceptedInputs: Array<'note' | 'meeting_transcript' | 'source'>;
+  capabilities: Array<'summarize' | 'rewrite' | 'extract_tasks' | 'extract_decisions' | 'chat'>;
+  permissions: Array<'read_note' | 'read_sources' | 'update_note' | 'create_tasks'>;
+  modelRequirements: { type: 'chat'; supportsLocal: boolean; supportsRemote: boolean };
+}
+
+export const listAgentDefinitions = () => request<{ agents: AgentDefinition[] }>('GET', '/agents');
+
+export const startNoteAgentRun = (noteId: string, body: { agentId?: string; sourceIds?: string[] } = {}) =>
+  request<{ run: AgentRun; status: 'awaiting_agent_runtime' }>('POST', `/notes/${encodeURIComponent(noteId)}/agents/run`, body);
 
 export interface AuditEvent {
   id: string;

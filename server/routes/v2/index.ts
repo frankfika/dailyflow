@@ -90,7 +90,25 @@ import {
   MobileCaptureInputSchema,
 } from '../../services/v2/mobileService.js';
 import { ConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
+import {
+  AgentInvocationInputSchema,
+  listAgentDefinitions,
+  startAgentRun,
+} from '../../services/v2/agentService.js';
 import { JobKindSchema, JobStatusSchema } from '../../domain/v2/jobs.js';
+import {
+  captureNoteMeeting,
+  MeetingAudioAccessError,
+  NoteMeetingCaptureInputSchema,
+  resolveNoteMeetingAudio,
+} from '../../services/v2/noteMeetingCaptureService.js';
+import {
+  getLocalTranscriptionConfig,
+  saveLocalTranscriptionConfig,
+  transcribeMeetingAudio,
+  LocalTranscriptionConfigSchema,
+  localTranscriptionStatus,
+} from '../../services/v2/localTranscriptionService.js';
 
 export const v2Router = Router();
 
@@ -177,6 +195,46 @@ v2Router.post('/jobs/:id/cancel', async (req, res) => {
     if (!job) return res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } });
     res.json({ job });
   } catch (err) { handleError(err, res); }
+});
+
+// Local ASR configuration is workspace-local and never contains API keys.
+v2Router.get('/transcription/local-config', async (_req, res) => {
+  try { const { repo } = getV2(res); res.json({ config: await getLocalTranscriptionConfig(repo) }); }
+  catch (err) { handleError(err, res); }
+});
+
+v2Router.put('/transcription/local-config', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const config = await saveLocalTranscriptionConfig(repo, LocalTranscriptionConfigSchema.parse(req.body));
+    res.json({ config, status: await localTranscriptionStatus(config) });
+  } catch (err) { handleError(err, res); }
+});
+
+// Queues and executes one local transcription. The durable JobRecord is
+// returned even when the provider fails; clients can retry the failed job.
+v2Router.post('/notes/:id/meeting/transcribe-local', async (req, res) => {
+  let active: Awaited<ReturnType<import('../../repositories/v2/repository.js').V2Repository['getJob']>> = null;
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const input = z.object({ sourceId: z.string().min(1), config: LocalTranscriptionConfigSchema.optional() }).parse(req.body);
+    const config = input.config ?? await getLocalTranscriptionConfig(repo);
+    if (!config) return res.status(400).json({ error: { code: 'local_transcription_not_configured', message: 'Configure a local whisper.cpp executable and model first.' } });
+    const source = await repo.getSourceItem(input.sourceId);
+    if (!source || source.kind !== 'meeting_audio') return res.status(404).json({ error: { code: 'not_found', message: 'Meeting audio source not found.' } });
+    active = await repo.createOrGetJob({ kind: 'transcription', entityRef: { type: 'source', id: source.id }, idempotencyKey: `local-transcription:${workspaceId}:${source.id}:${source.contentHash}:${config.modelPath}`, status: 'queued' });
+    if (active.status === 'succeeded') return res.json({ job: active });
+    if (active.status !== 'queued') return res.status(202).json({ job: active });
+    const claim = await repo.startJob(active.id, 10); if (!claim.started || !claim.job) return res.status(202).json({ job: claim.job });
+    active = claim.job;
+    const out = await transcribeMeetingAudio(repo, req.params.id, source.id, config);
+    active = await repo.updateJob(active.id, { status: 'succeeded', progress: 100, resultRef: { type: 'source', id: out.source.id }, finishedAt: new Date().toISOString() });
+    const note = await repo.getNoteDocument(req.params.id);
+    res.status(201).json({ job: active, source: out.source, note });
+  } catch (err) {
+    if (active?.status === 'running') await getV2(res).repo.updateJob(active.id, { status: 'failed', error: { code: 'local_transcription_failed', message: err instanceof Error ? err.message : String(err), retryable: true }, finishedAt: new Date().toISOString() }).catch(() => {});
+    handleError(err, res);
+  }
 });
 
 function handleError(err: unknown, res: Response): void {
@@ -400,6 +458,42 @@ v2Router.post('/notes/:id/archive', async (req, res) => {
   }
 });
 
+v2Router.post('/notes/:id/meeting/capture', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const input = NoteMeetingCaptureInputSchema.parse(req.body ?? {});
+    const result = await captureNoteMeeting(repo, req.params.id, input);
+    res.status(result.transcriptSource ? 201 : 200).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/notes/:id/meeting/audio/:sourceId', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const audio = await resolveNoteMeetingAudio(repo, req.params.id, req.params.sourceId);
+    res.type(audio.mimeType);
+    res.sendFile(audio.absolutePath, (error) => {
+      if (error && !res.headersSent) {
+        const statusCode = (error as Error & { statusCode?: number }).statusCode;
+        res.status(statusCode === 404 ? 404 : 500).json({
+          error: {
+            code: statusCode === 404 ? 'audio_source_not_found' : 'audio_read_failed',
+            message: statusCode === 404 ? 'Meeting audio file not found.' : 'Unable to read meeting audio.',
+          },
+        });
+      }
+    });
+  } catch (err) {
+    if (err instanceof MeetingAudioAccessError) {
+      res.status(err.status).json({ error: { code: err.code, message: err.message } });
+      return;
+    }
+    handleError(err, res);
+  }
+});
+
 v2Router.get('/notes/:id/backlinks', async (req, res) => {
   try {
     const { repo } = getV2(res);
@@ -536,6 +630,23 @@ v2Router.post('/sources/:id/process', async (req, res) => {
     } catch {
       // Preserve the original processing error if failure bookkeeping fails.
     }
+    handleError(err, res);
+  }
+});
+
+/** Declarative Agent catalog. Execution is intentionally a separate concern. */
+v2Router.get('/agents', (_req, res) => {
+  res.json({ agents: listAgentDefinitions() });
+});
+
+/** Create a reviewable AgentRun context for a Note; no summary is generated yet. */
+v2Router.post('/notes/:id/agents/run', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const parsed = AgentInvocationInputSchema.parse({ ...(req.body ?? {}), noteId: req.params.id });
+    const run = await startAgentRun(repo, ctx.workspaceId, parsed);
+    res.status(202).json({ run, status: 'awaiting_agent_runtime' });
+  } catch (err) {
     handleError(err, res);
   }
 });
