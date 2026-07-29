@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.2.1] - 2026-07-29
+
+### Fixed
+
+- **Explicit speech-provider opt-in** — an existing AI Chat provider is no longer treated as an audio transcription service. Meeting Notes now default to saving the original recording only, and remote audio upload is enabled only after the user explicitly selects remote transcription and configures its speech API URL, key, and model.
+
+### Verified
+
+- Meeting recording UI defaults to `Save recording only` even when AI Chat is configured.
+- Explicit remote speech configuration still submits to the configured transcription endpoint.
+
 ## [1.2.0] - 2026-07-29
 
 ### Added

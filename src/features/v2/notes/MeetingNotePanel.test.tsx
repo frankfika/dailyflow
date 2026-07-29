@@ -3,19 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MeetingCaptureResult, NoteDocument, SourceItem } from '../api/client';
 import { MeetingNotePanel } from './MeetingNotePanel';
 
-const { captureNoteMeeting, transcribeNoteMeeting, getSource, getActiveAiConfig } = vi.hoisted(() => ({
+const { captureNoteMeeting, transcribeNoteMeeting, getSource } = vi.hoisted(() => ({
   captureNoteMeeting: vi.fn(),
   transcribeNoteMeeting: vi.fn(),
   getSource: vi.fn(),
-  getActiveAiConfig: vi.fn(),
 }));
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
   return { ...actual, captureNoteMeeting, transcribeNoteMeeting, getSource };
 });
-
-vi.mock('../../../types/models', () => ({ getActiveAiConfig }));
 
 function note(overrides: Partial<NoteDocument> = {}): NoteDocument {
   return {
@@ -86,7 +83,6 @@ describe('MeetingNotePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockMediaRecorder.latest = null;
-    getActiveAiConfig.mockReturnValue(null);
     const storage = new Map<string, string>();
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -150,12 +146,13 @@ describe('MeetingNotePanel', () => {
     expect(onNoteUpdated).toHaveBeenCalledWith(updated, result);
   });
 
-  it('passes the active model and exposes a successful transcript without replacing the note', async () => {
-    getActiveAiConfig.mockReturnValue({
-      apiKey: 'secret',
-      baseUrl: 'https://example.test/v1',
-      model: 'whisper-1',
-    });
+  it('uses only an explicitly configured speech provider and preserves the transcript separately', async () => {
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'remote',
+      remoteApiKey: 'secret',
+      remoteBaseUrl: 'https://example.test/v1',
+      remoteModel: 'whisper-1',
+    }));
     const transcriptSource = source('meeting_transcript', 'src_transcript');
     const result: MeetingCaptureResult = {
       note: note({ sourceIds: ['src_audio_new', transcriptSource.id] }),
@@ -204,11 +201,12 @@ describe('MeetingNotePanel', () => {
   });
 
   it('clearly distinguishes a saved recording from a failed transcription', async () => {
-    getActiveAiConfig.mockReturnValue({
-      apiKey: 'secret',
-      baseUrl: 'https://example.test/v1',
-      model: 'whisper-1',
-    });
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'remote',
+      remoteApiKey: 'secret',
+      remoteBaseUrl: 'https://example.test/v1',
+      remoteModel: 'whisper-1',
+    }));
     captureNoteMeeting.mockResolvedValue({
       note: note(),
       audioSource: source('meeting_audio', 'src_audio_new'),

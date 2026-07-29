@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileAudio, FileText, Loader2, Mic, Square, Trash2 } from 'lucide-react';
 import {
   captureNoteMeeting,
@@ -9,7 +9,6 @@ import {
   type NoteDocument,
   type SourceItem,
 } from '../api/client';
-import { getActiveAiConfig } from '../../../types/models';
 import { isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings } from './meetingTranscription';
 
 export interface MeetingNotePanelProps {
@@ -161,19 +160,17 @@ export function MeetingNotePanel({
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef(0);
   const mountedRef = useRef(true);
-  const aiConfig = useMemo(() => getActiveAiConfig(), [note.id]);
   const [transcriptionSettings, setTranscriptionSettings] = useState(loadMeetingTranscriptionSettings);
-  const ollamaChatConfig = Boolean(aiConfig?.baseUrl.match(/(?:127\.0\.0\.1|localhost):11434/i));
-  const selectedMode = aiConfig && !ollamaChatConfig ? 'remote' : transcriptionSettings.mode;
+  const selectedMode = transcriptionSettings.mode;
   const remoteEndpoint = transcriptionSettings.remoteApiKey
+    && transcriptionSettings.remoteBaseUrl
+    && transcriptionSettings.remoteModel
     ? {
         apiKey: transcriptionSettings.remoteApiKey,
         baseUrl: transcriptionSettings.remoteBaseUrl,
         model: transcriptionSettings.remoteModel,
       }
-    : aiConfig && !ollamaChatConfig
-      ? aiConfig
-      : null;
+    : null;
   const localModelReady = isMeetingModelInstalled(transcriptionSettings.modelId);
   const canTranscribe = selectedMode === 'remote'
     ? Boolean(remoteEndpoint)
@@ -555,7 +552,7 @@ export function MeetingNotePanel({
 
       <p className="mt-2 text-[11px] text-text-muted">
         {selectedMode === 'remote'
-          ? (remoteEndpoint ? t.remoteReady : ollamaChatConfig ? t.remoteUnavailable : t.localOnly)
+          ? (remoteEndpoint ? t.remoteReady : t.localOnly)
           : selectedMode === 'local-endpoint'
             ? t.localEndpointReady
             : selectedMode === 'local-managed'
