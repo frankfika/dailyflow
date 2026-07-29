@@ -15,7 +15,7 @@
  *    `expectedAutoSaveVersion` from the server's response and retries
  *    the patch once, then surfaces the conflict to the caller.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   useMutation,
   useQuery,
@@ -24,7 +24,6 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import {
-  archiveNote,
   createNote,
   deleteNote,
   getNote,
@@ -122,6 +121,18 @@ export function useUpdateNote(): UseMutationResult<{ note: NoteDocument }, V2Api
         (key) => !['expectedAutoSaveVersion', 'body', 'title'].includes(key),
       );
       if (structuralChange) {
+        if (vars.input.state !== undefined) {
+          qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
+            { queryKey: queryKeys.notesRoot(workspaceId), exact: false },
+            (current) => {
+              if (!current || !Array.isArray(current.notes)) return current;
+              const notes = current.notes.filter((note) => note.id !== data.note.id);
+              return notes.length === current.notes.length
+                ? current
+                : { ...current, notes, total: Math.max(0, current.total - 1) };
+            },
+          );
+        }
         qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
         return;
       }
@@ -166,13 +177,55 @@ export function useDeleteNote(): UseMutationResult<{ ok: boolean }, V2ApiError, 
   });
 }
 
-export function useArchiveNote(): UseMutationResult<{ note: NoteDocument }, V2ApiError, string> {
+export interface SetNoteArchivedVars {
+  id: string;
+  archived: boolean;
+  expectedAutoSaveVersion: number;
+}
+
+/**
+ * Archive and restore use the same versioned write path as every other note
+ * edit. This keeps a state change from racing with an in-flight autosave and
+ * makes the transition symmetric: archived=true hides the note from working
+ * views, archived=false restores it as an active note.
+ */
+export function useSetNoteArchived(): UseMutationResult<
+  { note: NoteDocument },
+  V2ApiError,
+  SetNoteArchivedVars
+> {
   const qc = useQueryClient();
   const workspaceId = useWorkspaceScope();
   return useMutation({
-    mutationFn: (id) => archiveNote(id),
-    onSuccess: (data, id) => {
+    mutationFn: async ({ id, archived, expectedAutoSaveVersion }) => {
+      const state = archived ? 'archived' : 'active';
+      try {
+        return await updateNote(id, { state, expectedAutoSaveVersion });
+      } catch (err) {
+        if (!(err instanceof V2ApiError) || err.body?.code !== 'concurrent_modification') {
+          throw err;
+        }
+        // State-only transitions are safe to retry against the newest note:
+        // unlike body/title autosaves they cannot overwrite user-authored text.
+        const fresh = await getNote(id);
+        return updateNote(id, {
+          state,
+          expectedAutoSaveVersion: fresh.note.autoSaveVersion,
+        });
+      }
+    },
+    onSuccess: (data, { id }) => {
       qc.setQueryData(queryKeys.note(workspaceId, id), data);
+      qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
+        { queryKey: queryKeys.notesRoot(workspaceId), exact: false },
+        (current) => {
+          if (!current || !Array.isArray(current.notes)) return current;
+          const notes = current.notes.filter((note) => note.id !== id);
+          return notes.length === current.notes.length
+            ? current
+            : { ...current, notes, total: Math.max(0, current.total - 1) };
+        },
+      );
       qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
     },
   });
@@ -229,16 +282,19 @@ export interface UseNoteAutosaveResult {
   lastError?: string;
   /** Debounced save — call from onChange. Coalesces rapid keystrokes. */
   schedule: (vars: AutosaveVars) => void;
-  /** Force a save right now (e.g. before unmount, before navigation). */
-  flush: () => Promise<void>;
+  /** Force a save now; returns false when persistence failed or conflicted. */
+  flush: () => Promise<boolean>;
 }
 
 const DEBOUNCE_MS = 800;
 
+interface AutosavePersistResult {
+  ok: boolean;
+  note?: NoteDocument;
+}
+
 export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteAutosaveResult {
   const update = useUpdateNote();
-  const qc = useQueryClient();
-  const workspaceId = useWorkspaceScope();
   const [status, setStatus] = useState<AutosaveStatus>('idle');
   const [lastSavedVersion, setLastSavedVersion] = useState<number>(note?.autoSaveVersion ?? 0);
   const [lastError, setLastError] = useState<string | undefined>();
@@ -246,86 +302,162 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
   // It is bumped after every successful save so the server can detect
   // concurrent edits.
   const expectedRef = useRef<number>(note?.autoSaveVersion ?? 0);
+  // Snapshot used for field-level three-way conflict checks.
+  const baseRef = useRef<NoteDocument | null>(note ?? null);
+  const generationRef = useRef(0);
   // Pending vars that the debounce timer will eventually flush.
   const pendingRef = useRef<AutosaveVars>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // A "in-flight" promise the editor can await when it wants to force
   // a flush (e.g. before unmount).
-  const inflightRef = useRef<Promise<void> | null>(null);
+  const inflightRef = useRef<Promise<AutosavePersistResult> | null>(null);
 
   // Keep the expectedRef in sync when the note identity changes (e.g.
   // the user switched to a different note in the same component).
-  useEffect(() => {
+  useLayoutEffect(() => {
+    generationRef.current += 1;
     expectedRef.current = note?.autoSaveVersion ?? 0;
+    baseRef.current = note ?? null;
     setLastSavedVersion(note?.autoSaveVersion ?? 0);
     pendingRef.current = {};
     setStatus('idle');
   }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = useCallback(
-    async (vars: AutosaveVars): Promise<void> => {
-      if (!note) return;
+    async (
+      vars: AutosaveVars,
+      generation: number,
+      queuedNote: NoteDocument | null,
+      expected: number,
+      base: NoteDocument | null,
+    ): Promise<AutosavePersistResult> => {
+      if (!queuedNote) return { ok: true };
+      const isCurrentNote = () => generationRef.current === generation;
       // Nothing to do? Don't ping the server.
       const hasChange = Object.keys(vars).length > 0;
-      if (!hasChange) return;
+      if (!hasChange) return { ok: true, note: queuedNote };
 
-      setStatus('saving');
-      setLastError(undefined);
-      const expected = expectedRef.current;
+      if (isCurrentNote()) {
+        setStatus('saving');
+        setLastError(undefined);
+      }
       try {
         const { note: next } = await update.mutateAsync({
-          id: note.id,
+          id: queuedNote.id,
           input: {
             expectedAutoSaveVersion: expected,
             ...vars,
           },
         });
-        expectedRef.current = next.autoSaveVersion;
-        setLastSavedVersion(next.autoSaveVersion);
-        setStatus('saved');
+        if (isCurrentNote()) {
+          expectedRef.current = next.autoSaveVersion;
+          baseRef.current = next;
+          setLastSavedVersion(next.autoSaveVersion);
+          setStatus('saved');
+        }
+        return { ok: true, note: next };
       } catch (err) {
         if (err instanceof V2ApiError && err.body?.code === 'concurrent_modification') {
-          // Re-read the note, adopt its autoSaveVersion, then retry once.
           try {
-            const fresh = await qc.fetchQuery({
-              queryKey: queryKeys.note(workspaceId, note.id),
-              queryFn: () => getNote(note.id),
+            const fresh = await getNote(queuedNote.id);
+            const conflictingFields = Object.keys(vars).filter((key) => {
+              const field = key as keyof NoteDocument;
+              const intended = vars[key as keyof AutosaveVars];
+              const before = base?.[field];
+              const remote = fresh.note[field];
+              return JSON.stringify(remote) !== JSON.stringify(before)
+                && JSON.stringify(remote) !== JSON.stringify(intended);
             });
-            expectedRef.current = fresh.note.autoSaveVersion;
-            // Patch again with the fresh version + the same vars.
+
+            if (conflictingFields.length > 0) {
+              // Never replay a locally edited field over a different remote
+              // value. Keep it queued and ask the user to reconcile.
+              if (isCurrentNote()) {
+                pendingRef.current = { ...vars, ...pendingRef.current };
+                setStatus('conflict');
+                setLastError(
+                  `This note changed elsewhere (${conflictingFields.join(', ')}). `
+                  + 'Your local edits remain open.',
+                );
+              }
+              return { ok: false };
+            }
+
+            // Remote changes touched other fields only, so replaying this
+            // field-level patch is a safe three-way merge.
             const retried = await update.mutateAsync({
-              id: note.id,
+              id: queuedNote.id,
               input: {
                 expectedAutoSaveVersion: fresh.note.autoSaveVersion,
                 ...vars,
               },
             });
-            expectedRef.current = retried.note.autoSaveVersion;
-            setLastSavedVersion(retried.note.autoSaveVersion);
-            setStatus('saved');
+            if (isCurrentNote()) {
+              expectedRef.current = retried.note.autoSaveVersion;
+              baseRef.current = retried.note;
+              setLastSavedVersion(retried.note.autoSaveVersion);
+              setStatus('saved');
+            }
+            return { ok: true, note: retried.note };
           } catch (retryErr) {
-            setStatus('conflict');
-            setLastError(
-              retryErr instanceof V2ApiError
-                ? retryErr.body.message
-                : 'Autosave conflict; please refresh and merge manually.',
-            );
+            if (isCurrentNote()) {
+              pendingRef.current = { ...vars, ...pendingRef.current };
+              setStatus(
+                retryErr instanceof V2ApiError
+                && retryErr.body?.code === 'concurrent_modification'
+                  ? 'conflict'
+                  : 'error',
+              );
+              setLastError(
+                retryErr instanceof V2ApiError
+                  ? retryErr.body.message
+                  : String(retryErr),
+              );
+            }
           }
         } else {
-          setStatus('error');
-          setLastError(err instanceof V2ApiError ? err.body.message : String(err));
+          // Retain failed edits so a later keystroke or explicit flush retries
+          // the complete latest patch instead of silently dropping it.
+          if (isCurrentNote()) {
+            pendingRef.current = { ...vars, ...pendingRef.current };
+            setStatus('error');
+            setLastError(err instanceof V2ApiError ? err.body.message : String(err));
+          }
         }
+        return { ok: false };
       }
     },
-    [note, update, qc, workspaceId],
+    [update],
   );
 
   const enqueue = useCallback(
-    (vars: AutosaveVars): Promise<void> => {
+    (vars: AutosaveVars): Promise<AutosavePersistResult> => {
       const previous = inflightRef.current;
+      // Capture identity when the task is queued, not when it eventually
+      // starts after older writes. A queued save for note A must still write
+      // A after the editor switches to B, without touching B's UI refs.
+      const generation = generationRef.current;
+      const queuedNote = note ?? null;
+      const queuedExpected = expectedRef.current;
+      const queuedBase = baseRef.current;
       const run = (async () => {
-        if (previous) await previous;
-        await persist(vars);
+        const previousResult = previous ? await previous : undefined;
+        const previousNote = previousResult?.note?.id === queuedNote?.id
+          ? previousResult.note
+          : undefined;
+        const isCurrentNote = generationRef.current === generation;
+        // A previous failed write may have re-queued fields while this save
+        // was waiting. Merge them now so state changes cannot leapfrog and
+        // discard an unsaved body/title.
+        const requeued = isCurrentNote ? pendingRef.current : {};
+        if (isCurrentNote) pendingRef.current = {};
+        return persist(
+          { ...vars, ...requeued },
+          generation,
+          queuedNote,
+          previousNote?.autoSaveVersion ?? queuedExpected,
+          previousNote ?? queuedBase,
+        );
       })();
       inflightRef.current = run;
       void run.finally(() => {
@@ -333,7 +465,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
       });
       return run;
     },
-    [persist],
+    [note, persist],
   );
 
   const schedule = useCallback(
@@ -357,7 +489,7 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
     }
     const next = pendingRef.current;
     pendingRef.current = {};
-    await enqueue(next);
+    return (await enqueue(next)).ok;
   }, [enqueue]);
 
   return { status, lastSavedVersion, lastError, schedule, flush };

@@ -45,7 +45,32 @@ export function sha256(text: string): string {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
-export async function atomicWrite(opts: AtomicWriteOptions): Promise<AtomicWriteResult> {
+// Serialize compare-and-swap writes per file inside this process. Without this
+// queue, two requests can both read the same previous hash, both pass the CAS
+// check, and then rename competing temp files over each other.
+const fileWriteQueues = new Map<string, Promise<void>>();
+
+async function withFileWriteLock<T>(filePath: string, action: () => Promise<T>): Promise<T> {
+  const previous = fileWriteQueues.get(filePath) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.catch(() => undefined).then(() => gate);
+  fileWriteQueues.set(filePath, queued);
+
+  await previous.catch(() => undefined);
+  try {
+    return await action();
+  } finally {
+    release();
+    if (fileWriteQueues.get(filePath) === queued) {
+      fileWriteQueues.delete(filePath);
+    }
+  }
+}
+
+async function atomicWriteUnlocked(opts: AtomicWriteOptions): Promise<AtomicWriteResult> {
   const { filePath, content, expectedHash } = opts;
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
@@ -109,6 +134,10 @@ export async function atomicWrite(opts: AtomicWriteOptions): Promise<AtomicWrite
     previousHash,
     hashMatched: previousHash === null || previousHash === newHash || previousHash === expectedHash,
   };
+}
+
+export async function atomicWrite(opts: AtomicWriteOptions): Promise<AtomicWriteResult> {
+  return withFileWriteLock(opts.filePath, () => atomicWriteUnlocked(opts));
 }
 
 /**

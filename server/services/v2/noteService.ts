@@ -25,7 +25,11 @@ import {
   type NoteKind,
   type NoteState,
 } from '../../domain/v2/types.js';
-import { ConcurrentModificationError as RepoConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
+import {
+  ConcurrentModificationError as RepoConcurrentModificationError,
+  sha256 as fileSha256,
+} from '../../repositories/v2/atomicWrite.js';
+import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 
 // Re-export the repository's error so callers can `instanceof` check
 // against the same class the routes layer catches.
@@ -253,7 +257,9 @@ export class NoteService {
       updatedAt: new Date().toISOString(),
       autoSaveVersion: existing.autoSaveVersion + 1,
     });
-    await this.repo.saveNoteDocument(next);
+    await this.repo.saveNoteDocument(next, {
+      expectedHash: fileSha256(serializeNoteDocument(existing)),
+    });
     return next;
   }
 
@@ -265,20 +271,17 @@ export class NoteService {
       lastOpenedAt: new Date().toISOString(),
       updatedAt: note.updatedAt,
     });
-    await this.repo.saveNoteDocument(next);
+    await this.repo.saveNoteDocument(next, {
+      expectedHash: fileSha256(serializeNoteDocument(note)),
+    });
     return next;
   }
 
-  async archive(id: string): Promise<NoteDocument> {
-    const note = await this.tryGet(id);
-    if (!note) throw new NoteNotFoundError(id);
-    const next: NoteDocument = NoteDocumentSchema.parse({
-      ...note,
+  async archive(id: string, expectedAutoSaveVersion: number): Promise<NoteDocument> {
+    return this.update(id, {
+      expectedAutoSaveVersion,
       state: 'archived',
-      updatedAt: new Date().toISOString(),
     });
-    await this.repo.saveNoteDocument(next);
-    return next;
   }
 
   async delete(id: string): Promise<boolean> {

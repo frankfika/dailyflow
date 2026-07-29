@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   captureInput,
+  archiveNote,
   createNote,
   captureNoteMeeting,
   getNoteMeetingAudioUrl,
@@ -58,6 +59,13 @@ describe('v2/client', () => {
     const call = (fetch as any).mock.calls[0];
     expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes`);
     expect(call[1].method).toBe('POST');
+  });
+
+  it('archiveNote includes the expected autosave version', async () => {
+    await archiveNote('note_01', 7);
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes/note_01/archive`);
+    expect(JSON.parse(call[1].body)).toEqual({ expectedAutoSaveVersion: 7 });
   });
 
   it('captureNoteMeeting saves audio through the current note endpoint', async () => {

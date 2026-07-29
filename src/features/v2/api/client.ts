@@ -211,8 +211,8 @@ export const updateNote = (id: string, input: UpdateNoteInput) =>
 export const deleteNote = (id: string) =>
   request<{ ok: boolean }>('DELETE', `/notes/${id}`);
 
-export const archiveNote = (id: string) =>
-  request<{ note: NoteDocument }>('POST', `/notes/${id}/archive`, {});
+export const archiveNote = (id: string, expectedAutoSaveVersion: number) =>
+  request<{ note: NoteDocument }>('POST', `/notes/${id}/archive`, { expectedAutoSaveVersion });
 
 export const getNoteBacklinks = (id: string) =>
   request<{ backlinks: NoteBacklinks }>('GET', `/notes/${id}/backlinks`);

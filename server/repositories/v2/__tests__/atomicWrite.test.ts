@@ -75,6 +75,18 @@ describe('atomicWrite', () => {
     expect(results.length).toBe(3);
   });
 
+  it('allows only one concurrent compare-and-swap writer', async () => {
+    const filePath = path.join(workspace, 'a.md');
+    const initial = await atomicWrite({ filePath, content: 'base' });
+    const results = await Promise.allSettled([
+      atomicWrite({ filePath, content: 'A', expectedHash: initial.contentHash }),
+      atomicWrite({ filePath, content: 'B', expectedHash: initial.contentHash }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+  });
+
   it('readWithHash returns null for missing files', async () => {
     expect(await readWithHash(path.join(workspace, 'absent.md'))).toBeNull();
   });

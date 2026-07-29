@@ -165,6 +165,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
               layout="split"
               language={language}
               sidebarOpen={sidebarOpen}
+              autoSelectFirst={false}
             />
           </aside>
         )}

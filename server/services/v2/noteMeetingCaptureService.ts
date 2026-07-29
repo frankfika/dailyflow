@@ -18,6 +18,11 @@ import {
   type SourceItem,
 } from '../../domain/v2/types.js';
 import type { V2Repository } from '../../repositories/v2/repository.js';
+import {
+  ConcurrentModificationError,
+  sha256 as fileSha256,
+} from '../../repositories/v2/atomicWrite.js';
+import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
 
 const AudioSchema = z.object({
@@ -334,23 +339,31 @@ async function appendSourcesToNote(
   sourceIds: string[],
 ): Promise<NoteDocument> {
   return withNoteCaptureLock(repo, noteId, async () => {
-    const current = await repo.getNoteDocument(noteId);
-    if (!current) throw new NoteNotFoundError(noteId);
-    const now = new Date().toISOString();
-    const note = NoteDocumentSchema.parse({
-      ...current,
-      kind: 'meeting',
-      sourceIds: Array.from(new Set([...current.sourceIds, ...sourceIds])),
-      updatedAt: now,
-      autoSaveVersion: current.autoSaveVersion + 1,
-    });
-    await repo.saveNoteDocument(note, {
-      auditKind: 'capture',
-      auditActor: 'user',
-      auditEntity: { type: 'note', id: note.id },
-      auditData: { sourceIds },
-    });
-    return note;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const current = await repo.getNoteDocument(noteId);
+      if (!current) throw new NoteNotFoundError(noteId);
+      const now = new Date().toISOString();
+      const note = NoteDocumentSchema.parse({
+        ...current,
+        kind: 'meeting',
+        sourceIds: Array.from(new Set([...current.sourceIds, ...sourceIds])),
+        updatedAt: now,
+        autoSaveVersion: current.autoSaveVersion + 1,
+      });
+      try {
+        await repo.saveNoteDocument(note, {
+          expectedHash: fileSha256(serializeNoteDocument(current)),
+          auditKind: 'capture',
+          auditActor: 'user',
+          auditEntity: { type: 'note', id: note.id },
+          auditData: { sourceIds },
+        });
+        return note;
+      } catch (err) {
+        if (!(err instanceof ConcurrentModificationError) || attempt === 1) throw err;
+      }
+    }
+    throw new Error('Unable to attach meeting sources after concurrent note updates.');
   });
 }
 
