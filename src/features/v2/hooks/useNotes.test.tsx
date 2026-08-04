@@ -43,6 +43,13 @@ afterEach(() => {
 });
 
 describe('useNoteAutosave conflict safety', () => {
+  it('treats flushing before a note loads as a safe no-op', async () => {
+    const { result } = renderHook(() => useNoteAutosave(null), { wrapper: wrapper() });
+
+    await expect(result.current.flush()).resolves.toBe(true);
+    await expect(result.current.flush()).resolves.toBe(true);
+  });
+
   it('does not let a queued save from the previous note pollute the next note', async () => {
     let resolveFirst!: (response: Response) => void;
     const firstResponse = new Promise<Response>((resolve) => {

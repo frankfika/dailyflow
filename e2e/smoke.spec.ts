@@ -19,6 +19,18 @@ test.describe('DailyFlow Smoke Tests', () => {
     await expect(page.getByTestId('nav-notes')).toBeVisible();
   });
 
+  test('AI chat launcher is available outside the chat page', async ({ page }) => {
+    const firstRun = page.getByRole('heading', { name: /Commit to three things a day|每天承诺三件事/i });
+    if (await firstRun.isVisible().catch(() => false)) return;
+
+    const launcher = page.getByTestId('floating-ai-chat-button');
+    await expect(launcher).toBeVisible();
+    await launcher.click();
+    await expect(page.getByTestId('floating-ai-chat')).toBeVisible();
+    await launcher.click();
+    await expect(page.getByTestId('floating-ai-chat')).toBeHidden();
+  });
+
   test('settings panel opens', async ({ page }) => {
     const firstRun = page.getByRole('heading', { name: /Commit to three things a day|每天承诺三件事/i });
     if (await firstRun.isVisible().catch(() => false)) {

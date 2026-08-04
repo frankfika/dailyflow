@@ -30,6 +30,8 @@ export interface NotesViewProps {
   language?: 'zh' | 'en';
   /** Whether the app navigation sidebar is currently visible. */
   sidebarOpen?: boolean;
+  /** App-level toast for saves and actions that change selection. */
+  onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 const STORAGE_KEY = 'df_notes_layout';
@@ -59,7 +61,7 @@ function saveLayout(layout: NotesLayout) {
   }
 }
 
-export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProps) {
+export function NotesView({ language = 'en', sidebarOpen = true, onNotice }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layout, setLayout] = useState<NotesLayout>(() => loadLayout());
   const [isMobile, setIsMobile] = useState(() =>
@@ -102,7 +104,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
         state: 'draft',
       });
       setSelectedId(note.id);
-    },
+  },
     [create],
   );
 
@@ -155,6 +157,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
               onCreateFromTemplate={createAndOpen}
               onSelectNote={setSelectedId}
               onDeleted={() => setSelectedId(null)}
+              onNotice={onNotice}
             />
           </main>
         ) : (
@@ -166,6 +169,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
               language={language}
               sidebarOpen={sidebarOpen}
               autoSelectFirst={false}
+              onNotice={onNotice}
             />
           </aside>
         )}
@@ -192,6 +196,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
           onToggleLayout={toggleLayout}
           language={language}
           sidebarOpen={sidebarOpen}
+          onNotice={onNotice}
         />
       </aside>
       <main className="overflow-hidden">
@@ -203,6 +208,7 @@ export function NotesView({ language = 'en', sidebarOpen = true }: NotesViewProp
           onCreateFromTemplate={createAndOpen}
           onSelectNote={setSelectedId}
           onDeleted={() => setSelectedId(null)}
+          onNotice={onNotice}
         />
       </main>
     </div>

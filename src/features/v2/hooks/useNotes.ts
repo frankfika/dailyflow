@@ -216,14 +216,32 @@ export function useSetNoteArchived(): UseMutationResult<
     },
     onSuccess: (data, { id }) => {
       qc.setQueryData(queryKeys.note(workspaceId, id), data);
+      if (data.note.state === 'archived') {
+        qc.setQueryData<{ notes: NoteDocument[]; total: number }>(
+          queryKeys.notes(workspaceId, { state: 'archived', kind: null, q: null }),
+          (current) => {
+            if (!current) return { notes: [data.note], total: 1 };
+            const notes = [data.note, ...current.notes.filter((note) => note.id !== id)];
+            return { ...current, notes, total: notes.length };
+          },
+        );
+      } else {
+        qc.setQueryData<{ notes: NoteDocument[]; total: number }>(
+          queryKeys.notes(workspaceId, { state: null, kind: null, q: null }),
+          (current) => {
+            if (!current) return { notes: [data.note], total: 1 };
+            const notes = [data.note, ...current.notes.filter((note) => note.id !== id)];
+            return { ...current, notes, total: notes.length };
+          },
+        );
+      }
       qc.setQueriesData<{ notes: NoteDocument[]; total: number }>(
         { queryKey: queryKeys.notesRoot(workspaceId), exact: false },
         (current) => {
           if (!current || !Array.isArray(current.notes)) return current;
+          if (data.note.state === 'archived') return current;
           const notes = current.notes.filter((note) => note.id !== id);
-          return notes.length === current.notes.length
-            ? current
-            : { ...current, notes, total: Math.max(0, current.total - 1) };
+          return { ...current, notes, total: notes.length };
         },
       );
       qc.invalidateQueries({ queryKey: queryKeys.notesRoot(workspaceId), exact: false });
@@ -442,7 +460,11 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
       const queuedBase = baseRef.current;
       const run = (async () => {
         const previousResult = previous ? await previous : undefined;
-        const previousNote = previousResult?.note?.id === queuedNote?.id
+        // `undefined === undefined` is true. Without both guards, flushing an
+        // editor before its note has loaded takes the true branch and reads
+        // `previousResult.note` from undefined during unmount/navigation.
+        const previousNote = previousResult?.note && queuedNote
+          && previousResult.note.id === queuedNote.id
           ? previousResult.note
           : undefined;
         const isCurrentNote = generationRef.current === generation;

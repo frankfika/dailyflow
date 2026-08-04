@@ -129,6 +129,8 @@ export function TaskInputPanel({
               {language === 'zh' ? '添加 · Esc 关闭' : 'to add · Esc to close'}
             </span>
             <button
+              type="button"
+              aria-label={language === 'zh' ? '关闭任务输入' : 'Close task input'}
               onClick={() => { setShowTaskInput(false); setShowBrainDump(false); }}
               className="text-text-muted hover:text-text-heading hover:bg-black/[0.03] p-1.5 rounded-lg transition-colors active:scale-95"
             >
@@ -179,6 +181,7 @@ export function TaskInputPanel({
             </div>
             <textarea
               autoFocus
+              aria-label={language === 'zh' ? '任务标题和描述' : 'Task title and description'}
               placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
               className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
               value={newTaskTitle}
@@ -216,6 +219,7 @@ export function TaskInputPanel({
                   <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
                   <input
                     type="date"
+                    aria-label={language === 'zh' ? '截止日期' : 'Due date'}
                     className={`bg-transparent outline-none border-none text-xs sm:text-[11px]  font-bold cursor-pointer w-full min-w-[70px] sm:min-w-[120px] ${newTaskDeadline ? 'text-stone-600' : 'text-text-muted'}`}
                     value={newTaskDeadline}
                     onChange={e => setNewTaskDeadline(e.target.value)}
@@ -225,6 +229,8 @@ export function TaskInputPanel({
                   />
                   {newTaskDeadline && (
                     <button
+                      type="button"
+                      aria-label={language === 'zh' ? '清除截止日期' : 'Clear due date'}
                       onClick={(e) => {
                         e.preventDefault();
                         setNewTaskDeadline('');

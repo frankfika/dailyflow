@@ -50,6 +50,8 @@ export interface NoteEditorProps {
   onSelectNote?: (id: string) => void;
   /** Called after the active note is deleted or moved out of the current view. */
   onDeleted?: (id: string) => void;
+  /** Optional app-level feedback for actions that navigate away. */
+  onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 const COPY = {
@@ -165,7 +167,7 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
   }
 }
 
-export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote, onDeleted }: NoteEditorProps) {
+export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote, onDeleted, onNotice }: NoteEditorProps) {
   const t = COPY[language];
   const workspaceId = useWorkspaceScope();
   const queryClient = useQueryClient();
@@ -296,7 +298,15 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     const saved = await saveMetadata({
       state: note.state === 'archived' ? 'active' : 'archived',
     });
-    if (saved) onDeleted?.(note.id);
+    if (saved) {
+      onNotice?.(
+        note.state === 'archived'
+          ? (language === 'zh' ? '笔记已恢复' : 'Note restored')
+          : (language === 'zh' ? '笔记已归档，可在“归档”中找回' : 'Note archived — find it in Archived'),
+        'success',
+      );
+      onDeleted?.(note.id);
+    }
   };
   const tags = note.tagIds ?? [];
   const linkedCommitmentIds = note.commitmentIds ?? [];
@@ -365,6 +375,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               </span>
             )}
             <select
+              aria-label={language === 'zh' ? '笔记类型' : 'Note type'}
               value={note.kind}
               onChange={(e) => void saveMetadata({ kind: e.target.value as typeof note.kind })}
               className="bg-transparent border border-border rounded px-1.5 py-0.5"
@@ -379,6 +390,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             </select>
             <input
               type="date"
+              aria-label={language === 'zh' ? '笔记日期' : 'Note date'}
               value={note.date ?? ''}
               onChange={(e) => void saveMetadata({ date: e.target.value || null })}
               className="bg-transparent border border-border rounded px-1.5 py-0.5"
@@ -557,14 +569,23 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           no-selection state; a created note should be immediately writable. */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {viewMode === 'edit' ? (
-          <textarea
-            autoFocus
-            value={body}
-            onChange={(e) => onBodyChange(e.target.value)}
-            placeholder={t.placeholder}
-            className="w-full min-h-full pl-6 pr-8 py-6 bg-transparent text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose"
-            data-testid="note-body"
-          />
+          <div className="grid min-h-full grid-cols-1 gap-0 xl:grid-cols-2">
+            <textarea
+              autoFocus
+              value={body}
+              onChange={(e) => onBodyChange(e.target.value)}
+              placeholder={t.placeholder}
+              className="min-h-[22rem] w-full border-b border-border/70 bg-transparent pl-6 pr-8 py-6 text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose xl:min-h-full xl:border-b-0 xl:border-r"
+              data-testid="note-body"
+            />
+            <article className="note-markdown min-h-[14rem] overflow-y-auto pl-6 pr-8 py-6 text-text-heading" data-testid="note-live-preview">
+              {body.trim() ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+              ) : (
+                <p className="text-sm text-text-muted">{t.emptyPreview}</p>
+              )}
+            </article>
+          </div>
         ) : (
           <article className="note-markdown min-h-full pl-6 pr-8 py-6 text-text-heading" data-testid="note-markdown-preview">
             {body.trim() ? (

@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download, MessageCircle } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
@@ -88,6 +88,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
+  const [showFloatingChat, setShowFloatingChat] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -307,13 +308,9 @@ export default function App() {
           setAiBaseUrl('');
         }
 
-        // Restore last opened date for the active workspace
-        if (config.activeWorkspaceId) {
-          try {
-            const lastDate = localStorage.getItem(`df_last_date_${config.activeWorkspaceId}`);
-            if (lastDate) setCurrentFileDate(lastDate);
-          } catch { /* ignore */ }
-        }
+        // DailyFlow always opens on Today. Restoring a historical date while
+        // the active navigation item still says "Today" creates a misleading
+        // empty first screen and hides the primary capture action.
 
       } catch (e) {
         // ignore
@@ -501,14 +498,6 @@ export default function App() {
         console.error('Daily initialization failed', error);
       });
   }, [activeContext, activeWorkspaceId, currentFileDate, isFirstRun, loadTasksForDate]);
-
-  // Remember the last opened date per workspace
-  useEffect(() => {
-    if (!activeWorkspaceId) return;
-    try {
-      localStorage.setItem(`df_last_date_${activeWorkspaceId}`, currentFileDate);
-    } catch { /* ignore */ }
-  }, [activeWorkspaceId, currentFileDate]);
 
   const reloadFileList = useCallback(async () => {
     try {
@@ -1029,13 +1018,63 @@ export default function App() {
         onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
       />
 
+      {/* AI Chat is available from every workspace surface. It used to be
+          only reachable through the sidebar tab, which made it disappear
+          while working in Notes, Inbox, Today, or Calendar. Keep a compact
+          launcher and an overlay session so the current page stays visible. */}
+      {activeTab !== 'ai-chat' && (
+        <>
+          <AnimatePresence>
+            {showFloatingChat && (
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                className="fixed bottom-20 right-5 z-[80] h-[min(680px,calc(100dvh-7rem))] w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+                data-testid="floating-ai-chat"
+              >
+                <AIChat
+                  workspaceId={activeWorkspaceId || 'default'}
+                  language={language}
+                  activeContext={activeContext}
+                  tasks={contextFilteredTasks}
+                  notes={contextNotes}
+                  filesMap={filesMap}
+                  showToast={showToast}
+                  initialDraft={null}
+                  onOpenMeetingCapture={openMeetingCapture}
+                  onNoteCreated={() => {
+                    const today = getTodayStr();
+                    notesApi.getByDate(today).then(dateNotes => {
+                      setDailyNotes(prev => [...prev.filter(n => n.date !== today), ...dateNotes]);
+                    }).catch(err => console.error('Failed to refresh daily notes:', err));
+                    loadContextNotes();
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            type="button"
+            onClick={() => setShowFloatingChat(value => !value)}
+            className="fixed bottom-5 right-5 z-[81] inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-lg transition hover:scale-105 hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/40"
+            aria-label={language === 'zh' ? '打开 AI 对话' : 'Open AI Chat'}
+            title={language === 'zh' ? 'AI 对话' : 'AI Chat'}
+            data-testid="floating-ai-chat-button"
+          >
+            <MessageCircle className="h-5 w-5" />
+          </button>
+        </>
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-colors duration-300">
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-3.5 left-3.5 z-20 p-2 rounded-lg text-text-muted hover:text-text-heading hover:bg-black/5 transition-all active:scale-95"
+            className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
             aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
           >
@@ -1049,7 +1088,7 @@ export default function App() {
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
         <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
-          <div className="h-full min-h-0 w-full">
+          <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -1303,7 +1342,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="min-h-0 flex-1 overflow-hidden">
-                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} />}
+                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} />}
                   </div>
                 </div>
               )

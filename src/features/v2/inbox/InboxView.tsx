@@ -20,6 +20,7 @@ import {
   createCommitment,
   listProposals,
   listJobs,
+  createNote,
   V2ApiError,
   type SourceItem,
   type Proposal,
@@ -49,6 +50,12 @@ export function InboxView({ language = 'zh' }: { language?: 'zh' | 'en' }) {
       className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain p-4"
       data-testid="inbox-scroll-region"
     >
+      <Card>
+        <div className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+          <div className="text-sm font-medium text-text-heading">{language === 'zh' ? 'Inbox 是待处理来源，不是笔记列表' : 'Inbox is for unprocessed sources, not your note list'}</div>
+          <div>{language === 'zh' ? '把消息、录音转写或临时想法先放这里；确认后可以转成笔记，或直接创建任务。笔记和任务的关联在笔记编辑器的“关联任务”里维护。' : 'Capture messages, transcripts, or rough ideas here first. Once confirmed, turn them into a note or a task. Link notes and tasks from the note editor.'}</div>
+        </div>
+      </Card>
       <CaptureBox language={language} onSaved={refresh} />
       <SourcesList
         items={inbox.data?.items ?? []}
@@ -254,6 +261,7 @@ function SourceCard({ source, onChanged, language }: { source: SourceItem; onCha
               ? (isZh ? '处理中…' : 'Processing…')
               : proposal ? (isZh ? '查看建议' : 'Review suggestions') : (isZh ? 'AI 分析' : 'Analyze with AI')}
           </Button>
+          <CreateNoteFromSourceButton source={source} onCreated={onChanged} language={language} />
           <ManualCreateButton sourceId={source.id} onCreated={onChanged} language={language} />
         </div>
 
@@ -280,6 +288,25 @@ function SourceCard({ source, onChanged, language }: { source: SourceItem; onCha
         )}
       </div>
     </Card>
+  );
+}
+
+function CreateNoteFromSourceButton({ source, onCreated, language }: { source: SourceItem; onCreated: () => void; language: 'zh' | 'en' }) {
+  const isZh = language === 'zh';
+  const create = useMutation({
+    mutationFn: () => createNote({
+      title: source.title,
+      body: source.body ?? '',
+      kind: source.kind === 'meeting_audio' || source.kind === 'meeting_transcript' ? 'meeting' : 'general',
+      state: 'draft',
+      sourceIds: [source.id],
+    }),
+    onSuccess: () => onCreated(),
+  });
+  return (
+    <Button size="sm" variant="secondary" onClick={() => create.mutate()} disabled={create.isPending}>
+      {create.isPending ? (isZh ? '创建中…' : 'Creating…') : (isZh ? '转为笔记' : 'Turn into note')}
+    </Button>
   );
 }
 

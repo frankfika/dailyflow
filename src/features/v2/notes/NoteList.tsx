@@ -85,6 +85,8 @@ export interface NoteListProps {
   sidebarOpen?: boolean;
   /** Desktop opens the newest note automatically; mobile keeps the list visible until tapped. */
   autoSelectFirst?: boolean;
+  /** App-level feedback for archive/restore actions. */
+  onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 export function NoteList({
@@ -95,12 +97,28 @@ export function NoteList({
   language = 'en',
   sidebarOpen = true,
   autoSelectFirst = true,
+  onNotice,
 }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const create = useCreateNote();
   const setArchived = useSetNoteArchived();
   const del = useDeleteNote();
+  const lastArchiveNoticeRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const result = setArchived.data?.note;
+    if (!setArchived.isSuccess || !result) return;
+    const key = `${result.id}:${result.state}:${result.autoSaveVersion}`;
+    if (lastArchiveNoticeRef.current === key) return;
+    lastArchiveNoticeRef.current = key;
+    onNotice?.(
+      result.state === 'archived'
+        ? (language === 'zh' ? '笔记已归档，可在“归档”中找回' : 'Note archived — find it in Archived')
+        : (language === 'zh' ? '笔记已恢复' : 'Note restored'),
+      'success',
+    );
+  }, [language, onNotice, setArchived.data, setArchived.isSuccess]);
 
   // Fetch all working notes (active + draft) and bucket client-side.
   // New notes intentionally start as drafts; querying only `active` made a
@@ -175,6 +193,16 @@ export function NoteList({
     onSelect(note.id);
   };
 
+  const createMeetingAndOpen = async () => {
+    const { note } = await create.mutateAsync({
+      body: '',
+      kind: 'meeting',
+      state: 'draft',
+    });
+    onSelect(note.id);
+    onNotice?.(language === 'zh' ? '会议笔记已创建，下面可以开始录音' : 'Meeting note ready — start recording below', 'info');
+  };
+
   // Collapsed: just an icon strip. Each note is a single character
   // avatar; the active one is highlighted. Click to switch.
   if (layout === 'note') {
@@ -213,6 +241,14 @@ export function NoteList({
             data-testid="notes-new"
           >
             {language === 'zh' ? '+ 新建笔记' : '+ Add note'}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={create.isPending}
+            onClick={() => void createMeetingAndOpen()}
+            data-testid="notes-new-meeting"
+          >
+            {language === 'zh' ? '录音会议' : 'Record meeting'}
           </Button>
         </div>
       </header>
