@@ -101,12 +101,15 @@ import {
   MeetingAudioAccessError,
   NoteMeetingCaptureInputSchema,
   resolveNoteMeetingAudio,
+  StoredMeetingTranscriptionInputSchema,
+  transcribeStoredMeetingAudio,
 } from '../../services/v2/noteMeetingCaptureService.js';
 import {
   getLocalTranscriptionConfig,
   saveLocalTranscriptionConfig,
   transcribeMeetingAudio,
   LocalTranscriptionConfigSchema,
+  localTranscriptionDefaults,
   localTranscriptionStatus,
 } from '../../services/v2/localTranscriptionService.js';
 
@@ -199,7 +202,15 @@ v2Router.post('/jobs/:id/cancel', async (req, res) => {
 
 // Local ASR configuration is workspace-local and never contains API keys.
 v2Router.get('/transcription/local-config', async (_req, res) => {
-  try { const { repo } = getV2(res); res.json({ config: await getLocalTranscriptionConfig(repo) }); }
+  try {
+    const { repo } = getV2(res);
+    const config = await getLocalTranscriptionConfig(repo);
+    res.json({
+      config,
+      status: config ? await localTranscriptionStatus(config) : undefined,
+      defaults: localTranscriptionDefaults,
+    });
+  }
   catch (err) { handleError(err, res); }
 });
 
@@ -224,6 +235,10 @@ v2Router.post('/notes/:id/meeting/transcribe-local', async (req, res) => {
     if (!source || source.kind !== 'meeting_audio') return res.status(404).json({ error: { code: 'not_found', message: 'Meeting audio source not found.' } });
     active = await repo.createOrGetJob({ kind: 'transcription', entityRef: { type: 'source', id: source.id }, idempotencyKey: `local-transcription:${workspaceId}:${source.id}:${source.contentHash}:${config.modelPath}`, status: 'queued' });
     if (active.status === 'succeeded') return res.json({ job: active });
+    if (active.status === 'failed' && active.error?.retryable) {
+      active = await repo.retryJob(active.id);
+      if (!active) return res.status(404).json({ error: { code: 'not_found', message: 'Transcription job not found.' } });
+    }
     if (active.status !== 'queued') return res.status(202).json({ job: active });
     const claim = await repo.startJob(active.id, 10); if (!claim.started || !claim.job) return res.status(202).json({ job: claim.job });
     active = claim.job;
@@ -467,6 +482,17 @@ v2Router.post('/notes/:id/meeting/capture', async (req, res) => {
     const input = NoteMeetingCaptureInputSchema.parse(req.body ?? {});
     const result = await captureNoteMeeting(repo, req.params.id, input);
     res.status(result.transcriptSource ? 201 : 200).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/notes/:id/meeting/transcribe', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const input = StoredMeetingTranscriptionInputSchema.parse(req.body ?? {});
+    const result = await transcribeStoredMeetingAudio(repo, req.params.id, input);
+    res.status(201).json(result);
   } catch (err) {
     handleError(err, res);
   }

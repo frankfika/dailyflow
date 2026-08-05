@@ -57,6 +57,16 @@ export const NoteMeetingCaptureInputSchema = z.object({
 });
 export type NoteMeetingCaptureInput = z.infer<typeof NoteMeetingCaptureInputSchema>;
 
+export const StoredMeetingTranscriptionInputSchema = z.object({
+  sourceId: z.string().min(1),
+  transcription: z.discriminatedUnion('mode', [
+    EndpointTranscriptionSchema.extend({ mode: z.literal('remote'), apiKey: z.string().min(1).max(20_000) }),
+    EndpointTranscriptionSchema.extend({ mode: z.literal('local-endpoint') }),
+  ]),
+  language: z.enum(['zh', 'en']).optional(),
+});
+export type StoredMeetingTranscriptionInput = z.infer<typeof StoredMeetingTranscriptionInputSchema>;
+
 export interface TranscriptSegment {
   start: number;
   end: number;
@@ -534,6 +544,92 @@ export async function captureNoteMeeting(
     segments: remote.segments,
     text: remote.text,
     transcriptionMode: endpointMode,
+  };
+}
+
+/**
+ * Transcribe a recording that is already durable and attached to a note.
+ * Keeping this separate from capture makes the record button feel instant,
+ * permits retrying with another provider, and prevents provider latency from
+ * deciding whether the original audio survives.
+ */
+export async function transcribeStoredMeetingAudio(
+  repo: V2Repository,
+  noteId: string,
+  input: StoredMeetingTranscriptionInput,
+  fetchImpl: Fetch = fetch,
+): Promise<NoteMeetingCaptureResult> {
+  const parsed = StoredMeetingTranscriptionInputSchema.parse(input);
+  const note = await repo.getNoteDocument(noteId);
+  if (!note) throw new NoteNotFoundError(noteId);
+  const audioSource = await repo.getSourceItem(parsed.sourceId);
+  if (!audioSource || audioSource.kind !== 'meeting_audio' || !audioSource.filePath) {
+    throw new MeetingAudioAccessError('audio_source_not_found', 'Meeting audio source not found.');
+  }
+  if (!note.sourceIds.includes(audioSource.id)) {
+    throw new MeetingAudioAccessError('audio_source_not_linked', 'This audio source is not linked to the requested note.', 403);
+  }
+
+  const resolved = await resolveNoteMeetingAudio(repo, noteId, audioSource.id);
+  const bytes = await fs.readFile(resolved.absolutePath);
+  const extension = path.extname(resolved.absolutePath).toLowerCase();
+  const mode = parsed.transcription.mode;
+  const endpointConfig = {
+    baseUrl: parsed.transcription.baseUrl!,
+    model: parsed.transcription.model!,
+    apiKey: parsed.transcription.apiKey,
+    language: parsed.transcription.language,
+  };
+  const remote = await transcribe(
+    bytes,
+    resolved.mimeType,
+    extension,
+    endpointConfig,
+    parsed.language,
+    fetchImpl,
+    mode === 'local-endpoint',
+  );
+
+  const now = new Date().toISOString();
+  const transcriptBody = transcriptMarkdown(remote.text, remote.segments);
+  const transcriptId = newId('src');
+  const transcriptAbsolute = path.join(
+    repo.layout.attachments,
+    'Notes',
+    note.id,
+    'transcripts',
+    `${transcriptId}.md`,
+  );
+  await atomicWriteBytes(transcriptAbsolute, Buffer.from(transcriptBody, 'utf8'));
+  const transcriptSource = makeSource({
+    id: transcriptId,
+    note,
+    kind: 'meeting_transcript',
+    title: `Meeting transcript ${now.slice(0, 19).replace('T', ' ')}`,
+    body: remote.text,
+    filePath: workspaceRelative(repo.layout.root, transcriptAbsolute),
+    contentHash: hashBytes(Buffer.from(remote.text, 'utf8')),
+    durationSeconds: typeof audioSource.meta?.durationSeconds === 'number'
+      ? audioSource.meta.durationSeconds
+      : undefined,
+    language: parsed.language ?? (audioSource.language === 'zh' || audioSource.language === 'en' ? audioSource.language : undefined),
+    now,
+  });
+  await repo.saveSourceItem(transcriptSource, {
+    auditKind: 'capture',
+    auditActor: 'user',
+    auditEntity: { type: 'source', id: transcriptSource.id },
+    auditData: { kind: transcriptSource.kind, noteId, audioSourceId: audioSource.id, provider: mode },
+    occurredAt: now,
+  });
+  const updatedNote = await appendSourcesToNote(repo, noteId, [transcriptSource.id]);
+  return {
+    note: updatedNote,
+    audioSource,
+    transcriptSource,
+    segments: remote.segments,
+    text: remote.text,
+    transcriptionMode: mode,
   };
 }
 

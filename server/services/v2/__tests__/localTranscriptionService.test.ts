@@ -5,7 +5,7 @@ import path from 'path';
 import { V2Repository } from '../../../repositories/v2/repository';
 import { NoteService } from '../noteService';
 import { captureNoteMeeting } from '../noteMeetingCaptureService';
-import { getLocalTranscriptionConfig, saveLocalTranscriptionConfig, transcribeMeetingAudio } from '../localTranscriptionService';
+import { getLocalTranscriptionConfig, localTranscriptionStatus, saveLocalTranscriptionConfig, transcribeMeetingAudio } from '../localTranscriptionService';
 
 describe('local transcription service', () => {
   let root: string;
@@ -29,5 +29,18 @@ describe('local transcription service', () => {
     expect(result.source.processingStatus).toBe('processed');
     expect((await repo.getNoteDocument(note.id))?.sourceIds).toContain(result.source.id);
     expect(await fs.readFile(path.join(root, result.source.filePath!), 'utf8')).toContain('本地转写结果');
+  });
+
+  it('detects executable names through PATH instead of requiring absolute paths', async () => {
+    const modelPath = path.join(root, 'small.bin');
+    await fs.writeFile(modelPath, 'model');
+    const status = await localTranscriptionStatus({
+      executablePath: 'node',
+      modelPath,
+      ffmpegPath: 'node',
+      language: 'auto',
+      extraArgs: [],
+    });
+    expect(status).toEqual({ executable: true, model: true, ffmpeg: true });
   });
 });

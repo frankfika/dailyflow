@@ -6,6 +6,7 @@ import { V2Repository } from '../../../repositories/v2/repository';
 import { NoteService } from '../noteService';
 import { captureNoteMeeting } from '../noteMeetingCaptureService';
 import { resolveNoteMeetingAudio } from '../noteMeetingCaptureService';
+import { transcribeStoredMeetingAudio } from '../noteMeetingCaptureService';
 
 describe('note meeting capture service', () => {
   let root: string;
@@ -207,6 +208,33 @@ describe('note meeting capture service', () => {
     const request = fetchMock.mock.calls[0]!;
     expect(request[0]).toBe('http://127.0.0.1:8080/v1/audio/transcriptions');
     expect(request[1]?.headers).toBeUndefined();
+  });
+
+  it('can transcribe an already-saved recording later without recapturing audio', async () => {
+    const note = await new NoteService(repo).create({ body: 'manual notes', kind: 'meeting' });
+    const captured = await captureNoteMeeting(repo, note.id, {
+      audio: { data: Buffer.from('durable audio').toString('base64'), mimeType: 'audio/webm' },
+      transcription: { mode: 'save-only' },
+    });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ text: 'deferred transcript' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const result = await transcribeStoredMeetingAudio(repo, note.id, {
+      sourceId: captured.audioSource.id,
+      transcription: {
+        mode: 'local-endpoint',
+        baseUrl: 'http://127.0.0.1:8080/v1',
+        model: 'whisper',
+      },
+      language: 'en',
+    }, fetchMock as unknown as typeof fetch);
+
+    expect(result.audioSource.id).toBe(captured.audioSource.id);
+    expect(result.transcriptSource?.body).toBe('deferred transcript');
+    expect(result.note.body).toBe('manual notes');
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('rejects non-loopback hosts for local endpoint transcription while preserving audio', async () => {

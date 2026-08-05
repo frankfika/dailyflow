@@ -252,6 +252,20 @@ export interface MeetingTranscriptionRequest {
   language?: 'auto' | 'zh' | 'en';
 }
 
+export interface LocalTranscriptionConfig {
+  executablePath: string;
+  modelPath: string;
+  ffmpegPath: string;
+  language: string;
+  extraArgs: string[];
+}
+
+export interface LocalTranscriptionStatus {
+  executable: boolean;
+  model: boolean;
+  ffmpeg: boolean;
+}
+
 export interface MeetingTranscriptSegment {
   start?: number;
   end?: number;
@@ -279,7 +293,26 @@ export const captureNoteMeeting = (id: string, input: MeetingCaptureInput) =>
 export const transcribeNoteMeeting = (noteId: string, input: {
   sourceId: string;
   transcription: MeetingTranscriptionRequest;
-}) => request<MeetingCaptureResult & { note?: NoteDocument; job?: JobRecord; source?: SourceItem }>('POST', `/notes/${noteId}/meeting/transcribe-local`, input);
+}) => request<MeetingCaptureResult & { note?: NoteDocument; job?: JobRecord; source?: SourceItem }>(
+  'POST',
+  input.transcription.mode === 'local-managed'
+    ? `/notes/${noteId}/meeting/transcribe-local`
+    : `/notes/${noteId}/meeting/transcribe`,
+  input,
+);
+
+export const getLocalTranscriptionConfig = () =>
+  request<{ config: LocalTranscriptionConfig | null; status?: LocalTranscriptionStatus; defaults?: LocalTranscriptionConfig }>(
+    'GET',
+    '/transcription/local-config',
+  );
+
+export const saveLocalTranscriptionConfig = (config: LocalTranscriptionConfig) =>
+  request<{ config: LocalTranscriptionConfig; status: LocalTranscriptionStatus }>(
+    'PUT',
+    '/transcription/local-config',
+    config,
+  );
 
 /** URL for streaming a persisted meeting recording after the app restarts. */
 export const getNoteMeetingAudioUrl = (noteId: string, sourceId: string) =>

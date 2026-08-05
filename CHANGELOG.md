@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+## [1.3.1] - 2026-08-06
+
+### Fixed
+
+- **Ollama loopback support** — local Ollama/LM Studio chat endpoints on `localhost`, `127.0.0.1`, and `::1` are now accepted while LAN and link-local SSRF targets remain blocked.
+- **Meeting model separation** — chat models are no longer treated as speech models; Ollama can organize transcripts while Whisper-compatible providers handle audio.
+- **Durable-first meeting capture** — recordings are persisted before transcription and can be transcribed or retried later without recording again.
+- **No fake transcripts** — missing speech models no longer produce placeholder text that flows into meeting summaries.
+- **Local ASR readiness** — whisper.cpp executable, model, and ffmpeg availability are detected from the actual machine configuration.
+
+### Added
+
+- Local ASR path configuration and detection in Meeting Notes.
+- A stored-audio transcription endpoint for remote and loopback speech providers.
+- Meeting AI architecture notes in `docs/MEETING_AI_ARCHITECTURE.md`.
+
+### Verified
+
+- `npm test` ✅ 52 files / 402 tests
+- `npm run lint` ✅
+- `npm run build` ✅
+- In-app browser UX verification ✅
+
 ## [1.2.2] - 2026-07-29
 
 ### Fixed

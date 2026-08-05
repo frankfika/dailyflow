@@ -40,6 +40,14 @@ function isBlockedHost(url: URL): boolean {
   return BLOCKED_HOSTS.some(re => re.test(url.hostname));
 }
 
+function isLoopbackHost(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  return hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '::1'
+    || hostname === '[::1]';
+}
+
 function resolveChatCompletionsUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(trimmed)) {
@@ -51,7 +59,7 @@ function resolveChatCompletionsUrl(baseUrl: string): string {
   } catch {
     throw new Error('Invalid URL format');
   }
-  if (isBlockedHost(parsed)) {
+  if (isBlockedHost(parsed) && !isLoopbackHost(parsed)) {
     throw new Error('Invalid URL: internal addresses are not allowed');
   }
   if (/\/chat\/completions$/.test(trimmed)) return trimmed;
@@ -69,7 +77,7 @@ function resolveTranscriptionsUrl(baseUrl: string): string {
   } catch {
     throw new Error('Invalid URL format');
   }
-  if (isBlockedHost(parsed)) {
+  if (isBlockedHost(parsed) && !isLoopbackHost(parsed)) {
     throw new Error('Invalid URL: internal addresses are not allowed');
   }
   if (/\/audio\/transcriptions$/.test(trimmed)) return trimmed;
@@ -79,7 +87,7 @@ function resolveTranscriptionsUrl(baseUrl: string): string {
 }
 
 interface WhisperConfig {
-  apiKey: string;
+  apiKey?: string;
   baseUrl: string;
   model?: string;
   language?: string;
@@ -205,10 +213,7 @@ async function transcribeWithWhisper(
 
   const upstream = await fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.apiKey}`,
-      // Do NOT set Content-Type — let fetch set the multipart boundary.
-    },
+    headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : undefined,
     body: form,
   });
   if (!upstream.ok) {
@@ -298,7 +303,7 @@ router.post('/transcribe', async (req, res) => {
       }
 
       // Forward to the Whisper-compatible provider when configured.
-      if (body.whisperConfig && body.whisperConfig.apiKey && body.whisperConfig.baseUrl) {
+      if (body.whisperConfig?.baseUrl && body.whisperConfig.model) {
         const ext = pickExtension(mimeType, filename);
         const whisperResp = await transcribeWithWhisper(
           audioBytes,

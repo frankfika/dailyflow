@@ -1090,7 +1090,7 @@ export interface MeetingAudioTranscribeRequest {
   participants?: string[];
   /** When set, server forwards to the configured Whisper API. */
   whisperConfig?: {
-    apiKey: string;
+    apiKey?: string;
     baseUrl: string;
     model?: string;
     language?: string;

@@ -140,7 +140,7 @@ describe('MeetingNotePanel', () => {
         data: 'data:audio/webm;base64,YXVkaW8=',
         mimeType: 'audio/webm',
       }),
-      transcriptionConfig: undefined,
+      transcription: { mode: 'save-only' },
     }));
     expect(await screen.findByRole('status')).toHaveTextContent('Recording saved.');
     expect(onNoteUpdated).toHaveBeenCalledWith(updated, result);
@@ -161,7 +161,12 @@ describe('MeetingNotePanel', () => {
       text: 'A complete transcript',
       transcriptionMode: 'remote',
     };
-    captureNoteMeeting.mockResolvedValue(result);
+    captureNoteMeeting.mockResolvedValue({
+      note: note({ sourceIds: ['src_audio_new'] }),
+      audioSource: result.audioSource,
+      transcriptionMode: 'saved-only',
+    });
+    transcribeNoteMeeting.mockResolvedValue(result);
     const onTranscriptReady = vi.fn();
 
     render(<MeetingNotePanel note={note()} onTranscriptReady={onTranscriptReady} />);
@@ -171,10 +176,16 @@ describe('MeetingNotePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
 
     await waitFor(() => expect(onTranscriptReady).toHaveBeenCalledWith('A complete transcript', result));
-    expect(captureNoteMeeting.mock.calls[0][1].transcriptionConfig).toEqual({
-      apiKey: 'secret',
-      baseUrl: 'https://example.test/v1',
-      model: 'whisper-1',
+    expect(captureNoteMeeting.mock.calls[0][1].transcription).toEqual({ mode: 'save-only' });
+    expect(transcribeNoteMeeting).toHaveBeenCalledWith('note_01', {
+      sourceId: 'src_audio_new',
+      transcription: {
+        mode: 'remote',
+        apiKey: 'secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'whisper-1',
+        language: 'en',
+      },
     });
   });
 
@@ -207,12 +218,13 @@ describe('MeetingNotePanel', () => {
       remoteBaseUrl: 'https://example.test/v1',
       remoteModel: 'whisper-1',
     }));
+    const audioSource = source('meeting_audio', 'src_audio_new');
     captureNoteMeeting.mockResolvedValue({
       note: note(),
-      audioSource: source('meeting_audio', 'src_audio_new'),
+      audioSource,
       transcriptionMode: 'saved-only',
-      transcriptionError: 'provider unavailable',
     } satisfies MeetingCaptureResult);
+    transcribeNoteMeeting.mockRejectedValue(new Error('provider unavailable'));
 
     render(<MeetingNotePanel note={note()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));

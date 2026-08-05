@@ -156,10 +156,25 @@ export async function transcribeMeetingAudio(
   return { source, text };
 }
 
-export async function localTranscriptionStatus(config: LocalTranscriptionConfig): Promise<{ executable: boolean; model: boolean }> {
+async function executableAvailable(command: string): Promise<boolean> {
+  if (path.isAbsolute(command) || command.includes(path.sep)) {
+    return fs.access(command).then(() => true, () => false);
+  }
+  const pathEntries = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  for (const directory of pathEntries) {
+    if (await fs.access(path.join(directory, command)).then(() => true, () => false)) return true;
+  }
+  return false;
+}
+
+export async function localTranscriptionStatus(config: LocalTranscriptionConfig): Promise<{ executable: boolean; model: boolean; ffmpeg: boolean }> {
   const parsed = LocalTranscriptionConfigSchema.parse(config);
-  const [executable, model] = await Promise.all([fs.access(parsed.executablePath).then(() => true, () => false), fs.access(parsed.modelPath).then(() => true, () => false)]);
-  return { executable, model };
+  const [executable, model, ffmpeg] = await Promise.all([
+    executableAvailable(parsed.executablePath),
+    fs.access(parsed.modelPath).then(() => true, () => false),
+    executableAvailable(parsed.ffmpegPath),
+  ]);
+  return { executable, model, ffmpeg };
 }
 
 export const localTranscriptionDefaults = { executablePath: 'whisper-cli', modelPath: path.join(os.homedir(), 'Library/Application Support/DailyFlow/models/whisper/ggml-small.bin'), ffmpegPath: 'ffmpeg', language: 'auto', extraArgs: [] } satisfies LocalTranscriptionConfig;

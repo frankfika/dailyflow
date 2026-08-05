@@ -33,7 +33,15 @@ function isBlockedHost(url: URL): boolean {
   return BLOCKED_HOSTS.some(re => re.test(hostname));
 }
 
-function resolveUrl(baseUrl: string): string {
+function isLoopbackHost(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  return hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '::1'
+    || hostname === '[::1]';
+}
+
+export function resolveAiUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
 
   // Protocol check
@@ -49,7 +57,10 @@ function resolveUrl(baseUrl: string): string {
   }
 
   // SSRF prevention: block internal / metadata endpoints
-  if (isBlockedHost(parsed)) {
+  // DailyFlow is a local desktop app, so exact loopback endpoints are a
+  // supported provider boundary (Ollama, LM Studio, etc.). Keep blocking LAN,
+  // link-local, and wildcard addresses to avoid turning the proxy into SSRF.
+  if (isBlockedHost(parsed) && !isLoopbackHost(parsed)) {
     throw new Error('Invalid URL: internal addresses are not allowed');
   }
 
@@ -64,7 +75,7 @@ router.post('/summarize', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: apiKey, baseUrl, userPrompt' });
     }
 
-    const url = resolveUrl(body.baseUrl);
+    const url = resolveAiUrl(body.baseUrl);
     const model = body.model || 'default';
     const systemPrompt = body.systemPrompt || 'You are a helpful assistant that summarizes notes concisely in Markdown.';
     const maxTokens = body.maxTokens ?? 4096;

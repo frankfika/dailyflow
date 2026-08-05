@@ -29,6 +29,7 @@ import { meetingsApi, notesApi, tasksApi, type MeetingActionItem, type MeetingSe
 import { getActiveAiConfig as getActiveAiConfigShared } from '../types/models';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
 import { getTodayStr } from '../utils/tagColors';
+import { loadMeetingTranscriptionSettings } from '../features/v2/notes/meetingTranscription';
 
 type Step = 'input' | 'record' | 'organize' | 'review' | 'saving';
 type InputMode = 'paste' | 'record';
@@ -367,8 +368,28 @@ export function MeetingCapture({ isOpen, onClose, language, activeContext, showT
       return;
     }
 
-    // Try to forward to a real Whisper API when an AI provider is configured.
-    const cfg = getActiveAiConfigShared();
+    // Speech-to-text is configured independently from the chat model. Ollama
+    // can organize a finished transcript, but it is not an audio model.
+    const speech = loadMeetingTranscriptionSettings();
+    const whisperConfig = speech.mode === 'remote'
+      && speech.remoteBaseUrl
+      && speech.remoteApiKey
+      && speech.remoteModel
+      ? {
+          apiKey: speech.remoteApiKey,
+          baseUrl: speech.remoteBaseUrl,
+          model: speech.remoteModel,
+          language: language === 'zh' ? 'zh' : 'en',
+        }
+      : speech.mode === 'local-endpoint'
+        && speech.localEndpointBaseUrl
+        && speech.localEndpointModel
+        ? {
+            baseUrl: speech.localEndpointBaseUrl,
+            model: speech.localEndpointModel,
+            language: language === 'zh' ? 'zh' : 'en',
+          }
+        : undefined;
     setStep('organize');
     try {
       const dataUrl = await blobToBase64(audioBlob);
@@ -376,17 +397,18 @@ export function MeetingCapture({ isOpen, onClose, language, activeContext, showT
         audio: { data: dataUrl, mimeType: audioMimeType || 'audio/webm' },
         date: nowDateStr(),
         participants,
-        whisperConfig: cfg ? {
-          apiKey: cfg.apiKey,
-          baseUrl: cfg.baseUrl,
-          model: 'whisper-1',
-          language: language === 'zh' ? 'zh' : 'en',
-        } : undefined,
+        whisperConfig,
         language,
       });
       setSegments(result.segments);
-      setTranscriptionModeEcho(result.transcriptionMode || (cfg ? 'whisper' : 'mock-with-audio'));
+      setTranscriptionModeEcho(result.transcriptionMode || (whisperConfig ? 'whisper' : 'mock-with-audio'));
       setRecordingPathEcho(result.recordingPath || '');
+      if (result.transcriptionMode === 'mock-with-audio') {
+        setError(language === 'zh'
+          ? '录音已经安全保存，但尚未配置语音转写模型。请在会议笔记中配置本机 whisper.cpp、本机转写服务或远程语音模型后再转写。'
+          : 'The recording is safely saved, but no speech model is configured. Configure local whisper.cpp, a local transcription service, or a remote speech model in the meeting note before transcribing.');
+        setStep('input');
+      }
     } catch (e: any) {
       console.error('Audio transcribe failed:', e);
       const raw = e?.message || String(e);

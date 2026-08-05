@@ -4,8 +4,12 @@ import {
   captureNoteMeeting,
   transcribeNoteMeeting,
   getNoteMeetingAudioUrl,
+  getLocalTranscriptionConfig,
   getSource,
+  saveLocalTranscriptionConfig,
   type MeetingCaptureResult,
+  type LocalTranscriptionConfig,
+  type LocalTranscriptionStatus,
   type NoteDocument,
   type SourceItem,
 } from '../api/client';
@@ -39,7 +43,7 @@ const COPY = {
     modeRemote: '远程模型',
     modeSaveOnly: '仅保存录音',
     localReady: '本地模型已就绪',
-    localMissing: '本地模型未下载，将先保存录音',
+    localMissing: '本地转写尚未就绪；录音仍会先保存，可稍后配置路径并重试',
     localEndpointReady: '本机转写服务只允许使用 localhost/127.0.0.1，不会上传到外网',
     queued: '本地转写任务已排队，可稍后重试。',
     saving: '正在保存…',
@@ -63,6 +67,15 @@ const COPY = {
     apiKey: 'API Key',
     modelName: '模型名称',
     insertTranscript: '加入笔记并编辑',
+    backgroundTranscribing: '录音已保存，本地转写正在后台运行。你可以继续编辑或离开此页面。',
+    transcribeLater: '转写这段录音',
+    localConfig: '本地 whisper.cpp 设置',
+    executablePath: 'whisper-cli 路径',
+    modelPath: '模型文件路径',
+    ffmpegPath: 'ffmpeg 路径',
+    localConfigSaved: '本地转写设置已保存。',
+    localNotReady: '本地转写尚未就绪，请确认执行程序和模型文件路径。',
+    saveConfig: '保存并检测',
   },
   en: {
     title: 'Meeting recording',
@@ -79,7 +92,7 @@ const COPY = {
     modeRemote: 'Remote model',
     modeSaveOnly: 'Save recording only',
     localReady: 'Local model ready',
-    localMissing: 'Local model is not downloaded; recording will be saved first',
+    localMissing: 'Local transcription is not ready; the recording will still be saved so you can configure paths and retry later',
     localEndpointReady: 'Local transcription only allows localhost/127.0.0.1 and will not upload audio externally',
     queued: 'Local transcription is queued. You can retry it later.',
     saving: 'Saving…',
@@ -103,6 +116,15 @@ const COPY = {
     apiKey: 'API Key',
     modelName: 'Model name',
     insertTranscript: 'Add to note and edit',
+    backgroundTranscribing: 'Recording saved. Local transcription is running in the background; you can keep editing or leave this page.',
+    transcribeLater: 'Transcribe this recording',
+    localConfig: 'Local whisper.cpp settings',
+    executablePath: 'whisper-cli path',
+    modelPath: 'Model file path',
+    ffmpegPath: 'ffmpeg path',
+    localConfigSaved: 'Local transcription settings saved.',
+    localNotReady: 'Local transcription is not ready. Check the executable and model paths.',
+    saveConfig: 'Save & check',
   },
 } as const;
 
@@ -161,6 +183,10 @@ export function MeetingNotePanel({
   const startedAtRef = useRef(0);
   const mountedRef = useRef(true);
   const [transcriptionSettings, setTranscriptionSettings] = useState(loadMeetingTranscriptionSettings);
+  const [localConfig, setLocalConfig] = useState<LocalTranscriptionConfig | null>(null);
+  const [localStatus, setLocalStatus] = useState<LocalTranscriptionStatus | null>(null);
+  const [localConfigSaving, setLocalConfigSaving] = useState(false);
+  const [transcribingSourceId, setTranscribingSourceId] = useState<string | null>(null);
   const selectedMode = transcriptionSettings.mode;
   const remoteEndpoint = transcriptionSettings.remoteApiKey
     && transcriptionSettings.remoteBaseUrl
@@ -171,7 +197,9 @@ export function MeetingNotePanel({
         model: transcriptionSettings.remoteModel,
       }
     : null;
-  const localModelReady = isMeetingModelInstalled(transcriptionSettings.modelId);
+  const localModelReady = localStatus
+    ? localStatus.executable && localStatus.model && localStatus.ffmpeg
+    : isMeetingModelInstalled(transcriptionSettings.modelId);
   const canTranscribe = selectedMode === 'remote'
     ? Boolean(remoteEndpoint)
     : selectedMode === 'local-endpoint'
@@ -222,6 +250,21 @@ export function MeetingNotePanel({
       });
     return () => { cancelled = true; };
   }, [note.kind, note.sourceIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getLocalTranscriptionConfig()
+      .then(({ config, status, defaults }) => {
+        if (cancelled) return;
+        setLocalConfig(config ?? defaults ?? null);
+        setLocalStatus(status ?? null);
+      })
+      .catch(() => {
+        // Older servers do not expose local ASR status; keep save-only and
+        // local-endpoint modes usable without making the panel fail.
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const startRecording = async () => {
     setError('');
@@ -285,6 +328,61 @@ export function MeetingNotePanel({
     setState('idle');
   };
 
+  const transcriptionRequest = () => selectedMode === 'remote' && remoteEndpoint
+    ? { mode: 'remote' as const, ...remoteEndpoint, language }
+    : selectedMode === 'local-endpoint'
+      ? {
+          mode: 'local-endpoint' as const,
+          baseUrl: transcriptionSettings.localEndpointBaseUrl,
+          model: transcriptionSettings.localEndpointModel,
+          language,
+        }
+      : {
+          mode: 'local-managed' as const,
+          engine: 'whisper.cpp' as const,
+          modelId: transcriptionSettings.modelId,
+          language,
+        };
+
+  const runSavedTranscription = async (captureResult: MeetingCaptureResult) => {
+    setTranscribingSourceId(captureResult.audioSource.id);
+    setNotice('');
+    try {
+      const response = await transcribeNoteMeeting(note.id, {
+        sourceId: captureResult.audioSource.id,
+        transcription: transcriptionRequest(),
+      });
+      let transcriptSource = response.transcriptSource ?? response.source;
+      if (!transcriptSource && response.job?.resultRef?.type === 'source') {
+        transcriptSource = (await getSource(response.job.resultRef.id)).source;
+      }
+      const result: MeetingCaptureResult = {
+        ...captureResult,
+        note: response.note ?? captureResult.note,
+        transcriptSource,
+        text: response.text ?? transcriptSource?.body,
+        transcriptionMode: selectedMode,
+        transcriptionJob: response.job,
+      };
+      if (!transcriptSource) {
+        setNotice(t.queued);
+        return;
+      }
+      setSources((current) => [
+        ...current.filter((item) => item.id !== transcriptSource!.id),
+        transcriptSource!,
+      ]);
+      setNotice(t.transcribed);
+      onNoteUpdated?.(result.note, result);
+      if (result.text) onTranscriptReady?.(result.text, result);
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setNotice(`${t.transcriptionFailed} ${detail}`);
+    } finally {
+      setTranscribingSourceId(null);
+    }
+  };
+
   const saveRecording = async () => {
     if (!audioBlob) {
       setError(t.emptyRecording);
@@ -304,61 +402,23 @@ export function MeetingNotePanel({
         },
         durationSeconds: Math.round(elapsedSeconds),
         language,
-        transcriptionConfig: selectedMode === 'remote' && remoteEndpoint ? remoteEndpoint : undefined,
-        transcription: selectedMode === 'remote' && remoteEndpoint
-          ? { mode: 'remote', ...remoteEndpoint, language }
-          : selectedMode === 'local-endpoint'
-            ? {
-                mode: 'local-endpoint',
-                baseUrl: transcriptionSettings.localEndpointBaseUrl,
-                model: transcriptionSettings.localEndpointModel,
-                language,
-              }
-            : selectedMode === 'local-managed'
-              ? { mode: 'local-managed', engine: 'whisper.cpp', modelId: transcriptionSettings.modelId, language }
-              : { mode: 'save-only' },
+        transcription: { mode: 'save-only' },
       });
-      let result = captureResult;
-      if (selectedMode === 'local-managed' && localModelReady) {
-        try {
-          const localResult = await transcribeNoteMeeting(note.id, {
-            sourceId: captureResult.audioSource.id,
-            transcription: {
-              mode: 'local-managed',
-              engine: 'whisper.cpp',
-              modelId: transcriptionSettings.modelId,
-              language,
-            },
-          });
-          result = {
-            ...captureResult,
-            note: localResult.note ?? captureResult.note,
-            transcriptSource: localResult.source,
-            text: localResult.source?.body,
-            transcriptionMode: 'local-managed',
-            transcriptionJob: localResult.job,
-          };
-        } catch (localError) {
-          result = {
-            ...captureResult,
-            transcriptionError: localError instanceof Error ? localError.message : String(localError),
-          };
-        }
+      setSources((current) => [
+        ...current.filter((item) => item.id !== captureResult.audioSource.id),
+        captureResult.audioSource,
+      ]);
+      onNoteUpdated?.(captureResult.note, captureResult);
+      setAudioBlob(null);
+      setAudioUrl(null);
+      setElapsedSeconds(0);
+      chunksRef.current = [];
+      setState('idle');
+      if (canTranscribe) {
+        await runSavedTranscription(captureResult);
+      } else {
+        setNotice(t.savedOnly);
       }
-      setSources((current) => {
-        const next = [result.audioSource, ...(result.transcriptSource ? [result.transcriptSource] : [])];
-        return [...current.filter((item) => !next.some((added) => added.id === item.id)), ...next];
-      });
-      setNotice(
-        result.transcriptionMode === 'remote' || result.transcriptionMode === 'local-endpoint' || result.transcriptionMode === 'local-managed'
-          ? t.transcribed
-          : result.transcriptionError
-            ? `${t.transcriptionFailed} ${result.transcriptionError}`
-            : result.transcriptionJob ? t.queued : t.savedOnly,
-      );
-      setState('ready');
-      onNoteUpdated?.(result.note, result);
-      if (result.transcriptSource && result.text) onTranscriptReady?.(result.text, result);
     } catch (cause) {
       setError(cause instanceof Error ? `${t.saveFailed}: ${cause.message}` : t.saveFailed);
       setState('ready');
@@ -421,23 +481,6 @@ export function MeetingNotePanel({
           <option value="save-only">{t.modeSaveOnly}</option>
           <option value="local-managed">{t.modeLocal}</option>
         </select>
-        {selectedMode === 'local-managed' && (
-          <select
-            aria-label="Local transcription model"
-            value={transcriptionSettings.modelId}
-            disabled={state === 'saving'}
-            onChange={(event) => {
-              const next = { ...transcriptionSettings, modelId: event.target.value };
-              setTranscriptionSettings(next);
-              saveMeetingTranscriptionSettings(next);
-            }}
-            className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-primary"
-          >
-            <option value="base">whisper.cpp · base</option>
-            <option value="small">whisper.cpp · small</option>
-            <option value="medium">whisper.cpp · medium</option>
-          </select>
-        )}
       </div>
 
       {(selectedMode === 'remote' || selectedMode === 'local-endpoint') && (
@@ -487,6 +530,59 @@ export function MeetingNotePanel({
                 className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
               />
             </label>
+          </div>
+        </details>
+      )}
+
+      {selectedMode === 'local-managed' && localConfig && (
+        <details className="mt-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium text-text-secondary">{t.localConfig}</summary>
+          <div className="mt-2 grid gap-2">
+            <label className="grid gap-1 text-text-muted">
+              <span>{t.executablePath}</span>
+              <input
+                value={localConfig.executablePath}
+                onChange={(event) => setLocalConfig({ ...localConfig, executablePath: event.target.value })}
+                className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-text-primary"
+              />
+            </label>
+            <label className="grid gap-1 text-text-muted">
+              <span>{t.modelPath}</span>
+              <input
+                value={localConfig.modelPath}
+                onChange={(event) => setLocalConfig({ ...localConfig, modelPath: event.target.value })}
+                className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-text-primary"
+              />
+            </label>
+            <label className="grid gap-1 text-text-muted">
+              <span>{t.ffmpegPath}</span>
+              <input
+                value={localConfig.ffmpegPath}
+                onChange={(event) => setLocalConfig({ ...localConfig, ffmpegPath: event.target.value })}
+                className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-text-primary"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={localConfigSaving}
+              onClick={async () => {
+                setLocalConfigSaving(true);
+                setError('');
+                try {
+                  const result = await saveLocalTranscriptionConfig(localConfig);
+                  setLocalConfig(result.config);
+                  setLocalStatus(result.status);
+                  setNotice(result.status.executable && result.status.model && result.status.ffmpeg ? t.localConfigSaved : t.localNotReady);
+                } catch (cause) {
+                  setError(cause instanceof Error ? cause.message : String(cause));
+                } finally {
+                  setLocalConfigSaving(false);
+                }
+              }}
+              className="w-max rounded-md border border-accent/25 bg-accent/5 px-2.5 py-1.5 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+            >
+              {localConfigSaving ? t.saving : t.saveConfig}
+            </button>
           </div>
         </details>
       )}
@@ -565,6 +661,12 @@ export function MeetingNotePanel({
           {notice}
         </p>
       )}
+      {transcribingSourceId && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary" role="status" aria-live="polite">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          {t.backgroundTranscribing}
+        </p>
+      )}
       {error && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600" role="alert">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -590,6 +692,21 @@ export function MeetingNotePanel({
                       className="h-8 min-w-[220px] max-w-full flex-1"
                       aria-label={source.title || `${t.recording} ${index + 1}`}
                     />
+                    {canTranscribe && (
+                      <button
+                        type="button"
+                        disabled={transcribingSourceId === source.id}
+                        onClick={() => void runSavedTranscription({
+                          note,
+                          audioSource: source,
+                          transcriptionMode: 'saved-only',
+                        })}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface disabled:opacity-50"
+                      >
+                        {transcribingSourceId === source.id && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+                        {t.transcribeLater}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
