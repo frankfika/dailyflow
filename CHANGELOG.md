@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Inline note editor** — click the sticky-note button on a selected node to add a longer-form note. The note renders as a side panel beside the node and is exported alongside the headline.
 - **Markdown export** — `Copy Markdown` button in the header writes the visible tree (collapsed subtrees excluded) as a `#`-heading + nested list to the clipboard, with notes emitted as blockquotes.
 - **Multi-line text wrapping** — long node text now wraps inside the card instead of forcing a wide card. The edit input is an auto-growing textarea.
+- **Task status** — each node now has a three-state status (`todo` / `in-progress` / `done`). Click the badge on the left of a node to cycle; the canvas renders a check / dot / empty circle and strikes through the headline once a node is done. Persisted to the same JSON file.
+- **Undo / redo** — `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` (or `Ctrl+Y`) walk a 50-entry history per map. The header has Undo/Redo buttons that disable when the stack is empty. Position-only drags do not pollute the history (they're coalesced by the autosave debounce).
+- **In-map search** — `Ctrl/Cmd+F` opens a search bar that replaces the title; `Enter` / `↓` jumps to the next match, `↑` to the previous, `Esc` closes. Matches get a faint amber ring; the currently focused match gets a solid amber ring and the canvas auto-pans to keep it in view.
 
 ## [1.3.1] - 2026-08-06
 

@@ -31,7 +31,22 @@ export interface MindMapNode {
    * until the node is selected.
    */
   note?: string;
+  /**
+   * Optional task status. Mind maps that decompose work can flip nodes
+   * between `todo` (default), `in-progress`, and `done`. Render-only —
+   * not used by the layout algorithm.
+   */
+  status?: MindMapNodeStatus;
 }
+
+/** Three-state task marker. `todo` is the implicit default. */
+export type MindMapNodeStatus = 'todo' | 'in-progress' | 'done';
+
+export const MINDMAP_NODE_STATUSES: readonly MindMapNodeStatus[] = [
+  'todo',
+  'in-progress',
+  'done',
+] as const;
 
 export interface MindMapEdge {
   id: string;

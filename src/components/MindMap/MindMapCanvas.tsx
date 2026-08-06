@@ -45,6 +45,7 @@ import {
 } from '../../api/client';
 import { collectHiddenDescendants, layoutMindMap } from './layout';
 import { MindMapNode as MindMapNodeView } from './MindMapNode';
+import type { MindMapNodeStatus } from '../../api/client';
 
 interface MindMapCanvasProps {
   map: MindMap;
@@ -58,6 +59,27 @@ interface MindMapCanvasProps {
   }) => void;
   /** Fired when the user wants to re-run auto-layout. */
   onRequestLayout: (positions: Record<string, { x: number; y: number }>) => void;
+  /**
+   * Fired when the user drags a node to a new position. Position-only
+   * changes are routed through this callback so the parent can skip
+   * pushing them onto the undo stack (drags would otherwise flood it).
+   */
+  onPositionsChange?: (positions: Record<string, { x: number; y: number }>) => void;
+  /**
+   * Flat list of node ids that match the current search query. The
+   * canvas highlights these so the user can spot matches at a glance.
+   */
+  searchMatches?: string[];
+  /**
+   * The id of the currently focused search match. The canvas auto-pans
+   * to keep this node in view.
+   */
+  focusedMatchId?: string | null;
+  /**
+   * Fired when the user presses Enter on a match (or arrow keys) so the
+   * parent can move the focus to the next/previous match.
+   */
+  onCycleMatch?: (direction: 1 | -1) => void;
 }
 
 interface InternalNode extends Node {
@@ -73,6 +95,13 @@ function colorIndex(color: MindMapNodeColor | undefined): number {
 function nextColor(current: MindMapNodeColor | undefined): MindMapNodeColor {
   const i = colorIndex(current);
   return MINDMAP_NODE_COLORS[(i + 1) % MINDMAP_NODE_COLORS.length];
+}
+
+const STATUS_CYCLE: MindMapNodeStatus[] = ['todo', 'in-progress', 'done'];
+function nextStatus(current: MindMapNodeStatus | undefined): MindMapNodeStatus {
+  if (!current) return 'in-progress';
+  const i = STATUS_CYCLE.indexOf(current);
+  return STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
 }
 
 function toRfNodes(map: MindMap): InternalNode[] {
@@ -115,6 +144,10 @@ function MindMapCanvasInner({
   language,
   onChange,
   onRequestLayout,
+  onPositionsChange,
+  searchMatches,
+  focusedMatchId,
+  onCycleMatch,
 }: MindMapCanvasProps) {
   // The parent owns the canonical state. We mirror it locally as RF
   // nodes/edges for interaction. Whenever the map prop changes, we resync.
@@ -124,16 +157,38 @@ function MindMapCanvasInner({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteEditingId, setNoteEditingId] = useState<string | null>(null);
 
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter, getNode } = useReactFlow();
+
+  // When the focused search match changes, center the canvas on it so
+  // the user doesn't have to hunt. We use setCenter (a non-animated
+  // re-center) to keep navigation snappy.
+  useEffect(() => {
+    if (!focusedMatchId) return;
+    const node = getNode(focusedMatchId);
+    if (!node) return;
+    const t = setTimeout(() => {
+      try {
+        setCenter(node.position.x + 100, node.position.y + 30, {
+          zoom: 1.0,
+          duration: 200,
+        });
+      } catch {
+        /* getNode may fail before init; ignore. */
+      }
+    }, 30);
+    return () => clearTimeout(t);
+  }, [focusedMatchId, getNode, setCenter]);
 
   // Keep the latest map and onChange in refs so the node data callbacks
   // can close over the freshest values without forcing a decoratedNodes
   // re-memo on every parent render.
   const mapRef = useRef(map);
   const onChangeRef = useRef(onChange);
+  const onPositionsChangeRef = useRef(onPositionsChange);
   useEffect(() => {
     mapRef.current = map;
     onChangeRef.current = onChange;
+    onPositionsChangeRef.current = onPositionsChange;
   });
 
   // Track which prop value produced the current local state so we only
@@ -223,6 +278,8 @@ function MindMapCanvasInner({
             isSelected: n.id === selectedId,
             isEditing: n.id === editingId,
             isNoteEditing: n.id === noteEditingId,
+            isSearchMatch: searchMatches ? searchMatches.includes(n.id) : false,
+            isFocusedMatch: focusedMatchId === n.id,
             hasHiddenChildren: hidden.has(n.id) ||
               // A node "has hidden children" if it has children AND any
               // descendant is hidden. (Simpler: just check edges where
@@ -230,6 +287,7 @@ function MindMapCanvasInner({
               m.edges.some((e) => e.source === n.id && hidden.has(e.target)),
             collapsed: source?.collapsed ?? false,
             note: source?.note ?? '',
+            status: source?.status ?? 'todo',
             onStartEdit: (id: string) => {
               setEditingId(id);
               setNoteEditingId(null);
@@ -343,6 +401,13 @@ function MindMapCanvasInner({
               onChangeRef.current({ nodes: next });
               setNoteEditingId(null);
             },
+            onCycleStatus: (id: string) => {
+              const cur = mapRef.current;
+              const next = cur.nodes.map((nn) =>
+                nn.id === id ? { ...nn, status: nextStatus(nn.status) } : nn,
+              );
+              onChangeRef.current({ nodes: next });
+            },
           },
         };
       });
@@ -350,7 +415,7 @@ function MindMapCanvasInner({
     // Only the visual inputs to the decorator change should re-create the
     // node array. `map` and `onChange` are read via refs, not deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rfNodes, selectedId, editingId, noteEditingId],
+    [rfNodes, selectedId, editingId, noteEditingId, searchMatches, focusedMatchId],
   );
 
   const handleNodesChange = useCallback(
@@ -373,7 +438,16 @@ function MindMapCanvasInner({
         const p = positionById.get(nn.id);
         return p ? { ...nn, position: { x: p.x, y: p.y } } : nn;
       });
-      onChangeRef.current({ nodes: next });
+      // Route position-only changes through a separate callback so the
+      // parent can skip pushing them onto the undo stack — drag commits
+      // would otherwise flood it.
+      if (onPositionsChangeRef.current) {
+        const positions: Record<string, { x: number; y: number }> = {};
+        for (const nn of next) positions[nn.id] = nn.position;
+        onPositionsChangeRef.current(positions);
+      } else {
+        onChangeRef.current({ nodes: next });
+      }
     },
     [],
   );

@@ -3,10 +3,10 @@
  *
  * The node renders a rounded card that matches DailyFlow's "native minimal"
  * surface treatment. The card hosts:
+ *   - a status badge (☐/◐/✓) on the left, clickable to cycle
  *   - the node text (editable when `isEditing` is true)
  *   - a small footer of contextual actions when selected
- *   - a note editor that appears below the card when the node is selected
- *     and has a non-empty note (or the user just clicked the note button)
+ *   - a note editor that appears beside the card when the node is selected
  *
  * Color comes from a named token, not raw hex, so the rest of the app
  * keeps a consistent palette.
@@ -22,8 +22,11 @@ import {
   ChevronDown,
   ChevronRight,
   StickyNote,
+  Circle,
+  CircleDot,
+  CheckCircle2,
 } from 'lucide-react';
-import type { MindMapNodeColor } from '../../api/client';
+import type { MindMapNodeColor, MindMapNodeStatus } from '../../api/client';
 
 export interface MindMapNodeData extends Record<string, unknown> {
   text: string;
@@ -35,6 +38,11 @@ export interface MindMapNodeData extends Record<string, unknown> {
   hasHiddenChildren: boolean;
   collapsed: boolean;
   note: string;
+  status: MindMapNodeStatus;
+  /** True when this node matches the current in-map search query. */
+  isSearchMatch: boolean;
+  /** True when this node is the currently focused search match. */
+  isFocusedMatch: boolean;
   onStartEdit: (id: string) => void;
   onCommitEdit: (id: string, text: string) => void;
   onCancelEdit: () => void;
@@ -45,6 +53,7 @@ export interface MindMapNodeData extends Record<string, unknown> {
   onToggleCollapsed: (id: string) => void;
   onCommitNote: (id: string, note: string) => void;
   onStartNote: (id: string) => void;
+  onCycleStatus: (id: string) => void;
   isNoteEditing: boolean;
 }
 
@@ -177,9 +186,17 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
       data-testid={`mindmap-node-${id}`}
     >
       <div
-        className={`group relative rounded-2xl border backdrop-blur-sm transition-all ${palette.bg} ${palette.border} ${
+        className={`group relative flex items-start gap-2 rounded-2xl border backdrop-blur-sm transition-all ${palette.bg} ${palette.border} ${
           d.isRoot ? ROOT_CARD : CHILD_CARD
-        } ${selected || d.isSelected ? 'ring-2 ring-[var(--color-accent)] shadow-lg' : 'hover:shadow-md'}`}
+        } ${
+          d.isFocusedMatch
+            ? 'ring-2 ring-[var(--color-warning)] shadow-lg'
+            : selected || d.isSelected
+            ? 'ring-2 ring-[var(--color-accent)] shadow-lg'
+            : d.isSearchMatch
+            ? 'ring-1 ring-[var(--color-warning)]/50'
+            : 'hover:shadow-md'
+        }`}
         onDoubleClick={(e) => {
           e.stopPropagation();
           d.onStartEdit(id);
@@ -196,28 +213,65 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
           className={`!h-2 !w-2 !border-0 ${palette.handle}`}
         />
 
-        {d.isEditing ? (
-          <textarea
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            onBlur={commit}
-            onClick={(e) => e.stopPropagation()}
-            rows={1}
-            className={`nodrag w-full resize-none bg-transparent outline-none ${palette.text}`}
-            placeholder={d.isRoot ? '中心主题' : '子主题'}
-          />
-        ) : (
-          <div className={`${palette.text} ${d.isRoot ? 'text-center' : ''}`}>
-            {d.text || <span className="italic text-text-muted">未命名</span>}
-            {(d.note || d.isRoot) && d.note && (
-              <div className="mt-1 text-[10px] font-normal text-text-muted">
-                📝 已添加备注
-              </div>
-            )}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            d.onCycleStatus(id);
+          }}
+          className={`nodrag mt-0.5 shrink-0 rounded p-0.5 transition-colors ${
+            d.status === 'done'
+              ? 'text-[var(--color-success)]'
+              : d.status === 'in-progress'
+              ? 'text-[var(--color-warning)]'
+              : 'text-text-muted/60 hover:text-text-muted'
+          }`}
+          title={
+            d.status === 'done'
+              ? '已完成 — 点击切换'
+              : d.status === 'in-progress'
+              ? '进行中 — 点击切换'
+              : '待办 — 点击切换'
+          }
+          data-testid={`mindmap-status-${id}`}
+        >
+          {d.status === 'done' ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : d.status === 'in-progress' ? (
+            <CircleDot className="h-4 w-4" />
+          ) : (
+            <Circle className="h-4 w-4" />
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          {d.isEditing ? (
+            <textarea
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKeyDown}
+              onBlur={commit}
+              onClick={(e) => e.stopPropagation()}
+              rows={1}
+              className={`nodrag w-full resize-none bg-transparent outline-none ${palette.text}`}
+              placeholder={d.isRoot ? '中心主题' : '子主题'}
+            />
+          ) : (
+            <div
+              className={`${palette.text} ${d.isRoot ? 'text-center' : ''} ${
+                d.status === 'done' ? 'line-through opacity-60' : ''
+              }`}
+            >
+              {d.text || <span className="italic text-text-muted">未命名</span>}
+              {d.note && (
+                <div className="mt-1 text-[10px] font-normal text-text-muted">
+                  📝 已添加备注
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {(selected || d.isSelected) && !d.isEditing && (

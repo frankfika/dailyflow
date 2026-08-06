@@ -968,6 +968,14 @@ export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
   'danger',
 ] as const;
 
+export type MindMapNodeStatus = 'todo' | 'in-progress' | 'done';
+
+export const MINDMAP_NODE_STATUSES: readonly MindMapNodeStatus[] = [
+  'todo',
+  'in-progress',
+  'done',
+] as const;
+
 export interface MindMapNode {
   id: string;
   text: string;
@@ -977,6 +985,8 @@ export interface MindMapNode {
   collapsed?: boolean;
   /** Optional elaboration note shown when the node is selected. */
   note?: string;
+  /** Three-state task marker: `todo` (default), `in-progress`, `done`. */
+  status?: MindMapNodeStatus;
 }
 
 export interface MindMapEdge {
