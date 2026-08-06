@@ -25,6 +25,7 @@
     "@tauri-apps/plugin-shell": "^2.2.0",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@vitejs/plugin-react": "^5.0.4",
+    "@xyflow/react": "^12.11.2",
     "cors": "^2.8.6",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",

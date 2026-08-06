@@ -17,6 +17,7 @@ import feishuRouter from './routes/feishu.js';
 import calendarRouter from './routes/calendar.js';
 import googleCalendarRouter from './routes/googleCalendar.js';
 import dailyRouter from './routes/daily.js';
+import mindmapsRouter from './routes/mindmaps.js';
 import { v2Router } from './routes/v2/index.js';
 
 const app = express();
@@ -78,6 +79,7 @@ app.use('/api/feishu', feishuRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/google-calendar', googleCalendarRouter);
 app.use('/api/daily', dailyRouter);
+app.use('/api/mindmaps', mindmapsRouter);
 app.use('/api/v2', v2Router);
 
 // 健康检查

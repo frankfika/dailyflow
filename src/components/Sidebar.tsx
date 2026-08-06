@@ -15,6 +15,7 @@ import {
   Briefcase,
   Heart,
   PanelLeftClose,
+  Network,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
@@ -74,8 +75,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory';
-  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => void;
+  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap';
+  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -211,7 +212,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => {
+  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -527,6 +528,38 @@ export function Sidebar({
                         className="overflow-hidden whitespace-nowrap"
                       >
                         {language === 'zh' ? '记忆' : 'Memory'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavClick('mindmap')}
+                  data-testid="nav-mindmap"
+                  data-active={activeTab === 'mindmap'}
+                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${
+                    isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    activeTab === 'mindmap'
+                      ? 'bg-accent/10 text-accent font-semibold'
+                      : 'text-text-main hover:bg-black/[0.03]'
+                  }`}
+                  title={isCompact ? (language === 'zh' ? '思维导图' : 'Mind Map') : undefined}
+                  aria-label={language === 'zh' ? '思维导图' : 'Mind Map'}
+                >
+                  <Network className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <AnimatePresence initial={false}>
+                    {!isCompact && (
+                      <motion.span
+                        key="mindmap-label"
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {language === 'zh' ? '思维导图' : 'Mind Map'}
                       </motion.span>
                     )}
                   </AnimatePresence>

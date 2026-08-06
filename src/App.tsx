@@ -24,6 +24,7 @@ import { TodayBacklog } from './components/TodayBacklog';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
+import { MindMapView } from './components/MindMap';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
@@ -89,7 +90,7 @@ export default function App() {
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [showFloatingChat, setShowFloatingChat] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
@@ -1087,7 +1088,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
@@ -1328,6 +1329,20 @@ export default function App() {
                   className="h-full min-h-0 overflow-hidden"
                 >
                   <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
+                </motion.div>
+              ) : activeTab === 'mindmap' ? (
+                <motion.div
+                  key="mindmap"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full min-h-0 overflow-hidden"
+                >
+                  <MindMapView
+                    workspaceId={activeWorkspaceId || 'default'}
+                    language={language}
+                    showToast={showToast}
+                  />
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">

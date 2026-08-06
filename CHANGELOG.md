@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
 - tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
 
+### Added
+
+- **Mind Map workspace** — a new `思维导图` tab with a per-workspace list of mind maps and a pan/zoom canvas (powered by `@xyflow/react`). Auto-laid-out horizontal tree, drag-to-reposition, Tab to add a child, Enter to add a sibling, Backspace to delete, double-click to edit, F2 to edit, color cycle button. Auto-save to `<workspaceRoot>/.dailyflow/mindmaps/<id>.json` (debounced 600ms). 6 named color tokens that match the rest of the design system.
+- Mind map CRUD endpoints: `GET/POST /api/mindmaps`, `GET/PUT/DELETE /api/mindmaps/:id`.
+
 ## [1.3.1] - 2026-08-06
 
 ### Fixed

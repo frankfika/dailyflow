@@ -950,6 +950,108 @@ export const promptsApi = {
   },
 };
 
+/**
+ * Mind map types and API.
+ *
+ * The client treats a mind map as a graph: nodes (with explicit positions)
+ * plus edges. Auto-layout runs in the UI; positions are persisted so the
+ * canvas restores exactly where the user left it.
+ */
+export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warning' | 'danger';
+
+export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
+  'default',
+  'accent',
+  'warm',
+  'success',
+  'warning',
+  'danger',
+] as const;
+
+export interface MindMapNode {
+  id: string;
+  text: string;
+  color?: MindMapNodeColor;
+  position: { x: number; y: number };
+}
+
+export interface MindMapEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface MindMap {
+  id: string;
+  title: string;
+  rootId: string;
+  nodes: MindMapNode[];
+  edges: MindMapEdge[];
+  version: 1;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MindMapInput {
+  title?: string;
+  rootId?: string;
+  nodes?: MindMapNode[];
+  edges?: MindMapEdge[];
+}
+
+export interface MindMapUpdate {
+  title?: string;
+  rootId?: string;
+  nodes?: MindMapNode[];
+  edges?: MindMapEdge[];
+}
+
+/**
+ * 思维导图 API
+ */
+export const mindmapsApi = {
+  async list(): Promise<MindMap[]> {
+    const res = await fetch(`${API_BASE}/mindmaps`);
+    if (!res.ok) throw await httpError(res, 'Failed to list mind maps');
+    return res.json();
+  },
+
+  async get(id: string): Promise<MindMap> {
+    const res = await fetch(`${API_BASE}/mindmaps/${id}`);
+    if (!res.ok) throw await httpError(res, 'Failed to get mind map');
+    return res.json();
+  },
+
+  async create(input: MindMapInput = {}): Promise<MindMap> {
+    const res = await fetch(`${API_BASE}/mindmaps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create mind map');
+    return res.json();
+  },
+
+  async update(id: string, patch: MindMapUpdate): Promise<MindMap> {
+    const res = await fetch(`${API_BASE}/mindmaps/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to update mind map');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/mindmaps/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 404) {
+      throw await httpError(res, 'Failed to delete mind map');
+    }
+  },
+};
+
 export type RecurrenceRule =
   | { type: 'daily' }
   | { type: 'weekly'; weekdays: number[] }
