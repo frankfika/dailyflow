@@ -48,6 +48,7 @@ function slotHeight(): number {
 function buildTree(
   rootId: string,
   edges: MindMapEdge[],
+  nodesById: Map<string, MindMapNode>,
 ): InternalNode | null {
   const childMap = new Map<string, string[]>();
   for (const e of edges) {
@@ -63,6 +64,11 @@ function buildTree(
     visited.add(id);
     const childIds = childMap.get(id) ?? [];
     const children: InternalNode[] = [];
+    // If the node is collapsed, treat it as a leaf — its children still
+    // exist in storage but are not part of the laid-out tree.
+    if (nodesById.get(id)?.collapsed) {
+      return { id, children, parentId, height: 0, y: 0 };
+    }
     for (const c of childIds) {
       const node = visit(c, id);
       if (node) children.push(node);
@@ -139,7 +145,8 @@ export function layoutMindMap(
   let cursorY = 0;
 
   // Primary tree from the chosen root.
-  const primary = buildTree(rootId, edges);
+  const nodesById = new Map<string, MindMapNode>(nodes.map((n) => [n.id, n]));
+  const primary = buildTree(rootId, edges, nodesById);
   if (primary) {
     computeHeights(primary);
     assignY(primary, cursorY);
@@ -161,7 +168,7 @@ export function layoutMindMap(
     if (positions[n.id] || n.id === rootId) continue;
     const hasParent = inMap.has(n.id);
     if (hasParent) continue; // safety: should have been placed by primary
-    const sub = buildTree(n.id, edges);
+    const sub = buildTree(n.id, edges, nodesById);
     if (!sub) continue;
     computeHeights(sub);
     assignY(sub, cursorY);
@@ -203,4 +210,90 @@ export function buildChildrenIndex(edges: MindMapEdge[]): Map<string, string[]> 
     m.set(e.source, list);
   }
   return m;
+}
+
+/**
+ * Collect every node id that is hidden because an ancestor is collapsed.
+ * The canvas uses this to drop both the node and any edge that touches it,
+ * so the user really does see a clean focus view.
+ */
+export function collectHiddenDescendants(
+  nodes: MindMapNode[],
+  edges: MindMapEdge[],
+): Set<string> {
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const children = new Map<string, string[]>();
+  for (const e of edges) {
+    const list = children.get(e.source) ?? [];
+    list.push(e.target);
+    children.set(e.source, list);
+  }
+  const hidden = new Set<string>();
+  const visit = (id: string) => {
+    const kids = children.get(id) ?? [];
+    for (const k of kids) {
+      hidden.add(k);
+      visit(k);
+    }
+  };
+  for (const n of nodes) {
+    if (n.collapsed) visit(n.id);
+  }
+  // Suppress unused-var warning for the lookup; it's reserved for future
+  // symmetric helpers (e.g. "hide if no path to root").
+  void nodesById;
+  return hidden;
+}
+
+/**
+ * Render a mind map as a nested Markdown list.
+ *
+ * Output shape (root gets `#` heading, every other level is a `-` list):
+ *   # <root text>
+ *
+ *   - <child text>
+ *     - <grandchild text>
+ *     - <grandchild text>
+ *       > <note text>
+ *   - <child text>
+ *
+ * Notes attached to a node become a blockquote right after the list item.
+ * If a node is collapsed, its descendants are NOT included — the user
+ * expects export to mirror what they actually see on the canvas.
+ */
+export function toMarkdown(map: { rootId: string; nodes: MindMapNode[]; edges: MindMapEdge[] }): string {
+  const nodesById = new Map(map.nodes.map((n) => [n.id, n]));
+  const children = new Map<string, string[]>();
+  for (const e of map.edges) {
+    const list = children.get(e.source) ?? [];
+    list.push(e.target);
+    children.set(e.source, list);
+  }
+  const root = nodesById.get(map.rootId);
+  if (!root) return '';
+  const lines: string[] = [];
+  lines.push(`# ${root.text || '未命名导图'}`);
+  if (root.note) {
+    for (const ln of root.note.split(/\r?\n/)) lines.push(`> ${ln}`);
+  }
+  lines.push('');
+  const walk = (id: string, depth: number) => {
+    const node = nodesById.get(id);
+    if (!node) return;
+    if (node.collapsed) return; // mirror what the user sees
+    const kids = children.get(id) ?? [];
+    for (const k of kids) {
+      const child = nodesById.get(k);
+      if (!child) continue;
+      lines.push(`${'  '.repeat(depth)}- ${child.text || '未命名'}`);
+      if (child.note) {
+        for (const ln of child.note.split(/\r?\n/)) {
+          lines.push(`${'  '.repeat(depth + 1)}> ${ln}`);
+        }
+      }
+      walk(k, depth + 1);
+    }
+  };
+  walk(map.rootId, 0);
+  return lines.join('\n');
 }

@@ -20,7 +20,8 @@ import {
 } from '../../api/client';
 import { MindMapCanvas } from './MindMapCanvas';
 import { MindMapList } from './MindMapList';
-import { Network } from 'lucide-react';
+import { toMarkdown } from './layout';
+import { Clipboard, Check, Network } from 'lucide-react';
 
 interface MindMapViewProps {
   workspaceId: string;
@@ -42,6 +43,7 @@ export function MindMapView({
   const [isMapLoading, setIsMapLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [didCopyMarkdown, setDidCopyMarkdown] = useState(false);
 
   // Track the latest patch queued for the active map. We coalesce patches
   // within the debounce window so a fast drag produces one save, not 60.
@@ -243,6 +245,26 @@ export function MindMapView({
     [activeMap, handleChange],
   );
 
+  const handleCopyMarkdown = useCallback(async () => {
+    if (!activeMap) return;
+    const md = toMarkdown(activeMap);
+    try {
+      await navigator.clipboard.writeText(md);
+      setDidCopyMarkdown(true);
+      showToast(
+        language === 'zh' ? '已复制为 Markdown' : 'Copied as Markdown',
+        'success',
+      );
+      setTimeout(() => setDidCopyMarkdown(false), 1500);
+    } catch (err) {
+      console.error('[mindmap] clipboard write failed:', err);
+      showToast(
+        language === 'zh' ? '复制失败' : 'Copy failed',
+        'error',
+      );
+    }
+  }, [activeMap, language, showToast]);
+
   const handleCreate = useCallback(async () => {
     try {
       const created = await mindmapsApi.create({ title: '' });
@@ -333,6 +355,25 @@ export function MindMapView({
                 {activeMap.nodes.length} {language === 'zh' ? '节点' : 'nodes'} ·{' '}
                 {activeMap.edges.length} {language === 'zh' ? '连线' : 'edges'}
               </div>
+              <button
+                type="button"
+                onClick={handleCopyMarkdown}
+                className="ml-1 flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-xs font-medium text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+                title={language === 'zh' ? '复制为 Markdown' : 'Copy as Markdown'}
+                data-testid="mindmap-copy-markdown"
+              >
+                {didCopyMarkdown ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    {language === 'zh' ? '已复制' : 'Copied'}
+                  </>
+                ) : (
+                  <>
+                    <Clipboard className="h-3.5 w-3.5" />
+                    {language === 'zh' ? '复制 Markdown' : 'Copy Markdown'}
+                  </>
+                )}
+              </button>
             </header>
             <div className="min-h-0 flex-1">
               <MindMapCanvas

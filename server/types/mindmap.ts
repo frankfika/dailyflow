@@ -19,6 +19,18 @@ export interface MindMapNode {
   color?: MindMapNodeColor;
   /** x/y in canvas coordinates. */
   position: { x: number; y: number };
+  /**
+   * When true, the node's children are hidden in the canvas and the
+   * layout algorithm treats the node as a leaf. Persisted so the user's
+   * focus survives a reload.
+   */
+  collapsed?: boolean;
+  /**
+   * Optional longer-form note attached to the node. Useful for elaborated
+   * thoughts that don't belong in the headline. Hidden in the canvas
+   * until the node is selected.
+   */
+  note?: string;
 }
 
 export interface MindMapEdge {

@@ -973,6 +973,10 @@ export interface MindMapNode {
   text: string;
   color?: MindMapNodeColor;
   position: { x: number; y: number };
+  /** When true, the node's subtree is collapsed in the canvas. */
+  collapsed?: boolean;
+  /** Optional elaboration note shown when the node is selected. */
+  note?: string;
 }
 
 export interface MindMapEdge {

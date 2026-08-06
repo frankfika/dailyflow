@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Mind Map workspace** — a new `思维导图` tab with a per-workspace list of mind maps and a pan/zoom canvas (powered by `@xyflow/react`). Auto-laid-out horizontal tree, drag-to-reposition, Tab to add a child, Enter to add a sibling, Backspace to delete, double-click to edit, F2 to edit, color cycle button. Auto-save to `<workspaceRoot>/.dailyflow/mindmaps/<id>.json` (debounced 600ms). 6 named color tokens that match the rest of the design system.
 - Mind map CRUD endpoints: `GET/POST /api/mindmaps`, `GET/PUT/DELETE /api/mindmaps/:id`.
+- **Subtree collapse / expand** — toggle a node's children with a chevron button; collapsed state persists across reloads. The auto-layout and the canvas both skip hidden descendants.
+- **Inline note editor** — click the sticky-note button on a selected node to add a longer-form note. The note renders as a side panel beside the node and is exported alongside the headline.
+- **Markdown export** — `Copy Markdown` button in the header writes the visible tree (collapsed subtrees excluded) as a `#`-heading + nested list to the clipboard, with notes emitted as blockquotes.
+- **Multi-line text wrapping** — long node text now wraps inside the card instead of forcing a wide card. The edit input is an auto-growing textarea.
 
 ## [1.3.1] - 2026-08-06
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { layoutMindMap, buildChildrenIndex } from './layout';
+import {
+  buildChildrenIndex,
+  collectHiddenDescendants,
+  layoutMindMap,
+  toMarkdown,
+} from './layout';
 import type { MindMapEdge, MindMapNode } from '../../api/client';
 
 function node(id: string, x = 0, y = 0): MindMapNode {
@@ -75,5 +80,101 @@ describe('layoutMindMap', () => {
     const idx = buildChildrenIndex(edges);
     expect(idx.get('r')).toEqual(['a', 'b']);
     expect(idx.get('a')).toEqual(['a1']);
+  });
+});
+
+describe('collectHiddenDescendants', () => {
+  function collapsed(id: string, c: boolean = true): MindMapNode {
+    return { id, text: id, position: { x: 0, y: 0 }, collapsed: c };
+  }
+
+  it('returns empty when no nodes are collapsed', () => {
+    const nodes = [node('r'), node('a'), node('a1')];
+    const edges = [edge('r', 'a'), edge('a', 'a1')];
+    expect(collectHiddenDescendants(nodes, edges).size).toBe(0);
+  });
+
+  it('hides direct children of a collapsed node', () => {
+    const nodes = [collapsed('r', false), collapsed('a'), node('a1')];
+    const edges = [edge('r', 'a'), edge('a', 'a1')];
+    const hidden = collectHiddenDescendants(nodes, edges);
+    // a is the collapsed node itself (not hidden by the helper, since it
+    // is the one the user explicitly chose to collapse).
+    expect(hidden.has('a')).toBe(false);
+    // a1 is a descendant — it should be hidden.
+    expect(hidden.has('a1')).toBe(true);
+  });
+
+  it('does not hide the collapsed node itself (only its descendants)', () => {
+    const nodes = [collapsed('r', false), collapsed('a'), node('a1')];
+    const edges = [edge('r', 'a'), edge('a', 'a1')];
+    const hidden = collectHiddenDescendants(nodes, edges);
+    expect(hidden.has('r')).toBe(false);
+  });
+});
+
+describe('layoutMindMap with collapsed', () => {
+  it('treats a collapsed node as a leaf in the layout', () => {
+    const nodes: MindMapNode[] = [
+      node('r'),
+      { id: 'a', text: 'a', position: { x: 0, y: 0 }, collapsed: true },
+      node('a1'),
+      node('a2'),
+    ];
+    const edges: MindMapEdge[] = [
+      edge('r', 'a'),
+      edge('a', 'a1'),
+      edge('a', 'a2'),
+    ];
+    const { positions } = layoutMindMap('r', nodes, edges);
+    // a1 and a2 should not be placed by the layout (they are hidden descendants).
+    expect(positions['a1']).toBeUndefined();
+    expect(positions['a2']).toBeUndefined();
+    // a is still placed as a single-child of r.
+    expect(positions['a']).toBeDefined();
+  });
+});
+
+describe('toMarkdown', () => {
+  it('emits a heading for the root and nested lists for descendants', () => {
+    const map = {
+      rootId: 'r',
+      nodes: [node('r'), node('a'), node('a1'), node('b')],
+      edges: [edge('r', 'a'), edge('a', 'a1'), edge('r', 'b')],
+    };
+    const md = toMarkdown(map);
+    expect(md).toMatch(/^# r/);
+    expect(md).toMatch(/^- a/m);
+    expect(md).toMatch(/^  - a1/m);
+    expect(md).toMatch(/^- b/m);
+  });
+
+  it('appends a blockquote when a node has a note', () => {
+    const map = {
+      rootId: 'r',
+      nodes: [
+        { ...node('r'), note: 'top thought' },
+        node('a'),
+      ],
+      edges: [edge('r', 'a')],
+    };
+    const md = toMarkdown(map);
+    expect(md).toMatch(/^# r/m);
+    expect(md).toMatch(/^> top thought/m);
+  });
+
+  it('skips collapsed subtrees (mirrors what the user sees)', () => {
+    const map = {
+      rootId: 'r',
+      nodes: [
+        node('r'),
+        { ...node('a'), collapsed: true },
+        node('a1'),
+      ],
+      edges: [edge('r', 'a'), edge('a', 'a1')],
+    };
+    const md = toMarkdown(map);
+    expect(md).toMatch(/^- a/m);
+    expect(md).not.toMatch(/a1/);
   });
 });

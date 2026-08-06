@@ -43,7 +43,7 @@ import {
   type MindMapNode,
   type MindMapNodeColor,
 } from '../../api/client';
-import { layoutMindMap } from './layout';
+import { collectHiddenDescendants, layoutMindMap } from './layout';
 import { MindMapNode as MindMapNodeView } from './MindMapNode';
 
 interface MindMapCanvasProps {
@@ -76,29 +76,38 @@ function nextColor(current: MindMapNodeColor | undefined): MindMapNodeColor {
 }
 
 function toRfNodes(map: MindMap): InternalNode[] {
-  return map.nodes.map((n) => ({
-    id: n.id,
-    type: 'mindmap',
-    position: n.position,
-    data: {
-      text: n.text,
-      color: n.color ?? 'default',
-      isRoot: n.id === map.rootId,
-    },
-    draggable: true,
-    selectable: true,
-  }));
+  // Hide any node whose ancestor is collapsed — the user explicitly asked
+  // for a focus view.
+  const hidden = collectHiddenDescendants(map.nodes, map.edges);
+  return map.nodes
+    .filter((n) => !hidden.has(n.id))
+    .map((n) => ({
+      id: n.id,
+      type: 'mindmap',
+      position: n.position,
+      data: {
+        text: n.text,
+        color: n.color ?? 'default',
+        isRoot: n.id === map.rootId,
+      },
+      draggable: true,
+      selectable: true,
+    }));
 }
 
 function toRfEdges(map: MindMap): Edge[] {
-  return map.edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: 'straight',
-    style: { stroke: 'rgba(0,0,0,0.22)', strokeWidth: 1.25 },
-    animated: false,
-  }));
+  // Hide edges that target a hidden descendant of a collapsed ancestor.
+  const hidden = collectHiddenDescendants(map.nodes, map.edges);
+  return map.edges
+    .filter((e) => !hidden.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: 'straight',
+      style: { stroke: 'rgba(0,0,0,0.22)', strokeWidth: 1.25 },
+      animated: false,
+    }));
 }
 
 function MindMapCanvasInner({
@@ -113,6 +122,7 @@ function MindMapCanvasInner({
   const [rfEdges, setRfEdges] = useState<Edge[]>(() => toRfEdges(map));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [noteEditingId, setNoteEditingId] = useState<string | null>(null);
 
   const { fitView } = useReactFlow();
 
@@ -132,22 +142,32 @@ function MindMapCanvasInner({
   const lastSyncedTitle = useRef<string>('');
   const lastSyncedNodeIds = useRef<string>('');
   const lastSyncedEdgeIds = useRef<string>('');
+  // Fingerprint of the per-node visual fields (text / color / collapsed /
+  // note) so we re-mirror when the user changes them without otherwise
+  // touching topology.
+  const lastSyncedVisual = useRef<string>('');
 
   useEffect(() => {
     const nodeIds = map.nodes.map((n) => n.id).join(',');
     const edgeIds = map.edges.map((e) => e.id).join(',');
+    const visual = map.nodes
+      .map((n) => `${n.id}:${n.text.length}:${n.color ?? ''}:${n.collapsed ? 1 : 0}:${(n.note ?? '').length}`)
+      .join('|');
     const isNewMap = lastSyncedMapId.current !== map.id || lastSyncedTitle.current !== map.title;
     const topologyChanged = nodeIds !== lastSyncedNodeIds.current || edgeIds !== lastSyncedEdgeIds.current;
+    const visualChanged = visual !== lastSyncedVisual.current;
 
     if (isNewMap) {
       setRfNodes(toRfNodes(map));
       setRfEdges(toRfEdges(map));
       setSelectedId(null);
       setEditingId(null);
+      setNoteEditingId(null);
       lastSyncedMapId.current = map.id;
       lastSyncedTitle.current = map.title;
       lastSyncedNodeIds.current = nodeIds;
       lastSyncedEdgeIds.current = edgeIds;
+      lastSyncedVisual.current = visual;
       const t = setTimeout(() => {
         try {
           fitView({ padding: 0.25, maxZoom: 1.2, minZoom: 0.2, duration: 300 });
@@ -158,11 +178,25 @@ function MindMapCanvasInner({
       return () => clearTimeout(t);
     }
 
-    if (topologyChanged) {
+    if (topologyChanged || visualChanged) {
       setRfNodes(toRfNodes(map));
       setRfEdges(toRfEdges(map));
       lastSyncedNodeIds.current = nodeIds;
       lastSyncedEdgeIds.current = edgeIds;
+      lastSyncedVisual.current = visual;
+      // Re-fit the viewport when the visible tree shape changes (nodes
+      // added/removed, collapse toggled). Visual-only changes (text,
+      // color) leave the bounding box alone so we skip the re-fit.
+      if (topologyChanged) {
+        const t = setTimeout(() => {
+          try {
+            fitView({ padding: 0.25, maxZoom: 1.2, minZoom: 0.2, duration: 250 });
+          } catch {
+            /* fitView may fail before the provider is mounted; ignore. */
+          }
+        }, 50);
+        return () => clearTimeout(t);
+      }
     }
   }, [map, fitView]);
 
@@ -172,102 +206,151 @@ function MindMapCanvasInner({
   // create a new node array on every parent render and feed React Flow's
   // internal store a churn that escalates into an update loop.
   const decoratedNodes = useMemo<InternalNode[]>(
-    () =>
-      rfNodes.map((n) => ({
-        ...n,
-        selected: n.id === selectedId,
-        data: {
-          ...n.data,
-          isSelected: n.id === selectedId,
-          isEditing: n.id === editingId,
-          onStartEdit: (id: string) => setEditingId(id),
-          onCommitEdit: (id: string, text: string) => {
-            const m = mapRef.current;
-            const next = m.nodes.map((nn) => (nn.id === id ? { ...nn, text } : nn));
-            onChangeRef.current({ nodes: next });
-            setEditingId(null);
-          },
-          onCancelEdit: () => setEditingId(null),
-          onAddChild: (id: string) => {
-            const m = mapRef.current;
-            const childId = ulid();
-            const edgeId = ulid();
-            const child: MindMapNode = {
-              id: childId,
-              text: '子主题',
-              color: 'default',
-              position: { x: 0, y: 0 },
-            };
-            const edge: MindMapEdge = {
-              id: edgeId,
-              source: id,
-              target: childId,
-            };
-            const { positions } = layoutMindMap(m.rootId, [...m.nodes, child], [...m.edges, edge]);
-            const next = [...m.nodes, child].map((nn) =>
-              nn.id in positions ? { ...nn, position: positions[nn.id] } : nn,
-            );
-            onChangeRef.current({ nodes: next, edges: [...m.edges, edge] });
-            setSelectedId(childId);
-            setEditingId(childId);
-          },
-          onAddSibling: (id: string) => {
-            const m = mapRef.current;
-            const parent = m.edges.find((e) => e.target === id);
-            if (!parent) return;
-            const childId = ulid();
-            const edgeId = ulid();
-            const child: MindMapNode = {
-              id: childId,
-              text: '子主题',
-              color: 'default',
-              position: { x: 0, y: 0 },
-            };
-            const edge: MindMapEdge = {
-              id: edgeId,
-              source: parent.source,
-              target: childId,
-            };
-            const { positions } = layoutMindMap(m.rootId, [...m.nodes, child], [...m.edges, edge]);
-            const next = [...m.nodes, child].map((nn) =>
-              nn.id in positions ? { ...nn, position: positions[nn.id] } : nn,
-            );
-            onChangeRef.current({ nodes: next, edges: [...m.edges, edge] });
-            setSelectedId(childId);
-            setEditingId(childId);
-          },
-          onDelete: (id: string) => {
-            const m = mapRef.current;
-            if (id === m.rootId) return;
-            const toRemove = new Set<string>([id]);
-            let added = true;
-            while (added) {
-              added = false;
-              for (const e of m.edges) {
-                if (toRemove.has(e.source) && !toRemove.has(e.target)) {
-                  toRemove.add(e.target);
-                  added = true;
+    () => {
+      const m = mapRef.current;
+      const hidden = collectHiddenDescendants(m.nodes, m.edges);
+      return rfNodes.map((n) => {
+        const source = m.nodes.find((nn) => nn.id === n.id);
+        const isHiddenChild = !!source && hidden.has(source.id);
+        // isHiddenChild should never happen because toRfNodes already
+        // filtered those, but the type-narrow keeps the predicate readable.
+        void isHiddenChild;
+        return {
+          ...n,
+          selected: n.id === selectedId,
+          data: {
+            ...n.data,
+            isSelected: n.id === selectedId,
+            isEditing: n.id === editingId,
+            isNoteEditing: n.id === noteEditingId,
+            hasHiddenChildren: hidden.has(n.id) ||
+              // A node "has hidden children" if it has children AND any
+              // descendant is hidden. (Simpler: just check edges where
+              // the target is hidden.)
+              m.edges.some((e) => e.source === n.id && hidden.has(e.target)),
+            collapsed: source?.collapsed ?? false,
+            note: source?.note ?? '',
+            onStartEdit: (id: string) => {
+              setEditingId(id);
+              setNoteEditingId(null);
+            },
+            onCommitEdit: (id: string, text: string) => {
+              const cur = mapRef.current;
+              const next = cur.nodes.map((nn) => (nn.id === id ? { ...nn, text } : nn));
+              onChangeRef.current({ nodes: next });
+              setEditingId(null);
+            },
+            onCancelEdit: () => setEditingId(null),
+            onAddChild: (id: string) => {
+              const cur = mapRef.current;
+              const childId = ulid();
+              const edgeId = ulid();
+              const child: MindMapNode = {
+                id: childId,
+                text: '子主题',
+                color: 'default',
+                position: { x: 0, y: 0 },
+              };
+              const edge: MindMapEdge = {
+                id: edgeId,
+                source: id,
+                target: childId,
+              };
+              const { positions } = layoutMindMap(cur.rootId, [...cur.nodes, child], [...cur.edges, edge]);
+              const next = [...cur.nodes, child].map((nn) =>
+                nn.id in positions ? { ...nn, position: positions[nn.id] } : nn,
+              );
+              onChangeRef.current({ nodes: next, edges: [...cur.edges, edge] });
+              setSelectedId(childId);
+              setEditingId(childId);
+              setNoteEditingId(null);
+            },
+            onAddSibling: (id: string) => {
+              const cur = mapRef.current;
+              const parent = cur.edges.find((e) => e.target === id);
+              if (!parent) return;
+              const childId = ulid();
+              const edgeId = ulid();
+              const child: MindMapNode = {
+                id: childId,
+                text: '子主题',
+                color: 'default',
+                position: { x: 0, y: 0 },
+              };
+              const edge: MindMapEdge = {
+                id: edgeId,
+                source: parent.source,
+                target: childId,
+              };
+              const { positions } = layoutMindMap(cur.rootId, [...cur.nodes, child], [...cur.edges, edge]);
+              const next = [...cur.nodes, child].map((nn) =>
+                nn.id in positions ? { ...nn, position: positions[nn.id] } : nn,
+              );
+              onChangeRef.current({ nodes: next, edges: [...cur.edges, edge] });
+              setSelectedId(childId);
+              setEditingId(childId);
+              setNoteEditingId(null);
+            },
+            onDelete: (id: string) => {
+              const cur = mapRef.current;
+              if (id === cur.rootId) return;
+              const toRemove = new Set<string>([id]);
+              let added = true;
+              while (added) {
+                added = false;
+                for (const e of cur.edges) {
+                  if (toRemove.has(e.source) && !toRemove.has(e.target)) {
+                    toRemove.add(e.target);
+                    added = true;
+                  }
                 }
               }
-            }
-            onChangeRef.current({
-              nodes: m.nodes.filter((nn) => !toRemove.has(nn.id)),
-              edges: m.edges.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target)),
-            });
+              onChangeRef.current({
+                nodes: cur.nodes.filter((nn) => !toRemove.has(nn.id)),
+                edges: cur.edges.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target)),
+              });
+            },
+            onCycleColor: (id: string) => {
+              const cur = mapRef.current;
+              const next = cur.nodes.map((nn) =>
+                nn.id === id ? { ...nn, color: nextColor(nn.color) } : nn,
+              );
+              onChangeRef.current({ nodes: next });
+            },
+            onToggleCollapsed: (id: string) => {
+              const cur = mapRef.current;
+              const target = cur.nodes.find((nn) => nn.id === id);
+              if (!target) return;
+              const newCollapsed = !target.collapsed;
+              const nextNodes = cur.nodes.map((nn) =>
+                nn.id === id ? { ...nn, collapsed: newCollapsed } : nn,
+              );
+              // After toggling, re-run the layout so the rest of the tree
+              // shifts up to fill the space (or to make space).
+              const { positions } = layoutMindMap(cur.rootId, nextNodes, cur.edges);
+              const positioned = nextNodes.map((nn) =>
+                positions[nn.id] ? { ...nn, position: positions[nn.id] } : nn,
+              );
+              onChangeRef.current({ nodes: positioned });
+            },
+            onStartNote: (id: string) => {
+              setNoteEditingId(id);
+              setEditingId(null);
+            },
+            onCommitNote: (id: string, note: string) => {
+              const cur = mapRef.current;
+              const next = cur.nodes.map((nn) => (nn.id === id ? { ...nn, note } : nn));
+              onChangeRef.current({ nodes: next });
+              setNoteEditingId(null);
+            },
           },
-          onCycleColor: (id: string) => {
-            const m = mapRef.current;
-            const next = m.nodes.map((nn) =>
-              nn.id === id ? { ...nn, color: nextColor(nn.color) } : nn,
-            );
-            onChangeRef.current({ nodes: next });
-          },
-        },
-      })),
+        };
+      });
+    },
     // Only the visual inputs to the decorator change should re-create the
     // node array. `map` and `onChange` are read via refs, not deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rfNodes, selectedId, editingId],
+    [rfNodes, selectedId, editingId, noteEditingId],
   );
 
   const handleNodesChange = useCallback(
@@ -298,11 +381,13 @@ function MindMapCanvasInner({
   const handleNodeClick: NodeMouseHandler = useCallback((_e, node) => {
     setSelectedId(node.id);
     setEditingId(null);
+    setNoteEditingId(null);
   }, []);
 
   const handlePaneClick = useCallback(() => {
     setSelectedId(null);
     setEditingId(null);
+    setNoteEditingId(null);
   }, []);
 
   // Keyboard shortcuts — listen at the window level (capture phase) so we
