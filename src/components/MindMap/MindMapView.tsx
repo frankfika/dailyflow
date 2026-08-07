@@ -17,10 +17,18 @@ import {
   type MindMap,
   type MindMapEdge,
   type MindMapNode,
+  type MindMapNodeKind,
 } from '../../api/client';
 import { MindMapCanvas } from './MindMapCanvas';
 import { MindMapList } from './MindMapList';
-import { toMarkdown } from './layout';
+import { layoutMindMap, toMarkdown } from './layout';
+import { MINDMAP_TEMPLATES } from './templates';
+import { NodeContextMenu, type NodeContextMenuTaskOption } from './NodeContextMenu';
+import {
+  useLinkNodeToTask,
+  usePromoteNodeToTask,
+  useUpdateNodeKind,
+} from '../../hooks/useMindMapActions';
 import {
   Clipboard,
   Check,
@@ -29,12 +37,59 @@ import {
   Redo2,
   Search,
   X as CloseIcon,
+  Download,
+  Upload,
+  CheckCircle2,
+  ListChecks,
 } from 'lucide-react';
 
 interface MindMapViewProps {
   workspaceId: string;
   language: 'en' | 'zh';
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+  // Topic Space v2 (Phase 1): the parent owns the active space selection.
+  //  - null → "全部" — aggregate all maps in the workspace.
+  //  - '__unclassified__' — only maps with no `spaceId` (legacy / orphan).
+  //  - any other id — try to scope to that space's `mindmapId`; if the
+  //    space's mindmap isn't in the loaded list yet, fetch it.
+  activeSpaceId?: string | null | '__unclassified__';
+  /**
+   * Optional: the loaded topic spaces, used to resolve
+   * `activeSpaceId === '<space id>'` to a `mindmapId`. When omitted we
+   * still honor the `'__unclassified__'` filter; the `null` filter always
+   * works without any extra data.
+   */
+  topicSpaces?: ReadonlyArray<{ id: string; mindmapId?: string }>;
+  /**
+   * Phase 2: the currently active context (work / life). Used as the
+   * default for newly-promoted tasks and to scope the "link" picker.
+   * Falls back to 'work' when the parent doesn't provide one.
+   */
+  activeContext?: 'work' | 'life';
+  /**
+   * Phase 2: today's date (YYYY-MM-DD) in the user's local time. Used
+   * as the default `source_date` when promoting a node. The parent owns
+   * the clock; we never read `new Date()` inside this view.
+   */
+  todayDate?: string;
+  /**
+   * Phase 2: tasks the user can link to from the context menu. Usually
+   * the same set TodayView uses, but the parent decides what to show
+   * (e.g. "all tasks" vs "tasks in this space"). Pass an empty array
+   * to disable the link picker.
+   */
+  linkableTasks?: ReadonlyArray<{
+    id: string;
+    title: string;
+    status: 'todo' | 'done' | 'migrated';
+    date: string;
+  }>;
+  /**
+   * Phase 2: open a task in TodayView. The canvas forwards the click
+   * via this callback; the parent decides how to navigate (Today tab +
+   * date). Required to enable the "Open task" link on kind: 'task' nodes.
+   */
+  onOpenTask?: (taskId: string, date: string) => void;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
@@ -43,6 +98,12 @@ export function MindMapView({
   workspaceId,
   language,
   showToast,
+  activeSpaceId = null,
+  topicSpaces,
+  activeContext = 'work',
+  todayDate,
+  linkableTasks = [],
+  onOpenTask,
 }: MindMapViewProps) {
   const [maps, setMaps] = useState<MindMap[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -52,6 +113,176 @@ export function MindMapView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [didCopyMarkdown, setDidCopyMarkdown] = useState(false);
+
+  // Phase 2: right-click context menu state. We keep the node id and
+  // cursor coords here so the menu can position itself outside the
+  // canvas. The menu handles its own close on outside click / Escape.
+  const [contextMenu, setContextMenu] = useState<{
+    nodeId: string;
+    kind: MindMapNodeKind;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  // Phase 2: the date the active mind map was "born" on. We use it as
+  // the default `source_date` when promoting a node to a task. Falls
+  // back to `todayDate` (also a parent prop) and then to whatever the
+  // server accepts as "today".
+  const activeMapSourceDate = useMemo(() => {
+    if (!activeMap) return todayDate;
+    // Maps created from the topic-space flow have a fresh `createdAt`;
+    // the server's `promote-to-task` endpoint accepts an explicit
+    // `date` and we send the local clock when the parent didn't pass
+    // one in.
+    return todayDate;
+  }, [activeMap, todayDate]);
+
+  // Phase 2: tanstack-query mutations for the right-click actions. We
+  // keep them inside the view so the onSuccess handlers can update
+  // local map state (no extra round-trip).
+  const promoteMut = usePromoteNodeToTask();
+  const linkMut = useLinkNodeToTask();
+  const setKindMut = useUpdateNodeKind();
+
+  const handleContextMenu = useCallback(
+    (nodeId: string, position: { x: number; y: number }) => {
+      if (!activeMap) return;
+      const target = activeMap.nodes.find((n) => n.id === nodeId);
+      if (!target) return;
+      setContextMenu({
+        nodeId,
+        kind: target.kind ?? (target.id === activeMap.rootId ? 'root' : 'branch'),
+        position,
+      });
+    },
+    [activeMap],
+  );
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handlePromoteNode = useCallback(() => {
+    if (!activeMap || !contextMenu) return;
+    if (!activeMapSourceDate) {
+      showToast(
+        language === 'zh'
+          ? '需要先知道今天的日期才能转为待办'
+          : 'Need today\'s date to promote a node',
+        'error',
+      );
+      return;
+    }
+    promoteMut.mutate(
+      {
+        mapId: activeMap.id,
+        nodeId: contextMenu.nodeId,
+        date: activeMapSourceDate,
+        context: activeContext,
+      },
+      {
+        onSuccess: (updated) => {
+          setActiveMap(updated);
+          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
+          showToast(
+            language === 'zh' ? '已转为待办' : 'Promoted to task',
+            'success',
+          );
+        },
+        onError: () => {
+          showToast(
+            language === 'zh' ? '转为待办失败' : 'Failed to promote',
+            'error',
+          );
+        },
+      },
+    );
+  }, [
+    activeMap,
+    contextMenu,
+    activeMapSourceDate,
+    activeContext,
+    promoteMut,
+    showToast,
+    language,
+  ]);
+
+  const handleLinkNodeToTask = useCallback(
+    (taskId: string, date: string) => {
+      if (!activeMap || !contextMenu) return;
+      linkMut.mutate(
+        {
+          mapId: activeMap.id,
+          nodeId: contextMenu.nodeId,
+          taskId,
+          date,
+        },
+        {
+          onSuccess: (updated) => {
+            setActiveMap(updated);
+            setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
+            showToast(
+              language === 'zh' ? '已关联到 Task' : 'Linked to task',
+              'success',
+            );
+          },
+          onError: () => {
+            showToast(
+              language === 'zh' ? '关联失败' : 'Failed to link',
+              'error',
+            );
+          },
+        },
+      );
+    },
+    [activeMap, contextMenu, linkMut, showToast, language],
+  );
+
+  const handleSetNodeTag = useCallback(() => {
+    if (!activeMap || !contextMenu) return;
+    const target = activeMap.nodes.find((n) => n.id === contextMenu.nodeId);
+    if (!target) return;
+    setKindMut.mutate(
+      {
+        mapId: activeMap.id,
+        nodeId: contextMenu.nodeId,
+        kind: 'tag',
+        tag: target.text,
+      },
+      {
+        onSuccess: (updated) => {
+          setActiveMap(updated);
+          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
+        },
+        onError: () => {
+          showToast(
+            language === 'zh' ? '标记 Tag 失败' : 'Failed to mark as tag',
+            'error',
+          );
+        },
+      },
+    );
+  }, [activeMap, contextMenu, setKindMut, showToast, language]);
+
+  const handleUnclassifyNode = useCallback(() => {
+    if (!activeMap || !contextMenu) return;
+    setKindMut.mutate(
+      {
+        mapId: activeMap.id,
+        nodeId: contextMenu.nodeId,
+        kind: 'branch',
+      },
+      {
+        onSuccess: (updated) => {
+          setActiveMap(updated);
+          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
+        },
+        onError: () => {
+          showToast(
+            language === 'zh' ? '取消分类失败' : 'Failed to unclassify',
+            'error',
+          );
+        },
+      },
+    );
+  }, [activeMap, contextMenu, setKindMut, showToast, language]);
 
   // Undo / redo — we keep two stacks keyed by map id so switching maps
   // doesn't lose history. Coalesce rapid changes (typing, dragging)
@@ -65,6 +296,14 @@ export function MindMapView({
   const [, forceHistoryTick] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-layout and the manual "Re-layout" button both call fitView()
+  // once the new positions land in the canvas. We bump this counter as
+  // the signal so the canvas can distinguish a layout pass (re-fit) from
+  // a position drag (don't re-fit, the user is already looking at the
+  // result of their drag).
+  const [reLayoutVersion, setReLayoutVersion] = useState(0);
 
   // Track the latest patch queued for the active map. We coalesce patches
   // within the debounce window so a fast drag produces one save, not 60.
@@ -116,6 +355,44 @@ export function MindMapView({
     // workspaceId change is the trigger; refreshList identity is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
+
+  // Topic Space v2 (Phase 1): filter the visible map list based on the
+  // parent's `activeSpaceId`. We keep the full list loaded so the user
+  // can hop back to "全部" without a refetch.
+  const visibleMaps = useMemo(() => {
+    if (activeSpaceId === null || activeSpaceId === undefined) {
+      return maps;
+    }
+    if (activeSpaceId === '__unclassified__') {
+      // Legacy / orphan: no `spaceId` means the map predates the
+      // topic-space world, or it was created without a space.
+      return maps.filter((m) => !m.spaceId);
+    }
+    // A specific space: scope to that space's `mindmapId`. If the
+    // parent passed in `topicSpaces`, look it up; otherwise show all
+    // maps that match by id (best-effort) and let the user click.
+    const space = topicSpaces?.find((s) => s.id === activeSpaceId);
+    if (space?.mindmapId) {
+      return maps.filter((m) => m.id === space.mindmapId);
+    }
+    // Fall back: filter to maps whose `spaceId` matches even without
+    // a topicSpaces reference. This lets the legacy / standalone
+    // MindMap view still work when a parent doesn't pass spaces.
+    return maps.filter((m) => m.spaceId === activeSpaceId);
+  }, [maps, activeSpaceId, topicSpaces]);
+
+  // Topic Space v2: when the active space changes, switch the active
+  // mind map to match. We only do this for "concrete" space selections
+  // (not null, not the unclassified bucket) so the user keeps manual
+  // control over the aggregate / legacy views.
+  useEffect(() => {
+    if (!activeSpaceId || activeSpaceId === '__unclassified__') return;
+    const space = topicSpaces?.find((s) => s.id === activeSpaceId);
+    if (space?.mindmapId && space.mindmapId !== activeId) {
+      setActiveId(space.mindmapId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSpaceId, topicSpaces]);
 
   // Fetch the active map whenever activeId changes.
   useEffect(() => {
@@ -273,6 +550,42 @@ export function MindMapView({
     [activeMap, pushHistory, scheduleSave],
   );
 
+  // When a new map is created (e.g. from a template) the nodes often
+  // share the same default position (0, 0), which means they all stack
+  // on top of each other in the canvas. Run the auto-layout once to
+  // spread them out, then persist. We only do this when the map looks
+  // "fresh" (root + at least one child, but every node still at the
+  // origin), so a deliberately positioned map (e.g. one the user has
+  // dragged into shape) is never silently re-laid-out.
+  const lastAutoLaidMapId = useRef<string>('');
+  useEffect(() => {
+    if (!activeMap) return;
+    if (lastAutoLaidMapId.current === activeMap.id) return;
+    if (activeMap.nodes.length < 2) return;
+    const allAtOrigin = activeMap.nodes.every(
+      (n) => n.position.x === 0 && n.position.y === 0,
+    );
+    if (!allAtOrigin) return;
+    lastAutoLaidMapId.current = activeMap.id;
+    // Defer the layout one frame so the canvas mounts first; otherwise
+    // React Flow's bounds computation can be off by a few pixels.
+    const t = setTimeout(() => {
+      const m = activeMap;
+      const { positions } = layoutMindMap(m.rootId, m.nodes, m.edges);
+      const nextNodes = m.nodes.map((n) =>
+        positions[n.id] ? { ...n, position: positions[n.id] } : n,
+      );
+      setActiveMap({ ...m, nodes: nextNodes });
+      setMaps((current) =>
+        current.map((mm) => (mm.id === m.id ? { ...mm, nodes: nextNodes } : mm)),
+      );
+      scheduleSave(m.id, { nodes: nextNodes });
+      // Tell the canvas a re-fit is coming once the resync effect lands.
+      setReLayoutVersion((v) => v + 1);
+    }, 30);
+    return () => clearTimeout(t);
+  }, [activeMap, scheduleSave]);
+
   const handleChange = useCallback(
     (patch: {
       title?: string;
@@ -338,9 +651,77 @@ export function MindMapView({
         positions[n.id] ? { ...n, position: positions[n.id] } : n,
       );
       handleChange({ nodes: nextNodes });
+      setReLayoutVersion((v) => v + 1);
     },
     [activeMap, handleChange],
   );
+
+  // Progress stats: how many leaf-task nodes (i.e. everything except the
+  // root) are completed. We show this in the header so the user can see
+  // overall progress at a glance.
+  const progress = useMemo(() => {
+    if (!activeMap) return { done: 0, total: 0 };
+    let done = 0;
+    let total = 0;
+    for (const n of activeMap.nodes) {
+      if (n.id === activeMap.rootId) continue;
+      total += 1;
+      if (n.status === 'done') done += 1;
+    }
+    return { done, total };
+  }, [activeMap]);
+
+  // Phase 2: task mirror. Whenever the `linkableTasks` list changes
+  // (the parent refetched tasks, the user promoted a new node, the
+  // task title was edited in TodayView), we look at each `kind: 'task'`
+  // node and sync the visual:
+  //   - status 'done' → node.status = 'done'
+  //   - title changed → node.text = task.title (one-way, last writer wins)
+  // The "Open task" link also needs the source date so the canvas can
+  // decide whether to show the button; we build a per-node lookup and
+  // hand it to the canvas.
+  const { taskSourceDateByNodeId } = useMemo(() => {
+    if (!activeMap || linkableTasks.length === 0) {
+      return { taskSourceDateByNodeId: {} as Record<string, string> };
+    }
+    const lookup: Record<string, string> = {};
+    for (const t of linkableTasks) {
+      lookup[t.id] = t.date;
+    }
+    return { taskSourceDateByNodeId: lookup };
+  }, [activeMap, linkableTasks]);
+
+  // Apply the mirror only when the diff is real (avoid loops). We do
+  // the diff in render so a quick text edit in TodayView shows up on
+  // the next map render — the user doesn't have to refresh.
+  useEffect(() => {
+    if (!activeMap || linkableTasks.length === 0) return;
+    let dirty = false;
+    const nextNodes = activeMap.nodes.map((n) => {
+      if (n.kind !== 'task' || !n.taskId) return n;
+      // Find the source task. We only know the date via the lookup; the
+      // task itself must be fetched per-date. If we don't have it, we
+      // leave the node alone (it'll be re-evaluated on the next
+      // refetch).
+      const task = linkableTasks.find((t) => t.id === n.taskId);
+      if (!task) return n;
+      const mirroredStatus: MindMapNode['status'] =
+        task.status === 'done' ? 'done' : 'todo';
+      const textChanged = task.title && task.title !== n.text;
+      const statusChanged = (n.status ?? 'todo') !== mirroredStatus;
+      if (!textChanged && !statusChanged) return n;
+      dirty = true;
+      return { ...n, text: task.title || n.text, status: mirroredStatus };
+    });
+    if (!dirty) return;
+    const next: MindMap = { ...activeMap, nodes: nextNodes };
+    // Persist via the existing scheduleSave path but without pushing
+    // history (mirroring is not a user edit).
+    setActiveMap(next);
+    setMaps((cur) => cur.map((m) => (m.id === next.id ? next : m)));
+    scheduleSave(next.id, { nodes: nextNodes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkableTasks, activeMap?.id]);
 
   // Undo / redo. Both go through applyMapState with `recordHistory: false`
   // so the act of undoing doesn't itself become an undoable step.
@@ -507,6 +888,109 @@ export function MindMapView({
     }
   }, [language, showToast]);
 
+  const handleCreateFromTemplate = useCallback(
+    async (templateId: string) => {
+      const template = MINDMAP_TEMPLATES.find((t) => t.id === templateId);
+      if (!template) return;
+      const built = template.build();
+      try {
+        // The server will assign a fresh id and timestamp; we just pass
+        // the template's topology (with `tpl-` ids) and the server will
+        // re-root at the first node.
+        const created = await mindmapsApi.create({
+          title: built.title,
+          rootId: built.rootId,
+          nodes: built.nodes,
+          edges: built.edges,
+        });
+        setMaps((current) => [created, ...current]);
+        setActiveId(created.id);
+        showToast(
+          language === 'zh' ? `已从「${template.title}」创建` : `Created from ${template.title}`,
+          'success',
+        );
+      } catch (err: any) {
+        showToast(
+          language === 'zh' ? '创建失败' : 'Failed to create',
+          'error',
+        );
+        console.error('[mindmap] template create error:', err);
+      }
+    },
+    [language, showToast],
+  );
+
+  const handleExport = useCallback(
+    (mapId: string) => {
+      const target = maps.find((m) => m.id === mapId);
+      if (!target) return;
+      try {
+        const json = JSON.stringify(target, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeTitle = (target.title || 'mindmap')
+          .replace(/[^\p{L}\p{N}\-_]+/gu, '-')
+          .slice(0, 60);
+        a.download = `${safeTitle || 'mindmap'}-${target.id.slice(-6)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(
+          language === 'zh' ? '已导出' : 'Exported',
+          'success',
+        );
+      } catch (err: any) {
+        showToast(
+          language === 'zh' ? '导出失败' : 'Export failed',
+          'error',
+        );
+        console.error('[mindmap] export error:', err);
+      }
+    },
+    [maps, language, showToast],
+  );
+
+  const handleImport = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (
+          !parsed ||
+          typeof parsed !== 'object' ||
+          !Array.isArray(parsed.nodes) ||
+          !Array.isArray(parsed.edges) ||
+          typeof parsed.rootId !== 'string' ||
+          typeof parsed.title !== 'string'
+        ) {
+          throw new Error('Invalid mind map file');
+        }
+        const created = await mindmapsApi.create({
+          title: `${parsed.title} (导入)`,
+          rootId: parsed.rootId,
+          nodes: parsed.nodes,
+          edges: parsed.edges,
+        });
+        setMaps((current) => [created, ...current]);
+        setActiveId(created.id);
+        showToast(
+          language === 'zh' ? '已导入导图' : 'Imported mind map',
+          'success',
+        );
+      } catch (err: any) {
+        showToast(
+          language === 'zh' ? '导入失败：文件格式不对' : 'Import failed: invalid file',
+          'error',
+        );
+        console.error('[mindmap] import error:', err);
+      }
+    },
+    [language, showToast],
+  );
+
   const handleDelete = useCallback(
     (id: string) => {
       const target = maps.find((m) => m.id === id);
@@ -543,13 +1027,15 @@ export function MindMapView({
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
       <MindMapList
-        maps={maps}
+        maps={visibleMaps}
         activeId={activeId}
         language={language}
         isLoading={isListLoading}
         onSelect={(id) => setActiveId(id)}
         onCreate={handleCreate}
         onDelete={handleDelete}
+        onImport={() => fileInputRef.current?.click()}
+        onExport={handleExport}
       />
       <div className="min-w-0 flex-1">
         {loadError ? (
@@ -559,7 +1045,26 @@ export function MindMapView({
             onRetry={refreshList}
           />
         ) : !activeMap && !isMapLoading ? (
-          <EmptyState language={language} onCreate={handleCreate} />
+          <>
+            <EmptyState
+              language={language}
+              onCreate={handleCreate}
+              onPickTemplate={handleCreateFromTemplate}
+              onImport={() => fileInputRef.current?.click()}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImport(f);
+                e.target.value = '';
+              }}
+              className="hidden"
+              data-testid="mindmap-import-input"
+            />
+          </>
         ) : !activeMap ? (
           <div className="flex h-full items-center justify-center text-sm text-text-muted">
             {language === 'zh' ? '加载中...' : 'Loading...'}
@@ -611,6 +1116,30 @@ export function MindMapView({
                 {activeMap.nodes.length} {language === 'zh' ? '节点' : 'nodes'} ·{' '}
                 {activeMap.edges.length} {language === 'zh' ? '连线' : 'edges'}
               </div>
+              {progress.total > 0 && (
+                <div
+                  className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] ${
+                    progress.done === progress.total
+                      ? 'border-[var(--color-success)]/40 bg-[var(--color-success-light)] text-[var(--color-success)]'
+                      : 'border-border bg-white/80 text-text-muted'
+                  }`}
+                  data-testid="mindmap-progress"
+                  title={
+                    language === 'zh'
+                      ? `${progress.done} / ${progress.total} 任务已完成`
+                      : `${progress.done} of ${progress.total} tasks done`
+                  }
+                >
+                  {progress.done === progress.total ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    <ListChecks className="h-3 w-3" />
+                  )}
+                  <span className="tabular-nums">
+                    {progress.done}/{progress.total}
+                  </span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={undo}
@@ -670,6 +1199,10 @@ export function MindMapView({
                 searchMatches={searchMatches}
                 focusedMatchId={focusedMatchId}
                 onCycleMatch={cycleMatch}
+                reLayoutVersion={reLayoutVersion}
+                onNodeContextMenu={handleContextMenu}
+                onNodeOpenTask={onOpenTask}
+                taskSourceDateByNodeId={taskSourceDateByNodeId}
               />
             </div>
           </div>
@@ -689,6 +1222,20 @@ export function MindMapView({
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+      {contextMenu && (
+        <NodeContextMenu
+          open={!!contextMenu}
+          position={contextMenu.position}
+          kind={contextMenu.kind}
+          language={language}
+          taskOptions={linkableTasks as ReadonlyArray<NodeContextMenuTaskOption>}
+          onPromote={handlePromoteNode}
+          onLink={handleLinkNodeToTask}
+          onSetTag={handleSetNodeTag}
+          onUnclassify={handleUnclassifyNode}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   );
 }
@@ -696,30 +1243,71 @@ export function MindMapView({
 function EmptyState({
   language,
   onCreate,
+  onPickTemplate,
+  onImport,
 }: {
   language: 'en' | 'zh';
   onCreate: () => void;
+  onPickTemplate: (templateId: string) => void;
+  onImport: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="rounded-full bg-[var(--color-accent-light)] p-3 text-[var(--color-accent)]">
-        <Network className="h-7 w-7" />
+    <div className="flex h-full flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-10">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="rounded-full bg-[var(--color-accent-light)] p-3 text-[var(--color-accent)]">
+          <Network className="h-7 w-7" />
+        </div>
+        <h2 className="text-lg font-semibold text-text-heading">
+          {language === 'zh' ? '还没有思维导图' : 'No mind maps yet'}
+        </h2>
+        <p className="max-w-md text-sm text-text-muted">
+          {language === 'zh'
+            ? '把一个复杂问题拆成主分支和子分支，边想边整理。从空白页开始，或挑一个常用骨架：'
+            : 'Break a complex topic into a root and branches. Start from scratch, or pick a starter:'}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onCreate}
+            className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-accent)]/90"
+            data-testid="mindmap-empty-new"
+          >
+            {language === 'zh' ? '新建空白' : 'New blank'}
+          </button>
+          <button
+            type="button"
+            onClick={onImport}
+            className="rounded-md border border-border bg-white/80 px-4 py-1.5 text-sm font-medium text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+            data-testid="mindmap-empty-import"
+          >
+            {language === 'zh' ? '导入 JSON' : 'Import JSON'}
+          </button>
+        </div>
       </div>
-      <h2 className="text-lg font-semibold text-text-heading">
-        {language === 'zh' ? '还没有思维导图' : 'No mind maps yet'}
-      </h2>
-      <p className="max-w-sm text-sm text-text-muted">
-        {language === 'zh'
-          ? '把一个复杂问题拆成主分支和子分支，边想边整理。先建一个吧：'
-          : 'Break a complex topic into a root and branches. Create your first one:'}
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-2 rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-accent)]/90"
-      >
-        {language === 'zh' ? '新建思维导图' : 'New mind map'}
-      </button>
+
+      <div className="mt-2 w-full max-w-2xl">
+        <div className="mb-2 text-center text-[11px] font-semibold uppercase tracking-wider text-text-muted/70">
+          {language === 'zh' ? '从模板开始' : 'Start from a template'}
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {MINDMAP_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onPickTemplate(t.id)}
+              className="group rounded-lg border border-border bg-white/80 p-3 text-left shadow-sm transition-all hover:border-[var(--color-accent)]/40 hover:bg-white hover:shadow-md"
+              data-testid={`mindmap-template-${t.id}`}
+            >
+              <div className="text-sm font-semibold text-text-heading">
+                {t.title}
+              </div>
+              <div className="mt-0.5 text-[11px] text-text-muted">
+                {t.hint}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

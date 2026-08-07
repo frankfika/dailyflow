@@ -80,6 +80,31 @@ interface MindMapCanvasProps {
    * parent can move the focus to the next/previous match.
    */
   onCycleMatch?: (direction: 1 | -1) => void;
+  /**
+   * Bumped by the parent whenever a layout pass (auto-layout on load or
+   * the "Re-layout" button) writes new positions. The canvas re-fits
+   * when it sees a fresh version, but ignores position-only changes that
+   * came from a drag (so the viewport doesn't snap back to fit-all
+   * after the user just moved a node).
+   */
+  reLayoutVersion?: number;
+  /**
+   * Phase 2: right-click on a node. The parent (MindMapView) keeps the
+   * cursor coords + node id in its own state and renders the context
+   * menu. We just relay the event up.
+   */
+  onNodeContextMenu?: (nodeId: string, position: { x: number; y: number }) => void;
+  /**
+   * Phase 2: jump to the linked task in TodayView. The canvas forwards
+   * the click to the parent which owns navigation.
+   */
+  onNodeOpenTask?: (taskId: string, date: string) => void;
+  /**
+   * Phase 2: lookup of the source date for `kind === 'task'` nodes. The
+   * canvas threads it into the per-node data so MindMapNode can render
+   * the "Open task" button only when the date is known.
+   */
+  taskSourceDateByNodeId?: Readonly<Record<string, string>>;
 }
 
 interface InternalNode extends Node {
@@ -118,6 +143,12 @@ function toRfNodes(map: MindMap): InternalNode[] {
         text: n.text,
         color: n.color ?? 'default',
         isRoot: n.id === map.rootId,
+        // Topic Space v2 (Phase 1): plumb the node kind so the renderer
+        // can show tag / task decorations. Default to 'branch' for v1
+        // maps that don't have a kind on disk yet.
+        kind: n.kind ?? (n.id === map.rootId ? 'root' : 'branch'),
+        tag: n.tag,
+        taskId: n.taskId,
       },
       draggable: true,
       selectable: true,
@@ -148,6 +179,10 @@ function MindMapCanvasInner({
   searchMatches,
   focusedMatchId,
   onCycleMatch,
+  reLayoutVersion,
+  onNodeContextMenu,
+  onNodeOpenTask,
+  taskSourceDateByNodeId,
 }: MindMapCanvasProps) {
   // The parent owns the canonical state. We mirror it locally as RF
   // nodes/edges for interaction. Whenever the map prop changes, we resync.
@@ -157,7 +192,40 @@ function MindMapCanvasInner({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteEditingId, setNoteEditingId] = useState<string | null>(null);
 
-  const { fitView, setCenter, getNode } = useReactFlow();
+  const { setCenter, getNode, getNodes, getViewport, setViewport } = useReactFlow();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Center the viewport on the tree's layout bounds. fitView can race
+   * with React Flow's internal store (the new positions haven't
+   * propagated yet) and ends up zooming to maxZoom on just the root.
+   * Computing zoom + pan from the layout's own bounds sidesteps that
+   * and gives a stable result on every layout pass.
+   */
+  const fitToBounds = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (rect.width < 32 || rect.height < 32) return; // not laid out yet
+    const m = mapRef.current;
+    const { bounds } = layoutMindMap(m.rootId, m.nodes, m.edges);
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    // Leave some breathing room around the tree (10% on each axis).
+    const FIT_PAD = 0.9;
+    const zoom = Math.max(
+      0.1,
+      Math.min(1.2, Math.min((rect.width * FIT_PAD) / bounds.width, (rect.height * FIT_PAD) / bounds.height)),
+    );
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    const x = rect.width / 2 - cx * zoom;
+    const y = rect.height / 2 - cy * zoom;
+    try {
+      setViewport({ x, y, zoom }, { duration: 250 });
+    } catch {
+      /* setViewport may fail before the provider is mounted; ignore. */
+    }
+  }, [setViewport]);
 
   // When the focused search match changes, center the canvas on it so
   // the user doesn't have to hunt. We use setCenter (a non-animated
@@ -185,10 +253,16 @@ function MindMapCanvasInner({
   const mapRef = useRef(map);
   const onChangeRef = useRef(onChange);
   const onPositionsChangeRef = useRef(onPositionsChange);
+  const onNodeContextMenuRef = useRef(onNodeContextMenu);
+  const onNodeOpenTaskRef = useRef(onNodeOpenTask);
+  const taskSourceDateByNodeIdRef = useRef(taskSourceDateByNodeId);
   useEffect(() => {
     mapRef.current = map;
     onChangeRef.current = onChange;
     onPositionsChangeRef.current = onPositionsChange;
+    onNodeContextMenuRef.current = onNodeContextMenu;
+    onNodeOpenTaskRef.current = onNodeOpenTask;
+    taskSourceDateByNodeIdRef.current = taskSourceDateByNodeId;
   });
 
   // Track which prop value produced the current local state so we only
@@ -201,16 +275,27 @@ function MindMapCanvasInner({
   // note) so we re-mirror when the user changes them without otherwise
   // touching topology.
   const lastSyncedVisual = useRef<string>('');
+  // Last reLayoutVersion we reacted to. When the parent bumps it
+  // (auto-layout on load, or the Re-layout button), we re-fit on the
+  // next resync; position-only changes from a drag don't bump it.
+  const lastSeenReLayoutVersion = useRef<number>(-1);
 
   useEffect(() => {
     const nodeIds = map.nodes.map((n) => n.id).join(',');
     const edgeIds = map.edges.map((e) => e.id).join(',');
     const visual = map.nodes
-      .map((n) => `${n.id}:${n.text.length}:${n.color ?? ''}:${n.collapsed ? 1 : 0}:${(n.note ?? '').length}`)
+      .map((n) =>
+        `${n.id}:${n.text.length}:${n.color ?? ''}:${n.collapsed ? 1 : 0}:${(n.note ?? '').length}:${n.status ?? 'todo'}:${n.kind ?? 'branch'}:${n.tag ?? ''}:${n.taskId ?? ''}:${n.position.x.toFixed(0)},${n.position.y.toFixed(0)}`,
+      )
       .join('|');
     const isNewMap = lastSyncedMapId.current !== map.id || lastSyncedTitle.current !== map.title;
     const topologyChanged = nodeIds !== lastSyncedNodeIds.current || edgeIds !== lastSyncedEdgeIds.current;
     const visualChanged = visual !== lastSyncedVisual.current;
+    const layoutRequested =
+      reLayoutVersion !== undefined && reLayoutVersion !== lastSeenReLayoutVersion.current;
+    if (layoutRequested) {
+      lastSeenReLayoutVersion.current = reLayoutVersion!;
+    }
 
     if (isNewMap) {
       setRfNodes(toRfNodes(map));
@@ -223,13 +308,7 @@ function MindMapCanvasInner({
       lastSyncedNodeIds.current = nodeIds;
       lastSyncedEdgeIds.current = edgeIds;
       lastSyncedVisual.current = visual;
-      const t = setTimeout(() => {
-        try {
-          fitView({ padding: 0.25, maxZoom: 1.2, minZoom: 0.2, duration: 300 });
-        } catch {
-          /* fitView may fail before the provider is mounted; ignore. */
-        }
-      }, 50);
+      const t = setTimeout(() => fitToBounds(), 60);
       return () => clearTimeout(t);
     }
 
@@ -240,20 +319,17 @@ function MindMapCanvasInner({
       lastSyncedEdgeIds.current = edgeIds;
       lastSyncedVisual.current = visual;
       // Re-fit the viewport when the visible tree shape changes (nodes
-      // added/removed, collapse toggled). Visual-only changes (text,
-      // color) leave the bounding box alone so we skip the re-fit.
-      if (topologyChanged) {
-        const t = setTimeout(() => {
-          try {
-            fitView({ padding: 0.25, maxZoom: 1.2, minZoom: 0.2, duration: 250 });
-          } catch {
-            /* fitView may fail before the provider is mounted; ignore. */
-          }
-        }, 50);
+      // added/removed, collapse toggled) or when the parent signalled a
+      // layout pass (auto-layout on load, Re-layout button). Visual-only
+      // changes that came from a drag — e.g. the user repositioned a
+      // single node — leave the viewport alone because the user is
+      // already looking at the result of their drag.
+      if (topologyChanged || layoutRequested) {
+        const t = setTimeout(() => fitToBounds(), 60);
         return () => clearTimeout(t);
       }
     }
-  }, [map, fitView]);
+  }, [map, fitToBounds, reLayoutVersion]);
 
   // Inject transient per-node UI state (selected, editing) into the RF node
   // data. The callbacks close over `mapRef` and `onChangeRef` so we don't
@@ -408,6 +484,25 @@ function MindMapCanvasInner({
               );
               onChangeRef.current({ nodes: next });
             },
+            // Phase 2: right-click relay. We resolve the cursor position
+            // from the React Flow `data-testid` event in the node, but
+            // the simpler path is to thread it through onContextMenu on
+            // the wrapping div (handled in MindMapNode) — this branch is
+            // kept for the case where RF's own event system fires
+            // (selection via keyboard, etc).
+            onContextMenu: (id: string, pos: { x: number; y: number }) => {
+              onNodeContextMenuRef.current?.(id, pos);
+            },
+            onOpenTask: (taskId: string, date: string) => {
+              onNodeOpenTaskRef.current?.(taskId, date);
+            },
+            // Phase 2: thread the mirrored task's source date so the
+            // "Open task" button only renders for nodes whose task we
+            // actually know about. Falls back to the node's own stored
+            // source_date (a future Phase 3 enhancement) if the parent's
+            // map doesn't include the date.
+            sourceDate: taskSourceDateByNodeIdRef.current?.[n.id] ?? undefined,
+            language,
           },
         };
       });
@@ -525,17 +620,13 @@ function MindMapCanvasInner({
     const m = mapRef.current;
     const { positions } = layoutMindMap(m.rootId, m.nodes, m.edges);
     onRequestLayout(positions);
-    setTimeout(() => {
-      try {
-        fitView({ padding: 0.25, maxZoom: 1.2, minZoom: 0.2, duration: 300 });
-      } catch {
-        /* ignore */
-      }
-    }, 80);
-  }, [onRequestLayout, fitView]);
+    // The re-fit is handled by the resync effect (it sees the
+    // reLayoutVersion bump from the parent) — no need to also call
+    // fitView here, which would race with the new positions arriving.
+  }, [onRequestLayout]);
 
   return (
-    <div className="relative h-full w-full outline-none">
+    <div className="relative h-full w-full outline-none" ref={containerRef}>
       <ReactFlow
         nodes={decoratedNodes}
         edges={rfEdges}
@@ -544,8 +635,6 @@ function MindMapCanvasInner({
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
-        fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1.2, minZoom: 0.2 }}
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}

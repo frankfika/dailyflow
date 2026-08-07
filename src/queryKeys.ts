@@ -22,4 +22,12 @@ export const queryKeys = {
   topicSpacesRoot: () => ['topic-spaces'] as const,
   topicSpaces: (filters: object = {}) => [...queryKeys.topicSpacesRoot(), filters] as const,
   topicSpace: (id: string) => ['topic-spaces', 'detail', id] as const,
+  // Mind map (Phase 2). The server endpoint is `/api/mindmaps/:id`; we
+  // don't yet have a query layer for it, but the cache key is reserved
+  // for `useMindMapActions` and the upcoming `useMindMap` work.
+  mindmap: (id: string) => ['mindmap', id] as const,
+  // Root key for task list queries. We currently fetch tasks via
+  // `tasksApi.getByDate`, so this is mostly a placeholder for the
+  // React Query integration.
+  tasksRoot: () => ['tasks'] as const,
 };

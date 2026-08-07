@@ -19,6 +19,18 @@ interface TaskCardProps {
   categories: string[];
   currentFileDate: string;
   linkedNotesCount?: number;
+  /**
+   * Phase 4 (Topic Spaces): human-readable title of the space the task
+   * is bound to. When `task.spaceId` is set but `spaceTitle` is not
+   * provided, the indicator falls back to showing the id.
+   */
+  spaceTitle?: string;
+  /**
+   * Phase 4: callback fired by the small × on the space binding. The
+   * parent owns the actual update (e.g. `tasksApi.updateSpace(id, null)`).
+   * If omitted the × is not rendered.
+   */
+  onUnlinkFromSpace?: (taskId: string) => void;
   onToggle: () => void;
   onEdit: (updates: {
     title?: string;
@@ -43,6 +55,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   categories,
   currentFileDate,
   linkedNotesCount = 0,
+  spaceTitle,
+  onUnlinkFromSpace,
   onToggle,
   onEdit,
   onDelete,
@@ -252,6 +266,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span>#{tag}</span>
               </span>
             ))}
+            {task.spaceId && (
+              // Phase 4 (Topic Spaces): show a "已绑定到 [Space]" indicator
+              // when the task is bound to a topic space. The title comes
+              // from a lookup; we fall back to the id if the parent
+              // didn't pass one. Unlink fires `onUnlinkFromSpace`.
+              <span
+                data-testid={`task-card-space-binding-${task.id}`}
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent-light)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]"
+              >
+                <span className="font-mono text-[9px] opacity-70">@</span>
+                <span>{spaceTitle ?? task.spaceId}</span>
+                {onUnlinkFromSpace && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnlinkFromSpace(task.id);
+                    }}
+                    title={language === 'zh' ? '解除主题绑定' : 'Unlink from space'}
+                    data-testid={`task-card-space-unlink-${task.id}`}
+                    className="ml-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full text-[var(--color-accent)]/70 hover:bg-white/60 hover:text-[var(--color-accent)]"
+                    aria-label={language === 'zh' ? '解除主题绑定' : 'Unlink from space'}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            )}
             {task.project && (
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface text-text-main text-[11px] font-medium border border-border/60">
                 <Briefcase className="w-3 h-3 opacity-60" />

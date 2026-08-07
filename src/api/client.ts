@@ -199,6 +199,40 @@ export const tasksApi = {
     if (!res.ok) throw await httpError(res, 'Failed to delete task');
   },
 
+  // -------------------------------------------------------------------------
+  // Phase 2 (Topic Spaces): space binding.
+  //
+  // The server keeps `Task.spaceId` in-memory (it is not yet persisted in
+  // the markdown line). The list view queries this when scoping to a
+  // specific space; the unlink button clears it.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Move a task into a Topic Space (or out of one, when `spaceId` is
+   * `null`). The server keeps `Task.spaceId` in-memory and the new
+   * `^space:xxx` marker is the canonical Phase 4 source of truth. For
+   * now this just updates the in-memory map; the markdown line is not
+   * touched.
+   */
+  async updateSpace(taskId: string, spaceId: string | null): Promise<TaskInput> {
+    const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/space`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spaceId }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to update task space');
+    return res.json();
+  },
+
+  /**
+   * Helper: filter a flat task list to those bound to a given space.
+   * Tasks fetched via `getByDate` carry `spaceId`; we keep the
+   * filtering client-side so we don't need a new server endpoint.
+   */
+  filterBySpace(tasks: ReadonlyArray<TaskInput>, spaceId: string): TaskInput[] {
+    return tasks.filter((t) => (t as { spaceId?: string }).spaceId === spaceId);
+  },
+
   /**
    * Topic Space v2 (Phase 1): move a task to a different space. Pass
    * `null` to send it back to "未分类". Markdown rows do not get
@@ -1248,6 +1282,85 @@ export const mindmapsApi = {
     if (!res.ok && res.status !== 404) {
       throw await httpError(res, 'Failed to delete mind map');
     }
+  },
+
+  // -------------------------------------------------------------------------
+  // Phase 2 (Topic Spaces): node-kind mutations.
+  //
+  // Each endpoint mutates ONE node on a single mind map and returns the
+  // updated map. The canvas + parent state will resync from the response
+  // (no need to splice locally — the server is the source of truth for
+  // `kind` / `tag` / `taskId`).
+  // -------------------------------------------------------------------------
+
+  /**
+   * Promote a node to a Task: creates a real Task on `date`, binds it to
+   * this node, and sets `kind: 'task'` + `taskId` on the node. Parent tag
+   * nodes along the path (Phase 3) will be folded into the new task's
+   * `tags` server-side.
+   */
+  async promoteNodeToTask(
+    mapId: string,
+    nodeId: string,
+    opts: { date: string; context?: string },
+  ): Promise<MindMap> {
+    const res = await fetch(
+      `${API_BASE}/mindmaps/${encodeURIComponent(mapId)}/nodes/${encodeURIComponent(nodeId)}/promote-to-task`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(opts),
+      },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to promote node to task');
+    return res.json();
+  },
+
+  /**
+   * Bind an existing node to an existing Task. Sets `kind: 'task'` and
+   * `taskId` on the node; the task itself is not modified. `date` is the
+   * date the task was created on (so the server can resolve it).
+   */
+  async linkNodeToTask(
+    mapId: string,
+    nodeId: string,
+    taskId: string,
+    date: string,
+  ): Promise<MindMap> {
+    const res = await fetch(
+      `${API_BASE}/mindmaps/${encodeURIComponent(mapId)}/nodes/${encodeURIComponent(nodeId)}/link-task`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, date }),
+      },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to link node to task');
+    return res.json();
+  },
+
+  /**
+   * Re-classify a node's `kind`. Used by the right-click context menu for
+   * "设为 Tag" (kind: 'tag', tag: text) and "取消分类" (kind: 'branch',
+   * clear tag/taskId). The server is responsible for clearing the
+   * counterpart fields; the client just sends the new `kind`.
+   */
+  async updateNodeKind(
+    mapId: string,
+    nodeId: string,
+    kind: MindMapNodeKind,
+    extras: { tag?: string } = {},
+  ): Promise<MindMap> {
+    const res = await fetch(
+      `${API_BASE}/mindmaps/${encodeURIComponent(mapId)}/nodes/${encodeURIComponent(nodeId)}/kind`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, ...extras }),
+      },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to update node kind');
+    return res.json();
   },
 };
 

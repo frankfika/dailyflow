@@ -35,7 +35,10 @@ import { useMeetingCapture } from './hooks/useMeetingCapture';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { TopicTabs, type TopicTabValue } from './components/TopicTabs/TopicTabs';
-import { useTopicSpaces, useCreateTopicSpace } from './hooks/useTopicSpaces';
+import { useTopicSpaces, useCreateTopicSpace, useUpdateTopicSpace } from './hooks/useTopicSpaces';
+import { useUpdateTaskSpace } from './hooks/useMindMapActions';
+import { TaskListView } from './components/TopicSpaceView/TaskListView';
+import { TagFilterRow } from './components/TopicSpaceView/TagFilterRow';
 
 type Task = {
   id: string;
@@ -51,6 +54,10 @@ type Task = {
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  // Phase 2 (Topic Spaces): the Topic Space this task is bound to.
+  // The server keeps it in memory for now (no markdown marker); the
+  // list view filters by it and the unlink button clears it.
+  spaceId?: string;
 };
 
 async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
@@ -103,6 +110,17 @@ export default function App() {
   // matching the pre-Phase-1 behavior. The active space resets when
   // the workspace changes (see the effect below).
   const [activeSpaceId, setActiveSpaceId] = useState<TopicTabValue>(null);
+  // Topic Space v2 (Phase 2): the dual view (mindmap / list). The
+  // active space owns the truth (via `defaultView`); this local state
+  // is a transient override the user can flip without persisting (we
+  // only write back to the server when the user actively clicks the
+  // toggle). When `activeSpaceId` is null / '__unclassified__' the
+  // mindmap view is forced (the list view makes no sense for "全部").
+  const [viewOverride, setViewOverride] = useState<'mindmap' | 'list' | null>(null);
+  // Tag filter (Phase 3) — applies to both mindmap and list view. We
+  // keep it local because it's a per-session preference, not a property
+  // of the space.
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
   // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
@@ -207,6 +225,110 @@ export default function App() {
     },
     [createTopicSpace, activeContext],
   );
+
+  // Phase 2: derive the active space object (if any) so the view
+  // switcher can read its `defaultView` and the list view can render
+  // the right title.
+  const activeSpace = useMemo(() => {
+    if (!activeSpaceId || activeSpaceId === '__unclassified__') return null;
+    return topicSpaces.find((s) => s.id === activeSpaceId) ?? null;
+  }, [activeSpaceId, topicSpaces]);
+  const activeView: 'mindmap' | 'list' = (() => {
+    if (!activeSpace) return 'mindmap';
+    if (viewOverride) return viewOverride;
+    return activeSpace.defaultView;
+  })();
+
+  const updateTopicSpace = useUpdateTopicSpace();
+  const updateTaskSpaceMut = useUpdateTaskSpace();
+
+  // Phase 2: flip the active space's `defaultView`. The server persists
+  // it so the next time the user opens the space the same view shows up.
+  // Optimistic local update keeps the UI snappy; on error we restore.
+  const handleSetView = useCallback(
+    async (view: 'mindmap' | 'list') => {
+      if (!activeSpace) return;
+      setViewOverride(view);
+      try {
+        await updateTopicSpace.mutateAsync({
+          id: activeSpace.id,
+          patch: { defaultView: view },
+        });
+      } catch (err) {
+        // Revert on failure.
+        setViewOverride(null);
+        showToast(
+          language === 'zh' ? '切换视图失败' : 'Failed to switch view',
+          'error',
+        );
+        console.error('[topic-spaces] set view failed:', err);
+      }
+    },
+    [activeSpace, updateTopicSpace, showToast, language],
+  );
+
+  // Phase 2: open a task in TodayView. The Task card lives on a given
+  // date (source_date) and the only way to "open" it is to switch to
+  // the Today tab with that date pre-selected.
+  const handleOpenTask = useCallback(
+    (taskId: string, date: string) => {
+      void taskId;
+      setCurrentFileDate(date);
+      setActiveTab('today');
+    },
+    [],
+  );
+
+  // Phase 2: unlink a task from the active space. The server keeps
+  // `Task.spaceId` in-memory; the in-place `tasks` state is patched
+  // directly so the list view re-renders without a round-trip.
+  const handleUnlinkTask = useCallback(
+    async (taskId: string) => {
+      try {
+        await updateTaskSpaceMut.mutateAsync({ taskId, spaceId: null });
+        setTasks((cur) =>
+          cur.map((t) => (t.id === taskId ? { ...t, spaceId: undefined } : t)),
+        );
+      } catch (err) {
+        showToast(
+          language === 'zh' ? '解除绑定失败' : 'Failed to unlink',
+          'error',
+        );
+        console.error('[topic-spaces] unlink failed:', err);
+      }
+    },
+    [updateTaskSpaceMut, showToast, language],
+  );
+
+  // Phase 2: build the "tasks bound to this space" list. We source it
+  // from today's task list (the same list TodayView shows) filtered by
+  // `spaceId`. The spec acknowledges this is a Phase 2 simplification;
+  // a future Phase 4 enhancement will scan across days.
+  const tasksInActiveSpace = useMemo(() => {
+    if (!activeSpace) return [] as Task[];
+    return (tasks as Array<Task & { spaceId?: string }>).filter(
+      (t) => t.spaceId === activeSpace.id,
+    );
+  }, [tasks, activeSpace]);
+
+  // Phase 2: tags available to the filter row. We merge the space's own
+  // `tags` (set on creation) with tags scraped from its bound tasks.
+  // The `tag` field on a kind: 'tag' node would also be a source but
+  // we don't have node access here without the mind map loaded — for
+  // now the simplest signal is "tags of the space's tasks".
+  const spaceTagPool = useMemo(() => {
+    const pool = new Set<string>();
+    for (const t of tasksInActiveSpace) {
+      for (const tag of t.tags ?? []) {
+        if (!['tasks', 'work', 'life'].includes(tag)) pool.add(tag);
+      }
+    }
+    if (activeSpace) {
+      for (const tag of activeSpace.tags ?? []) pool.add(tag);
+    }
+    return Array.from(pool).sort();
+  }, [tasksInActiveSpace, activeSpace]);
+
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -1386,14 +1508,78 @@ export default function App() {
                     onCreate={handleCreateTopic}
                     isLoading={topicSpacesQuery.isLoading}
                   />
-                  <div className="min-h-0 flex-1">
-                    <MindMapView
-                      workspaceId={activeWorkspaceId || 'default'}
+                  {/* Phase 2: view switcher (mindmap / list). Hidden for
+                      "全部" / "未分类" where only the mindmap makes sense. */}
+                  {activeSpace && (
+                    <div
+                      className="flex shrink-0 items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-1"
+                      data-testid="topic-space-view-switcher"
+                    >
+                      {([
+                        ['mindmap', language === 'zh' ? '导图' : 'Mindmap'],
+                        ['list', language === 'zh' ? '列表' : 'List'],
+                      ] as const).map(([v, label]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => void handleSetView(v)}
+                          data-testid={`topic-space-view-${v}`}
+                          data-active={activeView === v}
+                          className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                            activeView === v
+                              ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                              : 'text-text-muted hover:bg-black/[0.04] hover:text-text-heading'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* Tag filter row (Phase 3). Shown when there are
+                      tags to filter. The list view applies the filter
+                      client-side; the mindmap view also uses it to
+                      hide non-matching nodes. */}
+                  {activeSpace && spaceTagPool.length > 0 && activeView === 'list' && (
+                    <TagFilterRow
+                      tags={spaceTagPool}
+                      selected={tagFilter}
+                      onChange={setTagFilter}
                       language={language}
-                      showToast={showToast}
-                      activeSpaceId={activeSpaceId}
-                      topicSpaces={topicSpaces}
                     />
+                  )}
+                  <div className="min-h-0 flex-1">
+                    {activeView === 'list' && activeSpace ? (
+                      <TaskListView
+                        tasks={tasksInActiveSpace}
+                        spaceId={activeSpace.id}
+                        spaceTitle={activeSpace.title}
+                        language={language}
+                        selectedTagFilter={tagFilter}
+                        onUnlinkTask={(taskId) => void handleUnlinkTask(taskId)}
+                        onSelectTask={(t) => {
+                          const date = t.source_date ?? currentFileDate;
+                          handleOpenTask(t.id, date);
+                        }}
+                      />
+                    ) : (
+                      <MindMapView
+                        workspaceId={activeWorkspaceId || 'default'}
+                        language={language}
+                        showToast={showToast}
+                        activeSpaceId={activeSpaceId}
+                        topicSpaces={topicSpaces}
+                        activeContext={activeContext}
+                        todayDate={currentFileDate}
+                        linkableTasks={tasks.map((t) => ({
+                          id: t.id,
+                          title: t.title,
+                          status: t.status as 'todo' | 'done' | 'migrated',
+                          date: t.source_date ?? currentFileDate,
+                        }))}
+                        onOpenTask={handleOpenTask}
+                      />
+                    )}
                   </div>
                 </motion.div>
               ) : (

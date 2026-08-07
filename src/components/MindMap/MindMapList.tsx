@@ -1,10 +1,11 @@
 /**
  * Mind map list — the left rail of the mind map workspace.
  *
- * Renders the maps in the active workspace sorted newest-first and offers a
- * single "new map" affordance. Selection is owned by the parent.
+ * Renders the maps in the active workspace sorted newest-first and offers
+ * create / import / export / delete affordances. Selection is owned by
+ * the parent.
  */
-import { Plus, Network, Trash2 } from 'lucide-react';
+import { Plus, Network, Trash2, Upload, Download } from 'lucide-react';
 import type { MindMap } from '../../api/client';
 
 interface MindMapListProps {
@@ -15,6 +16,8 @@ interface MindMapListProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  onImport: () => void;
+  onExport: (id: string) => void;
 }
 
 function formatDate(iso: string, language: 'en' | 'zh'): string {
@@ -48,6 +51,8 @@ export function MindMapList({
   onSelect,
   onCreate,
   onDelete,
+  onImport,
+  onExport,
 }: MindMapListProps) {
   return (
     <div className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface/40">
@@ -58,15 +63,27 @@ export function MindMapList({
             {language === 'zh' ? '思维导图' : 'Mind Maps'}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-xs font-medium text-text-main shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
-          title={language === 'zh' ? '新建思维导图' : 'New mind map'}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {language === 'zh' ? '新建' : 'New'}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onImport}
+            className="rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+            title={language === 'zh' ? '从 JSON 导入' : 'Import from JSON'}
+            data-testid="mindmap-list-import"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onCreate}
+            className="flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-xs font-medium text-text-main shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+            title={language === 'zh' ? '新建思维导图' : 'New mind map'}
+            data-testid="mindmap-list-new"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {language === 'zh' ? '新建' : 'New'}
+          </button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {isLoading ? (
@@ -108,6 +125,19 @@ export function MindMapList({
                       <span>·</span>
                       <span>{formatDate(m.updatedAt, language)}</span>
                     </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExport(m.id);
+                    }}
+                    className="absolute right-7 top-1.5 hidden rounded p-1 text-text-muted hover:bg-black/5 hover:text-[var(--color-accent)] group-hover:flex"
+                    title={language === 'zh' ? '导出 JSON' : 'Export JSON'}
+                    aria-label={language === 'zh' ? '导出导图' : 'Export map'}
+                    data-testid={`mindmap-list-export-${m.id}`}
+                  >
+                    <Download className="h-3 w-3" />
                   </button>
                   <button
                     type="button"

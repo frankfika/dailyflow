@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Tag as TagIcon,
   Link2,
+  ExternalLink,
 } from 'lucide-react';
 import type { MindMapNodeColor, MindMapNodeKind, MindMapNodeStatus } from '../../api/client';
 
@@ -53,6 +54,12 @@ export interface MindMapNodeData extends Record<string, unknown> {
   tag?: string;
   /** Set when `kind === 'task'` (link to a real Task). */
   taskId?: string;
+  /**
+   * When the node is mirrored from a real Task (kind === 'task'), this is
+   * the source date the task lives on. We use it to power the "Open task"
+   * link in the floating action strip.
+   */
+  sourceDate?: string;
   onStartEdit: (id: string) => void;
   onCommitEdit: (id: string, text: string) => void;
   onCancelEdit: () => void;
@@ -64,6 +71,20 @@ export interface MindMapNodeData extends Record<string, unknown> {
   onCommitNote: (id: string, note: string) => void;
   onStartNote: (id: string) => void;
   onCycleStatus: (id: string) => void;
+  /**
+   * Phase 2: right-click on a node opens the kind-mutating context menu.
+   * The handler is owned by the parent (MindMapView) which keeps the
+   * cursor coords + selected node id in its own state.
+   */
+  onContextMenu?: (id: string, position: { x: number; y: number }) => void;
+  /**
+   * Phase 2: open the linked task in TodayView. Only fired for nodes with
+   * `kind === 'task'` (the floating action strip shows the button only
+   * then).
+   */
+  onOpenTask?: (taskId: string, date: string) => void;
+  /** Phase 2: localized labels for the new actions. */
+  language?: 'en' | 'zh';
   isNoteEditing: boolean;
 }
 
@@ -208,6 +229,14 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
       className="relative"
       data-testid={`mindmap-node-${id}`}
       data-kind={kind}
+      onContextMenu={(e) => {
+        // Phase 2: right-click opens the kind-mutating context menu. The
+        // browser's native menu would otherwise intercept the event and
+        // print "Reload" / "Inspect", which is wrong inside an app.
+        e.preventDefault();
+        e.stopPropagation();
+        d.onContextMenu?.(id, { x: e.clientX, y: e.clientY });
+      }}
     >
       <div
         className={`group relative flex items-start gap-2 rounded-2xl border backdrop-blur-sm transition-all ${palette.bg} ${palette.border} ${kindClass} ${
@@ -398,6 +427,28 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
             </button>
           )}
         </div>
+      )}
+
+      {/* Phase 2: "open the linked Task" affordance lives outside the
+          selected-only action strip so the user can always jump from a
+          `kind: 'task'` node to TodayView. The icon is small and dim
+          until hovered; on selection it picks up the same accent ring
+          as the rest of the node. */}
+      {kind === 'task' && d.taskId && d.onOpenTask && d.sourceDate && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            d.onOpenTask!(d.taskId!, d.sourceDate!);
+          }}
+          className="nodrag absolute -right-2 -top-2 rounded-full border border-border bg-white/95 p-1 text-text-muted opacity-60 shadow-sm transition-opacity hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent)] hover:opacity-100"
+          title={
+            d.language === 'zh' ? '打开对应 Task' : 'Open linked Task'
+          }
+          data-testid={`mindmap-open-task-${id}`}
+        >
+          <ExternalLink className="h-3 w-3" />
+        </button>
       )}
 
       {d.isNoteEditing && (
