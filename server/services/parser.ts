@@ -1,4 +1,5 @@
 import type { Task } from '../types/task.js';
+import { spaceIdToMarker, markerToSpaceId, extractTaskId } from './taskMetadata.js';
 
 function hashStr(s: string): string {
   let hash = 0;
@@ -45,6 +46,12 @@ export function parseMarkdown(md: string): Task[] {
       const idMatch = content.match(/\^id-([a-zA-Z0-9_-]+)/);
       const explicitId = idMatch ? idMatch[1] : undefined;
       content = content.replace(/\^id-[a-zA-Z0-9_-]+/, '').trim();
+
+      // 提取 topic-space 系统标记 (^space:<id>) — Topic Spaces Phase 2
+      const spaceIdFromLine = markerToSpaceId(content);
+      if (spaceIdFromLine) {
+        content = content.replace(/\^space:\S+/, '').trim();
+      }
 
       // 提取 priority
       const priorityMatch = content.match(/#priority:(high|medium|low)/);
@@ -129,6 +136,7 @@ export function parseMarkdown(md: string): Task[] {
         deadline,
         priority,
         source_date,
+        spaceId: spaceIdFromLine,
         line: taskLineIndex
       });
 
@@ -182,15 +190,39 @@ function findDescriptionEnd(lines: string[], startIdx: number): number {
 
 /**
  * 将单个任务序列化为一行 Markdown
+ *
+ * Tag layout (Topic Spaces Phase 3):
+ *   - The task's own `task.tags` are written first, with any
+ *     `inheritedTags` (from ancestor `kind: 'tag'` nodes in the source
+ *     mindmap) merged in and de-duplicated. Inherited tags appear
+ *     alongside user tags; the spec example shows them interleaved.
+ *   - System metadata (`#project:`, `#deadline:`, `#priority:`,
+ *     `↗ migrated:`, `^space:`, `^id-`) comes AFTER all `#user-tag`
+ *     content. `^space:` is the topic-space system marker and is written
+ *     between the migrated marker and the id marker.
  */
-function taskToLine(task: Task, currentDate?: string): string {
+function taskToLine(
+  task: Task,
+  currentDate?: string,
+  options: { inheritedTags?: string[] } = {},
+): string {
   let line = `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`;
 
-  if (task.tags && task.tags.length > 0) {
-    const filteredTags = task.tags.filter(t => t && t !== 'tasks');
-    if (filteredTags.length > 0) {
-      line += ` ${filteredTags.map(t => `#${t.replace(/\s+/g, '-')}`).join(' ')}`;
-    }
+  // Merge user tags with inherited tags, dedupe (case-insensitive on the
+  // raw token — the markdown representation lowercases, so we compare on
+  // the post-normalized form to avoid #Work / #work collisions).
+  const userTags = (task.tags || []).filter(t => t && t !== 'tasks');
+  const inherited = options.inheritedTags || [];
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const t of [...userTags, ...inherited]) {
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(t);
+  }
+  if (merged.length > 0) {
+    line += ` ${merged.map(t => `#${t.replace(/\s+/g, '-')}`).join(' ')}`;
   }
 
   if (task.project) line += ` #project:${task.project.replace(/ /g, '_')}`;
@@ -198,6 +230,9 @@ function taskToLine(task: Task, currentDate?: string): string {
   if (task.priority) line += ` #priority:${task.priority}`;
   if (task.source_date && task.source_date !== currentDate) {
     line += ` ↗ migrated:${task.source_date}`;
+  }
+  if (task.spaceId) {
+    line += ` ${spaceIdToMarker(task.spaceId)}`;
   }
   if (task.id) {
     line += ` ^id-${task.id}`;
@@ -318,14 +353,24 @@ function parseTaskLine(rawLine: string): {
   priority?: 'high' | 'medium' | 'low';
   sourceDateFromMigrated?: string;
   id?: string;
+  spaceId?: string;
 } | null {
   const m = rawLine.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
   if (!m) return null;
   let content = m[4];
 
-  const idMatch = content.match(/\^id-([a-zA-Z0-9_-]+)/);
-  const id = idMatch ? idMatch[1] : undefined;
-  content = content.replace(/\^id-[a-zA-Z0-9_-]+/, '').trim();
+  // Topic Spaces Phase 2: extract the ^space:<id> system marker before
+  // the other token parsers strip it. We use the helper from
+  // taskMetadata so the regex stays in one place.
+  const spaceId = markerToSpaceId(content);
+  if (spaceId) {
+    content = content.replace(/\^space:\S+/, '').trim();
+  }
+
+  const id = extractTaskId(content);
+  if (id) {
+    content = content.replace(/\^id-\S+/, '').trim();
+  }
 
   const priorityMatch = content.match(/#priority:(high|medium|low)/);
   const priority = priorityMatch ? (priorityMatch[1] as 'high' | 'medium' | 'low') : undefined;
@@ -358,6 +403,7 @@ function parseTaskLine(rawLine: string): {
     priority,
     sourceDateFromMigrated,
     id,
+    spaceId,
   };
 }
 
@@ -426,6 +472,11 @@ export function editTaskFullInMarkdown(
     newLine += ` ↗ migrated:${parsed.sourceDateFromMigrated}`;
   }
 
+  // 保留 topic-space system marker (Topic Spaces Phase 2)
+  if (parsed.spaceId) {
+    newLine += ` ${spaceIdToMarker(parsed.spaceId)}`;
+  }
+
   // 保留 ID
   if (parsed.id) {
     newLine += ` ^id-${parsed.id}`;
@@ -482,8 +533,13 @@ export function editTaskFullInMarkdown(
 /**
  * 在文件末尾追加一个新任务行（保留原文档其余内容）
  */
-export function appendTaskToMarkdown(md: string, task: Task, currentDate?: string): string {
-  const line = taskToLine(task, currentDate);
+export function appendTaskToMarkdown(
+  md: string,
+  task: Task,
+  currentDate?: string,
+  options: { inheritedTags?: string[] } = {},
+): string {
+  const line = taskToLine(task, currentDate, options);
   if (!md || md.length === 0) {
     return line + '\n';
   }

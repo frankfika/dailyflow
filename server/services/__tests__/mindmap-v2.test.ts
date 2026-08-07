@@ -18,8 +18,11 @@ import {
   getMindMap,
   listMindMaps,
   updateMindMap,
+  updateNodeInMindMap,
+  getInheritedTagsFromMap,
 } from '../mindmaps.js';
 import { DEFAULT_MINDMAP_NODE_KIND } from '../../types/mindmap.ts';
+import type { MindMap, MindMapNode } from '../../types/mindmap.ts';
 
 describe.sequential('mindmap v2', () => {
   let tmpRoot: string;
@@ -130,5 +133,194 @@ describe.sequential('mindmap v2', () => {
     await updateMindMap(created.id, { spaceId: 'tw_outer_again' });
     const preserved = await updateMindMap(created.id, { title: 'Renamed' });
     expect(preserved?.spaceId).toBe('tw_outer_again');
+  });
+
+  // Topic Spaces Phase 2/3: the per-node helpers the routes use for
+  // promote-to-task / link-task / repair. These tests pin the
+  // behavior of `updateNodeInMindMap` and `getInheritedTagsFromMap` so
+  // the route layer can rely on them.
+  it('updateNodeInMindMap flips a node to kind: task with a new taskId', async () => {
+    const created = await createMindMap({ title: 'Promote me' });
+    const branch = {
+      id: 'n_branch',
+      text: '子任务',
+      position: { x: 1, y: 0 },
+      kind: 'branch' as const,
+    };
+    // Inject the branch + edge.
+    await updateMindMap(created.id, {
+      nodes: [...created.nodes, branch],
+      edges: [{ id: 'e1', source: created.rootId, target: branch.id }],
+    });
+
+    const updated = await updateNodeInMindMap(created.id, branch.id, {
+      kind: 'task',
+      taskId: 't_new',
+    });
+    expect(updated).not.toBeNull();
+    const next = updated!.nodes.find(n => n.id === branch.id);
+    expect(next?.kind).toBe('task');
+    expect(next?.taskId).toBe('t_new');
+    // The other nodes (root) are untouched.
+    const root = updated!.nodes.find(n => n.id === created.rootId);
+    expect(root?.kind).toBe('root');
+  });
+
+  it('updateNodeInMindMap returns null when the map does not exist', async () => {
+    const result = await updateNodeInMindMap('mm_does_not_exist', 'n1', { kind: 'task' });
+    expect(result).toBeNull();
+  });
+
+  it('updateNodeInMindMap returns null when the node does not exist', async () => {
+    const created = await createMindMap({ title: 'No node' });
+    const result = await updateNodeInMindMap(created.id, 'n_missing', { kind: 'task' });
+    expect(result).toBeNull();
+  });
+
+  it('updateNodeInMindMap can clear a field by setting it to undefined', async () => {
+    const created = await createMindMap({ title: 'Clear me' });
+    const branch = {
+      id: 'n_branch',
+      text: 'task-y',
+      position: { x: 1, y: 0 },
+      kind: 'task' as const,
+      taskId: 't_old',
+    };
+    await updateMindMap(created.id, {
+      nodes: [...created.nodes, branch],
+      edges: [{ id: 'e1', source: created.rootId, target: branch.id }],
+    });
+
+    // Demote back to a branch.
+    const updated = await updateNodeInMindMap(created.id, branch.id, {
+      kind: 'branch',
+      taskId: undefined,
+    });
+    const next = updated!.nodes.find(n => n.id === branch.id);
+    expect(next?.kind).toBe('branch');
+    expect(next?.taskId).toBeUndefined();
+  });
+});
+
+describe('getInheritedTagsFromMap', () => {
+  // Helper: build a tiny map inline without going through the file
+  // system, since `getInheritedTagsFromMap` is a pure function.
+  function buildMap(
+    nodes: MindMapNode[],
+    edges: { source: string; target: string }[],
+    rootId: string,
+  ): MindMap {
+    return {
+      id: 'mm_inline',
+      title: 'inline',
+      rootId,
+      nodes,
+      edges: edges.map((e, i) => ({ id: `e${i}`, source: e.source, target: e.target })),
+      version: 2,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+  }
+
+  it('returns tags from a single ancestor tag node, root-to-leaf order', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+        { id: 'tag1', text: '主题', position: { x: 0, y: 1 }, kind: 'tag', tag: 'waic' },
+        { id: 'sub', text: '子', position: { x: 0, y: 2 }, kind: 'branch' },
+        { id: 'leaf', text: '叶子', position: { x: 0, y: 3 }, kind: 'branch' },
+      ],
+      [
+        { source: 'root', target: 'tag1' },
+        { source: 'tag1', target: 'sub' },
+        { source: 'sub', target: 'leaf' },
+      ],
+      'root',
+    );
+    const tags = getInheritedTagsFromMap(map, 'leaf');
+    expect(tags).toEqual(['waic']);
+  });
+
+  it('collects multiple tag ancestors in root-to-leaf order', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+        { id: 'tag_a', text: 'A', position: { x: 0, y: 1 }, kind: 'tag', tag: 'a' },
+        { id: 'tag_b', text: 'B', position: { x: 0, y: 2 }, kind: 'tag', tag: 'b' },
+        { id: 'leaf', text: 'leaf', position: { x: 0, y: 3 }, kind: 'branch' },
+      ],
+      [
+        { source: 'root', target: 'tag_a' },
+        { source: 'tag_a', target: 'tag_b' },
+        { source: 'tag_b', target: 'leaf' },
+      ],
+      'root',
+    );
+    const tags = getInheritedTagsFromMap(map, 'leaf');
+    expect(tags).toEqual(['a', 'b']);
+  });
+
+  it('deduplicates tag ancestors (case-insensitive)', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+        { id: 'tag_a', text: 'A', position: { x: 0, y: 1 }, kind: 'tag', tag: 'waic' },
+        { id: 'tag_b', text: 'B', position: { x: 0, y: 2 }, kind: 'tag', tag: 'WAIC' },
+        { id: 'leaf', text: 'leaf', position: { x: 0, y: 3 }, kind: 'branch' },
+      ],
+      [
+        { source: 'root', target: 'tag_a' },
+        { source: 'tag_a', target: 'tag_b' },
+        { source: 'tag_b', target: 'leaf' },
+      ],
+      'root',
+    );
+    const tags = getInheritedTagsFromMap(map, 'leaf');
+    // The leaf-most tag is encountered first; case-insensitive dedup
+    // drops the duplicate at the higher level.
+    expect(tags).toEqual(['WAIC']);
+  });
+
+  it('returns an empty array when no ancestor is a tag', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+        { id: 'a', text: 'a', position: { x: 0, y: 1 }, kind: 'branch' },
+        { id: 'b', text: 'b', position: { x: 0, y: 2 }, kind: 'branch' },
+      ],
+      [
+        { source: 'root', target: 'a' },
+        { source: 'a', target: 'b' },
+      ],
+      'root',
+    );
+    expect(getInheritedTagsFromMap(map, 'b')).toEqual([]);
+  });
+
+  it('skips ancestors whose kind is "tag" but no `tag` value is set', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+        { id: 'tag_empty', text: 'no label', position: { x: 0, y: 1 }, kind: 'tag' },
+        { id: 'leaf', text: 'l', position: { x: 0, y: 2 }, kind: 'branch' },
+      ],
+      [
+        { source: 'root', target: 'tag_empty' },
+        { source: 'tag_empty', target: 'leaf' },
+      ],
+      'root',
+    );
+    expect(getInheritedTagsFromMap(map, 'leaf')).toEqual([]);
+  });
+
+  it('returns [] for a node that does not exist', () => {
+    const map = buildMap(
+      [
+        { id: 'root', text: 'r', position: { x: 0, y: 0 }, kind: 'root' },
+      ],
+      [],
+      'root',
+    );
+    expect(getInheritedTagsFromMap(map, 'missing')).toEqual([]);
   });
 });

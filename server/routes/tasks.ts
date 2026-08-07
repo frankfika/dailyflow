@@ -6,7 +6,15 @@ import {
   editTaskFullInMarkdown,
   appendTaskToMarkdown,
   removeTaskFromMarkdown,
+  parseMarkdown,
 } from '../services/parser.js';
+import { setSpaceMarker } from '../services/taskMetadata.js';
+import {
+  addTaskIdToTopicSpace,
+  removeTaskIdFromTopicSpace,
+  findTopicSpaceByTaskId,
+  getTopicSpace,
+} from '../services/topicSpaces.js';
 import { loadConfig } from '../services/config.js';
 import { withDateLock } from '../services/lock.js';
 import type { Task } from '../types/task.js';
@@ -182,53 +190,99 @@ router.delete('/:taskId', async (req, res) => {
 });
 
 /**
- * PUT /api/tasks/:taskId/space - 改 task 的归属主题空间 (Phase 1 stub)
+ * PUT /api/tasks/:taskId/space
  *
  * Body: `{ spaceId: string | null, date?: string }`
  *
- * Phase 1 行为: 验证 task 存在, 在内存里把 spaceId 写到 task 对象, 不写
- * markdown (markdown 元数据留给 Phase 4 实现, SPEC §2.3 / §3.4)。
- * 所以这个端点的 response 直接 echo "in-memory patched task"。
+ * Phase 2 行为: 把 task 绑到 / 解绑一个 topic space, 把
+ * `^space:<id>` 标记 (或移除) 写进 markdown 行, 并同步更新
+ * TopicSpace.taskIds (双向).
  *
- * TODO(topic-spaces/phase-4): 把 `^space:xxx` 注释写进 markdown 行，
- * 让关系可持久化。
+ * - `spaceId` 为 string: 验证 space 存在, 写 ^space:<id>, 把
+ *   taskId 加到新 space 的 taskIds, 从旧 space (如果有) 移除.
+ * - `spaceId` 为 null: 找到当前持有这个 task 的 space (如果有),
+ *   从它的 taskIds 移除, 然后从 markdown 行移除 ^space:xxx 标记.
+ * - `date` 必须传, 这样我们能定位到 daily note 文件; Phase 1 的
+ *   无 date echo-only 模式已经废弃.
+ *
+ * Status codes:
+ *   200 — marker written/cleared, taskIds updated
+ *   400 — body invalid (e.g. unknown spaceId)
+ *   404 — task / daily note / topic space not found
  */
 router.put('/:taskId/space', async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { spaceId, date } = req.body ?? {};
-    const config = await loadConfig();
+    const { spaceId, date } = (req.body ?? {}) as {
+      spaceId?: string | null;
+      date?: string;
+    };
 
+    if (spaceId === undefined) {
+      return res.status(400).json({ error: 'spaceId is required (string or null)' });
+    }
     if (spaceId !== null && typeof spaceId !== 'string') {
       return res.status(400).json({ error: 'spaceId must be a string or null' });
     }
-
-    // 不传 date: 直接 echo 一个最小 Task 对象, 让前端可以把关系存到
-    // 本地 state。传 date: 验证 task 存在, 并在 echo 中带上原始字段。
-    if (typeof date === 'string' && date) {
-      const note = await readDailyNote(date, config);
-      if (!note) {
-        return res.status(404).json({ error: 'File not found' });
-      }
-      const existing = note.tasks.find(t => t.id === taskId);
-      if (!existing) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      const patched: Task = {
-        ...existing,
-        spaceId: spaceId ?? undefined,
-      };
-      // Phase 1: 不写 markdown; 仅返回 echo。
-      return res.json({ success: true, task: patched, persisted: false });
+    if (typeof date !== 'string' || !date) {
+      return res.status(400).json({ error: 'date is required' });
     }
 
-    const echo: Task = {
-      id: taskId,
-      title: '',
-      status: 'todo',
-      spaceId: spaceId ?? undefined,
-    };
-    return res.json({ success: true, task: echo, persisted: false });
+    const config = await loadConfig();
+
+    // 1. Find the current space, if any, so we can update both sides
+    //    of the relationship in one request.
+    const previousSpace = await findTopicSpaceByTaskId(taskId);
+
+    // 2. Validate the target space (when not clearing).
+    if (spaceId !== null) {
+      const target = await getTopicSpace(spaceId);
+      if (!target) {
+        return res.status(400).json({ error: `Topic space ${spaceId} not found` });
+      }
+      if (previousSpace && previousSpace.id === spaceId) {
+        // No-op re-bind: marker is already correct on disk. Just echo.
+        return res.json({ success: true, task: { id: taskId, spaceId }, persisted: true });
+      }
+    }
+
+    // 3. Update the markdown file under the date lock. We have to
+    //    read-modify-write the file because the system marker lives
+    //    on the existing task line.
+    const patchedTask = await withDateLock(date, async () => {
+      const note = await readDailyNote(date, config);
+      if (!note) {
+        throw Object.assign(new Error('File not found'), { status: 404 });
+      }
+      const tasks = parseMarkdown(note.content);
+      const task = tasks.find(t => t.id === taskId);
+      if (!task || task.line === undefined) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
+      const lines = note.content.split('\n');
+      const originalLine = lines[task.line];
+      const nextLine = setSpaceMarker(originalLine, spaceId);
+      if (nextLine === originalLine) {
+        // The line was already in the desired state. No rewrite.
+        return { ...task, spaceId: spaceId ?? undefined };
+      }
+      lines[task.line] = nextLine;
+      await writeDailyNote(date, lines.join('\n'), config);
+      return { ...task, spaceId: spaceId ?? undefined };
+    });
+
+    // 4. Update the topic-space side of the relationship. The order
+    //    matters: when re-binding from A to B, we add to B first, then
+    //    remove from A. If the order were reversed and the add failed,
+    //    we'd be left with the task bound to no space at all.
+    if (spaceId !== null) {
+      await addTaskIdToTopicSpace(spaceId, taskId);
+    }
+    if (previousSpace && previousSpace.id !== spaceId) {
+      await removeTaskIdFromTopicSpace(previousSpace.id, taskId);
+    }
+
+    res.json({ success: true, task: patchedTask, persisted: true });
   } catch (error: any) {
     console.error('Error setting task space:', error);
     const status = error?.status ?? 500;

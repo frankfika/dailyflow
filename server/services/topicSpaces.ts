@@ -532,3 +532,58 @@ export async function readTopicSpaceFile(filePath: string): Promise<TopicSpace |
 
 // Re-export the MindMapNode type for callers that want a single import.
 export type { MindMap, MindMapNode };
+
+// --- taskIds maintenance -----------------------------------------------------
+
+/**
+ * Add a taskId to a topic space if not already present. Idempotent.
+ * Returns the updated TopicSpace, or `null` if the space does not exist.
+ *
+ * Used by:
+ *   - `POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task` (newly created task)
+ *   - `POST /api/mindmaps/:id/nodes/:nodeId/link-task`     (existing task)
+ *
+ * Note: the function only appends; it never re-orders existing entries
+ * because callers do not depend on order and stable diffs are nicer
+ * in git history.
+ */
+export async function addTaskIdToTopicSpace(
+  spaceId: string,
+  taskId: string,
+): Promise<TopicSpace | null> {
+  const space = await getTopicSpace(spaceId);
+  if (!space) return null;
+  if (space.taskIds.includes(taskId)) return space;
+  return updateTopicSpace(spaceId, {
+    taskIds: [...space.taskIds, taskId],
+  });
+}
+
+/**
+ * Remove a taskId from a topic space. Idempotent: returns the space
+ * unchanged (or with the id gone) whether or not the id was present.
+ *
+ * Used by `PUT /api/tasks/:taskId/space` when the caller sets
+ * `spaceId: null` to detach a task from its current topic space.
+ */
+export async function removeTaskIdFromTopicSpace(
+  spaceId: string,
+  taskId: string,
+): Promise<TopicSpace | null> {
+  const space = await getTopicSpace(spaceId);
+  if (!space) return null;
+  if (!space.taskIds.includes(taskId)) return space;
+  return updateTopicSpace(spaceId, {
+    taskIds: space.taskIds.filter(id => id !== taskId),
+  });
+}
+
+/**
+ * Find the topic space that currently owns a given taskId, or null if
+ * the task is unowned. Used by `PUT /api/tasks/:taskId/space` to
+ * detect re-bindings (task moving from space A to space B).
+ */
+export async function findTopicSpaceByTaskId(taskId: string): Promise<TopicSpace | null> {
+  const all = await listTopicSpaces();
+  return all.find(s => s.taskIds.includes(taskId)) || null;
+}

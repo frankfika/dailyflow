@@ -224,6 +224,122 @@ export async function deleteMindMap(id: string): Promise<boolean> {
 }
 
 /**
+ * Update a single node in a mindmap without round-tripping the full
+ * `nodes` array. Returns the updated MindMap (with version bump, kind
+ * defaulting, and updatedAt). Returns `null` if the map or node does
+ * not exist.
+ *
+ * The patch is shallow: it overwrites the named keys on the matching
+ * node. To delete an optional field, set it to `undefined` in the
+ * patch; the implementation strips the key from the stored object so
+ * the file on disk reflects the cleared state.
+ *
+ * Rationale: the route handlers (promote-to-task, link-task, repair)
+ * only need to flip one node's kind/taskId. The existing `updateMindMap`
+ * would force the caller to send back the entire `nodes` array, which
+ * is both wasteful and a footgun (any node dropped on the way would
+ * be silently deleted from the file).
+ */
+export async function updateNodeInMindMap(
+  mindmapId: string,
+  nodeId: string,
+  patch: Partial<MindMapNode>,
+): Promise<MindMap | null> {
+  const now = new Date().toISOString();
+  return withDir(async (dir) => {
+    const filePath = fileFor(dir, mindmapId);
+    let existing: MindMap;
+    try {
+      existing = await readMapFile(filePath);
+    } catch (err: any) {
+      if (err && err.code === 'ENOENT') return null;
+      throw err;
+    }
+    const idx = existing.nodes.findIndex(n => n.id === nodeId);
+    if (idx === -1) return null;
+    // Apply the patch, dropping any keys explicitly set to undefined so
+    // the cleared state survives a round-trip.
+    const merged: MindMapNode = { ...existing.nodes[idx] };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) {
+        delete (merged as any)[k];
+      } else {
+        (merged as any)[k] = v;
+      }
+    }
+    // Re-default `kind` if the patch wiped it.
+    if (!merged.kind) merged.kind = DEFAULT_MINDMAP_NODE_KIND;
+    const nextNodes = existing.nodes.slice();
+    nextNodes[idx] = merged;
+    const next: MindMap = {
+      ...existing,
+      nodes: nextNodes,
+      version: SCHEMA_VERSION,
+      updatedAt: now,
+    };
+    await writeMapFile(filePath, next);
+    return next;
+  });
+}
+
+/**
+ * Walk the parent chain of a node and collect `kind: 'tag'` labels in
+ * root-to-leaf order. Used by `appendTaskToMarkdown` (Topic Spaces
+ * Phase 3) to inherit tag labels from the source mindmap.
+ *
+ * Returns an empty array if the mindmap or node does not exist, or if
+ * no ancestor is a tag node. Multiple tag ancestors are deduplicated
+ * (case-insensitive) while preserving first-occurrence order.
+ *
+ * Edges are interpreted as parent → child (`source` is the parent).
+ * This matches the convention used everywhere else in the codebase
+ * (see `MindMapEdge` in `types/mindmap.ts`).
+ */
+export function getInheritedTagsFromMap(
+  map: MindMap,
+  nodeId: string,
+): string[] {
+  // Build a parent map once: child -> parent (first occurrence wins;
+  // a multi-parent cycle is treated as a no-parent for that child).
+  const parentOf = new Map<string, string>();
+  for (const edge of map.edges) {
+    if (!parentOf.has(edge.target)) parentOf.set(edge.target, edge.source);
+  }
+
+  // Walk from node up to the root, collecting tag nodes. The root is
+  // the node with `kind: 'root'` (or the node the mindmap declares as
+  // `rootId` if no node carries the discriminator).
+  //
+  // We collect in leaf-to-root order, then reverse at the end so the
+  // returned list reads root-to-leaf. That's the order that maps onto
+  // a natural "broader → narrower" tag hierarchy when the markdown
+  // line is rendered, and it also matches the order the spec example
+  // (SPEC §2) shows for a single inheritance path.
+  const rootId = map.rootId;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let cur: string | undefined = nodeId;
+  // Cycle guard: cap the walk at nodes.length so a malformed graph
+  // can't spin forever.
+  let safety = map.nodes.length + 1;
+  while (cur && safety-- > 0) {
+    if (cur === rootId) break; // reached the root; stop without including it
+    const node = map.nodes.find(n => n.id === cur);
+    if (!node) break;
+    if (node.kind === 'tag' && node.tag) {
+      const key = node.tag.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(node.tag);
+      }
+    }
+    cur = parentOf.get(cur);
+  }
+  out.reverse();
+  return out;
+}
+
+/**
  * Re-export the kind constant for callers that don't want a second import.
  */
 export type { MindMapNodeKind };

@@ -327,6 +327,93 @@ describe('appendTaskToMarkdown', () => {
     expect(result).toContain('- [ ] Existing task');
     expect(result).toContain('- [ ] New task');
   });
+
+  // Topic Spaces Phase 3: tag inheritance from `kind: 'tag'` ancestor
+  // nodes. The `inheritedTags` option is pre-computed by the route and
+  // merged into the task line in front of the system metadata.
+  it('appends inherited tags from the source mindmap parent chain', () => {
+    const task: Task = {
+      id: 't_phase3_1',
+      title: '新任务',
+      status: 'todo',
+      tags: ['user-tag'],
+      spaceId: 'tw_space_a',
+    };
+    const result = appendTaskToMarkdown('', task, undefined, {
+      inheritedTags: ['inherited-a', 'inherited-b'],
+    });
+    // User tags come first, inherited tags after, system metadata
+    // (`^space:`, `^id-`) at the tail.
+    expect(result).toContain('#user-tag');
+    expect(result).toContain('#inherited-a');
+    expect(result).toContain('#inherited-b');
+    expect(result).toContain('^space:tw_space_a');
+    expect(result).toContain('^id-t_phase3_1');
+    // Order check: inherited tags appear BEFORE the system metadata.
+    const inheritedIdx = result.indexOf('#inherited-b');
+    const spaceIdx = result.indexOf('^space:');
+    expect(inheritedIdx).toBeLessThan(spaceIdx);
+  });
+
+  it('does not duplicate a tag that the user already provided', () => {
+    const task: Task = {
+      id: 't_phase3_2',
+      title: 'dedupe test',
+      status: 'todo',
+      tags: ['shared', 'only-user'],
+    };
+    const result = appendTaskToMarkdown('', task, undefined, {
+      inheritedTags: ['shared', 'only-inherited'],
+    });
+    // "#shared" should appear exactly once.
+    const occurrences = (result.match(/#shared\b/g) || []).length;
+    expect(occurrences).toBe(1);
+    expect(result).toContain('#only-user');
+    expect(result).toContain('#only-inherited');
+  });
+
+  // Topic Spaces Phase 2: the `^space:` marker is written whenever
+  // the task carries a `spaceId`. The marker sits between the migrated
+  // marker and the `^id-` marker.
+  it('writes ^space:<id> when the task has a spaceId', () => {
+    const task: Task = {
+      id: 't_phase2_1',
+      title: '主题任务',
+      status: 'todo',
+      spaceId: 'tw_融资',
+    };
+    const result = appendTaskToMarkdown('', task);
+    expect(result).toContain('^space:tw_融资');
+    // Order: ^space: comes before ^id-
+    const spaceIdx = result.indexOf('^space:');
+    const idIdx = result.indexOf('^id-');
+    expect(spaceIdx).toBeGreaterThan(-1);
+    expect(idIdx).toBeGreaterThan(spaceIdx);
+  });
+
+  it('omits ^space: when the task has no spaceId', () => {
+    const task: Task = { id: 't_phase2_2', title: 'no space', status: 'todo' };
+    const result = appendTaskToMarkdown('', task);
+    expect(result).not.toContain('^space:');
+    expect(result).toContain('^id-t_phase2_2');
+  });
+});
+
+describe('parseMarkdown ^space: round-trip', () => {
+  it('populates spaceId when reading a task with the system marker', () => {
+    const md = '- [ ] 主题任务 ^space:tw_融资 ^id-t_roundtrip\n';
+    const tasks = parseMarkdown(md);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].spaceId).toBe('tw_融资');
+    // The marker must not appear in the user-visible title.
+    expect(tasks[0].title).toBe('主题任务');
+  });
+
+  it('leaves spaceId undefined for tasks without the marker', () => {
+    const md = '- [ ] plain task ^id-t_plain\n';
+    const tasks = parseMarkdown(md);
+    expect(tasks[0].spaceId).toBeUndefined();
+  });
 });
 
 describe('removeTaskFromMarkdown', () => {
