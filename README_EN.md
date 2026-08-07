@@ -10,7 +10,7 @@
 
 ![DailyFlow Today](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.4.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![Stack](https://img.shields.io/badge/stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
@@ -57,6 +57,26 @@ DailyFlow is a good fit if you want AI assistance and calendar connections witho
 - Keep notes as readable, portable Markdown files.
 
 ![Notes](./docs/assets/notes.png)
+
+### Mind Map: break complex problems into branches
+
+- A new `Mind Map` tab with a per-workspace list of maps and an independent pan/zoom canvas (powered by `@xyflow/react`).
+- Auto-laid-out horizontal tree. Drag to reposition, `Tab` to add a child, `Enter` to add a sibling, `Backspace` to delete, double-click or `F2` to edit, color-cycle button for 6 named tokens.
+- Subtree collapse/expand, inline note editor, Markdown export, undo/redo (50-step history), in-canvas `Ctrl/Cmd+F` search.
+- Every node has a three-state `todo` / `in-progress` / `done` status; the header shows a live progress badge.
+- 4 starter templates (SWOT, 5W1H, Decision Tree, Task Breakdown) and JSON import/export.
+- Auto-save to `<workspaceRoot>/.dailyflow/mindmaps/<id>.json` (600ms debounce).
+
+![Mind Map](./visual-mindmap-2-populated.png)
+
+### Topic Spaces: semantic grouping across the workspace
+
+- A new `Topic Space` dimension that ties every artifact of a project, initiative, or long-running goal together.
+- Each space owns one main mind map (default view); Work / Life contexts stay isolated.
+- Right-click on a node: Promote (turn a branch into a real Task) / Link to an existing Task / Set as Tag / Unclassify.
+- Tasks can be bound to a space; the list view filters by space, then by tag, and TaskCard shows the binding visibly.
+- The `^space:<id>` system marker in the Markdown file is the only source of truth for bindings — backups and migrations stay portable.
+- A broken-link diagnostic + repair endpoint catches and clears dangling nodes that point at deleted tasks.
 
 ### Calendar: tasks and events on one timeline
 

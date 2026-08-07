@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Pending for next release
-
-- 真实 connector 接入 / AI provider 真配置 / Phase 9 性能 — 留 1.2.x
-- tablet icon-only sidebar mode 后续 polish (1.1.7 mobile/tablet/desktop 三档已 work, 仍可加 tablet 默认折叠 + keyboard shortcut)
+## [1.4.0] - 2026-08-08
 
 ### Added
 
@@ -23,6 +20,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Task status** — each node now has a three-state status (`todo` / `in-progress` / `done`). Click the badge on the left of a node to cycle; the canvas renders a check / dot / empty circle and strikes through the headline once a node is done. Persisted to the same JSON file.
 - **Undo / redo** — `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` (or `Ctrl+Y`) walk a 50-entry history per map. The header has Undo/Redo buttons that disable when the stack is empty. Position-only drags do not pollute the history (they're coalesced by the autosave debounce).
 - **In-map search** — `Ctrl/Cmd+F` opens a search bar that replaces the title; `Enter` / `↓` jumps to the next match, `↑` to the previous, `Esc` closes. Matches get a faint amber ring; the currently focused match gets a solid amber ring and the canvas auto-pans to keep it in view.
+- **Mind map JSON import / export** — per-row export writes a `Blob` of the full map to disk; the empty-state Import button (and the list rail's upload button) re-creates the map from a JSON file. Filename uses a sanitized title + the last 6 chars of the id.
+- **Mind map progress badge** — the header shows a `done/total` chip for the active map (skips the root). Tints to the success color when 100% done.
+- **Mind map templates** — 4 starter templates (SWOT / 5W1H / Decision Tree / Task Breakdown) are offered from the empty state. Each template builds a real `MindMap` shape with deterministic ids so the auto-layout produces a clean tree on creation.
+
+#### Topic Spaces (Phase 1-4)
+
+The Topic Space refactor introduces a `主题` (Topic Space) as the primary
+organizing unit: one project, initiative, or long-running goal owns its own
+mind map, its own list of bound tasks, and its own tags. The refactor
+lands in four phases and is fully implemented end-to-end.
+
+- **Phase 1 — data model + UI** — `TopicSpace` lives as a new
+  `<workspaceRoot>/Workspaces/yyyy/MM/tw_*.md` Markdown file with YAML
+  frontmatter (id, kind, context, mindmapId, taskIds, defaultView, tags,
+  intent, scratchpad, brief, journey, timeline). A new `Topic Tabs` rail
+  lists `全部` / `未分类` / each space, with create / delete / select.
+  The mind-map node schema gains `kind` (`root` | `branch` | `tag` |
+  `task`) and optional `tag` / `taskId` fields. A one-time
+  `migrate:topic-spaces` script pre-seeds the metadata for any
+  pre-existing mind map.
+- **Phase 2 — node kind editing + task mirror** — right-click on a
+  node opens a context menu with four actions: `转为待办` (create a
+  real Task and bind it to the node), `关联已有 Task` (search-driven
+  picker over the active space's tasks), `设为 Tag` (re-classify the
+  node as a tag), and `取消分类` (demote back to a plain branch). The
+  root node hides the latter two. The mind-map view one-way mirrors
+  `status` and `text` from linked Tasks so editing a task in TodayView
+  reflects in the map. Endpoints:
+  `POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task`,
+  `POST /api/mindmaps/:id/nodes/:nodeId/link-task`,
+  `PUT /api/mindmaps/:id/nodes/:nodeId/kind`,
+  `PUT /api/tasks/:taskId/space`.
+- **Phase 3 — tag terminalization + inheritance** — `kind: 'tag'` nodes
+  along a path to a leaf become inherited tags when the leaf is promoted
+  to a Task. The walk is root-to-leaf, case-insensitive, deduplicated
+  against user-supplied `#tag`s, and cycle-safe.
+- **Phase 4 — `^space:xxx` system marker + diagnostics** — the binding
+  between a Task and a Topic Space is recorded as a system marker at the
+  end of the task line (`- [ ] title #user-tag #inherited-tag
+  ^space:<id> ^id-<taskId>`), separate from user-visible tags so it
+  survives migration. A new `/api/diagnostics` surface reports broken
+  links (nodes whose `taskId` no longer resolves) and supports a
+  surgical `repair-task-link` action to unlink dangling nodes
+  (re-create is reserved for a future phase).
+
+### Dual view (mindmap / list)
+
+- The Topic Space surface offers two views: a `mindmap` view (the
+  existing canvas) and a `list` view of the space's bound tasks. The
+  active view is persisted on the space as `defaultView`; a transient
+  `viewOverride` lets the user flip without committing.
+- The list view has a tag filter (multi-select chip row, sourced from
+  the union of the space's own tags and the tags scraped from its bound
+  tasks). TaskCard surfaces the space binding with a `已绑定到 [Space]`
+  chip plus an inline `×` to unlink.
+
+### Verified
+
+- `npm test` ✅ 69 files / **550 tests** (server 371 + client 179; +148
+  vs 1.3.1)
+- `npm run lint` ✅
+- `npm run build` ✅
+- `npx playwright test e2e/topic-spaces.spec.ts --workers=1` ✅
+- Live curl smoke for `promote-to-task` / `link-task` / `PUT
+  /tasks/:id/space` / `GET /diagnostics/broken-links` /
+  `POST /diagnostics/repair-task-link` ✅
+- `^space:<id>` marker round-trips through the Markdown file ✅
+
+## [1.3.1] - 2026-08-06
 
 ## [1.3.1] - 2026-08-06
 

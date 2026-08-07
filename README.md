@@ -10,7 +10,7 @@
 
 ![DailyFlow Today](./docs/assets/home.png)
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.4.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![Stack](https://img.shields.io/badge/stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
@@ -57,6 +57,26 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 - Markdown 文件作为可读、可迁移的本地数据。
 
 ![Notes](./docs/assets/notes.png)
+
+### Mind Map：把复杂问题拆成主分支
+
+- 新增 `思维导图` 标签，每个工作区一组导图，独立的平移/缩放画布（基于 `@xyflow/react`）。
+- 自动水平布局，拖拽改位置，`Tab` 加子节点、`Enter` 加同级节点、`Backspace` 删除、双击 / `F2` 编辑，色板按钮切换 6 个命名色。
+- 子树折叠/展开、节点内联备注、Markdown 导出、撤销/重做（50 步历史）、画布内 `Ctrl/Cmd+F` 搜索。
+- 每个节点有 `todo` / `in-progress` / `done` 三态进度，header 实时显示完成度。
+- 4 个内置模板（SWOT、5W1H、决策树、任务分解），JSON 导入/导出。
+- 自动保存到 `<workspaceRoot>/.dailyflow/mindmaps/<id>.json`（600ms 防抖）。
+
+![Mind Map](./visual-mindmap-2-populated.png)
+
+### Topic Spaces：跨工作区的语义分组
+
+- 新增 `主题`（Topic Space）维度，把一个项目 / 议题 / 长期目标的所有素材串起来。
+- 每个主题有独立的思维导图（默认视图），Work / Life 上下文隔离。
+- 节点右键：Promote（把分支节点升级成真实 Task）/ Link（关联已有 Task）/ Set Tag / Unclassify。
+- Task 可以绑定到主题，列表视图按主题筛选，按 Tag 二次筛选，绑定状态在 TaskCard 上清晰可见。
+- Markdown 文件里的 `^space:<id>` 系统标记是绑定关系的唯一权威来源，迁移 / 备份天然兼容。
+- 提供 broken-link 诊断 + repair 接口，发现并清理指向已删除 Task 的悬挂节点。
 
 ### Calendar：把任务和日程放在一条时间线上
 
