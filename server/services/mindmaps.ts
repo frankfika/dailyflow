@@ -13,14 +13,24 @@
  * per file. Two near-simultaneous saves can't interleave a half-written
  * JSON, but we do NOT add file-level locks for now because the UI is the
  * sole writer.
+ *
+ * Schema versioning (SPEC §2.2):
+ *   - `version: 1` — pre-Topic-Space format. Read tolerantly, no rewrite.
+ *   - `version: 2` — current. Adds `spaceId` and per-node `kind` / `tag`
+ *     / `taskId`. Any PUT auto-bumps to v2. New creates write v2.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ulid } from 'ulid';
 import { loadConfig } from './config.js';
-import type { MindMap, MindMapInput, MindMapNode, MindMapEdge } from '../types/mindmap.js';
+import type { MindMap, MindMapInput, MindMapNode, MindMapEdge, MindMapNodeKind } from '../types/mindmap.js';
+import { DEFAULT_MINDMAP_NODE_KIND } from '../types/mindmap.js';
 
-const SCHEMA_VERSION = 1 as const;
+/** Current schema version for new writes. Reads accept both 1 and 2. */
+const SCHEMA_VERSION = 2 as const;
+
+/** Maps older than this are still readable. */
+const MIN_SUPPORTED_VERSION = 1 as const;
 
 function getDir(): string {
   // loadConfig is async; we expose `getDir` only after the config resolves.
@@ -56,10 +66,30 @@ async function writeMapFile(filePath: string, map: MindMap): Promise<void> {
   await next;
 }
 
-function emptyMap(title: string, now: string): MindMap {
+/**
+ * Fill default `kind` for any node that doesn't have one (SPEC §2.2:
+ * "缺省 `kind === 'branch'` (兼容老节点)"). This is a pure function so
+ * tests can pin its behavior.
+ */
+export function defaultNodeKind(node: MindMapNode): MindMapNode {
+  if (node.kind) return node;
+  return { ...node, kind: DEFAULT_MINDMAP_NODE_KIND };
+}
+
+/** Apply `defaultNodeKind` to every node in an array. */
+function defaultNodeKinds(nodes: MindMapNode[]): MindMapNode[] {
+  return nodes.map(defaultNodeKind);
+}
+
+function emptyMap(title: string, now: string, spaceId?: string): MindMap {
   const id = ulid();
   const rootId = ulid();
-  const root: MindMapNode = { id: rootId, text: title || '中心主题', position: { x: 0, y: 0 } };
+  const root: MindMapNode = {
+    id: rootId,
+    text: title || '中心主题',
+    position: { x: 0, y: 0 },
+    kind: 'root',
+  };
   return {
     id,
     title: title || '未命名导图',
@@ -67,6 +97,7 @@ function emptyMap(title: string, now: string): MindMap {
     nodes: [root],
     edges: [],
     version: SCHEMA_VERSION,
+    ...(spaceId ? { spaceId } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -80,7 +111,9 @@ export async function listMindMaps(): Promise<MindMap[]> {
       if (!entry.endsWith('.json')) continue;
       try {
         const map = await readMapFile(path.join(dir, entry));
-        if (map && map.version === SCHEMA_VERSION) {
+        // Accept any supported version; unknown future versions are skipped
+        // so a forward-incompatible change doesn't break the whole list.
+        if (map && map.version >= MIN_SUPPORTED_VERSION && map.version <= SCHEMA_VERSION) {
           maps.push(map);
         }
       } catch (err) {
@@ -109,10 +142,10 @@ export async function getMindMap(id: string): Promise<MindMap | null> {
 export async function createMindMap(input: Partial<MindMapInput> = {}): Promise<MindMap> {
   const now = new Date().toISOString();
   const title = (input.title ?? '').trim() || '未命名导图';
-  const map = emptyMap(title, now);
+  const map = emptyMap(title, now, input.spaceId);
   if (input.rootId) map.rootId = input.rootId;
   if (Array.isArray(input.nodes) && input.nodes.length > 0) {
-    map.nodes = input.nodes;
+    map.nodes = defaultNodeKinds(input.nodes);
     if (!map.nodes.find((n) => n.id === map.rootId) && map.nodes[0]) {
       map.rootId = map.nodes[0].id;
     }
@@ -129,6 +162,11 @@ export interface MindMapUpdate {
   rootId?: string;
   nodes?: MindMapNode[];
   edges?: MindMapEdge[];
+  /**
+   * v2: allow the route (or TopicSpace) to set the reverse link. If
+   * omitted, the existing `spaceId` is preserved.
+   */
+  spaceId?: string | null;
 }
 
 export async function updateMindMap(id: string, patch: MindMapUpdate): Promise<MindMap | null> {
@@ -142,15 +180,31 @@ export async function updateMindMap(id: string, patch: MindMapUpdate): Promise<M
       if (err && err.code === 'ENOENT') return null;
       throw err;
     }
+    // Any PUT auto-bumps to the current schema version (SPEC §3.3).
+    // The resulting `nodes` array gets `kind: 'branch'` defaulted on
+    // any node missing one — including nodes we inherited from the
+    // v1 file on disk, not just the ones the client sent. This is
+    // what makes the file truly forward-migrated to v2 shape.
+    const baseNodes = patch.nodes !== undefined ? patch.nodes : existing.nodes;
     const next: MindMap = {
       ...existing,
       title: patch.title !== undefined ? patch.title : existing.title,
       rootId: patch.rootId !== undefined ? patch.rootId : existing.rootId,
-      nodes: patch.nodes !== undefined ? patch.nodes : existing.nodes,
+      nodes: defaultNodeKinds(baseNodes),
       edges: patch.edges !== undefined ? patch.edges : existing.edges,
       version: SCHEMA_VERSION,
       updatedAt: now,
     };
+    if (patch.spaceId !== undefined) {
+      if (patch.spaceId === null) {
+        delete next.spaceId;
+      } else {
+        next.spaceId = patch.spaceId;
+      }
+    } else if (existing.spaceId) {
+      // Preserve existing reverse link.
+      next.spaceId = existing.spaceId;
+    }
     await writeMapFile(filePath, next);
     return next;
   });
@@ -168,3 +222,8 @@ export async function deleteMindMap(id: string): Promise<boolean> {
     }
   });
 }
+
+/**
+ * Re-export the kind constant for callers that don't want a second import.
+ */
+export type { MindMapNodeKind };

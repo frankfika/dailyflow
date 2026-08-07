@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "tauri": "tauri",
-    "bump": "node scripts/bump-version.mjs"
+    "bump": "node scripts/bump-version.mjs",
+    "migrate:topic-spaces": "tsx server/scripts/migrate-to-topic-spaces.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

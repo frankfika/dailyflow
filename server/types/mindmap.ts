@@ -8,10 +8,20 @@
  *   - `edges`         — parent → child relationships
  *   - `rootId`        — the starting node; the auto-layout pivots from it
  *   - `version`       — schema version, bumped if the shape changes
+ *   - `spaceId`       — v2 only, reverse link to the owning TopicSpace
  *
  * `nodes` carry an explicit `position` so the canvas state survives a reload
  * even if the user has dragged nodes away from the auto-laid-out default.
  */
+
+/**
+ * v2 node discriminator. `branch` is the implicit default for any node
+ * written before the kind field existed (SPEC §2.2).
+ */
+export type MindMapNodeKind = 'root' | 'branch' | 'tag' | 'task';
+
+export const DEFAULT_MINDMAP_NODE_KIND: MindMapNodeKind = 'branch';
+
 export interface MindMapNode {
   id: string;
   text: string;
@@ -37,6 +47,12 @@ export interface MindMapNode {
    * not used by the layout algorithm.
    */
   status?: MindMapNodeStatus;
+  /** v2: node role. Defaults to 'branch' on read for v1 nodes. */
+  kind?: MindMapNodeKind;
+  /** v2: tag label, used when `kind === 'tag'`. */
+  tag?: string;
+  /** v2: back-link to a Task. Used when `kind === 'task'`. */
+  taskId?: string;
 }
 
 /** Three-state task marker. `todo` is the implicit default. */
@@ -78,7 +94,14 @@ export interface MindMap {
   rootId: string;
   nodes: MindMapNode[];
   edges: MindMapEdge[];
-  version: 1;
+  /**
+   * Schema version. v1 is the pre-Topic-Space format; v2 adds
+   * `spaceId` and per-node `kind` / `tag` / `taskId`. The server
+   * auto-bumps to v2 on any PUT (SPEC §3.3).
+   */
+  version: 1 | 2;
+  /** v2: reverse link to the owning TopicSpace. Optional — v1 maps have no value. */
+  spaceId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,4 +112,6 @@ export interface MindMapInput {
   rootId: string;
   nodes: MindMapNode[];
   edges: MindMapEdge[];
+  /** v2 only: back-link to the TopicSpace this map was created for. */
+  spaceId?: string;
 }

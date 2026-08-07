@@ -11,6 +11,16 @@ export interface Task {
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
   line?: number;
+  /**
+   * v2 (Topic Spaces): owning topic space. Optional — most tasks predate
+   * the migration and remain unattached. Backed in-memory only for now;
+   * markdown persistence is intentionally deferred to Phase 4 (SPEC §2.3).
+   */
+  spaceId?: string;
+  /** v2: source mindmap if this task was promoted from a node. */
+  originMindmapId?: string;
+  /** v2: source mindmap node id if this task was promoted from a node. */
+  originNodeId?: string;
 }
 
 export interface DailyNote {

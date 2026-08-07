@@ -181,4 +181,59 @@ router.delete('/:taskId', async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/tasks/:taskId/space - 改 task 的归属主题空间 (Phase 1 stub)
+ *
+ * Body: `{ spaceId: string | null, date?: string }`
+ *
+ * Phase 1 行为: 验证 task 存在, 在内存里把 spaceId 写到 task 对象, 不写
+ * markdown (markdown 元数据留给 Phase 4 实现, SPEC §2.3 / §3.4)。
+ * 所以这个端点的 response 直接 echo "in-memory patched task"。
+ *
+ * TODO(topic-spaces/phase-4): 把 `^space:xxx` 注释写进 markdown 行，
+ * 让关系可持久化。
+ */
+router.put('/:taskId/space', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { spaceId, date } = req.body ?? {};
+    const config = await loadConfig();
+
+    if (spaceId !== null && typeof spaceId !== 'string') {
+      return res.status(400).json({ error: 'spaceId must be a string or null' });
+    }
+
+    // 不传 date: 直接 echo 一个最小 Task 对象, 让前端可以把关系存到
+    // 本地 state。传 date: 验证 task 存在, 并在 echo 中带上原始字段。
+    if (typeof date === 'string' && date) {
+      const note = await readDailyNote(date, config);
+      if (!note) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      const existing = note.tasks.find(t => t.id === taskId);
+      if (!existing) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      const patched: Task = {
+        ...existing,
+        spaceId: spaceId ?? undefined,
+      };
+      // Phase 1: 不写 markdown; 仅返回 echo。
+      return res.json({ success: true, task: patched, persisted: false });
+    }
+
+    const echo: Task = {
+      id: taskId,
+      title: '',
+      status: 'todo',
+      spaceId: spaceId ?? undefined,
+    };
+    return res.json({ success: true, task: echo, persisted: false });
+  } catch (error: any) {
+    console.error('Error setting task space:', error);
+    const status = error?.status ?? 500;
+    res.status(status).json({ error: error.message });
+  }
+});
+
 export default router;

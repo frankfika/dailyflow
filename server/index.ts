@@ -18,6 +18,7 @@ import calendarRouter from './routes/calendar.js';
 import googleCalendarRouter from './routes/googleCalendar.js';
 import dailyRouter from './routes/daily.js';
 import mindmapsRouter from './routes/mindmaps.js';
+import topicSpacesRouter from './routes/topicSpaces.js';
 import { v2Router } from './routes/v2/index.js';
 
 const app = express();
@@ -80,6 +81,7 @@ app.use('/api/calendar', calendarRouter);
 app.use('/api/google-calendar', googleCalendarRouter);
 app.use('/api/daily', dailyRouter);
 app.use('/api/mindmaps', mindmapsRouter);
+app.use('/api/topic-spaces', topicSpacesRouter);
 app.use('/api/v2', v2Router);
 
 // 健康检查
