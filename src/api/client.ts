@@ -198,6 +198,37 @@ export const tasksApi = {
     });
     if (!res.ok) throw await httpError(res, 'Failed to delete task');
   },
+
+  /**
+   * Topic Space v2 (Phase 1): move a task to a different space. Pass
+   * `null` to send it back to "未分类". Markdown rows do not get
+   * `^space:xxx` annotations yet — the link lives in the server's
+   * in-memory map only.
+   */
+  async setSpace(taskId: string, spaceId: string | null): Promise<void> {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}/space`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spaceId }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to set task space');
+  },
+
+  /**
+   * Pure-client filter helper (Phase 1 stub). Given a list of tasks and
+   * a `spaceId`, return the tasks that belong to that space. `null`
+   * returns unclassified tasks (those with no `spaceId`). This is a
+   * placeholder until the server exposes a dedicated endpoint.
+   */
+  tasksBySpace<T extends { spaceId?: string }>(
+    tasks: T[],
+    spaceId: string | null,
+  ): T[] {
+    if (spaceId === null) {
+      return tasks.filter((t) => !t.spaceId);
+    }
+    return tasks.filter((t) => t.spaceId === spaceId);
+  },
 };
 
 /**
@@ -621,6 +652,137 @@ export const thinkingWorkspacesApi = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Topic Space (Phase 1) — superset of ThinkingWorkspace with a 1:1
+// mindmapId binding and a context discriminator. `kind: 'topic-space'`
+// separates new files from legacy 'workspace' (or missing) ones; the UI
+// reads both and labels legacy tabs as "（旧版）".
+// ---------------------------------------------------------------------------
+
+export type TopicSpaceContext = 'work' | 'life' | 'unclassified';
+export type TopicSpaceDefaultView = 'mindmap' | 'list';
+export type TopicSpaceStatus = 'active' | 'paused' | 'completed' | 'archived';
+
+export interface TopicSpace {
+  id: string;
+  title: string;
+  /** `'topic-space'` for new files; legacy 'workspace' files are read
+   *  through the `/api/thinking-workspaces` endpoint instead. */
+  kind: 'topic-space';
+  /** Which context this space lives under. Defaults to 'unclassified'
+   *  during the migration window. */
+  context: TopicSpaceContext;
+  /** Mind map that this space is bound to (1:1). The server creates
+   *  a blank map on POST and binds them in both directions. */
+  mindmapId: string;
+  /** Stable position among siblings in the same context. */
+  order: number;
+  defaultView: TopicSpaceDefaultView;
+  status: TopicSpaceStatus;
+  tags: string[];
+  taskIds: string[];
+  linkedNoteIds: string[];
+  intent: string;
+  scratchpad: string;
+  brief: string;
+  journey: string;
+  tasksMarkdown: string;
+  mindmapMarkdown: string;
+  timeline: WorkspaceTimelineEntryData[];
+  createdAt: string;
+  updatedAt: string;
+  filePath?: string;
+}
+
+/** Filters accepted by `topicSpacesApi.list`. */
+export interface TopicSpaceFilters {
+  context?: TopicSpaceContext;
+  status?: TopicSpaceStatus;
+  query?: string;
+}
+
+export interface TopicSpaceCreateInput {
+  title: string;
+  context?: TopicSpaceContext;
+  defaultView?: TopicSpaceDefaultView;
+  status?: TopicSpaceStatus;
+  tags?: string[];
+  intent?: string;
+  scratchpad?: string;
+  brief?: string;
+  journey?: string;
+}
+
+export type TopicSpaceUpdate = Partial<
+  Omit<
+    TopicSpace,
+    'id' | 'kind' | 'createdAt' | 'updatedAt' | 'filePath' | 'mindmapId'
+  >
+>;
+
+export const topicSpacesApi = {
+  async list(filters?: TopicSpaceFilters): Promise<TopicSpace[]> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+      });
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/topic-spaces${query}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch topic spaces');
+    return res.json();
+  },
+
+  async get(id: string): Promise<TopicSpace> {
+    const res = await fetch(`${API_BASE}/topic-spaces/${id}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch topic space');
+    return res.json();
+  },
+
+  async create(input: TopicSpaceCreateInput): Promise<TopicSpace> {
+    const res = await fetch(`${API_BASE}/topic-spaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create topic space');
+    return res.json();
+  },
+
+  async update(id: string, patch: TopicSpaceUpdate): Promise<TopicSpace> {
+    const res = await fetch(`${API_BASE}/topic-spaces/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to update topic space');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/topic-spaces/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 404) {
+      throw await httpError(res, 'Failed to delete topic space');
+    }
+  },
+
+  /**
+   * Reorder spaces within a context. The server persists the new `order`
+   * based on the position in `orderedIds`.
+   */
+  async reorder(context: TopicSpaceContext, orderedIds: string[]): Promise<void> {
+    const res = await fetch(`${API_BASE}/topic-spaces/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context, orderedIds }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to reorder topic spaces');
+  },
+};
+
 export interface ProjectData {
   id: string;
   name: string;
@@ -959,6 +1121,13 @@ export const promptsApi = {
  */
 export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warning' | 'danger';
 
+/**
+ * Topic Space v2 (Phase 1): semantic kind for a mind map node. The
+ * default for legacy nodes is `'branch'` — anything older is treated as
+ * a regular branch node until Phase 2 lets the user re-classify it.
+ */
+export type MindMapNodeKind = 'root' | 'branch' | 'tag' | 'task';
+
 export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
   'default',
   'accent',
@@ -987,6 +1156,18 @@ export interface MindMapNode {
   note?: string;
   /** Three-state task marker: `todo` (default), `in-progress`, `done`. */
   status?: MindMapNodeStatus;
+  // ---------------------------------------------------------------------
+  // Topic Space v2 (Phase 1): node semantics. `kind` defaults to 'branch'
+  // when missing (legacy maps). Phase 2 will let the UI mutate `kind`
+  // (right-click → "转为待办" / "关联已有 Task" / "设为 Tag"). For now
+  // these are read-only display hints.
+  // ---------------------------------------------------------------------
+  /** Default 'branch' if missing. */
+  kind?: MindMapNodeKind;
+  /** Tag label, used when `kind === 'tag'`. */
+  tag?: string;
+  /** Linked Task id, used when `kind === 'task'`. */
+  taskId?: string;
 }
 
 export interface MindMapEdge {
@@ -1001,7 +1182,11 @@ export interface MindMap {
   rootId: string;
   nodes: MindMapNode[];
   edges: MindMapEdge[];
-  version: 1;
+  /** v1 = legacy (no `spaceId`, nodes may lack `kind`). v2 = topic-space aware. */
+  version: 1 | 2;
+  /** Back-reference to the owning TopicSpace, set when this map was created
+   *  by `POST /api/topic-spaces`. May be missing on legacy / orphan maps. */
+  spaceId?: string;
   createdAt: string;
   updatedAt: string;
 }

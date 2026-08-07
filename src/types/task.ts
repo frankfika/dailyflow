@@ -10,6 +10,15 @@ export type Task = {
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  // Topic Space v2 (Phase 1): the task's home topic space, if any. A task
+  // with no spaceId belongs to "未分类" (unclassified). Kept in memory only
+  // for now; markdown rows do not get a `^space:xxx` annotation until
+  // Phase 4 decides on a round-trippable format.
+  spaceId?: string;
+  /** Origin mind map this task was promoted from, if any. */
+  originMindmapId?: string;
+  /** Origin mind map node this task was promoted from, if any. */
+  originNodeId?: string;
 };
 
 export type DailyNoteData = {

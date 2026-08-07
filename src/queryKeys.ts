@@ -16,4 +16,10 @@ export const queryKeys = {
   jobsRoot: (workspaceId: string) => ['workspace', workspaceId, 'jobs'] as const,
   jobs: (workspaceId: string, filters: object = {}) => [...queryKeys.jobsRoot(workspaceId), filters] as const,
   job: (workspaceId: string, jobId: string) => ['workspace', workspaceId, 'job', jobId] as const,
+  // Topic Space v2 (Phase 1). Not workspace-scoped: a topic space is
+  // global to a context (work / life / unclassified), and the same
+  // server endpoint serves every workspace.
+  topicSpacesRoot: () => ['topic-spaces'] as const,
+  topicSpaces: (filters: object = {}) => [...queryKeys.topicSpacesRoot(), filters] as const,
+  topicSpace: (id: string) => ['topic-spaces', 'detail', id] as const,
 };

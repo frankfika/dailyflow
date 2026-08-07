@@ -25,8 +25,10 @@ import {
   Circle,
   CircleDot,
   CheckCircle2,
+  Tag as TagIcon,
+  Link2,
 } from 'lucide-react';
-import type { MindMapNodeColor, MindMapNodeStatus } from '../../api/client';
+import type { MindMapNodeColor, MindMapNodeKind, MindMapNodeStatus } from '../../api/client';
 
 export interface MindMapNodeData extends Record<string, unknown> {
   text: string;
@@ -43,6 +45,14 @@ export interface MindMapNodeData extends Record<string, unknown> {
   isSearchMatch: boolean;
   /** True when this node is the currently focused search match. */
   isFocusedMatch: boolean;
+  // Topic Space v2 (Phase 1): node kind drives the visual treatment.
+  // Defaulted to 'branch' in the parent so this is always defined for
+  // v2+ maps; legacy maps without `kind` will see 'branch' as well.
+  kind: MindMapNodeKind;
+  /** Set when `kind === 'tag'`. */
+  tag?: string;
+  /** Set when `kind === 'task'` (link to a real Task). */
+  taskId?: string;
   onStartEdit: (id: string) => void;
   onCommitEdit: (id: string, text: string) => void;
   onCancelEdit: () => void;
@@ -180,13 +190,27 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
     inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 240)}px`;
   }, [draft, d.isEditing]);
 
+  // Topic Space v2: kind drives the visual treatment. The defaults below
+  // mean legacy maps (no `kind`) get the same look as `branch` — no
+  // visual regression for v1 data.
+  const kind: MindMapNodeKind = d.kind ?? 'branch';
+  const kindClass =
+    kind === 'tag'
+      ? 'opacity-70 border-dashed text-[11px] py-1 px-2.5'
+      : kind === 'task'
+        ? 'border-l-[3px] border-l-[var(--color-accent)] pl-2.5'
+        : kind === 'root'
+          ? 'rounded-full'
+          : '';
+
   return (
     <div
       className="relative"
       data-testid={`mindmap-node-${id}`}
+      data-kind={kind}
     >
       <div
-        className={`group relative flex items-start gap-2 rounded-2xl border backdrop-blur-sm transition-all ${palette.bg} ${palette.border} ${
+        className={`group relative flex items-start gap-2 rounded-2xl border backdrop-blur-sm transition-all ${palette.bg} ${palette.border} ${kindClass} ${
           d.isRoot ? ROOT_CARD : CHILD_CARD
         } ${
           d.isFocusedMatch
@@ -263,6 +287,27 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
                 d.status === 'done' ? 'line-through opacity-60' : ''
               }`}
             >
+              {kind === 'tag' && (
+                <TagIcon
+                  className="mr-1 inline-block h-3 w-3 align-[-2px] text-text-muted"
+                  aria-hidden="true"
+                  data-testid={`mindmap-kind-tag-${id}`}
+                />
+              )}
+              {kind === 'task' && d.taskId && (
+                <span
+                  className="mr-1 inline-flex items-center gap-0.5 text-[10px] text-text-muted"
+                  title={`linked to task: ${d.taskId}`}
+                  data-testid={`mindmap-kind-task-${id}`}
+                >
+                  <Link2 className="h-3 w-3" aria-hidden="true" />
+                  <span className="font-mono">{d.taskId.slice(-6)}</span>
+                </span>
+              )}
+              {/* TODO(topic-spaces/phase-2): Phase 2 will let the user
+                  right-click a node to mutate its kind via the new
+                  mindmapsApi.promoteNodeToTask / linkNodeToTask
+                  endpoints. For now the kind is read-only. */}
               {d.text || <span className="italic text-text-muted">未命名</span>}
               {d.note && (
                 <div className="mt-1 text-[10px] font-normal text-text-muted">

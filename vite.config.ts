@@ -17,6 +17,28 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    server: {
+      // Utility scripts at the project root (e.g. _demo-record.mjs,
+      // webbridge-*.mjs) are tooling, not source — but Vite still
+      // watches them and triggers a full page reload whenever they
+      // change. Ignoring them keeps the dev session stable while
+      // those scripts churn.
+      watch: {
+        ignored: [
+          '**/_demo-record.mjs',
+          '**/webbridge-*.mjs',
+          '**/scripts/_demo-record.mjs',
+          '**/scripts/debug-mindmap.mjs',
+        ],
+      },
+      hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:3003',
+          changeOrigin: true,
+        },
+      },
+    },
     build: {
       rollupOptions: {
         output: {
@@ -35,15 +57,6 @@ export default defineConfig(() => {
         },
       },
       chunkSizeWarningLimit: 800,
-    },
-    server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      proxy: {
-        '/api': {
-          target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:3003',
-          changeOrigin: true,
-        },
-      },
     },
   };
 });

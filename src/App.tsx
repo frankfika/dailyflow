@@ -34,6 +34,8 @@ import { filterTasksByContext, filterNotesByContext } from './utils/contextFilte
 import { useMeetingCapture } from './hooks/useMeetingCapture';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
+import { TopicTabs, type TopicTabValue } from './components/TopicTabs/TopicTabs';
+import { useTopicSpaces, useCreateTopicSpace } from './hooks/useTopicSpaces';
 
 type Task = {
   id: string;
@@ -93,6 +95,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
+  // Topic Space v2 (Phase 1): the active tab in the MindMap header.
+  //   - null → 全部
+  //   - '__unclassified__' → 未分类
+  //   - any other id → that specific space
+  // We default to null on first render so the user starts on "全部",
+  // matching the pre-Phase-1 behavior. The active space resets when
+  // the workspace changes (see the effect below).
+  const [activeSpaceId, setActiveSpaceId] = useState<TopicTabValue>(null);
   // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
   // modal lives at the App level so it can be opened from any tab, not just
   // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
@@ -173,6 +183,30 @@ export default function App() {
   const [configTab, setConfigTab] = useState<'general' | 'sync' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
+  // Topic Space v2 (Phase 1): load the spaces for the current context so
+  // the MindMap tab can render the topic strip. The hook is global
+  // (not workspace-scoped) so the same data shows up under every
+  // workspace switch — the server keeps spaces in their own folder.
+  const topicSpacesQuery = useTopicSpaces({ context: activeContext });
+  const topicSpaces = topicSpacesQuery.data ?? [];
+  const createTopicSpace = useCreateTopicSpace();
+  // The auto-select-on-create effect has been folded into
+  // `handleCreateTopic` itself: the `useTopicSpaces` cache update fires
+  // *before* `mutateAsync` resolves, so a ref set after the await
+  // would be invisible to the effect on the first render. Switching
+  // directly in the handler is both simpler and race-free.
+  const handleCreateTopic = useCallback(
+    async (title: string) => {
+      const created = await createTopicSpace.mutateAsync({
+        title,
+        context: activeContext,
+        defaultView: 'mindmap',
+        status: 'active',
+      });
+      setActiveSpaceId(created.id);
+    },
+    [createTopicSpace, activeContext],
+  );
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -1336,13 +1370,31 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="h-full min-h-0 overflow-hidden"
+                  className="flex h-full min-h-0 flex-col overflow-hidden"
                 >
-                  <MindMapView
-                    workspaceId={activeWorkspaceId || 'default'}
-                    language={language}
-                    showToast={showToast}
+                  <TopicTabs
+                    context={activeContext}
+                    spaces={topicSpaces.map((s) => ({
+                      id: s.id,
+                      title: s.title,
+                      context: s.context,
+                      order: s.order,
+                      kind: s.kind,
+                    }))}
+                    activeSpaceId={activeSpaceId}
+                    onSelect={setActiveSpaceId}
+                    onCreate={handleCreateTopic}
+                    isLoading={topicSpacesQuery.isLoading}
                   />
+                  <div className="min-h-0 flex-1">
+                    <MindMapView
+                      workspaceId={activeWorkspaceId || 'default'}
+                      language={language}
+                      showToast={showToast}
+                      activeSpaceId={activeSpaceId}
+                      topicSpaces={topicSpaces}
+                    />
+                  </div>
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">
