@@ -144,22 +144,6 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
 
   it('renders the Open task button when onOpenTask and sourceDate are set', () => {
     const onOpenTask = vi.fn();
-    renderNode('tn2', makeData({
-      text: '代码 review',
-      kind: 'task' as MindMapNodeKind,
-      taskId: 't2',
-      sourceDate: '2026-08-07',
-      language: 'zh',
-      onOpenTask,
-    }));
-    const btn = screen.getByTestId('mindmap-open-task-tn2');
-    expect(btn).toBeInTheDocument();
-    // Force the node to be selected so the action strip is visible.
-    // (MindMapNode only renders the strip when the node is selected, but
-    // the data passed in doesn't carry `selected`. We trigger selection
-    // by clicking the node body — but the simpler way is to re-render
-    // with isSelected: true.)
-    cleanup();
     render(
       <ReactFlowProvider>
         <ReactFlow
@@ -191,7 +175,21 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
   });
 
   it('does NOT render the Open task button for non-task kinds', () => {
-    renderNode('b1', makeData({ text: '普通节点', kind: 'branch' as MindMapNodeKind, isSelected: true }));
+    render(
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={[{
+            id: 'b1',
+            type: 'mindmap',
+            position: { x: 0, y: 0 },
+            data: makeData({ text: '普通节点', kind: 'branch' as MindMapNodeKind, isSelected: true }) as unknown as Record<string, unknown>,
+          }]}
+          edges={[]}
+          nodeTypes={NODE_TYPES}
+          fitView={false}
+        />
+      </ReactFlowProvider>,
+    );
     expect(screen.queryByTestId('mindmap-open-task-b1')).not.toBeInTheDocument();
   });
 });
