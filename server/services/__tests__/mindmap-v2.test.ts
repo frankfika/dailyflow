@@ -200,6 +200,32 @@ describe.sequential('mindmap v2', () => {
     expect(next?.kind).toBe('branch');
     expect(next?.taskId).toBeUndefined();
   });
+
+  it('serializes concurrent full-map and single-node updates without losing either change', async () => {
+    const created = await createMindMap({ title: 'Before' });
+    const branch = {
+      id: 'n_concurrent',
+      text: 'Concurrent',
+      position: { x: 1, y: 0 },
+      kind: 'branch' as const,
+    };
+    await updateMindMap(created.id, {
+      nodes: [...created.nodes, branch],
+      edges: [{ id: 'e_concurrent', source: created.rootId, target: branch.id }],
+    });
+
+    await Promise.all([
+      updateMindMap(created.id, { title: 'After' }),
+      updateNodeInMindMap(created.id, branch.id, { kind: 'task', taskId: 't_concurrent' }),
+    ]);
+
+    const final = await getMindMap(created.id);
+    expect(final?.title).toBe('After');
+    expect(final?.nodes.find((node) => node.id === branch.id)).toMatchObject({
+      kind: 'task',
+      taskId: 't_concurrent',
+    });
+  });
 });
 
 describe('getInheritedTagsFromMap', () => {

@@ -3,10 +3,10 @@
  *
  * The menu is controlled (parent owns `open` / `position`) and only
  * renders the actions that make sense for the node's current `kind`:
- *   - `root`  — only Promote / Link; the root is the space's anchor and
- *                can't be re-classified.
- *   - `task`  — Promote becomes "更新绑定" (re-promote), Tag/Link still apply.
- *   - `tag`   — Tag is greyed out (you're already a tag); Branch / Link / Promote apply.
+ *   - `root`  — no menu; the root is the space's anchor and can't be
+ *                converted, linked, or re-classified.
+ *   - `task`  — Link / Tag / Branch apply; promoting again would duplicate a task.
+ *   - `tag`   — Tag is greyed out; Branch / Link apply.
  *   - `branch`— all four actions are live.
  *
  * Click outside / Escape closes the menu (the parent is responsible for
@@ -52,7 +52,6 @@ export interface NodeContextMenuProps {
 const LANG = {
   zh: {
     promote: '转为待办',
-    promoteUpdate: '重新转为待办',
     link: '关联已有 Task',
     setTag: '设为 Tag',
     unclassify: '取消分类',
@@ -62,7 +61,6 @@ const LANG = {
   },
   en: {
     promote: 'Convert to Task',
-    promoteUpdate: 'Re-convert to Task',
     link: 'Link to existing Task',
     setTag: 'Mark as Tag',
     unclassify: 'Unclassify',
@@ -116,12 +114,7 @@ export function NodeContextMenu({
     };
   }, [open, onClose]);
 
-  if (!open || !position) return null;
-
-  // The root is the space's anchor and shouldn't be re-classified.
-  // Promote/Link still work (you can promote the root to a top-level task).
-  const hideTagActions = kind === 'root';
-  const promoteLabel = kind === 'task' ? L.promoteUpdate : L.promote;
+  if (!open || !position || kind === 'root') return null;
 
   // The "tag" action is a no-op for nodes that are already tags (their
   // `tag` label is the node text). We still render the row but disabled,
@@ -151,19 +144,21 @@ export function NodeContextMenu({
     >
       {!linkMode ? (
         <>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onPromote();
-              onClose();
-            }}
-            data-testid="node-context-menu-promote"
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-text-main transition-colors hover:bg-black/[0.05]"
-          >
-            <CheckSquare className="h-3.5 w-3.5 text-text-muted" />
-            <span className="flex-1">{promoteLabel}</span>
-          </button>
+          {kind === 'branch' && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onPromote();
+                onClose();
+              }}
+              data-testid="node-context-menu-promote"
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-text-main transition-colors hover:bg-black/[0.05]"
+            >
+              <CheckSquare className="h-3.5 w-3.5 text-text-muted" />
+              <span className="flex-1">{L.promote}</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -176,8 +171,7 @@ export function NodeContextMenu({
             <span className="flex-1">{L.link}</span>
           </button>
 
-          {!hideTagActions && (
-            <button
+          <button
               type="button"
               role="menuitem"
               onClick={() => {
@@ -192,11 +186,9 @@ export function NodeContextMenu({
               <TagIcon className="h-3.5 w-3.5 text-text-muted" />
               <span className="flex-1">{L.setTag}</span>
               {kind === 'tag' && <Check className="h-3 w-3 text-[var(--color-accent)]" />}
-            </button>
-          )}
+          </button>
 
-          {!hideTagActions && (
-            <button
+          <button
               type="button"
               role="menuitem"
               onClick={() => {
@@ -208,8 +200,7 @@ export function NodeContextMenu({
             >
               <XCircle className="h-3.5 w-3.5 text-text-muted" />
               <span className="flex-1">{L.unclassify}</span>
-            </button>
-          )}
+          </button>
         </>
       ) : (
         <div data-testid="node-context-menu-link-picker" className="p-1">

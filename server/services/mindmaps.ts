@@ -9,10 +9,9 @@
  *  - the v2 repository is append-audit / conflict-resolved; we just need
  *    a single-document save with no concurrent writers in the UI today.
  *
- * Concurrency: the in-process write queue (`saveQueue`) serializes writes
- * per file. Two near-simultaneous saves can't interleave a half-written
- * JSON, but we do NOT add file-level locks for now because the UI is the
- * sole writer.
+ * Concurrency: the in-process mutation queue serializes the complete
+ * read-modify-write cycle per file. This matters now that canvas autosave
+ * and node/task mutations can target the same map at the same time.
  *
  * Schema versioning (SPEC §2.2):
  *   - `version: 1` — pre-Topic-Space format. Read tolerantly, no rewrite.
@@ -32,12 +31,6 @@ const SCHEMA_VERSION = 2 as const;
 /** Maps older than this are still readable. */
 const MIN_SUPPORTED_VERSION = 1 as const;
 
-function getDir(): string {
-  // loadConfig is async; we expose `getDir` only after the config resolves.
-  // See `withDir` below.
-  throw new Error('getDir called without workspaceRoot; use withDir');
-}
-
 async function withDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const config = await loadConfig();
   const dir = path.join(config.workspaceRoot, '.dailyflow', 'mindmaps');
@@ -50,7 +43,19 @@ function fileFor(dir: string, id: string): string {
   return path.join(dir, `${id}.json`);
 }
 
-const saveQueue = new Map<string, Promise<unknown>>();
+const mutationQueue = new Map<string, Promise<void>>();
+
+async function withFileLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
+  const previous = mutationQueue.get(filePath) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(operation);
+  const settled = current.then(() => undefined, () => undefined);
+  mutationQueue.set(filePath, settled);
+  try {
+    return await current;
+  } finally {
+    if (mutationQueue.get(filePath) === settled) mutationQueue.delete(filePath);
+  }
+}
 
 async function readMapFile(filePath: string): Promise<MindMap> {
   const raw = await fs.readFile(filePath, 'utf-8');
@@ -58,12 +63,7 @@ async function readMapFile(filePath: string): Promise<MindMap> {
 }
 
 async function writeMapFile(filePath: string, map: MindMap): Promise<void> {
-  // Serialize per file so concurrent updates don't interleave a half-written
-  // document on disk.
-  const previous = saveQueue.get(filePath) ?? Promise.resolve();
-  const next = previous.then(() => fs.writeFile(filePath, JSON.stringify(map, null, 2), 'utf-8'));
-  saveQueue.set(filePath, next.catch(() => undefined));
-  await next;
+  await fs.writeFile(filePath, JSON.stringify(map, null, 2), 'utf-8');
 }
 
 /**
@@ -109,8 +109,9 @@ export async function listMindMaps(): Promise<MindMap[]> {
     const maps: MindMap[] = [];
     for (const entry of entries) {
       if (!entry.endsWith('.json')) continue;
+      const filePath = path.join(dir, entry);
       try {
-        const map = await readMapFile(path.join(dir, entry));
+        const map = await withFileLock(filePath, () => readMapFile(filePath));
         // Accept any supported version; unknown future versions are skipped
         // so a forward-incompatible change doesn't break the whole list.
         if (map && map.version >= MIN_SUPPORTED_VERSION && map.version <= SCHEMA_VERSION) {
@@ -130,12 +131,14 @@ export async function listMindMaps(): Promise<MindMap[]> {
 export async function getMindMap(id: string): Promise<MindMap | null> {
   return withDir(async (dir) => {
     const filePath = fileFor(dir, id);
-    try {
-      return await readMapFile(filePath);
-    } catch (err: any) {
-      if (err && err.code === 'ENOENT') return null;
-      throw err;
-    }
+    return withFileLock(filePath, async () => {
+      try {
+        return await readMapFile(filePath);
+      } catch (err: any) {
+        if (err && err.code === 'ENOENT') return null;
+        throw err;
+      }
+    });
   });
 }
 
@@ -152,8 +155,11 @@ export async function createMindMap(input: Partial<MindMapInput> = {}): Promise<
   }
   if (Array.isArray(input.edges)) map.edges = input.edges;
   return withDir(async (dir) => {
-    await writeMapFile(fileFor(dir, map.id), map);
-    return map;
+    const filePath = fileFor(dir, map.id);
+    return withFileLock(filePath, async () => {
+      await writeMapFile(filePath, map);
+      return map;
+    });
   });
 }
 
@@ -173,53 +179,49 @@ export async function updateMindMap(id: string, patch: MindMapUpdate): Promise<M
   const now = new Date().toISOString();
   return withDir(async (dir) => {
     const filePath = fileFor(dir, id);
-    let existing: MindMap;
-    try {
-      existing = await readMapFile(filePath);
-    } catch (err: any) {
-      if (err && err.code === 'ENOENT') return null;
-      throw err;
-    }
-    // Any PUT auto-bumps to the current schema version (SPEC §3.3).
-    // The resulting `nodes` array gets `kind: 'branch'` defaulted on
-    // any node missing one — including nodes we inherited from the
-    // v1 file on disk, not just the ones the client sent. This is
-    // what makes the file truly forward-migrated to v2 shape.
-    const baseNodes = patch.nodes !== undefined ? patch.nodes : existing.nodes;
-    const next: MindMap = {
-      ...existing,
-      title: patch.title !== undefined ? patch.title : existing.title,
-      rootId: patch.rootId !== undefined ? patch.rootId : existing.rootId,
-      nodes: defaultNodeKinds(baseNodes),
-      edges: patch.edges !== undefined ? patch.edges : existing.edges,
-      version: SCHEMA_VERSION,
-      updatedAt: now,
-    };
-    if (patch.spaceId !== undefined) {
-      if (patch.spaceId === null) {
-        delete next.spaceId;
-      } else {
-        next.spaceId = patch.spaceId;
+    return withFileLock(filePath, async () => {
+      let existing: MindMap;
+      try {
+        existing = await readMapFile(filePath);
+      } catch (err: any) {
+        if (err && err.code === 'ENOENT') return null;
+        throw err;
       }
-    } else if (existing.spaceId) {
-      // Preserve existing reverse link.
-      next.spaceId = existing.spaceId;
-    }
-    await writeMapFile(filePath, next);
-    return next;
+      // Any PUT auto-bumps to the current schema version (SPEC §3.3).
+      const baseNodes = patch.nodes !== undefined ? patch.nodes : existing.nodes;
+      const next: MindMap = {
+        ...existing,
+        title: patch.title !== undefined ? patch.title : existing.title,
+        rootId: patch.rootId !== undefined ? patch.rootId : existing.rootId,
+        nodes: defaultNodeKinds(baseNodes),
+        edges: patch.edges !== undefined ? patch.edges : existing.edges,
+        version: SCHEMA_VERSION,
+        updatedAt: now,
+      };
+      if (patch.spaceId !== undefined) {
+        if (patch.spaceId === null) delete next.spaceId;
+        else next.spaceId = patch.spaceId;
+      } else if (existing.spaceId) {
+        next.spaceId = existing.spaceId;
+      }
+      await writeMapFile(filePath, next);
+      return next;
+    });
   });
 }
 
 export async function deleteMindMap(id: string): Promise<boolean> {
   return withDir(async (dir) => {
     const filePath = fileFor(dir, id);
-    try {
-      await fs.unlink(filePath);
-      return true;
-    } catch (err: any) {
-      if (err && err.code === 'ENOENT') return false;
-      throw err;
-    }
+    return withFileLock(filePath, async () => {
+      try {
+        await fs.unlink(filePath);
+        return true;
+      } catch (err: any) {
+        if (err && err.code === 'ENOENT') return false;
+        throw err;
+      }
+    });
   });
 }
 
@@ -248,37 +250,33 @@ export async function updateNodeInMindMap(
   const now = new Date().toISOString();
   return withDir(async (dir) => {
     const filePath = fileFor(dir, mindmapId);
-    let existing: MindMap;
-    try {
-      existing = await readMapFile(filePath);
-    } catch (err: any) {
-      if (err && err.code === 'ENOENT') return null;
-      throw err;
-    }
-    const idx = existing.nodes.findIndex(n => n.id === nodeId);
-    if (idx === -1) return null;
-    // Apply the patch, dropping any keys explicitly set to undefined so
-    // the cleared state survives a round-trip.
-    const merged: MindMapNode = { ...existing.nodes[idx] };
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === undefined) {
-        delete (merged as any)[k];
-      } else {
-        (merged as any)[k] = v;
+    return withFileLock(filePath, async () => {
+      let existing: MindMap;
+      try {
+        existing = await readMapFile(filePath);
+      } catch (err: any) {
+        if (err && err.code === 'ENOENT') return null;
+        throw err;
       }
-    }
-    // Re-default `kind` if the patch wiped it.
-    if (!merged.kind) merged.kind = DEFAULT_MINDMAP_NODE_KIND;
-    const nextNodes = existing.nodes.slice();
-    nextNodes[idx] = merged;
-    const next: MindMap = {
-      ...existing,
-      nodes: nextNodes,
-      version: SCHEMA_VERSION,
-      updatedAt: now,
-    };
-    await writeMapFile(filePath, next);
-    return next;
+      const idx = existing.nodes.findIndex(n => n.id === nodeId);
+      if (idx === -1) return null;
+      const merged: MindMapNode = { ...existing.nodes[idx] };
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === undefined) delete (merged as any)[k];
+        else (merged as any)[k] = v;
+      }
+      if (!merged.kind) merged.kind = DEFAULT_MINDMAP_NODE_KIND;
+      const nextNodes = existing.nodes.slice();
+      nextNodes[idx] = merged;
+      const next: MindMap = {
+        ...existing,
+        nodes: nextNodes,
+        version: SCHEMA_VERSION,
+        updatedAt: now,
+      };
+      await writeMapFile(filePath, next);
+      return next;
+    });
   });
 }
 
