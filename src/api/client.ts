@@ -1313,7 +1313,8 @@ export const mindmapsApi = {
       },
     );
     if (!res.ok) throw await httpError(res, 'Failed to promote node to task');
-    return res.json();
+    const payload = await res.json() as { mindmap: MindMap };
+    return payload.mindmap;
   },
 
   /**
@@ -1336,7 +1337,8 @@ export const mindmapsApi = {
       },
     );
     if (!res.ok) throw await httpError(res, 'Failed to link node to task');
-    return res.json();
+    const payload = await res.json() as { mindmap: MindMap };
+    return payload.mindmap;
   },
 
   /**

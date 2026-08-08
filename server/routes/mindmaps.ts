@@ -8,6 +8,7 @@
  *   DELETE /api/mindmaps/:id                                   — delete
  *   POST   /api/mindmaps/:id/nodes/:nodeId/promote-to-task    — turn a branch node into a new Task
  *   POST   /api/mindmaps/:id/nodes/:nodeId/link-task           — bind a branch node to an existing Task
+ *   PUT    /api/mindmaps/:id/nodes/:nodeId/kind                — classify a node as tag/branch
  */
 import { Router } from 'express';
 import { ulid } from 'ulid';
@@ -21,7 +22,6 @@ import {
   getInheritedTagsFromMap,
 } from '../services/mindmaps.js';
 import {
-  getTopicSpace,
   addTaskIdToTopicSpace,
 } from '../services/topicSpaces.js';
 import { readDailyNote, writeDailyNote } from '../services/fileSystem.js';
@@ -29,6 +29,7 @@ import { appendTaskToMarkdown, parseMarkdown } from '../services/parser.js';
 import { withDateLock } from '../services/lock.js';
 import { loadConfig } from '../services/config.js';
 import type { Task } from '../types/task.js';
+import type { MindMapNodeKind } from '../types/mindmap.js';
 
 const router = Router();
 
@@ -85,6 +86,44 @@ router.delete('/:id', async (req, res) => {
   } catch (error: any) {
     console.error('[mindmaps] delete error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+const MUTABLE_NODE_KINDS = new Set<MindMapNodeKind>(['branch', 'tag']);
+
+router.put('/:id/nodes/:nodeId/kind', async (req, res) => {
+  try {
+    const { id: mindmapId, nodeId } = req.params;
+    const body = (req.body ?? {}) as { kind?: MindMapNodeKind; tag?: string };
+    if (!body.kind || !MUTABLE_NODE_KINDS.has(body.kind)) {
+      return res.status(400).json({ error: "kind must be 'branch' or 'tag'" });
+    }
+
+    const map = await getMindMap(mindmapId);
+    if (!map) return res.status(404).json({ error: 'Mind map not found' });
+    const node = map.nodes.find(n => n.id === nodeId);
+    if (!node) return res.status(404).json({ error: 'Node not found' });
+    if (node.id === map.rootId || node.kind === 'root') {
+      return res.status(400).json({ error: 'Root node cannot be reclassified' });
+    }
+
+    const tag = body.kind === 'tag'
+      ? (typeof body.tag === 'string' ? body.tag.trim() : '') || node.text.trim()
+      : undefined;
+    if (body.kind === 'tag' && !tag) {
+      return res.status(400).json({ error: 'Tag label cannot be empty' });
+    }
+
+    const updated = await updateNodeInMindMap(mindmapId, nodeId, {
+      kind: body.kind,
+      tag,
+      taskId: undefined,
+    });
+    if (!updated) return res.status(404).json({ error: 'Mind map or node not found' });
+    res.json(updated);
+  } catch (error: any) {
+    console.error('[mindmaps] update node kind error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
   }
 });
 
@@ -268,6 +307,9 @@ router.post('/:id/nodes/:nodeId/link-task', async (req, res) => {
     if (!map) return res.status(404).json({ error: 'Mind map not found' });
     const node = map.nodes.find(n => n.id === nodeId);
     if (!node) return res.status(404).json({ error: 'Node not found' });
+    if (node.id === map.rootId || node.kind === 'root') {
+      return res.status(400).json({ error: 'Root node cannot be linked to a task' });
+    }
 
     // Verify the task exists on the named date.
     const note = await readDailyNote(body.date, config);

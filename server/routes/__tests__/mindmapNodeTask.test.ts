@@ -337,10 +337,96 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/link-task', () => {
     expect(res.body.error).toMatch(/taskId/i);
   });
 
+  it('rejects linking the root node', async () => {
+    const { createTopicSpace } = await import('../../services/topicSpaces.js');
+    const { getMindMap } = await import('../../services/mindmaps.js');
+    const space = await createTopicSpace({ title: 'Root link' });
+    const map = await getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    const res = await withServer(app, (p) =>
+      request(p, 'POST', `/api/mindmaps/${space.mindmapId}/nodes/${map.rootId}/link-task`, {
+        taskId: 't_any',
+        date: '2026-08-09',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/root/i);
+  });
+
   it('returns 404 when the mindmap does not exist', async () => {
     const res = await withServer(app, (p) =>
       request(p, 'POST', `/api/mindmaps/mm_missing/nodes/n1/link-task`, { taskId: 't1', date: '2026-08-09' }),
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe.sequential('PUT /api/mindmaps/:id/nodes/:nodeId/kind', () => {
+  let tmpRoot: string;
+  let app: express.Express;
+
+  beforeEach(async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-kind-test-'));
+    vi.spyOn(config, 'loadConfig').mockResolvedValue({ workspaceRoot: tmpRoot } as any);
+    app = express();
+    app.use(express.json());
+    app.use('/api/mindmaps', router);
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    if (tmpRoot) await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
+  async function seedBranch(kind: 'branch' | 'task' = 'branch') {
+    const { createMindMap, updateMindMap } = await import('../../services/mindmaps.js');
+    const map = await createMindMap({ title: 'Kinds' });
+    await updateMindMap(map.id, {
+      nodes: [
+        ...map.nodes,
+        {
+          id: 'branch',
+          text: 'Priority',
+          position: { x: 1, y: 0 },
+          kind,
+          ...(kind === 'task' ? { taskId: 't_old' } : {}),
+        },
+      ],
+      edges: [{ id: 'edge', source: map.rootId, target: 'branch' }],
+    });
+    return map;
+  }
+
+  it('marks a branch as a tag and defaults the label from node text', async () => {
+    const map = await seedBranch();
+    const res = await withServer(app, (p) =>
+      request(p, 'PUT', `/api/mindmaps/${map.id}/nodes/branch/kind`, { kind: 'tag' }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.nodes.find((node: any) => node.id === 'branch')).toMatchObject({
+      kind: 'tag',
+      tag: 'Priority',
+    });
+  });
+
+  it('unclassifies a task node and clears task/tag metadata', async () => {
+    const map = await seedBranch('task');
+    const res = await withServer(app, (p) =>
+      request(p, 'PUT', `/api/mindmaps/${map.id}/nodes/branch/kind`, { kind: 'branch' }),
+    );
+    expect(res.status).toBe(200);
+    const node = res.body.nodes.find((candidate: any) => candidate.id === 'branch');
+    expect(node.kind).toBe('branch');
+    expect(node.taskId).toBeUndefined();
+    expect(node.tag).toBeUndefined();
+  });
+
+  it('rejects root reclassification', async () => {
+    const map = await seedBranch();
+    const res = await withServer(app, (p) =>
+      request(p, 'PUT', `/api/mindmaps/${map.id}/nodes/${map.rootId}/kind`, { kind: 'tag' }),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/root/i);
   });
 });

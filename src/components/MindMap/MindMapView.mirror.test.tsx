@@ -15,6 +15,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
 import { MindMapNode, type MindMapNodeData } from './MindMapNode';
+import { buildTaskSourceDateByNodeId } from './MindMapView';
 import type { MindMapNodeKind, MindMapNodeStatus } from '../../api/client';
 
 beforeAll(() => {
@@ -90,6 +91,16 @@ function renderNode(id: string, data: MindMapNodeData) {
 }
 
 describe('MindMapNode — task mirror (Phase 2)', () => {
+  it('indexes linked task dates by node id for the canvas', () => {
+    expect(buildTaskSourceDateByNodeId(
+      [
+        { id: 'node-a', taskId: 'task-1' },
+        { id: 'node-b', taskId: 'task-missing' },
+      ],
+      [{ id: 'task-1', date: '2026-08-07' }],
+    )).toEqual({ 'node-a': '2026-08-07' });
+  });
+
   it('keeps the latest task title and status when the parent re-renders with new data', () => {
     // First render: the node is bound to a task and shows the task's
     // current title. The parent's data has been pushed down from the

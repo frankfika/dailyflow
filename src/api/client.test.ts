@@ -6,6 +6,7 @@ import {
   dailyApi,
   filesApi,
   gitApi,
+  mindmapsApi,
   projectsApi,
   rolloverApi,
   tasksApi,
@@ -92,6 +93,39 @@ describe('API Client', () => {
           body: expect.stringContaining('"date":"2026-05-05"'),
         })
       );
+    });
+  });
+
+  describe('mindmapsApi', () => {
+    const map = {
+      id: 'mm_1',
+      title: 'Map',
+      rootId: 'root',
+      nodes: [{ id: 'root', text: 'Map', position: { x: 0, y: 0 }, kind: 'root' as const }],
+      edges: [],
+      version: 2 as const,
+      createdAt: '2026-08-08T00:00:00.000Z',
+      updatedAt: '2026-08-08T00:00:00.000Z',
+    };
+
+    it('unwraps the mindmap from promote-to-task responses', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ task: { id: 't_1' }, node: map.nodes[0], mindmap: map }),
+      });
+      await expect(
+        mindmapsApi.promoteNodeToTask('mm_1', 'n_1', { date: '2026-08-08' }),
+      ).resolves.toEqual(map);
+    });
+
+    it('unwraps the mindmap from link-task responses', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ node: map.nodes[0], mindmap: map }),
+      });
+      await expect(
+        mindmapsApi.linkNodeToTask('mm_1', 'n_1', 't_1', '2026-08-08'),
+      ).resolves.toEqual(map);
     });
   });
 

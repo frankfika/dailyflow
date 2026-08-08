@@ -4,7 +4,7 @@
  * Covers the four contracts Phase 2 promises:
  *   1. Promote / Link / SetTag / Unclassify each fire the matching
  *      callback.
- *   2. Root kind hides SetTag and Unclassify.
+ *   2. Root kind has no mutation menu.
  *   3. The Link picker shows tasks and clicking one fires onLink with
  *      the right id + date.
  *   4. Outside click / Escape closes the menu.
@@ -76,13 +76,9 @@ describe('NodeContextMenu', () => {
     expect(d.onClose).toHaveBeenCalled();
   });
 
-  it('hides the SetTag and Unclassify rows for root kind', () => {
+  it('does not render mutation actions for the root kind', () => {
     renderMenu({ kind: 'root' });
-    expect(screen.getByTestId('node-context-menu-promote')).toBeInTheDocument();
-    expect(screen.getByTestId('node-context-menu-link')).toBeInTheDocument();
-    // The root is the space's anchor and shouldn't be re-classified.
-    expect(screen.queryByTestId('node-context-menu-set-tag')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('node-context-menu-unclassify')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('node-context-menu')).not.toBeInTheDocument();
   });
 
   it('disables SetTag when the node is already a tag (no-op)', () => {
@@ -94,6 +90,13 @@ describe('NodeContextMenu', () => {
     // reaches our handler.
     fireEvent.click(setTagBtn);
     expect(onSetTag).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('node-context-menu-promote')).not.toBeInTheDocument();
+  });
+
+  it('does not offer duplicate promotion for an existing task node', () => {
+    renderMenu({ kind: 'task' });
+    expect(screen.queryByTestId('node-context-menu-promote')).not.toBeInTheDocument();
+    expect(screen.getByTestId('node-context-menu-link')).toBeInTheDocument();
   });
 
   it('shows tasks in the link picker and forwards id+date on click', () => {

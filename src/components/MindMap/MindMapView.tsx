@@ -94,6 +94,44 @@ interface MindMapViewProps {
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
 
+type MindMapPatch = {
+  title?: string;
+  rootId?: string;
+  nodes?: MindMapNode[];
+  edges?: MindMapEdge[];
+};
+
+export function buildTaskSourceDateByNodeId(
+  nodes: ReadonlyArray<Pick<MindMapNode, 'id' | 'taskId'>>,
+  tasks: ReadonlyArray<{ id: string; date: string }>,
+): Record<string, string> {
+  const dateByTaskId = new Map(tasks.map((task) => [task.id, task.date]));
+  const result: Record<string, string> = {};
+  for (const node of nodes) {
+    if (!node.taskId) continue;
+    const date = dateByTaskId.get(node.taskId);
+    if (date) result[node.id] = date;
+  }
+  return result;
+}
+
+export function rebaseSemanticNodeFields(
+  pendingNodes: MindMapNode[],
+  authoritativeNodes: ReadonlyArray<MindMapNode>,
+): MindMapNode[] {
+  const authoritative = new Map(authoritativeNodes.map((node) => [node.id, node]));
+  return pendingNodes.map((node) => {
+    const serverNode = authoritative.get(node.id);
+    if (!serverNode) return node;
+    const next = { ...node, kind: serverNode.kind };
+    if (serverNode.tag === undefined) delete next.tag;
+    else next.tag = serverNode.tag;
+    if (serverNode.taskId === undefined) delete next.taskId;
+    else next.taskId = serverNode.taskId;
+    return next;
+  });
+}
+
 export function MindMapView({
   workspaceId,
   language,
@@ -113,6 +151,8 @@ export function MindMapView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [didCopyMarkdown, setDidCopyMarkdown] = useState(false);
+  const flushSaveRef = useRef<(id: string) => Promise<MindMap | null>>(async () => null);
+  const rebasePendingSaveRef = useRef<(map: MindMap) => MindMap>((map) => map);
 
   // Phase 2: right-click context menu state. We keep the node id and
   // cursor coords here so the menu can position itself outside the
@@ -148,9 +188,11 @@ export function MindMapView({
       if (!activeMap) return;
       const target = activeMap.nodes.find((n) => n.id === nodeId);
       if (!target) return;
+      const kind = target.kind ?? (target.id === activeMap.rootId ? 'root' : 'branch');
+      if (kind === 'root') return;
       setContextMenu({
         nodeId,
-        kind: target.kind ?? (target.id === activeMap.rootId ? 'root' : 'branch'),
+        kind,
         position,
       });
     },
@@ -159,7 +201,7 @@ export function MindMapView({
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  const handlePromoteNode = useCallback(() => {
+  const handlePromoteNode = useCallback(async () => {
     if (!activeMap || !contextMenu) return;
     if (!activeMapSourceDate) {
       showToast(
@@ -170,30 +212,21 @@ export function MindMapView({
       );
       return;
     }
-    promoteMut.mutate(
-      {
+    try {
+      await flushSaveRef.current(activeMap.id);
+      const updated = await promoteMut.mutateAsync({
         mapId: activeMap.id,
         nodeId: contextMenu.nodeId,
         date: activeMapSourceDate,
         context: activeContext,
-      },
-      {
-        onSuccess: (updated) => {
-          setActiveMap(updated);
-          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
-          showToast(
-            language === 'zh' ? '已转为待办' : 'Promoted to task',
-            'success',
-          );
-        },
-        onError: () => {
-          showToast(
-            language === 'zh' ? '转为待办失败' : 'Failed to promote',
-            'error',
-          );
-        },
-      },
-    );
+      });
+      const rebased = rebasePendingSaveRef.current(updated);
+      setActiveMap(rebased);
+      setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
+      showToast(language === 'zh' ? '已转为待办' : 'Promoted to task', 'success');
+    } catch {
+      showToast(language === 'zh' ? '转为待办失败' : 'Failed to promote', 'error');
+    }
   }, [
     activeMap,
     contextMenu,
@@ -205,83 +238,62 @@ export function MindMapView({
   ]);
 
   const handleLinkNodeToTask = useCallback(
-    (taskId: string, date: string) => {
+    async (taskId: string, date: string) => {
       if (!activeMap || !contextMenu) return;
-      linkMut.mutate(
-        {
+      try {
+        await flushSaveRef.current(activeMap.id);
+        const updated = await linkMut.mutateAsync({
           mapId: activeMap.id,
           nodeId: contextMenu.nodeId,
           taskId,
           date,
-        },
-        {
-          onSuccess: (updated) => {
-            setActiveMap(updated);
-            setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
-            showToast(
-              language === 'zh' ? '已关联到 Task' : 'Linked to task',
-              'success',
-            );
-          },
-          onError: () => {
-            showToast(
-              language === 'zh' ? '关联失败' : 'Failed to link',
-              'error',
-            );
-          },
-        },
-      );
+        });
+        const rebased = rebasePendingSaveRef.current(updated);
+        setActiveMap(rebased);
+        setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
+        showToast(language === 'zh' ? '已关联到 Task' : 'Linked to task', 'success');
+      } catch {
+        showToast(language === 'zh' ? '关联失败' : 'Failed to link', 'error');
+      }
     },
     [activeMap, contextMenu, linkMut, showToast, language],
   );
 
-  const handleSetNodeTag = useCallback(() => {
+  const handleSetNodeTag = useCallback(async () => {
     if (!activeMap || !contextMenu) return;
     const target = activeMap.nodes.find((n) => n.id === contextMenu.nodeId);
     if (!target) return;
-    setKindMut.mutate(
-      {
+    try {
+      await flushSaveRef.current(activeMap.id);
+      const updated = await setKindMut.mutateAsync({
         mapId: activeMap.id,
         nodeId: contextMenu.nodeId,
         kind: 'tag',
         tag: target.text,
-      },
-      {
-        onSuccess: (updated) => {
-          setActiveMap(updated);
-          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
-        },
-        onError: () => {
-          showToast(
-            language === 'zh' ? '标记 Tag 失败' : 'Failed to mark as tag',
-            'error',
-          );
-        },
-      },
-    );
+      });
+      const rebased = rebasePendingSaveRef.current(updated);
+      setActiveMap(rebased);
+      setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
+    } catch {
+      showToast(language === 'zh' ? '标记 Tag 失败' : 'Failed to mark as tag', 'error');
+    }
   }, [activeMap, contextMenu, setKindMut, showToast, language]);
 
-  const handleUnclassifyNode = useCallback(() => {
+  const handleUnclassifyNode = useCallback(async () => {
     if (!activeMap || !contextMenu) return;
-    setKindMut.mutate(
-      {
+    try {
+      await flushSaveRef.current(activeMap.id);
+      const updated = await setKindMut.mutateAsync({
         mapId: activeMap.id,
         nodeId: contextMenu.nodeId,
         kind: 'branch',
-      },
-      {
-        onSuccess: (updated) => {
-          setActiveMap(updated);
-          setMaps((cur) => cur.map((m) => (m.id === updated.id ? updated : m)));
-        },
-        onError: () => {
-          showToast(
-            language === 'zh' ? '取消分类失败' : 'Failed to unclassify',
-            'error',
-          );
-        },
-      },
-    );
+      });
+      const rebased = rebasePendingSaveRef.current(updated);
+      setActiveMap(rebased);
+      setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
+    } catch {
+      showToast(language === 'zh' ? '取消分类失败' : 'Failed to unclassify', 'error');
+    }
   }, [activeMap, contextMenu, setKindMut, showToast, language]);
 
   // Undo / redo — we keep two stacks keyed by map id so switching maps
@@ -305,18 +317,14 @@ export function MindMapView({
   // result of their drag).
   const [reLayoutVersion, setReLayoutVersion] = useState(0);
 
-  // Track the latest patch queued for the active map. We coalesce patches
-  // within the debounce window so a fast drag produces one save, not 60.
-  const pendingPatch = useRef<{
-    id: string;
-    patch: {
-      title?: string;
-      rootId?: string;
-      nodes?: MindMapNode[];
-      edges?: MindMapEdge[];
-    };
-  } | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Each map owns an independent pending patch and network chain. Switching
+  // maps can no longer overwrite the previous map's debounce slot.
+  const pendingSaves = useRef(new Map<string, {
+    patch: MindMapPatch;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>());
+  const saveChains = useRef(new Map<string, Promise<MindMap | null>>());
+  const mountedRef = useRef(true);
 
   const refreshList = useCallback(async () => {
     setIsListLoading(true);
@@ -430,60 +438,79 @@ export function MindMapView({
     };
   }, [activeId, maps, language, showToast]);
 
-  // Flush any pending save when unmounting.
+  const flushSave = useCallback((id: string): Promise<MindMap | null> => {
+    const pending = pendingSaves.current.get(id);
+    const previous = saveChains.current.get(id) ?? Promise.resolve(null);
+    if (!pending) return previous;
+
+    if (pending.timer) clearTimeout(pending.timer);
+    pendingSaves.current.delete(id);
+    const current = previous
+      .catch(() => null)
+      .then(() => mindmapsApi.update(id, pending.patch))
+      .then((updated) => {
+        if (mountedRef.current) {
+          // Only merge server-owned metadata. Replacing the whole map here
+          // would roll back edits made while this request was in flight.
+          const mergeSavedMetadata = (map: MindMap): MindMap => map.id === updated.id
+            ? { ...map, version: updated.version, updatedAt: updated.updatedAt }
+            : map;
+          setMaps((mapsNow) => mapsNow.map(mergeSavedMetadata));
+          setActiveMap((mapNow) => mapNow ? mergeSavedMetadata(mapNow) : mapNow);
+        }
+        return updated;
+      })
+      .catch((err: any) => {
+        if (mountedRef.current) {
+          showToast(language === 'zh' ? '保存失败' : 'Failed to save', 'error');
+        }
+        console.error('[mindmap] save error:', err);
+        throw err;
+      })
+      .finally(() => {
+        if (saveChains.current.get(id) === current) saveChains.current.delete(id);
+      });
+    saveChains.current.set(id, current);
+    return current;
+  }, [language, showToast]);
+  flushSaveRef.current = flushSave;
+
+  const scheduleSave = useCallback((id: string, patch: MindMapPatch) => {
+    const previous = pendingSaves.current.get(id);
+    if (previous?.timer) clearTimeout(previous.timer);
+    const merged: MindMapPatch = {
+      ...(previous?.patch ?? {}),
+      ...patch,
+      ...(patch.nodes !== undefined ? { nodes: patch.nodes } : {}),
+      ...(patch.edges !== undefined ? { edges: patch.edges } : {}),
+    };
+    const entry = { patch: merged, timer: null as ReturnType<typeof setTimeout> | null };
+    entry.timer = setTimeout(() => {
+      void flushSaveRef.current(id).catch(() => undefined);
+    }, AUTOSAVE_DEBOUNCE_MS);
+    pendingSaves.current.set(id, entry);
+  }, []);
+
+  // If edits arrive while a semantic node mutation is in flight, preserve
+  // the authoritative classification fields in the later full-node save.
+  rebasePendingSaveRef.current = (updated) => {
+    const pending = pendingSaves.current.get(updated.id);
+    if (!pending?.patch.nodes) return updated;
+    pending.patch.nodes = rebaseSemanticNodeFields(pending.patch.nodes, updated.nodes);
+    return { ...updated, nodes: pending.patch.nodes };
+  };
+
+  // Start every mount as live (StrictMode runs setup/cleanup twice), then
+  // flush all map-specific debounce slots during the real unmount.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      if (pendingPatch.current) {
-        // Best-effort: we cannot await on unmount, but the patch will be
-        // re-sent if the user reopens the tab. Acceptable trade-off.
+      mountedRef.current = false;
+      for (const id of pendingSaves.current.keys()) {
+        void flushSaveRef.current(id).catch(() => undefined);
       }
     };
   }, []);
-
-  const scheduleSave = useCallback(
-    (id: string, patch: MindMap['nodes'] extends never ? never : {
-      title?: string;
-      rootId?: string;
-      nodes?: MindMapNode[];
-      edges?: MindMapEdge[];
-    }) => {
-      // Merge into the pending patch so the latest write wins.
-      const prev = pendingPatch.current?.id === id ? pendingPatch.current.patch : {};
-      pendingPatch.current = {
-        id,
-        patch: {
-          ...prev,
-          ...patch,
-          // Arrays must be replaced, not shallow-merged.
-          ...(patch.nodes ? { nodes: patch.nodes } : {}),
-          ...(patch.edges ? { edges: patch.edges } : {}),
-        },
-      };
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(async () => {
-        const pending = pendingPatch.current;
-        pendingPatch.current = null;
-        saveTimer.current = null;
-        if (!pending) return;
-        try {
-          const updated = await mindmapsApi.update(pending.id, pending.patch);
-          setMaps((current) =>
-            current.map((m) => (m.id === updated.id ? updated : m)),
-          );
-          // Keep the active map in sync with the saved shape (timestamps).
-          setActiveMap((current) => (current && current.id === updated.id ? updated : current));
-        } catch (err: any) {
-          showToast(
-            language === 'zh' ? '保存失败' : 'Failed to save',
-            'error',
-          );
-          console.error('[mindmap] save error:', err);
-        }
-      }, AUTOSAVE_DEBOUNCE_MS);
-    },
-    [language, showToast],
-  );
 
   /**
    * Compute a coarse "fingerprint" of the user-facing fields we care
@@ -684,11 +711,9 @@ export function MindMapView({
     if (!activeMap || linkableTasks.length === 0) {
       return { taskSourceDateByNodeId: {} as Record<string, string> };
     }
-    const lookup: Record<string, string> = {};
-    for (const t of linkableTasks) {
-      lookup[t.id] = t.date;
-    }
-    return { taskSourceDateByNodeId: lookup };
+    return {
+      taskSourceDateByNodeId: buildTaskSourceDateByNodeId(activeMap.nodes, linkableTasks),
+    };
   }, [activeMap, linkableTasks]);
 
   // Apply the mirror only when the diff is real (avoid loops). We do
