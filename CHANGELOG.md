@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/frankfika/dailyflow/compare/v1.4.1...v1.5.0) (2026-08-08)
+
+
+### Features
+
+* unify meeting capture and AI models ([#11](https://github.com/frankfika/dailyflow/issues/11)) ([4af309f](https://github.com/frankfika/dailyflow/commit/4af309f24cfc2311e1c868ac7558f5fef8023093))
+
 ## [Unreleased]
 
 ### Changed
