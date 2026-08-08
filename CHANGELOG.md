@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-08
+
+### Fixed
+
+- **Reliable mind map autosave** — serialize saves and flush pending edits when switching maps or leaving the view, preventing stale writes and lost changes.
+- **Concurrent persistence safety** — make mind map updates atomic so simultaneous edits cannot overwrite newer data.
+- **Task linking actions** — keep linked-task creation, selection, navigation, and context-menu actions consistent across the mind map UI.
+- **Regression coverage** — add route, service, API client, autosave, mirroring, and context-menu tests for the repaired flows.
+
 ## [1.4.0] - 2026-08-08
 
 ### Added
