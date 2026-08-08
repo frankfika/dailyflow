@@ -10,6 +10,11 @@ on:
         description: "Release tag (e.g. v0.2.1)"
         required: true
         type: string
+      build_installers:
+        description: "Rebuild installers before publishing updater metadata"
+        required: true
+        default: true
+        type: boolean
 
 permissions: {}
 
@@ -44,7 +49,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (github.event_name == 'workflow_dispatch' ||
+        ((github.event_name == 'workflow_dispatch' && inputs.build_installers) ||
          needs.release-please.outputs.release_created == 'true')
       }}
     runs-on: ${{ matrix.platform.os }}
@@ -144,7 +149,9 @@ jobs:
             See commits for full changelog.
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
+          # Matrix jobs upload signed updater archives, but latest.json is
+          # generated once after every platform finishes to avoid lost updates.
+          uploadUpdaterJson: false
           uploadUpdaterSignatures: true
           args: ${{ matrix.platform.args }}
 
@@ -166,17 +173,23 @@ jobs:
     if: >-
       ${{
         always() &&
-        needs.build.result == 'success' &&
-        (github.event_name == 'workflow_dispatch' ||
-         needs.release-please.outputs.release_created == 'true')
+        ((github.event_name == 'workflow_dispatch' &&
+          (inputs.build_installers == false || needs.build.result == 'success')) ||
+         (needs.release-please.outputs.release_created == 'true' &&
+          needs.build.result == 'success'))
       }}
     runs-on: ubuntu-22.04
     permissions:
-      contents: read
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
     steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
       - name: Validate installers, signatures and latest.json
         shell: bash
         run: |
@@ -194,13 +207,13 @@ jobs:
             fi
           }
 
-          check_asset 'aarch64\\.dmg$' 20000000 'macOS Apple Silicon DMG'
-          check_asset 'x64\\.dmg$' 20000000 'macOS Intel DMG'
-          check_asset 'x64-setup\\.exe$' 20000000 'Windows NSIS installer'
-          check_asset 'x64_en-US\\.msi$' 20000000 'Windows MSI installer'
-          check_asset 'amd64\\.AppImage$' 80000000 'Linux AppImage'
-          check_asset 'amd64\\.deb$' 30000000 'Linux DEB package'
-          check_asset 'x86_64\\.rpm$' 30000000 'Linux RPM package'
+          check_asset 'aarch64\.dmg$' 20000000 'macOS Apple Silicon DMG'
+          check_asset 'x64\.dmg$' 20000000 'macOS Intel DMG'
+          check_asset 'x64-setup\.exe$' 20000000 'Windows NSIS installer'
+          check_asset 'x64_en-US\.msi$' 20000000 'Windows MSI installer'
+          check_asset 'amd64\.AppImage$' 80000000 'Linux AppImage'
+          check_asset 'amd64\.deb$' 30000000 'Linux DEB package'
+          check_asset 'x86_64\.rpm$' 30000000 'Linux RPM package'
 
           signature_count="$(jq '[.assets[] | select(.name | endswith(".sig"))] | length' <<<"$release_json")"
           if (( signature_count < 4 )); then
@@ -208,11 +221,19 @@ jobs:
             exit 1
           fi
 
-          mkdir -p "$RUNNER_TEMP/updater"
-          gh release download "$RELEASE_TAG" \
+          node scripts/generate-updater-manifest.mjs \
+            "$GITHUB_REPOSITORY" \
+            "$RELEASE_TAG" \
+            "$RUNNER_TEMP/latest.json"
+
+          gh release upload "$RELEASE_TAG" \
+            "$RUNNER_TEMP/latest.json" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern latest.json \
-            --dir "$RUNNER_TEMP/updater"
+            --clobber
+
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/latest.json" \
+            --output "$RUNNER_TEMP/published-latest.json"
 
           jq -e --arg version "${RELEASE_TAG#v}" '
             .version == $version and
@@ -224,7 +245,7 @@ jobs:
             (.platforms["windows-x86_64"].url | startswith("https://")) and
             (.platforms["linux-x86_64"].signature | length > 20) and
             (.platforms["linux-x86_64"].url | startswith("https://"))
-          ' "$RUNNER_TEMP/updater/latest.json"
+          ' "$RUNNER_TEMP/published-latest.json"
 
   finalize-release-notes:
     name: Finalize release notes
@@ -232,10 +253,11 @@ jobs:
     if: >-
       ${{
         always() &&
-        needs.build.result == 'success' &&
         needs.verify-release.result == 'success' &&
-        (github.event_name == 'workflow_dispatch' ||
-         needs.release-please.outputs.release_created == 'true')
+        ((github.event_name == 'workflow_dispatch' &&
+          (inputs.build_installers == false || needs.build.result == 'success')) ||
+         (needs.release-please.outputs.release_created == 'true' &&
+          needs.build.result == 'success'))
       }}
     runs-on: ubuntu-22.04
     permissions:

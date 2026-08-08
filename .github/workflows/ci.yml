@@ -35,6 +35,9 @@ jobs:
       - name: Check release version consistency
         run: npm run check:version
 
+      - name: Check updater manifest generation
+        run: npm run check:updater
+
       - name: Type check
         run: npm run lint
 
