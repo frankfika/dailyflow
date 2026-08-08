@@ -34,7 +34,7 @@ import { createNote as createV2Note } from './features/v2/api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { TopicTabs, type TopicTabValue } from './components/TopicTabs/TopicTabs';
-import { useTopicSpaces, useCreateTopicSpace, useUpdateTopicSpace } from './hooks/useTopicSpaces';
+import { useTopicSpaces, useCreateTopicSpace, useUpdateTopicSpace, useTopicSpaceTasks } from './hooks/useTopicSpaces';
 import { useUpdateTaskSpace } from './hooks/useMindMapActions';
 import { TaskListView } from './components/TopicSpaceView/TaskListView';
 import { TagFilterRow } from './components/TopicSpaceView/TagFilterRow';
@@ -99,6 +99,7 @@ export default function App() {
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [showFloatingChat, setShowFloatingChat] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
+  const [mindMapImmersive, setMindMapImmersive] = useState(false);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -311,13 +312,22 @@ export default function App() {
     [],
   );
 
-  // Phase 2: unlink a task from the active space. The server keeps
-  // `Task.spaceId` in-memory; the in-place `tasks` state is patched
-  // directly so the list view re-renders without a round-trip.
+  // Phase 2: unlink a task from the active space. The server writes /
+  // clears the `^space:<id>` marker on the task line, so we MUST pass
+  // the date of the daily note that hosts the task. Without it the
+  // server cannot locate the line and returns 400 (this was a
+  // long-standing bug before the contract was tightened).
   const handleUnlinkTask = useCallback(
-    async (taskId: string) => {
+    async (taskId: string, sourceDate?: string) => {
+      // Find the task in the current list to recover its date. Prefer
+      // the explicit `source_date` (set on migrated tasks); otherwise
+      // fall back to the currently-open file date.
+      const task = (tasks as Array<Task & { spaceId?: string; source_date?: string }>).find(
+        (t) => t.id === taskId,
+      );
+      const date = sourceDate ?? task?.source_date ?? currentFileDate;
       try {
-        await updateTaskSpaceMut.mutateAsync({ taskId, spaceId: null });
+        await updateTaskSpaceMut.mutateAsync({ taskId, spaceId: null, date });
         setTasks((cur) =>
           cur.map((t) => (t.id === taskId ? { ...t, spaceId: undefined } : t)),
         );
@@ -329,19 +339,25 @@ export default function App() {
         console.error('[topic-spaces] unlink failed:', err);
       }
     },
-    [updateTaskSpaceMut, showToast, language],
+    [updateTaskSpaceMut, showToast, language, tasks, currentFileDate],
   );
 
-  // Phase 2: build the "tasks bound to this space" list. We source it
-  // from today's task list (the same list TodayView shows) filtered by
-  // `spaceId`. The spec acknowledges this is a Phase 2 simplification;
-  // a future Phase 4 enhancement will scan across days.
-  const tasksInActiveSpace = useMemo(() => {
-    if (!activeSpace) return [] as Task[];
-    return (tasks as Array<Task & { spaceId?: string }>).filter(
-      (t) => t.spaceId === activeSpace.id,
-    );
-  }, [tasks, activeSpace]);
+  // Phase 3: cross-date task source for the active space. The old
+  // implementation filtered the current day's `tasks` by `spaceId`,
+  // which silently dropped any task that wasn't on the open date. The
+  // new `useTopicSpaceTasks` hits a dedicated endpoint that walks all
+  // daily notes and returns `{ task, date }` items. `source_date` is
+  // set to the hosting date so the list view / TaskCard can navigate
+  // to the right day.
+  const spaceTasksQuery = useTopicSpaceTasks(activeSpace?.id ?? null);
+  const tasksInActiveSpace = useMemo<Array<Task & { spaceId?: string }>>(() => {
+    if (!activeSpace) return [];
+    return spaceTasksQuery.data?.map((item) => ({
+      ...(item.task as any),
+      source_date: item.date,
+      spaceId: activeSpace.id,
+    })) ?? [];
+  }, [spaceTasksQuery.data, activeSpace]);
 
   // Phase 2: tags available to the filter row. We merge the space's own
   // `tags` (set on creation) with tags scraped from its bound tasks.
@@ -1164,7 +1180,7 @@ export default function App() {
         onConfirm={handleConfirmRollover}
       />
 
-      <Sidebar
+      {!mindMapImmersive && <Sidebar
         language={language}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
@@ -1208,13 +1224,13 @@ export default function App() {
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
         onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
-      />
+      />}
 
       {/* AI Chat is available from every workspace surface. It used to be
           only reachable through the sidebar tab, which made it disappear
           while working in Notes, Inbox, Today, or Calendar. Keep a compact
           launcher and an overlay session so the current page stays visible. */}
-      {activeTab !== 'ai-chat' && (
+      {activeTab !== 'ai-chat' && !mindMapImmersive && (
         <>
           <AnimatePresence>
             {showFloatingChat && (
@@ -1261,9 +1277,9 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
+      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen && !mindMapImmersive ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
-        {!isSidebarOpen && (
+        {!isSidebarOpen && !mindMapImmersive && (
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 sm:hidden min-[1025px]:block"
@@ -1529,7 +1545,7 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="flex h-full min-h-0 flex-col overflow-hidden"
                 >
-                  <TopicTabs
+                  {!mindMapImmersive && <TopicTabs
                     context={activeContext}
                     spaces={topicSpaces.map((s) => ({
                       id: s.id,
@@ -1542,10 +1558,10 @@ export default function App() {
                     onSelect={setActiveSpaceId}
                     onCreate={handleCreateTopic}
                     isLoading={topicSpacesQuery.isLoading}
-                  />
+                  />}
                   {/* Phase 2: view switcher (mindmap / list). Hidden for
                       "全部" / "未分类" where only the mindmap makes sense. */}
-                  {activeSpace && (
+                  {activeSpace && !mindMapImmersive && (
                     <div
                       className="flex shrink-0 items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-1"
                       data-testid="topic-space-view-switcher"
@@ -1575,7 +1591,7 @@ export default function App() {
                       tags to filter. The list view applies the filter
                       client-side; the mindmap view also uses it to
                       hide non-matching nodes. */}
-                  {activeSpace && spaceTagPool.length > 0 && activeView === 'list' && (
+                  {activeSpace && !mindMapImmersive && spaceTagPool.length > 0 && activeView === 'list' && (
                     <TagFilterRow
                       tags={spaceTagPool}
                       selected={tagFilter}
@@ -1591,7 +1607,10 @@ export default function App() {
                         spaceTitle={activeSpace.title}
                         language={language}
                         selectedTagFilter={tagFilter}
-                        onUnlinkTask={(taskId) => void handleUnlinkTask(taskId)}
+                        onUnlinkTask={(taskId) => {
+                          const task = tasksInActiveSpace.find((item) => item.id === taskId);
+                          void handleUnlinkTask(taskId, task?.source_date);
+                        }}
                         onSelectTask={(t) => {
                           const date = t.source_date ?? currentFileDate;
                           handleOpenTask(t.id, date);
@@ -1606,13 +1625,31 @@ export default function App() {
                         topicSpaces={topicSpaces}
                         activeContext={activeContext}
                         todayDate={currentFileDate}
-                        linkableTasks={tasks.map((t) => ({
-                          id: t.id,
-                          title: t.title,
-                          status: t.status as 'todo' | 'done' | 'migrated',
-                          date: t.source_date ?? currentFileDate,
-                        }))}
+                        linkableTasks={
+                          // Phase 3: source from the cross-date list so
+                          // the mindmap mirror can resolve task status /
+                          // source date for nodes bound to tasks on ANY
+                          // day — not just the currently-open date. This
+                          // fixes the audit's B2 finding (mirrors only
+                          // worked for today's tasks). Falls back to
+                          // today's `tasks` when no space is selected
+                          // (the "全部" / "未分类" aggregates).
+                          activeSpace
+                            ? (tasksInActiveSpace.map((t) => ({
+                                id: t.id,
+                                title: t.title,
+                                status: t.status as 'todo' | 'done' | 'migrated',
+                                date: t.source_date ?? currentFileDate,
+                              })))
+                            : tasks.map((t) => ({
+                                id: t.id,
+                                title: t.title,
+                                status: t.status as 'todo' | 'done' | 'migrated',
+                                date: t.source_date ?? currentFileDate,
+                              }))
+                        }
                         onOpenTask={handleOpenTask}
+                        onImmersiveChange={setMindMapImmersive}
                       />
                     )}
                   </div>

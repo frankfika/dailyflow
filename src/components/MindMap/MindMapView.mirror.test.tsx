@@ -203,4 +203,24 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
     );
     expect(screen.queryByTestId('mindmap-open-task-b1')).not.toBeInTheDocument();
   });
+
+  it('shows an explicit primary “make task” action for a selected branch', () => {
+    const onPromoteToTask = vi.fn();
+    renderNode('branch-primary', makeData({
+      text: '可执行节点',
+      kind: 'branch',
+      isSelected: true,
+      language: 'zh',
+      onPromoteToTask,
+    }));
+    screen.getByTestId('mindmap-promote-branch-primary').click();
+    expect(onPromoteToTask).toHaveBeenCalledWith('branch-primary');
+  });
+
+  it('uses persisted taskDate before the loaded task list lookup', () => {
+    expect(buildTaskSourceDateByNodeId(
+      [{ id: 'node-a', taskId: 'task-1', taskDate: '2026-08-01' }],
+      [{ id: 'task-1', date: '2026-08-08' }],
+    )).toEqual({ 'node-a': '2026-08-01' });
+  });
 });

@@ -17,6 +17,8 @@ import {
 } from '../services/topicSpaces.js';
 import { loadConfig } from '../services/config.js';
 import { withDateLock } from '../services/lock.js';
+import { invalidateTaskIndex } from '../services/taskIndex.js';
+import { listMindMaps, updateNodeInMindMap } from '../services/mindmaps.js';
 import type { Task } from '../types/task.js';
 
 const router = Router();
@@ -50,7 +52,7 @@ router.patch('/:taskId', async (req, res) => {
     const { status, date } = req.body;
     const config = await loadConfig();
 
-    await withDateLock(date, async () => {
+    const updatedTask = await withDateLock(date, async () => {
       const note = await readDailyNote(date, config);
       if (!note) {
         throw Object.assign(new Error('File not found'), { status: 404 });
@@ -65,7 +67,19 @@ router.patch('/:taskId', async (req, res) => {
       // 更新 Markdown 内容
       const newContent = updateTaskInMarkdown(note.content, task.line, status);
       await writeDailyNote(date, newContent, config);
+      return task;
     });
+
+    if (updatedTask.originMindmapId && updatedTask.originNodeId) {
+      await updateNodeInMindMap(updatedTask.originMindmapId, updatedTask.originNodeId, {
+        status: status === 'done' ? 'done' : 'todo',
+      });
+    }
+
+    // Status change does not move the task between files, but the
+    // index memo includes parsed task objects that downstream readers
+    // may cache — drop it so the next read sees the new status.
+    invalidateTaskIndex();
 
     res.json({ success: true });
   } catch (error: any) {
@@ -94,7 +108,7 @@ router.put('/:taskId', async (req, res) => {
     };
     const config = await loadConfig();
 
-    await withDateLock(date, async () => {
+    const editedTask = await withDateLock(date, async () => {
       // 在锁内重新读取最新内容，避免读到陈旧快照
       const note = await readDailyNote(date, config);
       if (!note) {
@@ -124,7 +138,14 @@ router.put('/:taskId', async (req, res) => {
         const newContent = editTaskInMarkdown(note.content, task.line, title || task.title, description);
         await writeDailyNote(date, newContent, config);
       }
+      return task;
     });
+
+    if (editedTask.originMindmapId && editedTask.originNodeId && title !== undefined) {
+      await updateNodeInMindMap(editedTask.originMindmapId, editedTask.originNodeId, { text: title });
+    }
+
+    invalidateTaskIndex();
 
     res.json({ success: true });
   } catch (error: any) {
@@ -150,6 +171,11 @@ router.post('/', async (req, res) => {
       await writeDailyNote(date, newContent, config);
     });
 
+    // A new task id joined the workspace — the cached index no longer
+    // knows about it. Drop the memo so the next cross-date lookup
+    // rebuilds and picks the new id up.
+    invalidateTaskIndex();
+
     res.json({ success: true, task });
   } catch (error: any) {
     console.error('Error creating task:', error);
@@ -166,7 +192,7 @@ router.delete('/:taskId', async (req, res) => {
     const { date } = req.body;
     const config = await loadConfig();
 
-    await withDateLock(date, async () => {
+    const deletedTask = await withDateLock(date, async () => {
       const note = await readDailyNote(date, config);
       if (!note) {
         throw Object.assign(new Error('File not found'), { status: 404 });
@@ -179,7 +205,48 @@ router.delete('/:taskId', async (req, res) => {
 
       const newContent = removeTaskFromMarkdown(note.content, task.line);
       await writeDailyNote(date, newContent, config);
+      return task;
     });
+
+    // A Task is authoritative for execution, but its mind-map node is a
+    // durable planning projection. Deleting the Task therefore keeps the
+    // node and turns it back into a regular branch.
+    if (deletedTask.originMindmapId && deletedTask.originNodeId) {
+      const updated = await updateNodeInMindMap(
+        deletedTask.originMindmapId,
+        deletedTask.originNodeId,
+        { kind: 'branch', taskId: undefined, taskDate: undefined, status: 'todo' },
+      );
+      if (!updated) {
+        console.warn(
+          `[tasks] deleted ${taskId}, but its source node ` +
+          `${deletedTask.originMindmapId}/${deletedTask.originNodeId} no longer exists`,
+        );
+      }
+    }
+    // Legacy linked tasks may predate persisted ^mm/^node markers. Scan
+    // mindmaps by taskId as a compatibility fallback so deletion cannot
+    // leave a kind:'task' projection pointing at a missing Task.
+    const maps = await listMindMaps();
+    for (const map of maps) {
+      for (const node of map.nodes) {
+        if (node.taskId !== taskId) continue;
+        if (map.id === deletedTask.originMindmapId && node.id === deletedTask.originNodeId) continue;
+        await updateNodeInMindMap(map.id, node.id, {
+          kind: 'branch',
+          taskId: undefined,
+          taskDate: undefined,
+          status: 'todo',
+        });
+      }
+    }
+    const owningSpace = await findTopicSpaceByTaskId(taskId);
+    if (owningSpace) {
+      await removeTaskIdFromTopicSpace(owningSpace.id, taskId);
+    }
+
+    // The task is gone — drop the memo so stale entries don't linger.
+    invalidateTaskIndex();
 
     res.json({ success: true });
   } catch (error: any) {
@@ -281,6 +348,11 @@ router.put('/:taskId/space', async (req, res) => {
     if (previousSpace && previousSpace.id !== spaceId) {
       await removeTaskIdFromTopicSpace(previousSpace.id, taskId);
     }
+
+    // The task line was rewritten (marker added/cleared); the cached
+    // index holds the old parsed line. Drop it so the next read picks
+    // up the new marker state.
+    invalidateTaskIndex();
 
     res.json({ success: true, task: patchedTask, persisted: true });
   } catch (error: any) {

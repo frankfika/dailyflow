@@ -1,5 +1,13 @@
 import type { Task } from '../types/task.js';
-import { spaceIdToMarker, markerToSpaceId, extractTaskId } from './taskMetadata.js';
+import {
+  spaceIdToMarker,
+  markerToSpaceId,
+  extractTaskId,
+  markerToMindmapId,
+  markerToNodeId,
+  mindmapIdToMarker,
+  nodeIdToMarker,
+} from './taskMetadata.js';
 
 function hashStr(s: string): string {
   let hash = 0;
@@ -51,6 +59,17 @@ export function parseMarkdown(md: string): Task[] {
       const spaceIdFromLine = markerToSpaceId(content);
       if (spaceIdFromLine) {
         content = content.replace(/\^space:\S+/, '').trim();
+      }
+
+      // 提取 mindmap-origin 系统标记 (^mm:<id> 和 ^node:<id>) — Phase 3
+      // 这些标记让 Task→Node 的反向关联在重启 / 跨日期加载后仍然可靠。
+      const originMindmapId = markerToMindmapId(content);
+      if (originMindmapId) {
+        content = content.replace(/\^mm:\S+/, '').trim();
+      }
+      const originNodeId = markerToNodeId(content);
+      if (originNodeId) {
+        content = content.replace(/\^node:\S+/, '').trim();
       }
 
       // 提取 priority
@@ -137,6 +156,8 @@ export function parseMarkdown(md: string): Task[] {
         priority,
         source_date,
         spaceId: spaceIdFromLine,
+        originMindmapId,
+        originNodeId,
         line: taskLineIndex
       });
 
@@ -234,6 +255,14 @@ function taskToLine(
   if (task.spaceId) {
     line += ` ${spaceIdToMarker(task.spaceId)}`;
   }
+  // Phase 3: write mindmap-origin markers so the task→node reverse
+  // link survives a reload. Order: ^mm: then ^node: then ^id-.
+  if (task.originMindmapId) {
+    line += ` ${mindmapIdToMarker(task.originMindmapId)}`;
+  }
+  if (task.originNodeId) {
+    line += ` ${nodeIdToMarker(task.originNodeId)}`;
+  }
   if (task.id) {
     line += ` ^id-${task.id}`;
   }
@@ -312,8 +341,9 @@ export function editTaskInMarkdown(
   const checkbox = taskMatch[3];
   const originalContent = taskMatch[4];
 
-  // 提取所有元数据片段以保留：tags, project, deadline, priority, migrated, id
-  const metaRegex = /(#priority:(?:high|medium|low)|#deadline:\S+|#project:\S+|↗\s*migrated:\S+|\^id-[a-zA-Z0-9_-]+|#[a-zA-Z0-9_\u4e00-\u9fa5-]+)/g;
+  // 提取所有元数据片段以保留：tags, project, deadline, priority, migrated,
+  // space marker, origin markers, id。Phase 3 新增 ^space: ^mm: ^node:。
+  const metaRegex = /(#priority:(?:high|medium|low)|#deadline:\S+|#project:\S+|↗\s*migrated:\S+|\^space:\S+|\^mm:\S+|\^node:\S+|\^id-[a-zA-Z0-9_-]+|#[a-zA-Z0-9_\u4e00-\u9fa5-]+)/g;
   const metaParts = originalContent.match(metaRegex) || [];
 
   const metaSuffix = metaParts.length ? ' ' + metaParts.join(' ') : '';
@@ -354,6 +384,8 @@ function parseTaskLine(rawLine: string): {
   sourceDateFromMigrated?: string;
   id?: string;
   spaceId?: string;
+  originMindmapId?: string;
+  originNodeId?: string;
 } | null {
   const m = rawLine.match(/^(\s*)([-*])\s+\[([xX> ])\]\s+(.*)$/);
   if (!m) return null;
@@ -365,6 +397,17 @@ function parseTaskLine(rawLine: string): {
   const spaceId = markerToSpaceId(content);
   if (spaceId) {
     content = content.replace(/\^space:\S+/, '').trim();
+  }
+
+  // Phase 3: extract origin markers (^mm: / ^node:) so they survive a
+  // title/tags edit and are re-emitted by editTaskFullInMarkdown.
+  const originMindmapId = markerToMindmapId(content);
+  if (originMindmapId) {
+    content = content.replace(/\^mm:\S+/, '').trim();
+  }
+  const originNodeId = markerToNodeId(content);
+  if (originNodeId) {
+    content = content.replace(/\^node:\S+/, '').trim();
   }
 
   const id = extractTaskId(content);
@@ -404,6 +447,8 @@ function parseTaskLine(rawLine: string): {
     sourceDateFromMigrated,
     id,
     spaceId,
+    originMindmapId,
+    originNodeId,
   };
 }
 
@@ -475,6 +520,16 @@ export function editTaskFullInMarkdown(
   // 保留 topic-space system marker (Topic Spaces Phase 2)
   if (parsed.spaceId) {
     newLine += ` ${spaceIdToMarker(parsed.spaceId)}`;
+  }
+
+  // Phase 3: preserve mindmap-origin markers so a title/tags edit does
+  // not silently detach the task from its source node. They sit between
+  // ^space: and ^id- (see taskMetadata.ts marker order).
+  if (parsed.originMindmapId) {
+    newLine += ` ${mindmapIdToMarker(parsed.originMindmapId)}`;
+  }
+  if (parsed.originNodeId) {
+    newLine += ` ${nodeIdToMarker(parsed.originNodeId)}`;
   }
 
   // 保留 ID

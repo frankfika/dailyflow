@@ -441,3 +441,90 @@ describe('removeTaskFromMarkdown', () => {
     expect(result).toContain('Next task');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mindmap-origin markers (Phase 3) — ^mm: and ^node: round-trip through
+// the parser and every mutation path that preserves metadata.
+// ---------------------------------------------------------------------------
+
+describe('parseMarkdown ^mm: / ^node: round-trip', () => {
+  it('populates originMindmapId and originNodeId when reading a task with the markers', () => {
+    const md = '- [ ] 准备BP ^space:tw_a ^mm:mm_01 ^node:n_01 ^id-t_roundtrip\n';
+    const tasks = parseMarkdown(md);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].originMindmapId).toBe('mm_01');
+    expect(tasks[0].originNodeId).toBe('n_01');
+    // The markers must not leak into the user-visible title.
+    expect(tasks[0].title).toBe('准备BP');
+    // Space id is still parsed alongside.
+    expect(tasks[0].spaceId).toBe('tw_a');
+  });
+
+  it('leaves origin fields undefined for tasks without the markers', () => {
+    const md = '- [ ] plain task ^id-t_plain\n';
+    const tasks = parseMarkdown(md);
+    expect(tasks[0].originMindmapId).toBeUndefined();
+    expect(tasks[0].originNodeId).toBeUndefined();
+  });
+
+  it('tolerates a mindmap marker without a node marker', () => {
+    const md = '- [ ] half-linked ^mm:mm_only ^id-t_half\n';
+    const tasks = parseMarkdown(md);
+    expect(tasks[0].originMindmapId).toBe('mm_only');
+    expect(tasks[0].originNodeId).toBeUndefined();
+  });
+});
+
+describe('appendTaskToMarkdown writes ^mm: and ^node: when origin fields are set', () => {
+  it('emits origin markers before the ^id- marker', () => {
+    const task: Task = {
+      id: 't_new',
+      title: '准备BP',
+      status: 'todo',
+      originMindmapId: 'mm_seed',
+      originNodeId: 'n_seed',
+    };
+    const out = appendTaskToMarkdown('## Tasks\n', task, '2026-08-08');
+    const line = out.split('\n').find((l) => l.includes('t_new'))!;
+    expect(line).toContain('^mm:mm_seed');
+    expect(line).toContain('^node:n_seed');
+    // Stable id stays last.
+    expect(line.lastIndexOf('^id-')).toBeGreaterThan(line.lastIndexOf('^node:'));
+    expect(line.lastIndexOf('^node:')).toBeGreaterThan(line.lastIndexOf('^mm:'));
+  });
+
+  it('omits origin markers when the task has no origin fields', () => {
+    const task: Task = { id: 't_plain', title: 'plain', status: 'todo' };
+    const out = appendTaskToMarkdown('## Tasks\n', task, '2026-08-08');
+    const line = out.split('\n').find((l) => l.includes('t_plain'))!;
+    expect(line).not.toContain('^mm:');
+    expect(line).not.toContain('^node:');
+  });
+});
+
+describe('editTaskInMarkdown preserves ^mm: and ^node: markers across a title edit', () => {
+  it('keeps the origin markers when only the title changes', () => {
+    const md = '- [ ] old title #work ^space:tw_a ^mm:mm_1 ^node:n_1 ^id-t_keep\n';
+    const out = editTaskInMarkdown(md, 0, 'new title');
+    const line = out.split('\n')[0];
+    expect(line).toContain('new title');
+    expect(line).toContain('^mm:mm_1');
+    expect(line).toContain('^node:n_1');
+    expect(line).toContain('^space:tw_a');
+    expect(line).toContain('^id-t_keep');
+  });
+});
+
+describe('editTaskFullInMarkdown preserves ^mm: and ^node: markers across a tag edit', () => {
+  it('re-emits origin markers when rebuilding the line for a tag update', () => {
+    const md = '- [ ] title #old ^space:tw_a ^mm:mm_1 ^node:n_1 ^id-t_full\n';
+    const out = editTaskFullInMarkdown(md, 0, { tags: ['new'] }, '2026-08-08');
+    const line = out.split('\n')[0];
+    expect(line).toContain('#new');
+    expect(line).not.toContain('#old');
+    expect(line).toContain('^mm:mm_1');
+    expect(line).toContain('^node:n_1');
+    expect(line).toContain('^space:tw_a');
+    expect(line).toContain('^id-t_full');
+  });
+});

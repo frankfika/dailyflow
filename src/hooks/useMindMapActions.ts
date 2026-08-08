@@ -28,7 +28,6 @@ import {
   type TaskInput,
 } from '../api/client';
 import { queryKeys } from '../queryKeys';
-
 // ---------------------------------------------------------------------------
 // Promote
 // ---------------------------------------------------------------------------
@@ -55,8 +54,11 @@ export function usePromoteNodeToTask(): UseMutationResult<
       // the response (it already has it via setActiveMap).
       qc.setQueryData(queryKeys.mindmap(updated.id), updated);
       // Tasks for the promote-date are now stale (a new task was
-      // created) — invalidate so a refetch picks it up.
+      // created) — invalidate so a refetch picks it up. Also drop
+      // the cross-date task source for any topic space so the list
+      // view and the mindmap mirror see the new task.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
 }
@@ -83,6 +85,9 @@ export function useLinkNodeToTask(): UseMutationResult<
       mindmapsApi.linkNodeToTask(mapId, nodeId, taskId, date),
     onSuccess: (updated) => {
       qc.setQueryData(queryKeys.mindmap(updated.id), updated);
+      // The linked task may now appear in a different space's
+      // cross-date list — invalidate so the cache refetches.
+      qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
 }
@@ -121,6 +126,12 @@ export function useUpdateNodeKind(): UseMutationResult<
 export interface UpdateTaskSpaceVars {
   taskId: string;
   spaceId: string | null;
+  /**
+   * Daily-note date that hosts the task. Required by the server to
+   * read-modify-write the `^space:` marker on the task line. Falls
+   * back to the task's `source_date` when the caller knows it.
+   */
+  date: string;
 }
 
 export function useUpdateTaskSpace(): UseMutationResult<
@@ -130,11 +141,14 @@ export function useUpdateTaskSpace(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ taskId, spaceId }) => tasksApi.updateSpace(taskId, spaceId),
+    mutationFn: ({ taskId, spaceId, date }) => tasksApi.updateSpace(taskId, spaceId, date),
     onSuccess: (_updated) => {
       // Whichever tasks list is currently mounted (today + future
-      // dates) is now stale; the next render will refetch it.
+      // dates) is now stale; the next render will refetch it. Also
+      // drop the cross-date source for every space — the task may
+      // have moved between spaces or been detached entirely.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
 }

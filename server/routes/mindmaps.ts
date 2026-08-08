@@ -23,13 +23,17 @@ import {
 } from '../services/mindmaps.js';
 import {
   addTaskIdToTopicSpace,
+  findTopicSpaceByTaskId,
+  removeTaskIdFromTopicSpace,
 } from '../services/topicSpaces.js';
 import { readDailyNote, writeDailyNote } from '../services/fileSystem.js';
-import { appendTaskToMarkdown, parseMarkdown } from '../services/parser.js';
+import { appendTaskToMarkdown, parseMarkdown, removeTaskFromMarkdown } from '../services/parser.js';
+import { setOriginMarkers, setSpaceMarker } from '../services/taskMetadata.js';
 import { withDateLock } from '../services/lock.js';
 import { loadConfig } from '../services/config.js';
+import { invalidateTaskIndex, resolveTaskDate } from '../services/taskIndex.js';
 import type { Task } from '../types/task.js';
-import type { MindMapNodeKind } from '../types/mindmap.js';
+import type { MindMap, MindMapNodeKind } from '../types/mindmap.js';
 
 const router = Router();
 
@@ -118,11 +122,80 @@ router.put('/:id/nodes/:nodeId/kind', async (req, res) => {
       kind: body.kind,
       tag,
       taskId: undefined,
+      taskDate: undefined,
     });
     if (!updated) return res.status(404).json({ error: 'Mind map or node not found' });
     res.json(updated);
   } catch (error: any) {
     console.error('[mindmaps] update node kind error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
+  }
+});
+
+/**
+ * Delete a node subtree while applying an explicit policy to linked Tasks.
+ * `keep-tasks` detaches every Task and removes it from the Topic Space;
+ * `delete-tasks` removes the Task markdown rows as well.
+ */
+router.post('/:id/nodes/delete', async (req, res) => {
+  try {
+    const map = await getMindMap(req.params.id);
+    if (!map) return res.status(404).json({ error: 'Mind map not found' });
+    const { nodeId, taskPolicy } = (req.body ?? {}) as {
+      nodeId?: string;
+      taskPolicy?: 'keep-tasks' | 'delete-tasks';
+    };
+    if (!nodeId || !map.nodes.some(node => node.id === nodeId)) {
+      return res.status(404).json({ error: 'Node not found' });
+    }
+    if (nodeId === map.rootId) return res.status(400).json({ error: 'Root node cannot be deleted' });
+    if (taskPolicy !== 'keep-tasks' && taskPolicy !== 'delete-tasks') {
+      return res.status(400).json({ error: 'taskPolicy is required' });
+    }
+
+    const removeIds = new Set<string>([nodeId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const edge of map.edges) {
+        if (removeIds.has(edge.source) && !removeIds.has(edge.target)) {
+          removeIds.add(edge.target);
+          changed = true;
+        }
+      }
+    }
+    const linkedNodes = map.nodes.filter(node => removeIds.has(node.id) && node.taskId);
+    const config = await loadConfig();
+    for (const node of linkedNodes) {
+      const taskId = node.taskId!;
+      const date = node.taskDate ?? await resolveTaskDate(taskId);
+      if (date) {
+        await withDateLock(date, async () => {
+          const note = await readDailyNote(date, config);
+          if (!note) return;
+          const task = note.tasks.find(item => item.id === taskId);
+          if (!task || task.line === undefined) return;
+          if (taskPolicy === 'delete-tasks') {
+            await writeDailyNote(date, removeTaskFromMarkdown(note.content, task.line), config);
+          } else {
+            const lines = note.content.split('\n');
+            lines[task.line] = setSpaceMarker(setOriginMarkers(lines[task.line], null), null);
+            await writeDailyNote(date, lines.join('\n'), config);
+          }
+        });
+      }
+      const owningSpace = await findTopicSpaceByTaskId(taskId);
+      if (owningSpace) await removeTaskIdFromTopicSpace(owningSpace.id, taskId);
+    }
+
+    const updated = await updateMindMap(map.id, {
+      nodes: map.nodes.filter(node => !removeIds.has(node.id)),
+      edges: map.edges.filter(edge => !removeIds.has(edge.source) && !removeIds.has(edge.target)),
+    });
+    invalidateTaskIndex();
+    res.json({ mindmap: updated, affectedTaskIds: linkedNodes.map(node => node.taskId) });
+  } catch (error: any) {
+    console.error('[mindmaps] delete node subtree error:', error);
     res.status(error?.status ?? 500).json({ error: error.message });
   }
 });
@@ -151,6 +224,16 @@ function extractUserTags(text: string): string[] {
     out.push(tag);
   }
   return out;
+}
+
+function planOrderForNode(map: MindMap, nodeId: string): number {
+  const parentId = map.edges.find(edge => edge.target === nodeId)?.source;
+  if (!parentId) return 0;
+  const childIds = new Set(map.edges.filter(edge => edge.source === parentId).map(edge => edge.target));
+  const siblings = map.nodes
+    .filter(node => childIds.has(node.id))
+    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+  return Math.max(0, siblings.findIndex(node => node.id === nodeId));
 }
 
 /**
@@ -245,6 +328,8 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
     const updatedMap = await updateNodeInMindMap(mindmapId, nodeId, {
       kind: 'task',
       taskId: newTask.id,
+      taskDate: date,
+      planOrder: planOrderForNode(map, nodeId),
     });
     if (!updatedMap) {
       return res.status(500).json({ error: 'Failed to update node after task creation' });
@@ -256,6 +341,11 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
     if (updatedMap.spaceId) {
       topicSpace = await addTaskIdToTopicSpace(updatedMap.spaceId, newTask.id);
     }
+
+    // A new task joined the workspace (and the daily-note line was
+    // written) — the cross-date index must drop its memo so the next
+    // lookup picks up the new id.
+    invalidateTaskIndex();
 
     res.status(201).json({
       task: newTask,
@@ -312,32 +402,62 @@ router.post('/:id/nodes/:nodeId/link-task', async (req, res) => {
     }
 
     // Verify the task exists on the named date.
-    const note = await readDailyNote(body.date, config);
-    if (!note) {
-      return res.status(404).json({ error: `Daily note for ${body.date} not found` });
-    }
-    const tasks = parseMarkdown(note.content);
-    const task = tasks.find(t => t.id === body.taskId);
-    if (!task) {
-      return res.status(404).json({ error: `Task ${body.taskId} not found on ${body.date}` });
-    }
+    const task = await withDateLock(body.date, async () => {
+      const note = await readDailyNote(body.date!, config);
+      if (!note) {
+        throw Object.assign(new Error(`Daily note for ${body.date} not found`), { status: 404 });
+      }
+      const tasks = parseMarkdown(note.content);
+      const found = tasks.find(t => t.id === body.taskId);
+      if (!found || found.line === undefined) {
+        throw Object.assign(new Error(`Task ${body.taskId} not found on ${body.date}`), { status: 404 });
+      }
+      if (
+        found.originMindmapId &&
+        found.originNodeId &&
+        (found.originMindmapId !== mindmapId || found.originNodeId !== nodeId)
+      ) {
+        throw Object.assign(new Error('Task is already linked to another mind-map node'), { status: 409 });
+      }
+      const lines = note.content.split('\n');
+      const originalLine = lines[found.line];
+      const withOrigin = setOriginMarkers(originalLine, mindmapId, nodeId);
+      const nextLine = setSpaceMarker(withOrigin, map.spaceId ?? null);
+      if (nextLine !== originalLine) {
+        lines[found.line] = nextLine;
+        await writeDailyNote(body.date!, lines.join('\n'), config);
+      }
+      return { ...found, originMindmapId: mindmapId, originNodeId: nodeId };
+    });
 
     // Sync the node text from the live task title so a rename on
     // the daily-note side is picked up on the next paint.
     const updatedMap = await updateNodeInMindMap(mindmapId, nodeId, {
       kind: 'task',
       taskId: task.id,
+      taskDate: body.date,
+      planOrder: planOrderForNode(map, nodeId),
       text: task.title,
     });
     if (!updatedMap) {
       return res.status(500).json({ error: 'Failed to update node' });
     }
 
-    // Register the taskId on the owning TopicSpace (idempotent).
+    // Register the taskId on the owning TopicSpace (idempotent), and
+    // remove a stale ownership entry if this task is moving between
+    // spaces as part of the link.
+    const previousSpace = await findTopicSpaceByTaskId(task.id);
     let topicSpace = null;
     if (updatedMap.spaceId) {
       topicSpace = await addTaskIdToTopicSpace(updatedMap.spaceId, task.id);
     }
+    if (previousSpace && previousSpace.id !== updatedMap.spaceId) {
+      await removeTaskIdFromTopicSpace(previousSpace.id, task.id);
+    }
+
+    // The task line was rewritten (title synced); drop the memoized
+    // index so the next read reflects the new title.
+    invalidateTaskIndex();
 
     res.json({
       node: updatedMap.nodes.find(n => n.id === nodeId) ?? null,

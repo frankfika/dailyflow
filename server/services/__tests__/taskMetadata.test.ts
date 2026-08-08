@@ -15,8 +15,16 @@ import {
   findSpaceMarkerLine,
   extractTaskId,
   stripAllSpaceMarkers,
+  mindmapIdToMarker,
+  nodeIdToMarker,
+  markerToMindmapId,
+  markerToNodeId,
+  setOriginMarkers,
+  stripAllOriginMarkers,
   SPACE_MARKER_PREFIX,
   ID_MARKER_PREFIX,
+  MM_MARKER_PREFIX,
+  NODE_MARKER_PREFIX,
 } from '../taskMetadata.js';
 
 describe('spaceIdToMarker / markerToSpaceId', () => {
@@ -146,5 +154,103 @@ describe('prefix constants', () => {
   it('exposes the documented prefixes', () => {
     expect(SPACE_MARKER_PREFIX).toBe('^space:');
     expect(ID_MARKER_PREFIX).toBe('^id-');
+    expect(MM_MARKER_PREFIX).toBe('^mm:');
+    expect(NODE_MARKER_PREFIX).toBe('^node:');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mindmap-origin markers (Phase 3)
+// ---------------------------------------------------------------------------
+
+describe('mindmapIdToMarker / nodeIdToMarker / extractors', () => {
+  it('builds markers from ascii ids', () => {
+    expect(mindmapIdToMarker('01J')).toBe('^mm:01J');
+    expect(nodeIdToMarker('01NODE')).toBe('^node:01NODE');
+  });
+
+  it('preserves CJK in marker values', () => {
+    expect(mindmapIdToMarker('01J_融资')).toBe('^mm:01J_融资');
+    expect(nodeIdToMarker('节点1')).toBe('^node:节点1');
+  });
+
+  it('round-trips markers back to ids', () => {
+    expect(
+      markerToMindmapId(`- [ ] title ${mindmapIdToMarker('01J')} ${nodeIdToMarker('n1')} ^id-t1`),
+    ).toBe('01J');
+    expect(
+      markerToNodeId(`- [ ] title ${mindmapIdToMarker('01J')} ${nodeIdToMarker('n1')} ^id-t1`),
+    ).toBe('n1');
+  });
+
+  it('returns undefined when markers are absent or empty', () => {
+    expect(markerToMindmapId('- [ ] no marker ^id-t1')).toBeUndefined();
+    expect(markerToNodeId('- [ ] no marker ^id-t1')).toBeUndefined();
+    // Empty / next-marker values are treated as absent.
+    expect(markerToMindmapId('- [ ] empty ^mm: ^id-t1')).toBeUndefined();
+    expect(markerToNodeId('- [ ] empty ^node: ^id-t1')).toBeUndefined();
+  });
+});
+
+describe('setOriginMarkers', () => {
+  it('adds both markers immediately before ^id-', () => {
+    const out = setOriginMarkers('- [ ] title ^id-t1', 'mm_1', 'n_1');
+    expect(out).toBe('- [ ] title ^mm:mm_1 ^node:n_1 ^id-t1');
+  });
+
+  it('places origin markers after an existing ^space: marker', () => {
+    const out = setOriginMarkers('- [ ] title ^space:tw_a ^id-t1', 'mm_1', 'n_1');
+    expect(out).toBe('- [ ] title ^space:tw_a ^mm:mm_1 ^node:n_1 ^id-t1');
+  });
+
+  it('appends markers at the end when no ^id- exists', () => {
+    const out = setOriginMarkers('- [ ] title', 'mm_1', 'n_1');
+    expect(out).toBe('- [ ] title ^mm:mm_1 ^node:n_1');
+  });
+
+  it('allows writing only the mindmap id without a node id', () => {
+    const out = setOriginMarkers('- [ ] title ^id-t1', 'mm_1');
+    expect(out).toBe('- [ ] title ^mm:mm_1 ^id-t1');
+    expect(out).not.toContain('^node:');
+  });
+
+  it('replaces existing markers with new values', () => {
+    const out = setOriginMarkers('- [ ] title ^mm:old ^node:oldnode ^id-t1', 'new', 'newnode');
+    expect(out).toBe('- [ ] title ^mm:new ^node:newnode ^id-t1');
+    expect(out).not.toContain('old');
+  });
+
+  it('clears both markers when mindmapId is null', () => {
+    const out = setOriginMarkers('- [ ] title ^mm:old ^node:oldnode ^id-t1', null);
+    expect(out).toBe('- [ ] title ^id-t1');
+    expect(out).not.toContain('^mm:');
+    expect(out).not.toContain('^node:');
+  });
+
+  it('preserves user tags and other metadata', () => {
+    const out = setOriginMarkers(
+      '- [ ] title #work #deadline:2026-05-10 ^space:tw_a ^id-t1',
+      'mm_1',
+      'n_1',
+    );
+    expect(out).toBe(
+      '- [ ] title #work #deadline:2026-05-10 ^space:tw_a ^mm:mm_1 ^node:n_1 ^id-t1',
+    );
+  });
+});
+
+describe('stripAllOriginMarkers', () => {
+  it('removes every ^mm: and ^node: marker from the content', () => {
+    const content = [
+      '## Tasks',
+      '- [ ] task1 ^mm:mm_a ^node:n1 ^id-t1',
+      '- [ ] task2 ^mm:mm_b ^node:n2 ^space:tw_x ^id-t2',
+      '',
+    ].join('\n');
+    const out = stripAllOriginMarkers(content);
+    expect(out).toContain('- [ ] task1 ^id-t1');
+    expect(out).toContain('- [ ] task2 ^space:tw_x ^id-t2');
+    expect(out).not.toContain('^mm:');
+    expect(out).not.toContain('^node:');
   });
 });

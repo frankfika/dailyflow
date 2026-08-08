@@ -124,10 +124,10 @@ describe('useMindMapActions', () => {
     const { result } = renderHook(() => useUpdateTaskSpace(), { wrapper });
 
     act(() => {
-      result.current.mutate({ taskId: 't_1', spaceId: 'sp_1' });
+      result.current.mutate({ taskId: 't_1', spaceId: 'sp_1', date: '2026-08-07' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(tasksApi.updateSpace).toHaveBeenCalledWith('t_1', 'sp_1');
+    expect(tasksApi.updateSpace).toHaveBeenCalledWith('t_1', 'sp_1', '2026-08-07');
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.tasksRoot() }),
     );

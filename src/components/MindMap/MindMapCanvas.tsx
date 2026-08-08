@@ -105,6 +105,13 @@ interface MindMapCanvasProps {
    * the "Open task" button only when the date is known.
    */
   taskSourceDateByNodeId?: Readonly<Record<string, string>>;
+  /** Persist the title of an already-linked task after a node edit. */
+  onLinkedNodeTitleChange?: (node: MindMapNode, title: string) => void;
+  /** Persist the completion state of an already-linked task. */
+  onLinkedNodeStatusChange?: (node: MindMapNode, status: MindMapNodeStatus) => void;
+  /** Explicit primary action for one or many selected planning nodes. */
+  onPromoteNodes?: (nodeIds: string[]) => void;
+  onDeleteNodeRequest?: (nodeId: string) => void;
 }
 
 interface InternalNode extends Node {
@@ -183,17 +190,27 @@ function MindMapCanvasInner({
   onNodeContextMenu,
   onNodeOpenTask,
   taskSourceDateByNodeId,
+  onLinkedNodeTitleChange,
+  onLinkedNodeStatusChange,
+  onPromoteNodes,
+  onDeleteNodeRequest,
 }: MindMapCanvasProps) {
   // The parent owns the canonical state. We mirror it locally as RF
   // nodes/edges for interaction. Whenever the map prop changes, we resync.
   const [rfNodes, setRfNodes] = useState<InternalNode[]>(() => toRfNodes(map));
   const [rfEdges, setRfEdges] = useState<Edge[]>(() => toRfEdges(map));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMiniMap, setShowMiniMap] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteEditingId, setNoteEditingId] = useState<string | null>(null);
+  const selectedBeforeClickRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    selectedBeforeClickRef.current = new Set(rfNodes.filter((node) => node.selected).map((node) => node.id));
+  }, [rfNodes]);
 
   const { setCenter, getNode, getNodes, getViewport, setViewport } = useReactFlow();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewportByMapIdRef = useRef<Map<string, { x: number; y: number; zoom: number }>>(new Map());
 
   /**
    * Center the viewport on the tree's layout bounds. fitView can race
@@ -256,6 +273,10 @@ function MindMapCanvasInner({
   const onNodeContextMenuRef = useRef(onNodeContextMenu);
   const onNodeOpenTaskRef = useRef(onNodeOpenTask);
   const taskSourceDateByNodeIdRef = useRef(taskSourceDateByNodeId);
+  const onLinkedNodeTitleChangeRef = useRef(onLinkedNodeTitleChange);
+  const onLinkedNodeStatusChangeRef = useRef(onLinkedNodeStatusChange);
+  const onPromoteNodesRef = useRef(onPromoteNodes);
+  const onDeleteNodeRequestRef = useRef(onDeleteNodeRequest);
   useEffect(() => {
     mapRef.current = map;
     onChangeRef.current = onChange;
@@ -263,6 +284,10 @@ function MindMapCanvasInner({
     onNodeContextMenuRef.current = onNodeContextMenu;
     onNodeOpenTaskRef.current = onNodeOpenTask;
     taskSourceDateByNodeIdRef.current = taskSourceDateByNodeId;
+    onLinkedNodeTitleChangeRef.current = onLinkedNodeTitleChange;
+    onLinkedNodeStatusChangeRef.current = onLinkedNodeStatusChange;
+    onPromoteNodesRef.current = onPromoteNodes;
+    onDeleteNodeRequestRef.current = onDeleteNodeRequest;
   });
 
   // Track which prop value produced the current local state so we only
@@ -288,7 +313,7 @@ function MindMapCanvasInner({
         `${n.id}:${n.text.length}:${n.color ?? ''}:${n.collapsed ? 1 : 0}:${(n.note ?? '').length}:${n.status ?? 'todo'}:${n.kind ?? 'branch'}:${n.tag ?? ''}:${n.taskId ?? ''}:${n.position.x.toFixed(0)},${n.position.y.toFixed(0)}`,
       )
       .join('|');
-    const isNewMap = lastSyncedMapId.current !== map.id || lastSyncedTitle.current !== map.title;
+    const isNewMap = lastSyncedMapId.current !== map.id;
     const topologyChanged = nodeIds !== lastSyncedNodeIds.current || edgeIds !== lastSyncedEdgeIds.current;
     const visualChanged = visual !== lastSyncedVisual.current;
     const layoutRequested =
@@ -308,7 +333,11 @@ function MindMapCanvasInner({
       lastSyncedNodeIds.current = nodeIds;
       lastSyncedEdgeIds.current = edgeIds;
       lastSyncedVisual.current = visual;
-      const t = setTimeout(() => fitToBounds(), 60);
+      const savedViewport = viewportByMapIdRef.current.get(map.id);
+      const t = setTimeout(() => {
+        if (savedViewport) void setViewport(savedViewport, { duration: 0 });
+        else fitToBounds();
+      }, 60);
       return () => clearTimeout(t);
     }
 
@@ -324,7 +353,7 @@ function MindMapCanvasInner({
       // changes that came from a drag — e.g. the user repositioned a
       // single node — leave the viewport alone because the user is
       // already looking at the result of their drag.
-      if (topologyChanged || layoutRequested) {
+      if (layoutRequested) {
         const t = setTimeout(() => fitToBounds(), 60);
         return () => clearTimeout(t);
       }
@@ -348,10 +377,9 @@ function MindMapCanvasInner({
         void isHiddenChild;
         return {
           ...n,
-          selected: n.id === selectedId,
           data: {
             ...n.data,
-            isSelected: n.id === selectedId,
+            isSelected: Boolean(n.selected),
             isEditing: n.id === editingId,
             isNoteEditing: n.id === noteEditingId,
             isSearchMatch: searchMatches ? searchMatches.includes(n.id) : false,
@@ -370,8 +398,12 @@ function MindMapCanvasInner({
             },
             onCommitEdit: (id: string, text: string) => {
               const cur = mapRef.current;
+              const source = cur.nodes.find((nn) => nn.id === id);
               const next = cur.nodes.map((nn) => (nn.id === id ? { ...nn, text } : nn));
               onChangeRef.current({ nodes: next });
+              if (source?.kind === 'task' && source.taskId && source.text !== text) {
+                onLinkedNodeTitleChangeRef.current?.(source, text);
+              }
               setEditingId(null);
             },
             onCancelEdit: () => setEditingId(null),
@@ -428,6 +460,10 @@ function MindMapCanvasInner({
             onDelete: (id: string) => {
               const cur = mapRef.current;
               if (id === cur.rootId) return;
+              if (onDeleteNodeRequestRef.current) {
+                onDeleteNodeRequestRef.current(id);
+                return;
+              }
               const toRemove = new Set<string>([id]);
               let added = true;
               while (added) {
@@ -479,11 +515,17 @@ function MindMapCanvasInner({
             },
             onCycleStatus: (id: string) => {
               const cur = mapRef.current;
+              const source = cur.nodes.find((nn) => nn.id === id);
+              const status = nextStatus(source?.status);
               const next = cur.nodes.map((nn) =>
-                nn.id === id ? { ...nn, status: nextStatus(nn.status) } : nn,
+                nn.id === id ? { ...nn, status } : nn,
               );
               onChangeRef.current({ nodes: next });
+              if (source?.kind === 'task' && source.taskId) {
+                onLinkedNodeStatusChangeRef.current?.(source, status);
+              }
             },
+            onPromoteToTask: (id: string) => onPromoteNodesRef.current?.([id]),
             // Phase 2: right-click relay. We resolve the cursor position
             // from the React Flow `data-testid` event in the node, but
             // the simpler path is to thread it through onContextMenu on
@@ -510,12 +552,19 @@ function MindMapCanvasInner({
     // Only the visual inputs to the decorator change should re-create the
     // node array. `map` and `onChange` are read via refs, not deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rfNodes, selectedId, editingId, noteEditingId, searchMatches, focusedMatchId],
+    [rfNodes, editingId, noteEditingId, searchMatches, focusedMatchId],
   );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setRfNodes((current) => applyNodeChanges(changes, current) as InternalNode[]);
+      const selectionChanges = changes.filter((change) => change.type === 'select');
+      setRfNodes((current) => {
+        const next = applyNodeChanges(changes, current) as InternalNode[];
+        if (selectionChanges.length > 0) {
+          setSelectedId(next.filter((node) => node.selected).at(-1)?.id ?? null);
+        }
+        return next;
+      });
       const positionChanges = changes.filter(
         (c) => c.type === 'position' && c.position && !c.dragging,
       );
@@ -547,13 +596,20 @@ function MindMapCanvasInner({
     [],
   );
 
-  const handleNodeClick: NodeMouseHandler = useCallback((_e, node) => {
+  const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
+    const additive = event.metaKey || event.ctrlKey || event.shiftKey;
+    const previous = selectedBeforeClickRef.current;
+    const next = additive ? new Set(previous) : new Set<string>();
+    if (additive && next.has(node.id)) next.delete(node.id);
+    else next.add(node.id);
+    setRfNodes((current) => current.map((item) => ({ ...item, selected: next.has(item.id) })));
     setSelectedId(node.id);
     setEditingId(null);
     setNoteEditingId(null);
   }, []);
 
   const handlePaneClick = useCallback(() => {
+    setRfNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
     setSelectedId(null);
     setEditingId(null);
     setNoteEditingId(null);
@@ -625,14 +681,76 @@ function MindMapCanvasInner({
     // fitView here, which would race with the new positions arriving.
   }, [onRequestLayout]);
 
+  const handleFocusBranch = useCallback(() => {
+    const root = selectedIdRef.current;
+    if (!root) return;
+    const ids = new Set<string>([root]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const edge of mapRef.current.edges) {
+        if (ids.has(edge.source) && !ids.has(edge.target)) {
+          ids.add(edge.target);
+          changed = true;
+        }
+      }
+    }
+    const visible = getNodes().filter((node) => ids.has(node.id));
+    if (visible.length === 0) return;
+    const minX = Math.min(...visible.map((node) => node.position.x));
+    const minY = Math.min(...visible.map((node) => node.position.y));
+    const maxX = Math.max(...visible.map((node) => node.position.x + (node.measured?.width ?? 220)));
+    const maxY = Math.max(...visible.map((node) => node.position.y + (node.measured?.height ?? 80)));
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+    const zoom = Math.max(0.1, Math.min(1.4, Math.min((rect.width * 0.82) / width, (rect.height * 0.82) / height)));
+    void setViewport({
+      x: rect.width / 2 - (minX + width / 2) * zoom,
+      y: rect.height / 2 - (minY + height / 2) * zoom,
+      zoom,
+    }, { duration: 250 });
+  }, [getNodes, setViewport]);
+
+  const promotableSelectedIds = rfNodes.filter((node) => node.selected).map((node) => node.id).filter((id) => {
+    const node = map.nodes.find((item) => item.id === id);
+    return node && node.id !== map.rootId && (node.kind ?? 'branch') === 'branch';
+  });
+
+  const handlePointerWheelZoom = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    // Trackpads use small, high-frequency deltas for two-finger panning;
+    // let React Flow handle those. A discrete mouse wheel emits larger
+    // steps, which we zoom around the actual pointer position.
+    if (event.ctrlKey || Math.abs(event.deltaY) < 40) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const viewport = getViewport();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const flowX = (pointerX - viewport.x) / viewport.zoom;
+    const flowY = (pointerY - viewport.y) / viewport.zoom;
+    const nextZoom = Math.max(0.1, Math.min(2, viewport.zoom * Math.exp(-event.deltaY * 0.0015)));
+    void setViewport({
+      x: pointerX - flowX * nextZoom,
+      y: pointerY - flowY * nextZoom,
+      zoom: nextZoom,
+    }, { duration: 0 });
+  }, [getViewport, setViewport]);
+
   return (
-    <div className="relative h-full w-full outline-none" ref={containerRef}>
+    <div className="relative h-full w-full outline-none" ref={containerRef} onWheelCapture={handlePointerWheelZoom}>
       <ReactFlow
         nodes={decoratedNodes}
         edges={rfEdges}
         onNodesChange={handleNodesChange}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
+        onMoveEnd={() => {
+          viewportByMapIdRef.current.set(mapRef.current.id, getViewport());
+        }}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         minZoom={0.1}
@@ -642,9 +760,12 @@ function MindMapCanvasInner({
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
-        zoomOnScroll
-        panOnDrag
-        panOnScroll={false}
+        zoomOnScroll={false}
+        zoomOnPinch
+        panOnDrag={[1, 2]}
+        panOnScroll
+        panOnScrollSpeed={0.8}
+        selectionOnDrag
         disableKeyboardA11y
         className="bg-[var(--color-background)]"
       >
@@ -653,23 +774,40 @@ function MindMapCanvasInner({
           showInteractive={false}
           className="!bottom-3 !right-3 !top-auto !left-auto !shadow-md"
         />
-        <MiniMap
-          pannable
-          zoomable
-          className="!bottom-3 !left-3 !right-auto !top-auto !h-24 !w-32 !bg-white/85 !border !border-border !rounded-md !shadow-sm"
-          nodeColor={(n) => colorForMini(n)}
-          maskColor="rgba(0,0,0,0.04)"
-        />
+        {showMiniMap && (
+          <MiniMap
+            pannable
+            zoomable
+            className="!bottom-3 !left-3 !right-auto !top-auto !h-24 !w-32 !bg-white/85 !border !border-border !rounded-md !shadow-sm"
+            nodeColor={(n) => colorForMini(n)}
+            maskColor="rgba(0,0,0,0.04)"
+          />
+        )}
       </ReactFlow>
 
-      <button
-        type="button"
-        onClick={handleAutoLayout}
-        className="absolute right-3 top-3 z-10 rounded-md border border-border bg-white/90 px-2.5 py-1 text-xs font-medium text-text-muted shadow-sm transition-colors hover:bg-white hover:text-text-heading"
-        title={language === 'zh' ? '重新整理布局' : 'Re-layout'}
-      >
-        {language === 'zh' ? '整理布局' : 'Re-layout'}
-      </button>
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-lg border border-border bg-white/90 p-1 shadow-sm backdrop-blur-xl">
+        <button type="button" onClick={fitToBounds} className="rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text-heading" data-testid="mindmap-fit-all">
+          {language === 'zh' ? '适应全部' : 'Fit all'}
+        </button>
+        <button type="button" onClick={handleFocusBranch} disabled={!selectedId} className="rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text-heading disabled:opacity-40" data-testid="mindmap-focus-branch">
+          {language === 'zh' ? '聚焦分支' : 'Focus branch'}
+        </button>
+        <button type="button" onClick={() => setShowMiniMap((value) => !value)} className="rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text-heading" data-testid="mindmap-toggle-minimap">
+          {language === 'zh' ? '小地图' : 'Minimap'}
+        </button>
+        <button type="button" onClick={handleAutoLayout} className="rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text-heading" data-testid="mindmap-relayout">
+          {language === 'zh' ? '整理布局' : 'Re-layout'}
+        </button>
+      </div>
+
+      {promotableSelectedIds.length > 1 && onPromoteNodes && (
+        <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-white/95 px-3 py-2 shadow-lg backdrop-blur-xl" data-testid="mindmap-batch-actions">
+          <span className="text-xs text-text-muted">{language === 'zh' ? `已选 ${promotableSelectedIds.length} 个节点` : `${promotableSelectedIds.length} nodes selected`}</span>
+          <button type="button" onClick={() => onPromoteNodes(promotableSelectedIds)} className="rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90" data-testid="mindmap-batch-promote">
+            {language === 'zh' ? '批量设为任务' : 'Make tasks'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

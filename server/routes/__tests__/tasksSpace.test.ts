@@ -210,4 +210,57 @@ describe.sequential('PUT /api/tasks/:taskId/space', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it('syncs title/status to the source node and downgrades it when the Task is deleted', async () => {
+    const date = '2026-08-10';
+    const taskId = 't_lifecycle';
+    const space = await createTopicSpace({ title: 'Lifecycle' });
+    const mindmaps = await import('../../services/mindmaps.js');
+    const topicSpaces = await import('../../services/topicSpaces.js');
+    const map = await mindmaps.getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    await mindmaps.updateMindMap(map.id, {
+      nodes: [
+        ...map.nodes,
+        {
+          id: 'source-node',
+          text: 'Old title',
+          position: { x: 10, y: 20 },
+          kind: 'task',
+          taskId,
+          taskDate: date,
+          status: 'todo',
+        },
+      ],
+      edges: [...map.edges, { id: 'edge', source: map.rootId, target: 'source-node' }],
+    });
+    await topicSpaces.updateTopicSpace(space.id, { taskIds: [taskId] });
+    await writeDailyNote(
+      date,
+      `- [ ] Old title ^space:${space.id} ^mm:${map.id} ^node:source-node ^id-${taskId}\n`,
+      configObj,
+    );
+
+    const statusRes = await withServer(app, (port) =>
+      request(port, 'PATCH', `/api/tasks/${taskId}`, { status: 'done', date }),
+    );
+    expect(statusRes.status).toBe(200);
+    expect((await mindmaps.getMindMap(map.id))!.nodes.find(node => node.id === 'source-node')!.status).toBe('done');
+
+    const titleRes = await withServer(app, (port) =>
+      request(port, 'PUT', `/api/tasks/${taskId}`, { title: 'New title', date }),
+    );
+    expect(titleRes.status).toBe(200);
+    expect((await mindmaps.getMindMap(map.id))!.nodes.find(node => node.id === 'source-node')!.text).toBe('New title');
+
+    const deleteRes = await withServer(app, (port) =>
+      request(port, 'DELETE', `/api/tasks/${taskId}`, { date }),
+    );
+    expect(deleteRes.status).toBe(200);
+    const sourceNode = (await mindmaps.getMindMap(map.id))!.nodes.find(node => node.id === 'source-node')!;
+    expect(sourceNode.kind).toBe('branch');
+    expect(sourceNode.taskId).toBeUndefined();
+    expect(sourceNode.taskDate).toBeUndefined();
+    expect((await topicSpaces.getTopicSpace(space.id))!.taskIds).not.toContain(taskId);
+  });
 });

@@ -19,6 +19,7 @@ import {
   type TopicSpaceContext,
   type TopicSpaceCreateInput,
   type TopicSpaceFilters,
+  type TopicSpaceTaskItem,
   type TopicSpaceUpdate,
 } from '../api/client';
 
@@ -137,5 +138,30 @@ export function useDeleteTopicSpace(): UseMutationResult<void, Error, string> {
       );
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cross-date task source (Phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a topic space's tasks across ALL daily notes (not just the
+ * currently-selected date). Use this for the Topic Space list view
+ * and for the mindmap node↔task mirror — the old "filter today's
+ * tasks by spaceId" approach silently dropped any task that wasn't
+ * on the open date.
+ *
+ * Pass `null` to disable the query (e.g. when no space is selected).
+ */
+export function useTopicSpaceTasks(
+  spaceId: string | null | undefined,
+): UseQueryResult<TopicSpaceTaskItem[]> {
+  return useQuery({
+    queryKey: queryKeys.topicSpaceTasks(spaceId ?? ''),
+    queryFn: () => topicSpacesApi.getTasks(spaceId as string),
+    enabled: Boolean(spaceId),
+    staleTime: 10_000,
+    retry: 1,
   });
 }
