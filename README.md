@@ -16,6 +16,8 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/frankfika/dailyflow/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
+**当前稳定版：v1.5.0** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
+
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [开发](#-开发) · [文档](#-文档)
 
 __简体中文__ | [English](./README_EN.md)
@@ -132,7 +134,13 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 | Windows | `DailyFlow_*_x64-setup.exe` |
 | Linux | `DailyFlow_*_amd64.AppImage` |
 
-macOS 如果提示应用已损坏，可按项目文档执行隔离属性修复：[MACOS_DAMAGED_FIX.md](./docs/MACOS_DAMAGED_FIX.md)。
+macOS 安装后请将 DailyFlow 拖入“应用程序”。由于当前构建尚未经过 Apple 公证，如果提示“DailyFlow 已损坏”或无法验证开发者，请执行：
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/DailyFlow.app"
+```
+
+然后在 Finder 中右键 DailyFlow，选择“打开”。完整说明见 [MACOS_DAMAGED_FIX.md](./docs/MACOS_DAMAGED_FIX.md)。
 
 ### 从源码运行
 
