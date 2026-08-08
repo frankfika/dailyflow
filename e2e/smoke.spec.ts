@@ -41,15 +41,35 @@ test.describe('DailyFlow Smoke Tests', () => {
     await expect(page.locator('text=/Settings|Configuration|Config|设置|全局设置/i').first()).toBeVisible();
   });
 
-  test('no console errors on initial load', async ({ page }) => {
-    const errors: string[] = [];
+  test('no unexpected console or HTTP errors on initial load', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    const httpErrors: string[] = [];
     page.on('console', msg => {
       if (msg.type() === 'error') {
-        errors.push(msg.text());
+        consoleErrors.push(msg.text());
       }
     });
+    page.on('response', response => {
+      if (response.status() >= 400) {
+        httpErrors.push(`${response.status()} ${response.url()}`);
+      }
+    });
+
+    // Install the listeners before a full reload so initial requests are observable.
+    await page.reload();
     await page.waitForLoadState('networkidle');
-    const realErrors = errors.filter(e => !e.includes('favicon'));
-    expect(realErrors).toHaveLength(0);
+
+    // Chromium emits a generic console error for every failed HTTP response. The
+    // response assertion below retains the URL and status, so it is more precise.
+    const realConsoleErrors = consoleErrors.filter(error =>
+      !error.includes('favicon') &&
+      !error.includes('Failed to load resource'),
+    );
+    const unexpectedHttpErrors = httpErrors.filter(error =>
+      !/^404 http:\/\/localhost:3000\/api\/files\/\d{4}-\d{2}-\d{2}$/.test(error),
+    );
+
+    expect(realConsoleErrors).toHaveLength(0);
+    expect(unexpectedHttpErrors).toHaveLength(0);
   });
 });
