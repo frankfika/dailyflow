@@ -187,8 +187,6 @@ jobs:
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_TAG }}
 
       - name: Validate installers, signatures and latest.json
         shell: bash
