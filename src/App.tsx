@@ -1250,7 +1250,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setShowFloatingChat(value => !value)}
-            className="fixed bottom-5 right-5 z-[81] inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-lg transition hover:scale-105 hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="fixed bottom-10 right-10 z-[81] inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-lg transition hover:scale-105 hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/40"
             aria-label={language === 'zh' ? '打开 AI 对话' : 'Open AI Chat'}
             title={language === 'zh' ? 'AI 对话' : 'AI Chat'}
             data-testid="floating-ai-chat-button"
@@ -1261,12 +1261,12 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-colors duration-300">
+      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95"
+            className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 sm:hidden min-[1025px]:block"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
             aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
           >
