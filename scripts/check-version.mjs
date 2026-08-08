@@ -34,6 +34,8 @@ function readCargoLockVersion(packageName) {
 const packageJson = readJson("package.json");
 const packageLock = readJson("package-lock.json");
 const tauriConfig = readJson("src-tauri/tauri.conf.json");
+const releaseManifest = readJson(".release-please-manifest.json");
+const readme = readFileSync("README.md", "utf8");
 const expected = packageJson.version;
 
 const versions = new Map([
@@ -41,6 +43,11 @@ const versions = new Map([
   ["package-lock.json", packageLock.version],
   ["package-lock.json root package", packageLock.packages?.[""]?.version],
   ["src-tauri/tauri.conf.json", tauriConfig.version],
+  [".release-please-manifest.json", releaseManifest["."]],
+  [
+    "README.md stable release",
+    readme.match(/当前稳定版：v([^*\s]+)/)?.[1],
+  ],
   [
     "src-tauri/Cargo.toml",
     readTomlSectionVersion("src-tauri/Cargo.toml", "package"),
@@ -50,6 +57,12 @@ const versions = new Map([
 
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(expected)) {
   throw new Error(`Invalid semantic version in package.json: ${expected}`);
+}
+
+if (tauriConfig.bundle?.createUpdaterArtifacts !== true) {
+  throw new Error(
+    "Tauri updater artifacts are disabled; set bundle.createUpdaterArtifacts to true.",
+  );
 }
 
 const mismatches = [...versions].filter(([, version]) => version !== expected);
