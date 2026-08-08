@@ -46,17 +46,6 @@ export default defineConfig(() => {
     },
     build: {
       rollupOptions: {
-        output: {
-          manualChunks: (id) => {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
-            if (id.includes('react-markdown') || id.includes('remark') || id.includes('mdast') || id.includes('micromark')) return 'markdown';
-            if (id.includes('lucide-react')) return 'lucide';
-            if (id.includes('@tanstack')) return 'tanstack';
-            if (id.includes('react') || id.includes('scheduler')) return 'react';
-            return 'vendor';
-          },
-        },
         input: {
           main: path.resolve(__dirname, 'index.html'),
         },
