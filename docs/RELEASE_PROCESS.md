@@ -12,6 +12,7 @@ DailyFlow 使用 Release Please + GitHub Actions 管理版本。日常开发不�
    - `src-tauri/tauri.conf.json`
    - `src-tauri/Cargo.toml` 与 `src-tauri/Cargo.lock`
    - `.release-please-manifest.json`
+   - `README.md` 中的当前稳定版本
 4. 确认 Release PR 的 CI 通过后，将其合并。
 5. Release Please 自动创建语义化版本 Tag 和 GitHub Release。
 6. 同一个 Release workflow 自动构建并上传：
@@ -19,6 +20,7 @@ DailyFlow 使用 Release Please + GitHub Actions 管理版本。日常开发不�
    - macOS Intel
    - Windows x64
    - Linux x64
+7. 四个平台构建成功后，工作流统一补充 Release 下载表、macOS 安装方式和未公证构建的处理命令。
 
 发布通常需要 10–20 分钟。进度可在仓库的 Actions 和 Releases 页面查看。
 
@@ -73,6 +75,8 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - GitHub Release 不是 Draft 或 Prerelease（除非本次明确发布测试版）。
 - macOS、Windows、Linux 安装文件均已上传。
 - `main`、版本 Tag 与 Release PR 中的版本号一致。
+- README 中的“当前稳定版”与 Release 一致。
+- Release 正文包含 macOS 芯片选择、拖入“应用程序”、解除隔离属性和右键打开步骤。
 
 ## 配置文件
 
