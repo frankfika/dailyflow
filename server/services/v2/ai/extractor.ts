@@ -124,7 +124,7 @@ Rules (strict):
 
 export async function runExtractor(input: ExtractorInput): Promise<ExtractorOutput> {
   const start = Date.now();
-  const provider: AIProvider = input.provider ?? buildProvider(loadV2AIConfig());
+  const provider: AIProvider = input.provider ?? buildProvider(await loadV2AIConfig('meetingSummary'));
 
   const prompt = buildPrompt(input);
   const result = await provider.complete({
@@ -207,6 +207,8 @@ export function buildExtractorProposal(input: BuildProposalInput): BuildProposal
   for (const item of input.extractorOutput.items) {
     const evidenceId = newId('ev');
     const changeId = newId('chg');
+    const sourceBody = input.source.body ?? '';
+    const quoteStart = sourceBody.indexOf(item.quote);
     const evidenceEntry: Evidence = {
       id: evidenceId,
       schemaVersion: 1,
@@ -216,7 +218,11 @@ export function buildExtractorProposal(input: BuildProposalInput): BuildProposal
       workspaceId: input.workspaceId,
       sourceId: input.source.id,
       quote: item.quote,
-      locator: { kind: 'text', start: 0, end: 0 },
+      locator: {
+        kind: 'text',
+        start: quoteStart >= 0 ? quoteStart : 0,
+        end: quoteStart >= 0 ? quoteStart + item.quote.length : 0,
+      },
       sourceContentHash: input.source.contentHash,
       stale: false,
       fieldRefs: fieldRefsFor(item as { kind: string; title: string; outcome?: string; dueAt?: string; owner?: string; beneficiary?: string; waitingOn?: string; decision?: string; question?: string }),

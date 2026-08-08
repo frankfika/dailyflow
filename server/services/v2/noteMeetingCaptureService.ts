@@ -32,10 +32,14 @@ const AudioSchema = z.object({
 });
 
 const EndpointTranscriptionSchema = z.object({
+  provider: z.enum(['openai', 'deepgram', 'elevenlabs', 'openai-compatible']).optional().default('openai-compatible'),
   baseUrl: z.string().trim().min(1).max(2_000),
   model: z.string().trim().min(1).max(200),
   apiKey: z.string().max(20_000).optional(),
   language: z.string().trim().min(1).max(30).optional(),
+  diarize: z.boolean().optional().default(true),
+  speakerCount: z.number().int().min(0).max(32).optional(),
+  keyterms: z.array(z.string().trim().min(1).max(100)).max(1_000).optional(),
 });
 
 export const NoteMeetingCaptureInputSchema = z.object({
@@ -98,6 +102,17 @@ export class MeetingAudioAccessError extends Error {
 interface TranscriptionResponse {
   text?: unknown;
   segments?: unknown;
+}
+
+interface TranscriptionConfig {
+  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'openai-compatible';
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  language?: string;
+  diarize?: boolean;
+  speakerCount?: number;
+  keyterms?: string[];
 }
 
 type Fetch = typeof fetch;
@@ -240,6 +255,35 @@ function transcriptionUrl(baseUrl: string, allowLoopback = false): string {
     : `${clean}/v1/audio/transcriptions`;
 }
 
+function providerUrl(config: TranscriptionConfig, allowLoopback: boolean): string {
+  const provider = config.provider ?? 'openai-compatible';
+  if (provider === 'openai' || provider === 'openai-compatible') {
+    return transcriptionUrl(config.baseUrl, allowLoopback);
+  }
+  if (allowLoopback) throw new Error('Local transcription endpoints must use the OpenAI-compatible provider.');
+  let parsed: URL;
+  try {
+    parsed = new URL(config.baseUrl);
+  } catch {
+    throw new Error('Transcription base URL is invalid.');
+  }
+  if (parsed.protocol !== 'https:' || isBlockedHost(parsed)) {
+    throw new Error('Remote transcription providers must use a public HTTPS endpoint.');
+  }
+  const clean = config.baseUrl.replace(/\/+$/, '');
+  if (provider === 'deepgram') {
+    const url = new URL(/\/listen$/i.test(clean) ? clean : `${clean}/listen`);
+    url.searchParams.set('model', config.model);
+    url.searchParams.set('smart_format', 'true');
+    url.searchParams.set('utterances', 'true');
+    if (config.diarize !== false) url.searchParams.set('diarize_model', 'latest');
+    if (config.language && config.language !== 'auto') url.searchParams.set('language', config.language);
+    for (const term of config.keyterms ?? []) url.searchParams.append('keyterm', term);
+    return url.toString();
+  }
+  return /\/speech-to-text$/i.test(clean) ? clean : `${clean}/speech-to-text`;
+}
+
 function normalizeSegments(value: unknown): TranscriptSegment[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry): TranscriptSegment[] => {
@@ -256,6 +300,52 @@ function normalizeSegments(value: unknown): TranscriptSegment[] {
       text,
     }];
   });
+}
+
+function normalizeDeepgram(payload: any): { text: string; segments: TranscriptSegment[] } {
+  const alternative = payload?.results?.channels?.[0]?.alternatives?.[0];
+  const utterances = Array.isArray(payload?.results?.utterances) ? payload.results.utterances : [];
+  const segments = utterances.flatMap((entry: any): TranscriptSegment[] => {
+    const text = typeof entry?.transcript === 'string' ? entry.transcript.trim() : '';
+    if (!text) return [];
+    return [{
+      start: typeof entry.start === 'number' ? entry.start : 0,
+      end: typeof entry.end === 'number' ? entry.end : 0,
+      speaker: typeof entry.speaker === 'number' || typeof entry.speaker === 'string' ? `Speaker ${entry.speaker}` : undefined,
+      text,
+    }];
+  });
+  const text = typeof alternative?.transcript === 'string' && alternative.transcript.trim()
+    ? alternative.transcript.trim()
+    : segments.map(segment => `${segment.speaker ? `${segment.speaker}: ` : ''}${segment.text}`).join('\n');
+  return { text, segments };
+}
+
+function normalizeElevenLabs(payload: any): { text: string; segments: TranscriptSegment[] } {
+  const words = Array.isArray(payload?.words) ? payload.words : [];
+  const segments: TranscriptSegment[] = [];
+  for (const word of words) {
+    const token = typeof word?.text === 'string' ? word.text : '';
+    if (!token || word?.type === 'spacing') continue;
+    const speaker = typeof word?.speaker_id === 'string' ? word.speaker_id : undefined;
+    const previous = segments.at(-1);
+    if (!previous || previous.speaker !== speaker) {
+      segments.push({
+        start: typeof word?.start === 'number' ? word.start : 0,
+        end: typeof word?.end === 'number' ? word.end : 0,
+        speaker,
+        text: token,
+      });
+    } else {
+      const punctuation = /^[,.;:!?，。；：！？]/.test(token);
+      previous.text += `${punctuation || /^\s/.test(token) ? '' : ' '}${token}`;
+      if (typeof word?.end === 'number') previous.end = word.end;
+    }
+  }
+  const text = typeof payload?.text === 'string' && payload.text.trim()
+    ? payload.text.trim()
+    : segments.map(segment => `${segment.speaker ? `${segment.speaker}: ` : ''}${segment.text}`).join('\n');
+  return { text, segments };
 }
 
 function transcriptMarkdown(text: string, segments: TranscriptSegment[]): string {
@@ -281,20 +371,51 @@ async function transcribe(
   bytes: Buffer,
   mimeType: string,
   extension: string,
-  config: { baseUrl: string; model: string; apiKey?: string; language?: string },
+  config: TranscriptionConfig,
   language: 'zh' | 'en' | undefined,
   fetchImpl: Fetch,
   allowLoopback = false,
 ): Promise<{ text: string; segments: TranscriptSegment[] }> {
+  const provider = config.provider ?? 'openai-compatible';
+  const url = providerUrl(config, allowLoopback);
+  if (provider === 'deepgram') {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${config.apiKey ?? ''}`,
+        'Content-Type': mimeType,
+      },
+      body: Uint8Array.from(bytes),
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300).replace(/\s+/g, ' ').trim();
+      throw new Error(`Transcription provider returned ${response.status}${detail ? `: ${detail}` : ''}`);
+    }
+    const result = normalizeDeepgram(await response.json());
+    if (!result.text) throw new Error('Transcription provider returned no text.');
+    return result;
+  }
+
   const form = new FormData();
   form.append('file', new Blob([Uint8Array.from(bytes)], { type: mimeType }), `recording${extension}`);
-  form.append('model', config.model);
-  form.append('response_format', 'verbose_json');
+  form.append(provider === 'elevenlabs' ? 'model_id' : 'model', config.model);
   const languageHint = config.language ?? language;
-  if (languageHint) form.append('language', languageHint);
-  const response = await fetchImpl(transcriptionUrl(config.baseUrl, allowLoopback), {
+  if (provider === 'elevenlabs') {
+    if (languageHint && languageHint !== 'auto') form.append('language_code', languageHint);
+    form.append('diarize', String(config.diarize !== false));
+    if (config.speakerCount && config.speakerCount > 0) form.append('num_speakers', String(config.speakerCount));
+    for (const term of config.keyterms ?? []) form.append('keyterms', term);
+  } else {
+    const diarized = provider === 'openai' && config.model.includes('diarize') && config.diarize !== false;
+    form.append('response_format', diarized ? 'diarized_json' : 'verbose_json');
+    if (diarized) form.append('chunking_strategy', 'auto');
+    if (languageHint && languageHint !== 'auto') form.append('language', languageHint);
+  }
+  const response = await fetchImpl(url, {
     method: 'POST',
-    headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : undefined,
+    headers: config.apiKey
+      ? (provider === 'elevenlabs' ? { 'xi-api-key': config.apiKey } : { Authorization: `Bearer ${config.apiKey}` })
+      : undefined,
     body: form,
   });
   if (!response.ok) {
@@ -302,6 +423,11 @@ async function transcribe(
     throw new Error(`Transcription provider returned ${response.status}${detail ? `: ${detail}` : ''}`);
   }
   const payload = await response.json() as TranscriptionResponse;
+  if (provider === 'elevenlabs') {
+    const result = normalizeElevenLabs(payload);
+    if (!result.text) throw new Error('Transcription provider returned no text.');
+    return result;
+  }
   const segments = normalizeSegments(payload.segments);
   const text = typeof payload.text === 'string' && payload.text.trim()
     ? payload.text.trim()
@@ -466,13 +592,17 @@ export async function captureNoteMeeting(
   let note = await appendSourcesToNote(repo, noteId, [audioSource.id]);
 
   const requested = parsed.transcription;
-  const endpointConfig: { baseUrl: string; model: string; apiKey?: string; language?: string } | undefined =
+  const endpointConfig: TranscriptionConfig | undefined =
     requested?.mode === 'remote' || requested?.mode === 'local-endpoint'
       ? {
           baseUrl: requested.baseUrl!,
           model: requested.model!,
+          provider: requested.provider,
           apiKey: requested.apiKey,
           language: requested.language,
+          diarize: requested.diarize,
+          speakerCount: requested.speakerCount,
+          keyterms: requested.keyterms,
         }
       : parsed.transcriptionConfig
         ? {
@@ -522,9 +652,9 @@ export async function captureNoteMeeting(
     note: originalNote,
     kind: 'meeting_transcript',
     title: `Meeting transcript ${now.slice(0, 19).replace('T', ' ')}`,
-    body: remote.text,
+    body: transcriptBody,
     filePath: workspaceRelative(repo.layout.root, transcriptAbsolute),
-    contentHash: hashBytes(Buffer.from(remote.text, 'utf8')),
+    contentHash: hashBytes(Buffer.from(transcriptBody, 'utf8')),
     durationSeconds: parsed.durationSeconds,
     language: parsed.language,
     now: new Date().toISOString(),
@@ -575,10 +705,14 @@ export async function transcribeStoredMeetingAudio(
   const extension = path.extname(resolved.absolutePath).toLowerCase();
   const mode = parsed.transcription.mode;
   const endpointConfig = {
+    provider: parsed.transcription.provider,
     baseUrl: parsed.transcription.baseUrl!,
     model: parsed.transcription.model!,
     apiKey: parsed.transcription.apiKey,
     language: parsed.transcription.language,
+    diarize: parsed.transcription.diarize,
+    speakerCount: parsed.transcription.speakerCount,
+    keyterms: parsed.transcription.keyterms,
   };
   const remote = await transcribe(
     bytes,
@@ -606,9 +740,9 @@ export async function transcribeStoredMeetingAudio(
     note,
     kind: 'meeting_transcript',
     title: `Meeting transcript ${now.slice(0, 19).replace('T', ' ')}`,
-    body: remote.text,
+    body: transcriptBody,
     filePath: workspaceRelative(repo.layout.root, transcriptAbsolute),
-    contentHash: hashBytes(Buffer.from(remote.text, 'utf8')),
+    contentHash: hashBytes(Buffer.from(transcriptBody, 'utf8')),
     durationSeconds: typeof audioSource.meta?.durationSeconds === 'number'
       ? audioSource.meta.durationSeconds
       : undefined,

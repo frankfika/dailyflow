@@ -188,11 +188,11 @@ POST   /api/topic-spaces/:id/reorder                      — 调整同 context 
 
 请求/响应直接用 §2.1 的 `TopicSpace` 类型，不包 envelope。
 
-### 3.2 保留 `/api/thinking-workspaces` (deprecate 不删)
+### 3.2 老 ThinkingWorkspace 读取兼容
 
-- 老客户端代码不动也能跑
-- 响应里加 `kind` 字段，缺省 'workspace'
-- UI 新代码优先用 `/api/topic-spaces`
+- `/api/topic-spaces` 是唯一 API；旧 `/api/thinking-workspaces` 写入器已下线。
+- 老文件的 `kind: workspace`（或缺省 kind）由 Topic Space service 容错读取。
+- 只读不会改盘；用户明确更新该主题时才写成 `kind: topic-space`。
 
 ### 3.3 扩展 `/api/mindmaps`
 
@@ -307,8 +307,8 @@ updatedAt: ...
 
 ## 7. 风险 & 注意点
 
-1. **不破坏老 UI**:
-   - `/api/thinking-workspaces` 继续能用
+1. **不破坏老数据**:
+   - `/api/topic-spaces` 继续读取旧 ThinkingWorkspace 文件
    - 老 MindMap 节点 status 字段保留
    - 升级时 frontmatter 不重写顺序 (避免 git diff 噪音)
 

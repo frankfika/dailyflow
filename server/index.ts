@@ -4,15 +4,11 @@ import filesRouter from './routes/files.js';
 import tasksRouter from './routes/tasks.js';
 import rolloverRouter from './routes/rollover.js';
 import configRouter from './routes/config.js';
-import projectsRouter from './routes/projects.js';
-import gitRouter from './routes/git.js';
 import notesRouter from './routes/notes.js';
 import promptsRouter from './routes/prompts.js';
 import aiRouter from './routes/ai.js';
 import recurringRouter from './routes/recurring.js';
 import ipfsRouter from './routes/ipfs.js';
-import thinkingWorkspacesRouter from './routes/thinkingWorkspaces.js';
-import meetingsRouter from './routes/meetings.js';
 import feishuRouter from './routes/feishu.js';
 import calendarRouter from './routes/calendar.js';
 import googleCalendarRouter from './routes/googleCalendar.js';
@@ -47,10 +43,11 @@ app.use(cors({
   },
   credentials: true,
 }));
-// Body limit raised to 200mb so a 1h recording (base64-encoded WebM ~ 80MB
-// for a typical meeting) fits in a single POST to /api/meetings/transcribe.
-// Other routes stay under 10mb; this is a safe ceiling for the audio path.
-app.use(express.json({ limit: '200mb' }));
+// Meeting audio is currently base64 encoded, so only its canonical v2 capture
+// endpoint receives the larger parser. Keep every other API at a conservative
+// ceiling instead of exposing the whole local server to 200 MB JSON bodies.
+app.use('/api/v2/notes/:id/meeting/capture', express.json({ limit: '200mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Security headers (without bringing in helmet as a dependency).
 // We deliberately do NOT set HSTS — per security-best-practices, HSTS can
@@ -68,15 +65,11 @@ app.use('/api/files', filesRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/rollover', rolloverRouter);
 app.use('/api/config', configRouter);
-app.use('/api/projects', projectsRouter);
-app.use('/api/git', gitRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/prompts', promptsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/recurring', recurringRouter);
 app.use('/api/ipfs', ipfsRouter);
-app.use('/api/thinking-workspaces', thinkingWorkspacesRouter);
-app.use('/api/meetings', meetingsRouter);
 app.use('/api/feishu', feishuRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/google-calendar', googleCalendarRouter);

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { AIChat } from '../../components/AIChat';
 
@@ -209,5 +209,14 @@ describe('AIChat initialDraft', () => {
 
     expect(screen.getByTestId('chat-session-scroll-region')).toHaveClass('min-h-0', 'overflow-y-auto');
     expect(screen.getByTestId('chat-message-scroll-region')).toHaveClass('min-h-0', 'overflow-y-auto', 'overscroll-contain');
+  });
+
+  it('delegates meeting creation to the canonical app-level note flow', () => {
+    const onCreateMeetingNote = vi.fn();
+    render(<AIChat {...baseProps} onCreateMeetingNote={onCreateMeetingNote} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Meeting' }));
+
+    expect(onCreateMeetingNote).toHaveBeenCalledOnce();
   });
 });

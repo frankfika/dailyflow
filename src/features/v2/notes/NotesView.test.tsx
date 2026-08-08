@@ -49,4 +49,11 @@ describe('NotesView mobile navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to notes' }));
     expect(screen.getByRole('button', { name: 'Open note' })).toBeInTheDocument();
   });
+
+  it('opens a meeting note requested by a global capture entry point', () => {
+    render(<NotesView language="en" requestedNoteId="meeting-note-1" />);
+
+    expect(screen.getByTestId('mock-note-editor')).toHaveTextContent('meeting-note-1');
+    expect(screen.getByRole('button', { name: 'Back to notes' })).toBeInTheDocument();
+  });
 });

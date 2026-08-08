@@ -5,17 +5,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Plus, Sparkles, Settings, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, Bot, Loader2 } from 'lucide-react';
-import { notesApi } from '../api/client';
 import { persistProviderConfigsToBackend } from '../types/models';
 import { type ChatMessage, type ContextItem } from '../types/chat';
 import { useAiSession } from '../hooks/useAiSession';
 import { ChatSettingsPanel } from './ChatSettingsPanel';
 import { ContextPicker } from './ContextPicker';
-import { MeetingCapture } from './MeetingCapture';
 import { SaveNoteModal } from './SaveNoteModal';
 import { MessageBubble } from './MessageBubble';
 import { ChatInputArea } from './ChatInputArea';
-import { getTodayStr } from '../utils/tagColors';
 
 interface AIChatProps {
   workspaceId?: string;
@@ -27,11 +24,11 @@ interface AIChatProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   initialDraft?: { text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null;
   onDraftConsumed?: () => void;
-  onOpenMeetingCapture?: () => void;
+  onCreateMeetingNote?: () => void;
   onNoteCreated?: () => void;
 }
 
-export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onOpenMeetingCapture, onNoteCreated }: AIChatProps) {
+export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated }: AIChatProps) {
   const {
     sessions, activeSession, setActiveSessionId, createSession, prepareSessionForDraft, deleteSession, renameSession,
     isStreaming, sendMessage, stopMessage, retryMessage,
@@ -45,10 +42,6 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
   const [isComposing, setIsComposing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
-  const [showMeetingCapture, setShowMeetingCapture] = useState(false);
-  // 当 App.tsx 注入 onOpenMeetingCapture, 走父组件的全局 modal; 否则本地 state 兜底
-  const openMeetingCapture = onOpenMeetingCapture ?? (() => setShowMeetingCapture(true));
-  const closeMeetingCapture = onOpenMeetingCapture ? () => {} : () => setShowMeetingCapture(false);
   const [draftSourceTitle, setDraftSourceTitle] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -416,7 +409,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
           onStop={stopMessage}
           onKeyDown={handleKeyDown}
           onOpenContextPicker={() => setShowContextPicker(true)}
-          onOpenMeetingCapture={openMeetingCapture}
+          onCreateMeetingNote={onCreateMeetingNote}
           onOpenSettings={() => setShowSettings(true)}
           onRemoveContext={removeContext}
           skills={skills}
@@ -455,19 +448,6 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
             onSelect={addContext}
             onDeselect={removeContext}
             onClose={() => setShowContextPicker(false)}
-          />
-        )}
-        {showMeetingCapture && (
-          <MeetingCapture
-            isOpen={showMeetingCapture}
-            language={language}
-            activeContext={activeContext}
-            showToast={showToast}
-            onSaved={() => {
-              const today = getTodayStr();
-              notesApi.getByDate(today).then(() => onNoteCreated?.()).catch(() => onNoteCreated?.());
-            }}
-            onClose={() => setShowMeetingCapture(false)}
           />
         )}
         {saveNoteModal.open && (

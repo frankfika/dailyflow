@@ -2,6 +2,8 @@
 
 ## 结论
 
+模型选型、质量门槛和可配置方案见 [MEETING_AI_MODEL_GUIDE.md](./MEETING_AI_MODEL_GUIDE.md)。
+
 会议能力拆成三个相互独立的阶段，不再把“聊天模型”当作“语音模型”：
 
 1. **Capture**：浏览器录音后先原子写入当前 Note 的附件目录。任何模型故障都不能影响原始录音保存。
@@ -13,6 +15,23 @@ Microphone -> durable audio -> ASR transcript -> AI summary / actions
                  |                 |                    |
               always local     local or remote      Ollama or remote
 ```
+
+## 唯一产品入口与存储
+
+- 聊天工具栏和 `⌘/Ctrl + Shift + R` 都创建 `kind: meeting` 的 V2 NoteDocument，并直接打开该笔记的录音面板。
+- 录音只走 `/api/v2/notes/:id/meeting/capture`；旧 `/api/meetings`、独立 MeetingCapture 弹窗和 `~/.dailyflow/recordings` 写入器已经下线。
+- 原始音频、转写稿和 Evidence 都由会议 Note 的 `sourceIds` 关联，不能再写入另一套 Notes 数据树。
+- 历史 `~/.dailyflow/recordings` 文件不会自动删除；需要显式迁移或人工确认。
+
+## Model Center
+
+模型配置只有一个注册表，但按职责分配：
+
+- **Chat**：日常 AI Chat 使用的文本模型；
+- **Meeting summary / extraction**：结构化提取决定、承诺、负责人和截止日期；
+- **Speech transcription**：本地 whisper.cpp、本地语音端点或远程 ASR。
+
+旧 `df_provider_configs` 与 `df_meeting_transcription_settings` 会无损迁移到 `df_model_center`。桌面端把统一配置持久化为后端 `modelCenter`；`V2_AI_*` 环境变量只作为无界面部署和测试的显式覆盖。
 
 ## 为什么不是只用 Ollama
 

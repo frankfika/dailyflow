@@ -8,12 +8,11 @@ import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Se
 import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
-import { getActiveAiConfig } from './types/models';
+import { getActiveAiConfig, importModelCenter, loadProviderConfigs } from './types/models';
 import { getTodayStr } from './utils/tagColors';
 import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
-import { MeetingCapture } from './components/MeetingCapture';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
 import { TaskInputPanel } from './components/TaskInputPanel';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
@@ -31,7 +30,7 @@ import { InboxView } from './features/v2/inbox/InboxView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
-import { useMeetingCapture } from './hooks/useMeetingCapture';
+import { createNote as createV2Note } from './features/v2/api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { TopicTabs, type TopicTabValue } from './components/TopicTabs/TopicTabs';
@@ -101,6 +100,7 @@ export default function App() {
   const [showFloatingChat, setShowFloatingChat] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
+  const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Topic Space v2 (Phase 1): the active tab in the MindMap header.
   //   - null → 全部
@@ -121,10 +121,9 @@ export default function App() {
   // keep it local because it's a per-session preference, not a property
   // of the space.
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  // Phase 2 M1: ⌘⇧R global shortcut opens the meeting capture modal. The
-  // modal lives at the App level so it can be opened from any tab, not just
-  // the AI Chat tab. AIChat's "会议" button calls `openMeetingCapture` below
-  // to trigger it. (The hint state and ⌘⇧R listener live in useMeetingCapture.)
+  // Meeting capture has one canonical owner: a v2 NoteDocument. Every entry
+  // point creates and opens a meeting note instead of mounting the retired
+  // standalone meeting modal, which used a different API and storage tree.
 
   const taskLinkedNotesCount = useMemo(() => {
     const map: Record<string, number> = {};
@@ -146,6 +145,7 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [entityDrawerRef, setEntityDrawerRef] = useState<EntityRef | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const meetingCreateInFlightRef = useRef(false);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -155,6 +155,7 @@ export default function App() {
       toastTimeoutRef.current = null;
     }, type === 'error' ? 5000 : 3500);
   };
+
   const [brainDumpText, setBrainDumpText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
@@ -175,6 +176,37 @@ export default function App() {
       return 'en';
     }
   });
+  const openMeetingNote = useCallback(async () => {
+    if (meetingCreateInFlightRef.current) return;
+    meetingCreateInFlightRef.current = true;
+    setActiveTab('notes');
+    setNotesSurface('notes');
+    try {
+      const now = new Date();
+      const date = getTodayStr();
+      const title = language === 'zh'
+        ? `会议记录 ${now.toLocaleString('zh-CN', { hour12: false })}`
+        : `Meeting ${now.toLocaleString('en-US')}`;
+      const body = language === 'zh'
+        ? '# 会议记录\n\n## 议程\n\n- \n\n## 笔记\n\n## 决策\n\n- \n\n## 行动项\n\n- [ ] \n'
+        : '# Meeting notes\n\n## Agenda\n\n- \n\n## Notes\n\n## Decisions\n\n- \n\n## Action items\n\n- [ ] \n';
+      const { note } = await createV2Note({
+        title,
+        body,
+        kind: 'meeting',
+        state: 'draft',
+        date,
+      });
+      setRequestedV2NoteId(note.id);
+      setShowFloatingChat(false);
+      showToast(language === 'zh' ? '已创建会议记录，可以开始录音' : 'Meeting note created — ready to record', 'info');
+    } catch (error) {
+      console.error('Failed to create meeting note:', error);
+      showToast(language === 'zh' ? '创建会议记录失败' : 'Failed to create meeting note', 'error');
+    } finally {
+      meetingCreateInFlightRef.current = false;
+    }
+  }, [language]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadRevisionRef = useRef(0);
@@ -441,24 +473,28 @@ export default function App() {
         setIpfsApiKey(config.ipfsApiKey || '');
         setIpfsGateway(config.ipfsGateway || '');
 
-        // AI: read from ModelLibrary store first; fall back to providerConfigs in backend config
-        const active = getActiveAiConfig();
+        // Model Center is the single registry for chat, structured meeting
+        // extraction, and speech transcription. Import the durable backend
+        // copy only when this browser has no local model-center state.
+        const localModels = loadProviderConfigs();
+        const durableModelCenter = config.modelCenter || config.providerConfigs;
+        if (durableModelCenter && localModels.configs.length === 0 && !localModels.meetingTranscription) {
+          try {
+            importModelCenter(durableModelCenter);
+            if (!config.modelCenter && config.providerConfigs) {
+              const migrated = loadProviderConfigs();
+              await configApi.update({
+                modelCenter: JSON.stringify(migrated),
+                providerConfigs: null,
+              }, config.version);
+            }
+          } catch { /* ignore */ }
+        }
+        const active = getActiveAiConfig('chat');
         if (active) {
           setAiApiKey(active.apiKey);
           setAiModel(active.model);
           setAiBaseUrl(active.baseUrl);
-        } else if (config.providerConfigs) {
-          try {
-            const store = JSON.parse(config.providerConfigs);
-            localStorage.setItem('df_provider_configs', JSON.stringify(store));
-            const activeCfg = store.configs?.find((c: any) => c.id === store.activeId);
-            if (activeCfg) {
-              setAiApiKey(activeCfg.apiKey || '');
-              setAiModel(activeCfg.model || '');
-              setAiBaseUrl(activeCfg.baseUrl || '');
-            }
-            dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'config-load' });
-          } catch { /* ignore */ }
         } else {
           setAiApiKey('');
           setAiModel('');
@@ -743,14 +779,15 @@ export default function App() {
     }
   }, [activeWorkspaceId, language, reloadFileList]);
 
-  // Keyboard shortcuts: Cmd/Ctrl+N to toggle task input, ⌘⇧R to open
-  // Meeting Capture (Granola Phase 2), Escape to close. The ⌘⇧R handler
-  // + first-use hint live in `useMeetingCapture` so this body stays focused
-  // on the App-level shortcuts.
-  const { isOpen: showMeetingCapture, open: openMeetingCapture, close: closeMeetingCapture } = useMeetingCapture({ language, showToast });
-
+  // Keyboard shortcuts: Cmd/Ctrl+N toggles task input; Cmd/Ctrl+Shift+R
+  // creates a canonical v2 meeting note and opens its recording panel.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        void openMeetingNote();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         setShowTaskInput(prev => !prev);
@@ -759,13 +796,11 @@ export default function App() {
       if (e.key === 'Escape') {
         setShowTaskInput(false);
         setShowBrainDump(false);
-        // Don't auto-close the meeting modal on Escape — its own component
-        // handles Esc (and refuses to close mid-recording).
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [language, showToast]);
+  }, [openMeetingNote]);
 
   const processBrainDump = async () => {
     if (!brainDumpText.trim()) return;
@@ -1200,7 +1235,7 @@ export default function App() {
                   filesMap={filesMap}
                   showToast={showToast}
                   initialDraft={null}
-                  onOpenMeetingCapture={openMeetingCapture}
+                  onCreateMeetingNote={() => void openMeetingNote()}
                   onNoteCreated={() => {
                     const today = getTodayStr();
                     notesApi.getByDate(today).then(dateNotes => {
@@ -1463,7 +1498,7 @@ export default function App() {
                     showToast={showToast}
                     initialDraft={chatDraft}
                     onDraftConsumed={() => setChatDraft(null)}
-                    onOpenMeetingCapture={openMeetingCapture}
+                    onCreateMeetingNote={() => void openMeetingNote()}
                     onNoteCreated={() => {
                       const today = getTodayStr();
                       notesApi.getByDate(today).then(dateNotes => {
@@ -1595,7 +1630,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="min-h-0 flex-1 overflow-hidden">
-                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} />}
+                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
                   </div>
                 </div>
               )
@@ -1754,28 +1789,6 @@ export default function App() {
           </div>
         )}
 
-      {/* Phase 2 M1: Meeting Capture modal — owned by App.tsx so the ⌘⇧R
-          global shortcut works from any tab. AIChat's toolbar button calls
-          onOpenMeetingCapture to set the same state. */}
-      <MeetingCapture
-        isOpen={showMeetingCapture}
-        language={language}
-        activeContext={activeContext}
-        showToast={showToast}
-        onSaved={() => {
-          // Refresh daily notes so a meeting saved for today shows up
-          // immediately in the Today tab.
-          const today = getTodayStr();
-          notesApi.getByDate(today).then(dateNotes => {
-            setDailyNotes(prev => {
-              const others = prev.filter(n => n.date !== today);
-              return [...others, ...dateNotes];
-            });
-          }).catch(err => console.error('Failed to refresh daily notes:', err));
-          loadContextNotes();
-        }}
-        onClose={closeMeetingCapture}
-      />
       </div>
     </WorkspaceScopeProvider>
    );

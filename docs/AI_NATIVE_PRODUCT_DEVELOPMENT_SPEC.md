@@ -1992,9 +1992,7 @@ Memory 空状态:
 
 > AI Agent 完成对应能力后更新；不得把"已有实验代码"标为完整。
 >
-> **2026-07-20 状态纠正** — v2 后端对象、Proposal、Today 和独立演示页已有大量实现,但不能据此宣称产品终态。当前主应用 Notes 仍是旧的日期卡片列表、手动保存、重型元数据表单和易失效的 `linkedTaskIds`;v2 也仍以独立页面存在。因此 Phase 1、Phase 2、Phase 4 和 DF2-001 → DF2-012 应视为“工程能力部分完成、主产品体验未验收”,直到主应用完成整合并通过本节新增的 Note 验收。
->
-> v2 是与 v1 平行的 additive 层：旧 `Daily/YYYY/MM/<date>.md` checkbox 任务继续可读、可完成；v1 AI Chat / Notes / DailyFocus / Capsules 入口保留。v2 入口通过 `/api/v2` 路由 + `src/features/v2/` 组件 + `src/features/v2/v2-standalone.html` 独立页提供。
+> **2026-08-08 状态纠正** — v2 已整合进主应用，不再存在 standalone 产品页或第二套 Today/Review 壳。主 Notes 使用 NoteDocument；会议录音、转写和证据归属于会议 Note。旧 Daily checkbox task 继续通过 Legacy Adapter 读取，旧 Notes 仅为 Today quick-note 等尚未迁移流程保留，不得再扩展。
 >
 > **2026-07-20 第二轮** — §26 验收场景覆盖推进：
 > - **§26 step 12** Today MorningBrief 接入 `getWaitingOverdue`，新增 `OverdueWaitingSection`（只显示，不自动恢复或发消息）。
@@ -2037,7 +2035,7 @@ Memory 空状态:
 | §26 step 18 验证 | 已实现 | NoteService update 必传 expectedAutoSaveVersion, body 字段不被自动改 (1.1.0 + 1.1.3 e2e) |
 | §26 step 19 验证 | 已实现 | `memoryService.search` 召回 Note (`type: 'note'`, 1.1.0) + backlinks service 走 evidence 反向找 Commitment/Decision/Outcome (1.1.3) |
 | Triage / 旧任务整理 | 已有骨架 | `Triage Proposal` 类型已支持；UI 部分由 Phase 7 跟进 |
-| Meeting Capture | 部分 | 已有 MeetingCapture 路由；提取走 v2 Extractor；Phase 3 余下与音视频关联 |
+| Meeting Capture | 已整合 | 唯一入口为 V2 meeting Note；录音、转写与 SourceItem 关联；旧 MeetingCapture 和 `/api/meetings` 已删除 |
 | Calendar Connector | 协议 + 阻塞 | Connector Contract 已实现；所有外部 connector 默认 `blocked_by_external_authorization`；Google/Outlook/Feishu 全部就位但 `isAuthorized` 永远返回 false |
 | Email/Message Connector | 协议 + 阻塞 | 同上；Gmail/Outlook/Feishu 全部就位但 `isAuthorized` 永远返回 false |
 | External Actions | 协议就位 | `buildDraft` 完整；`confirmAndSend` 走 `blockedSendImpl` 默认实现；UI/Preview/Confirm 流在路由层；真实发送需 Provider 凭据 |
@@ -2054,7 +2052,7 @@ Memory 空状态:
 | 提示注入防护 | 部分 | 外部内容在 Extractor 中作为 data 处理（不作为 instruction），未在 prompt 模板中混入工具调用 |
 | 迁移 / 兼容 | 已实现 | Legacy adapter + 状态机 + `legacyTaskId` 字段连接 v1↔v2 |
 | v2 持久化 | 真实 | 所有 v2 写入走真实 Markdown 路径，重启后状态保留 |
-| v2 UI | 已实现 | `src/features/v2/{V2Shell, today/TodayView, inbox/InboxView, memory/MemoryView, commitments/CommitmentContext, review/ReviewView}` + 独立 `v2-standalone.html` |
+| v2 UI | 已整合 | Notes、Inbox、Memory 和 Proposal Review 作为主 App 内能力；无 standalone、重复 Today/Review 或 CommitmentContext 壳 |
 
 ---
 

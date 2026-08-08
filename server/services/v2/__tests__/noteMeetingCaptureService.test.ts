@@ -71,7 +71,7 @@ describe('note meeting capture service', () => {
     expect(result.transcriptionMode).toBe('remote');
     expect(result.text).toBe('你好，今天讨论发布计划。');
     expect(result.transcriptSource?.kind).toBe('meeting_transcript');
-    expect(result.transcriptSource?.body).toBe('你好，今天讨论发布计划。');
+    expect(result.transcriptSource?.body).toContain('[00:01–00:05] 方辰: 今天讨论发布计划。');
     expect(result.note.sourceIds).toEqual(expect.arrayContaining([
       result.audioSource.id,
       result.transcriptSource!.id,
@@ -84,6 +84,87 @@ describe('note meeting capture service', () => {
     const request = fetchMock.mock.calls[0]!;
     expect(request[0]).toBe('https://speech.example.test/v1/audio/transcriptions');
     expect((request[1]?.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+  });
+
+  it('uses OpenAI diarized JSON for speaker-aware meeting transcripts', async () => {
+    const note = await new NoteService(repo).create({ body: '', kind: 'meeting' });
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      text: '先做原型。下周评审。',
+      segments: [
+        { start: 0, end: 2, speaker: 'A', text: '先做原型。' },
+        { start: 2, end: 4, speaker: 'B', text: '下周评审。' },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const result = await captureNoteMeeting(repo, note.id, {
+      audio: { data: Buffer.from('audio').toString('base64'), mimeType: 'audio/webm' },
+      transcription: {
+        mode: 'remote',
+        provider: 'openai',
+        apiKey: 'secret',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-transcribe-diarize',
+        diarize: true,
+      },
+    }, fetchMock as unknown as typeof fetch);
+
+    expect(result.segments?.map(segment => segment.speaker)).toEqual(['A', 'B']);
+    const form = fetchMock.mock.calls[0]![1]?.body as FormData;
+    expect(form.get('response_format')).toBe('diarized_json');
+    expect(form.get('chunking_strategy')).toBe('auto');
+  });
+
+  it('normalizes Deepgram utterances into timestamped speaker segments', async () => {
+    const note = await new NoteService(repo).create({ body: '', kind: 'meeting' });
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      results: {
+        channels: [{ alternatives: [{ transcript: '先做原型。下周评审。' }] }],
+        utterances: [
+          { start: 0, end: 2, speaker: 0, transcript: '先做原型。' },
+          { start: 2, end: 4, speaker: 1, transcript: '下周评审。' },
+        ],
+      },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const result = await captureNoteMeeting(repo, note.id, {
+      audio: { data: Buffer.from('audio').toString('base64'), mimeType: 'audio/webm' },
+      transcription: {
+        mode: 'remote', provider: 'deepgram', apiKey: 'secret',
+        baseUrl: 'https://api.deepgram.com/v1', model: 'nova-3', language: 'zh', diarize: true,
+        keyterms: ['DailyFlow'],
+      },
+    }, fetchMock as unknown as typeof fetch);
+
+    expect(result.transcriptSource?.body).toContain('Speaker 0: 先做原型。');
+    const url = new URL(String(fetchMock.mock.calls[0]![0]));
+    expect(url.pathname).toBe('/v1/listen');
+    expect(url.searchParams.get('diarize_model')).toBe('latest');
+    expect(url.searchParams.get('keyterm')).toBe('DailyFlow');
+    expect((fetchMock.mock.calls[0]![1]?.headers as Record<string, string>).Authorization).toBe('Token secret');
+  });
+
+  it('normalizes ElevenLabs word-level speaker labels', async () => {
+    const note = await new NoteService(repo).create({ body: '', kind: 'meeting' });
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      text: 'Ship Friday. Agreed.',
+      words: [
+        { start: 0, end: 1, speaker_id: 'speaker_0', text: 'Ship', type: 'word' },
+        { start: 1, end: 2, speaker_id: 'speaker_0', text: 'Friday.', type: 'word' },
+        { start: 2, end: 3, speaker_id: 'speaker_1', text: 'Agreed.', type: 'word' },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const result = await captureNoteMeeting(repo, note.id, {
+      audio: { data: Buffer.from('audio').toString('base64'), mimeType: 'audio/webm' },
+      transcription: {
+        mode: 'remote', provider: 'elevenlabs', apiKey: 'secret',
+        baseUrl: 'https://api.elevenlabs.io/v1', model: 'scribe_v2', diarize: true, speakerCount: 2,
+      },
+    }, fetchMock as unknown as typeof fetch);
+
+    expect(result.segments).toHaveLength(2);
+    expect(result.transcriptSource?.body).toContain('speaker_0: Ship Friday.');
+    expect((fetchMock.mock.calls[0]![1]?.headers as Record<string, string>)['xi-api-key']).toBe('secret');
   });
 
   it('returns saved-only with an understandable error when remote transcription fails', async () => {

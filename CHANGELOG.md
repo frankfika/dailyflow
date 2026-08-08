@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **One meeting workflow** — every meeting entry point now creates and opens a v2 meeting NoteDocument; audio, transcript, evidence, and review stay attached to that note.
+- **Unified Model Center** — chat, meeting summary/extraction, and speech transcription share one versioned registry with automatic migration from the two legacy browser stores. V2 extraction uses the selected meeting-summary role; environment variables remain a headless override.
+- **Scoped upload limit** — the 200 MB JSON parser applies only to the canonical v2 meeting capture endpoint; all other APIs use a 10 MB ceiling.
+
+### Removed
+
+- Removed the legacy MeetingCapture modal, `/api/meetings`, and its split recording/note storage path.
+- Removed unused legacy Projects, Git, and Thinking Workspace APIs and their duplicate write services. Topic Space continues to read old `kind: workspace` files without rewriting them.
+- Removed unreachable Today/Review/Tags/Prompt Library/Feishu Agenda components and their orphaned helpers and tests.
+
 ## [1.4.1] - 2026-08-08
 
 ### Fixed

@@ -126,6 +126,7 @@ describe('MeetingNotePanel', () => {
     const onNoteUpdated = vi.fn();
 
     render(<MeetingNotePanel note={note()} language="en" onNoteUpdated={onNoteUpdated} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
     await screen.findByRole('button', { name: 'Stop' });
 
@@ -170,6 +171,7 @@ describe('MeetingNotePanel', () => {
     const onTranscriptReady = vi.fn();
 
     render(<MeetingNotePanel note={note()} onTranscriptReady={onTranscriptReady} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
     await screen.findByRole('button', { name: 'Stop' });
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
@@ -185,6 +187,10 @@ describe('MeetingNotePanel', () => {
         baseUrl: 'https://example.test/v1',
         model: 'whisper-1',
         language: 'en',
+        provider: 'openai',
+        diarize: true,
+        speakerCount: undefined,
+        keyterms: [],
       },
     });
   });
@@ -200,6 +206,7 @@ describe('MeetingNotePanel', () => {
     transcribeNoteMeeting.mockResolvedValue(completed);
 
     render(<MeetingNotePanel note={note()} language="zh" />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /有权录音和处理/ }));
     fireEvent.click(screen.getByRole('button', { name: '开始录音' }));
     await screen.findByRole('button', { name: '停止' });
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
@@ -227,6 +234,7 @@ describe('MeetingNotePanel', () => {
     transcribeNoteMeeting.mockRejectedValue(new Error('provider unavailable'));
 
     render(<MeetingNotePanel note={note()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
     await screen.findByRole('button', { name: 'Stop' });
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
@@ -238,6 +246,7 @@ describe('MeetingNotePanel', () => {
 
   it('stops microphone tracks and releases the preview URL on unmount', async () => {
     const view = render(<MeetingNotePanel note={note()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
     await screen.findByRole('button', { name: 'Stop' });
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));

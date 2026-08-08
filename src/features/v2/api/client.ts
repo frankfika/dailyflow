@@ -243,6 +243,7 @@ export type MeetingTranscriptionMode = 'save-only' | 'saved-only' | 'remote' | '
 
 export interface MeetingTranscriptionRequest {
   mode: MeetingTranscriptionMode;
+  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'openai-compatible';
   engine?: 'whisper.cpp';
   modelId?: 'base' | 'small' | 'medium' | string;
   model?: string;
@@ -250,6 +251,9 @@ export interface MeetingTranscriptionRequest {
   baseUrl?: string;
   apiKey?: string;
   language?: 'auto' | 'zh' | 'en';
+  diarize?: boolean;
+  speakerCount?: number;
+  keyterms?: string[];
 }
 
 export interface LocalTranscriptionConfig {
