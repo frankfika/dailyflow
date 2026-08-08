@@ -13,6 +13,7 @@
 ![Version](https://img.shields.io/badge/version-1.4.0-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-green?style=flat-square)
 ![Stack](https://img.shields.io/badge/stack-React%20%2B%20Tauri%20%2B%20Express-purple?style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/frankfika/dailyflow/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [开发](#-开发) · [文档](#-文档)
