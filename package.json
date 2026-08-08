@@ -11,6 +11,7 @@
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist-server/index.cjs --external:fsevents && node scripts/bundle-node.mjs && node scripts/bundle-lark-cli.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "check:version": "node scripts/check-version.mjs",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
