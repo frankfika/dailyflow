@@ -22,6 +22,8 @@
 
 const SPACE_MARKER_PREFIX = '^space:';
 const ID_MARKER_PREFIX = '^id-';
+const MM_MARKER_PREFIX = '^mm:';
+const NODE_MARKER_PREFIX = '^node:';
 
 /**
  * Build the `^space:<id>` marker string for a given space id.
@@ -133,6 +135,127 @@ export function stripAllSpaceMarkers(content: string): string {
   return content.replace(/\s*\^space:\S+/g, '').replace(/[ \t]+$/gm, '');
 }
 
+// ---------------------------------------------------------------------------
+// Mindmap-origin markers (Topic Spaces Phase 3 — node↔task lifecycle).
+//
+// When a mindmap node is promoted to a Task, we persist the source
+// mindmap id and node id onto the task's markdown line so the reverse
+// relationship survives a server restart, a daily-note reload, and any
+// cross-date lookup. The markers follow the same `^key:value` system
+// convention as `^space:` — they are stripped on read for the UI and
+// rewritten on write.
+//
+// Marker order on a fully-annotated task line (rightmost = most stable):
+//
+//   - [ ] title #tags #project:x #deadline:y #priority:z ↗ migrated:d
+//         ^space:<spaceId> ^mm:<mindmapId> ^node:<nodeId> ^id-<taskId>
+//
+// `^mm:` / `^node:` sit immediately before `^id-` so the stable id is
+// always last (existing readers that anchor on `\^id-` keep working).
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the `^mm:<id>` marker string for a mindmap id.
+ *
+ *   mindmapIdToMarker('01J...')
+ *   mindmapIdToMarker('mm_融资')  // CJK round-trips faithfully
+ */
+export function mindmapIdToMarker(mindmapId: string): string {
+  return `${MM_MARKER_PREFIX}${mindmapId}`;
+}
+
+/**
+ * Build the `^node:<id>` marker string for a node id.
+ */
+export function nodeIdToMarker(nodeId: string): string {
+  return `${NODE_MARKER_PREFIX}${nodeId}`;
+}
+
+/**
+ * Extract the `^mm:<id>` value from a task line, or `undefined`.
+ * Companion to `markerToSpaceId`.
+ */
+export function markerToMindmapId(line: string): string | undefined {
+  const m = line.match(/\^mm:(\S+)/);
+  if (!m) return undefined;
+  const slice = m[1];
+  if (!slice || slice.startsWith('^') || slice.startsWith('#')) return undefined;
+  return slice;
+}
+
+/**
+ * Extract the `^node:<id>` value from a task line, or `undefined`.
+ */
+export function markerToNodeId(line: string): string | undefined {
+  const m = line.match(/\^node:(\S+)/);
+  if (!m) return undefined;
+  const slice = m[1];
+  if (!slice || slice.startsWith('^') || slice.startsWith('#')) return undefined;
+  return slice;
+}
+
+/**
+ * Set / replace / clear the `^mm:<id>` and `^node:<id>` markers on a
+ * single task line. Both markers are written together (you never have
+ * a node without its mindmap) and are placed immediately before the
+ * `^id-` marker so the stable id stays last.
+ *
+ * Pass `mindmapId === null` (or `undefined`) to clear both markers.
+ * Passing only a `mindmapId` without a `nodeId` is allowed — the node
+ * marker is simply omitted.
+ *
+ * The function is a pure string transform; it does not parse the line
+ * into a Task object.
+ */
+export function setOriginMarkers(
+  line: string,
+  mindmapId: string | null | undefined,
+  nodeId?: string | null,
+): string {
+  // Strip any existing ^mm: / ^node: markers (with a leading space if
+  // present). Anchored anywhere in the line so indented continuation
+  // lines also round-trip unchanged (they have no markers anyway).
+  const withoutOrigin = line
+    .replace(/\s*\^mm:\S+/g, '')
+    .replace(/\s*\^node:\S+/g, '')
+    .replace(/[ \t]+$/g, '');
+
+  if (!mindmapId) {
+    return withoutOrigin;
+  }
+
+  const markers = `${mindmapIdToMarker(mindmapId)}${nodeId ? ` ${nodeIdToMarker(nodeId)}` : ''}`;
+
+  // Splice the origin markers immediately before the existing ^id-
+  // marker so the id stays last (existing readers keep working). If
+  // there is no ^id- marker, append at the tail.
+  const idMatch = withoutOrigin.match(/\s*\^id-\S+/);
+  if (idMatch && idMatch.index !== undefined) {
+    const before = withoutOrigin.slice(0, idMatch.index).replace(/\s+$/g, '');
+    const idPart = idMatch[0].replace(/^\s+/, '');
+    return `${before} ${markers} ${idPart}`;
+  }
+  if (withoutOrigin.length === 0) return withoutOrigin;
+  return `${withoutOrigin} ${markers}`;
+}
+
+/**
+ * Strip all `^mm:...` and `^node:...` markers from a markdown body.
+ * Used when a task is being detached from its source mindmap (e.g. the
+ * source node was deleted with "keep task").
+ */
+export function stripAllOriginMarkers(content: string): string {
+  return content
+    .replace(/\s*\^mm:\S+/g, '')
+    .replace(/\s*\^node:\S+/g, '')
+    .replace(/[ \t]+$/gm, '');
+}
+
 // Re-export the prefix constants for callers that want to be defensive
 // (e.g. diagnostic scripts that scan the file system).
-export { SPACE_MARKER_PREFIX, ID_MARKER_PREFIX };
+export {
+  SPACE_MARKER_PREFIX,
+  ID_MARKER_PREFIX,
+  MM_MARKER_PREFIX,
+  NODE_MARKER_PREFIX,
+};

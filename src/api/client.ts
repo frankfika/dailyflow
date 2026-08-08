@@ -34,6 +34,11 @@ export interface TaskInput {
   deadline?: string;
   priority?: string;
   source_date?: string;
+  spaceId?: string;
+  originMindmapId?: string;
+  originNodeId?: string;
+  parentTaskId?: string;
+  planOrder?: number;
 }
 
 export interface DailyNoteData {
@@ -205,23 +210,28 @@ export const tasksApi = {
   // -------------------------------------------------------------------------
   // Phase 2 (Topic Spaces): space binding.
   //
-  // The server keeps `Task.spaceId` in-memory (it is not yet persisted in
-  // the markdown line). The list view queries this when scoping to a
-  // specific space; the unlink button clears it.
+  // The server writes / clears the `^space:<id>` marker on the task's
+  // daily-note line, so every call MUST pass the `date` of the file that
+  // hosts the task. The list view queries this when scoping to a space;
+  // the unlink button clears it. Omitting `date` makes the server 400
+  // because it cannot locate the markdown line to mutate.
   // -------------------------------------------------------------------------
 
   /**
    * Move a task into a Topic Space (or out of one, when `spaceId` is
-   * `null`). The server keeps `Task.spaceId` in-memory and the new
-   * `^space:xxx` marker is the canonical Phase 4 source of truth. For
-   * now this just updates the in-memory map; the markdown line is not
-   * touched.
+   * `null`). `date` is the daily note date that hosts the task — the
+   * server needs it to read-modify-write the `^space:` marker on the
+   * task line.
    */
-  async updateSpace(taskId: string, spaceId: string | null): Promise<TaskInput> {
+  async updateSpace(
+    taskId: string,
+    spaceId: string | null,
+    date: string,
+  ): Promise<TaskInput> {
     const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/space`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spaceId }),
+      body: JSON.stringify({ spaceId, date }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to update task space');
     return res.json();
@@ -238,15 +248,15 @@ export const tasksApi = {
 
   /**
    * Topic Space v2 (Phase 1): move a task to a different space. Pass
-   * `null` to send it back to "未分类". Markdown rows do not get
-   * `^space:xxx` annotations yet — the link lives in the server's
-   * in-memory map only.
+   * `null` to send it back to "未分类". `date` is the daily note date
+   * that hosts the task (required by the server to mutate the
+   * `^space:` marker on the task line).
    */
-  async setSpace(taskId: string, spaceId: string | null): Promise<void> {
+  async setSpace(taskId: string, spaceId: string | null, date: string): Promise<void> {
     const res = await fetch(`${API_BASE}/tasks/${taskId}/space`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spaceId }),
+      body: JSON.stringify({ spaceId, date }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to set task space');
   },
@@ -674,6 +684,16 @@ export interface TopicSpaceFilters {
   query?: string;
 }
 
+/**
+ * One entry in a Topic Space's cross-date task list. `date` is the
+ * daily-note date that hosts the task — the client uses it to
+ * navigate to the right day when the user opens the task.
+ */
+export interface TopicSpaceTaskItem {
+  task: TaskInput & { spaceId?: string; originMindmapId?: string; originNodeId?: string };
+  date: string;
+}
+
 export interface TopicSpaceCreateInput {
   title: string;
   context?: TopicSpaceContext;
@@ -711,6 +731,19 @@ export const topicSpacesApi = {
     const res = await fetch(`${API_BASE}/topic-spaces/${id}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch topic space');
     return res.json();
+  },
+
+  /**
+   * Cross-date task source (Phase 3). Returns the space's tasks across
+   * ALL daily notes as `{ task, date }[]`. Use this instead of
+   * filtering the current day's tasks — the old approach silently
+   * dropped any task that wasn't on the open date.
+   */
+  async getTasks(id: string): Promise<TopicSpaceTaskItem[]> {
+    const res = await fetch(`${API_BASE}/topic-spaces/${encodeURIComponent(id)}/tasks`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch topic-space tasks');
+    const data = await res.json();
+    return (data?.items ?? []) as TopicSpaceTaskItem[];
   },
 
   async create(input: TopicSpaceCreateInput): Promise<TopicSpace> {
@@ -1029,6 +1062,10 @@ export interface MindMapNode {
   tag?: string;
   /** Linked Task id, used when `kind === 'task'`. */
   taskId?: string;
+  /** Daily-note date that owns the linked Task (YYYY-MM-DD). */
+  taskDate?: string;
+  /** Stable sibling planning order. Lower values are planned first. */
+  planOrder?: number;
 }
 
 export interface MindMapEdge {
@@ -1109,6 +1146,21 @@ export const mindmapsApi = {
     if (!res.ok && res.status !== 404) {
       throw await httpError(res, 'Failed to delete mind map');
     }
+  },
+
+  async deleteNodeSubtree(
+    mapId: string,
+    nodeId: string,
+    taskPolicy: 'keep-tasks' | 'delete-tasks',
+  ): Promise<MindMap> {
+    const res = await fetch(`${API_BASE}/mindmaps/${encodeURIComponent(mapId)}/nodes/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId, taskPolicy }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to delete mind-map node');
+    const data = await res.json();
+    return data.mindmap as MindMap;
   },
 
   // -------------------------------------------------------------------------

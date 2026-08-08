@@ -21,6 +21,10 @@ export interface Task {
   originMindmapId?: string;
   /** v2: source mindmap node id if this task was promoted from a node. */
   originNodeId?: string;
+  /** Optional parent Task id derived from a task-node parent in the map. */
+  parentTaskId?: string;
+  /** Planning order inherited from the source mindmap node. */
+  planOrder?: number;
 }
 
 export interface DailyNote {

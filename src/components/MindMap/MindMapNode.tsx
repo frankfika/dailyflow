@@ -28,6 +28,7 @@ import {
   Tag as TagIcon,
   Link2,
   ExternalLink,
+  ListPlus,
 } from 'lucide-react';
 import type { MindMapNodeColor, MindMapNodeKind, MindMapNodeStatus } from '../../api/client';
 
@@ -71,6 +72,8 @@ export interface MindMapNodeData extends Record<string, unknown> {
   onCommitNote: (id: string, note: string) => void;
   onStartNote: (id: string) => void;
   onCycleStatus: (id: string) => void;
+  /** Upgrade this planning node into a persisted Task. */
+  onPromoteToTask?: (id: string) => void;
   /**
    * Phase 2: right-click on a node opens the kind-mutating context menu.
    * The handler is owned by the parent (MindMapView) which keeps the
@@ -353,6 +356,18 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
           className="nodrag absolute -bottom-9 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full border border-border bg-white/95 px-1 py-0.5 shadow-md"
           onClick={(e) => e.stopPropagation()}
         >
+          {!d.isRoot && kind === 'branch' && d.onPromoteToTask && (
+            <button
+              type="button"
+              onClick={() => d.onPromoteToTask!(id)}
+              className="flex items-center gap-1 rounded-full bg-[var(--color-accent)] px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+              title={d.language === 'zh' ? '设为任务' : 'Make task'}
+              data-testid={`mindmap-promote-${id}`}
+            >
+              <ListPlus className="h-3.5 w-3.5" />
+              {d.language === 'zh' ? '设为任务' : 'Task'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => d.onAddChild(id)}

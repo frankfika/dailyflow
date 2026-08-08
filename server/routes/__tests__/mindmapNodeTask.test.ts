@@ -143,6 +143,8 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     // The node was flipped to kind: 'task' with the new taskId.
     expect(res.body.node.kind).toBe('task');
     expect(res.body.node.taskId).toBe(res.body.task.id);
+    expect(res.body.node.taskDate).toBe(date);
+    expect(res.body.node.planOrder).toBe(0);
     // The topic space picked up the taskId.
     expect(res.body.topicSpace.taskIds).toContain(res.body.task.id);
 
@@ -153,6 +155,10 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     expect(content).toContain('#投资人');
     expect(content).toContain('^space:' + space.id);
     expect(content).toContain('^id-' + res.body.task.id);
+    // Phase 3: the origin markers are persisted so the task→node reverse
+    // link survives a reload and works across dates.
+    expect(content).toContain('^mm:' + space.mindmapId);
+    expect(content).toContain('^node:' + branchId);
   });
 
   it('returns 404 when the mindmap does not exist', async () => {
@@ -296,10 +302,16 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/link-task', () => {
     expect(res.status).toBe(200);
     expect(res.body.node.kind).toBe('task');
     expect(res.body.node.taskId).toBe(taskId);
+    expect(res.body.node.taskDate).toBe(date);
     // The text was synced from the live task title.
     expect(res.body.node.text).toBe('准备BP');
     // The topic space picked up the taskId.
     expect(res.body.topicSpace.taskIds).toContain(taskId);
+    const filePath = path.join(tmpRoot, 'Daily', '2026', '08', `${date}.md`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toContain(`^mm:${space.mindmapId}`);
+    expect(content).toContain(`^node:${branchId}`);
+    expect(content).toContain(`^space:${space.id}`);
   });
 
   it('returns 404 when the task is not on the named date', async () => {
@@ -390,6 +402,7 @@ describe.sequential('PUT /api/mindmaps/:id/nodes/:nodeId/kind', () => {
           position: { x: 1, y: 0 },
           kind,
           ...(kind === 'task' ? { taskId: 't_old' } : {}),
+          ...(kind === 'task' ? { taskDate: '2026-08-09' } : {}),
         },
       ],
       edges: [{ id: 'edge', source: map.rootId, target: 'branch' }],
@@ -418,6 +431,7 @@ describe.sequential('PUT /api/mindmaps/:id/nodes/:nodeId/kind', () => {
     const node = res.body.nodes.find((candidate: any) => candidate.id === 'branch');
     expect(node.kind).toBe('branch');
     expect(node.taskId).toBeUndefined();
+    expect(node.taskDate).toBeUndefined();
     expect(node.tag).toBeUndefined();
   });
 
@@ -428,5 +442,79 @@ describe.sequential('PUT /api/mindmaps/:id/nodes/:nodeId/kind', () => {
     );
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/root/i);
+  });
+});
+
+describe.sequential('POST /api/mindmaps/:id/nodes/delete', () => {
+  let tmpRoot: string;
+  let app: express.Express;
+
+  beforeEach(async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-delete-node-test-'));
+    vi.spyOn(config, 'loadConfig').mockResolvedValue({
+      workspaceRoot: tmpRoot,
+      dailyPathTemplate: 'Daily/{year}/{month}/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: [],
+    } as any);
+    app = express();
+    app.use(express.json());
+    app.use('/api/mindmaps', router);
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    if (tmpRoot) await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
+  async function seedPromotedNode() {
+    const { createTopicSpace } = await import('../../services/topicSpaces.js');
+    const { getMindMap, updateMindMap } = await import('../../services/mindmaps.js');
+    const space = await createTopicSpace({ title: 'Delete projection' });
+    const map = await getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    await updateMindMap(map.id, {
+      nodes: [...map.nodes, { id: 'branch', text: 'Keep the work', position: { x: 10, y: 20 }, kind: 'branch' }],
+      edges: [...map.edges, { id: 'edge', source: map.rootId, target: 'branch' }],
+    });
+    const date = '2026-08-08';
+    const promoted = await withServer(app, (port) =>
+      request(port, 'POST', `/api/mindmaps/${map.id}/nodes/branch/promote-to-task`, { date }),
+    );
+    expect(promoted.status).toBe(201);
+    return { space, mapId: map.id, date, taskId: promoted.body.task.id };
+  }
+
+  it('keeps the Task but clears origin and Topic Space references', async () => {
+    const seeded = await seedPromotedNode();
+    const res = await withServer(app, (port) =>
+      request(port, 'POST', `/api/mindmaps/${seeded.mapId}/nodes/delete`, {
+        nodeId: 'branch',
+        taskPolicy: 'keep-tasks',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.mindmap.nodes.some((node: any) => node.id === 'branch')).toBe(false);
+    const filePath = path.join(tmpRoot, 'Daily', '2026', '08', `${seeded.date}.md`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toContain(`^id-${seeded.taskId}`);
+    expect(content).not.toContain('^mm:');
+    expect(content).not.toContain('^node:');
+    expect(content).not.toContain('^space:');
+    const { getTopicSpace } = await import('../../services/topicSpaces.js');
+    expect((await getTopicSpace(seeded.space.id))?.taskIds).not.toContain(seeded.taskId);
+  });
+
+  it('deletes the linked Task when requested', async () => {
+    const seeded = await seedPromotedNode();
+    const res = await withServer(app, (port) =>
+      request(port, 'POST', `/api/mindmaps/${seeded.mapId}/nodes/delete`, {
+        nodeId: 'branch',
+        taskPolicy: 'delete-tasks',
+      }),
+    );
+    expect(res.status).toBe(200);
+    const filePath = path.join(tmpRoot, 'Daily', '2026', '08', `${seeded.date}.md`);
+    expect(await fs.readFile(filePath, 'utf-8')).not.toContain(seeded.taskId);
   });
 });

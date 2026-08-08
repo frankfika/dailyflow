@@ -13,7 +13,7 @@
  * done so the parent can refetch the list.
  */
 import { useMemo, useState } from 'react';
-import { CheckSquare, Link2, X } from 'lucide-react';
+import { CheckSquare, Link2, X, ArrowUpDown } from 'lucide-react';
 import type { TaskInput } from '../../api/client';
 
 export interface TaskListViewTask extends TaskInput {
@@ -67,6 +67,10 @@ const LANG = {
     statusTodo: '待办',
     filterEmpty: '当前过滤下没有任务',
     untagged: '无标签',
+    sortPlan: '规划顺序',
+    sortDate: '日期',
+    sortDeadline: '截止时间',
+    sortPriority: '优先级',
   },
   en: {
     title: (s: string) => `${s} · Tasks`,
@@ -79,6 +83,10 @@ const LANG = {
     statusTodo: 'Todo',
     filterEmpty: 'No tasks match the current filter',
     untagged: 'No tags',
+    sortPlan: 'Plan order',
+    sortDate: 'Date',
+    sortDeadline: 'Deadline',
+    sortPriority: 'Priority',
   },
 };
 
@@ -100,13 +108,20 @@ export function TaskListView({
 }: TaskListViewProps) {
   const L = LANG[language];
   const [pendingUnlinkId, setPendingUnlinkId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'plan' | 'date' | 'deadline' | 'priority'>('plan');
 
   const filtered = useMemo(() => {
-    if (selectedTagFilter.length === 0) return tasks;
-    return tasks.filter((t) =>
+    const matching = selectedTagFilter.length === 0 ? [...tasks] : tasks.filter((t) =>
       (t.tags ?? []).some((tag) => selectedTagFilter.includes(tag)),
     );
-  }, [tasks, selectedTagFilter]);
+    const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 };
+    return matching.sort((a, b) => {
+      if (sortMode === 'date') return (a.source_date ?? '').localeCompare(b.source_date ?? '');
+      if (sortMode === 'deadline') return (a.deadline ?? '9999-99-99').localeCompare(b.deadline ?? '9999-99-99');
+      if (sortMode === 'priority') return (priorityRank[a.priority ?? ''] ?? 3) - (priorityRank[b.priority ?? ''] ?? 3);
+      return (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER);
+    });
+  }, [tasks, selectedTagFilter, sortMode]);
 
   const stats = useMemo(() => {
     let done = 0;
@@ -142,6 +157,15 @@ export function TaskListView({
             </span>
           )}
         </div>
+        <label className="flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-[11px] text-text-muted">
+          <ArrowUpDown className="h-3 w-3" />
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as typeof sortMode)} className="bg-transparent outline-none" data-testid="task-list-sort">
+            <option value="plan">{L.sortPlan}</option>
+            <option value="date">{L.sortDate}</option>
+            <option value="deadline">{L.sortDeadline}</option>
+            <option value="priority">{L.sortPriority}</option>
+          </select>
+        </label>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {filtered.length === 0 ? (

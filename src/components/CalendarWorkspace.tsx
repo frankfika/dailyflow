@@ -1080,8 +1080,8 @@ function WeekGrid({
   const today = getTodayStr();
   const locale = language === 'zh' ? 'zh-CN' : 'en-US';
   return (
-    <div className="min-w-[980px] bg-background/20">
-      <div className="sticky top-0 z-20 grid border-b border-border bg-surface/95 backdrop-blur-xl" style={{ gridTemplateColumns: `64px repeat(${dates.length}, minmax(128px, 1fr))` }}>
+    <div className="min-w-[680px] bg-background/20">
+      <div className="sticky top-0 z-20 grid border-b border-border bg-surface/95 backdrop-blur-xl" style={{ gridTemplateColumns: `56px repeat(${dates.length}, minmax(88px, 1fr))` }}>
         <div className="border-r border-border/70" />
         {dates.map(day => (
           <div key={day} className={`border-r border-border/70 px-2 py-2.5 text-center ${day === today ? 'bg-blue-50/70' : ''}`}>
@@ -1112,7 +1112,7 @@ function WeekGrid({
           );
         })}
       </div>
-      <div className="grid" style={{ gridTemplateColumns: `64px repeat(${dates.length}, minmax(128px, 1fr))` }}>
+      <div className="grid" style={{ gridTemplateColumns: `56px repeat(${dates.length}, minmax(88px, 1fr))` }}>
         <div className="relative border-r border-border/70 bg-background/35" style={{ height: hours.length * HOUR_HEIGHT }}>
           {hours.map((hour, index) => (
             <div key={hour} className="absolute w-full -translate-y-1/2 pr-2 text-right text-[9px] tabular-nums text-text-muted" style={{ top: index * HOUR_HEIGHT }}>

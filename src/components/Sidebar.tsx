@@ -208,6 +208,7 @@ export function Sidebar({
     } else if (isTablet) {
       // On tablet, collapse back to the icon strip so the user can see
       // the content they just navigated to.
+      setHoverExpanded(false);
       setIsSidebarOpen(false);
     }
   };
@@ -215,6 +216,7 @@ export function Sidebar({
   const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
+      setHoverExpanded(false);
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
     }
   };
@@ -223,6 +225,7 @@ export function Sidebar({
     setActiveTab('today');
     setCurrentFileDate(date);
     if (isMobile || isTablet) {
+      setHoverExpanded(false);
       setIsSidebarOpen(false);
     }
   };
@@ -313,10 +316,12 @@ export function Sidebar({
           if (isCompact) setHoverExpanded(false);
         }}
         onClick={(e) => {
-          // Tablet compact: clicking the strip toggles to overlay. Clicks
-          // bubble up from children, so the active element check is just
-          // defensive — the whole 60px aside is the click target.
-          if (isCompact) {
+          // Keep navigation and utility buttons usable in compact mode.
+          // Expanding from their bubbled click used to reopen the overlay
+          // immediately after navigation and leave the content dimmed.
+          const target = e.target as HTMLElement;
+          const isInteractive = Boolean(target.closest('button, a, input, select, textarea'));
+          if (isCompact && !isInteractive) {
             e.stopPropagation();
             setIsSidebarOpen(true);
           }

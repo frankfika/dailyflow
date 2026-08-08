@@ -53,6 +53,10 @@ export interface MindMapNode {
   tag?: string;
   /** v2: back-link to a Task. Used when `kind === 'task'`. */
   taskId?: string;
+  /** Daily-note date that owns the linked Task (YYYY-MM-DD). */
+  taskDate?: string;
+  /** Stable sibling planning order. Lower values are planned first. */
+  planOrder?: number;
 }
 
 /** Three-state task marker. `todo` is the implicit default. */

@@ -18,6 +18,11 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // The Tauri shell is pinned to this URL. Vite's default behaviour is to
+      // silently move to the next free port, which leaves the shell connected
+      // to an unrelated service and presents as a blank window.
+      port: 3000,
+      strictPort: true,
       // Utility scripts at the project root (e.g. _demo-record.mjs,
       // webbridge-*.mjs) are tooling, not source — but Vite still
       // watches them and triggers a full page reload whenever they
