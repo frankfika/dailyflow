@@ -100,7 +100,7 @@ test('topic spaces: 全部 / 未分类 pills, create flow, auto-select', async (
   // 6. Capture the resulting view regardless of the post-create state so
   // we always have a visual artifact.
   await page.screenshot({
-    path: '/Users/fangchen/Baidu/GitHub/dailyflow/visual-topic-spaces-1-created.png',
+    path: 'visual-topic-spaces-1-created.png',
     fullPage: true,
   });
 

@@ -41,7 +41,7 @@ test('mind map: empty state → create → add children → notes → collapse �
   await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
   await page.getByTestId('nav-mindmap').click();
   await page.waitForTimeout(800);
-  await page.screenshot({ path: '/Users/fangchen/Baidu/GitHub/dailyflow/visual-mindmap-1-empty.png' });
+  await page.screenshot({ path: 'visual-mindmap-1-empty.png' });
 
   // 2. Create a new map.
   const newBtn = page.getByRole('button', { name: /新建思维导图|New mind map/i }).first();
@@ -92,14 +92,14 @@ test('mind map: empty state → create → add children → notes → collapse �
   await page.waitForTimeout(500);
 
   // 7. Capture full tree before collapsing.
-  await page.screenshot({ path: '/Users/fangchen/Baidu/GitHub/dailyflow/visual-mindmap-2-populated.png' });
+  await page.screenshot({ path: 'visual-mindmap-2-populated.png' });
 
   // 8. Collapse the first child subtree to demo the focus view.
   await page.locator('[data-testid^="mindmap-node-"]').nth(1).click();
   await page.waitForTimeout(300);
   await page.locator('button[title="折叠子节点"]').first().click();
   await page.waitForTimeout(500);
-  await page.screenshot({ path: '/Users/fangchen/Baidu/GitHub/dailyflow/visual-mindmap-3-collapsed.png' });
+  await page.screenshot({ path: 'visual-mindmap-3-collapsed.png' });
 
   // 9. Cycle the status of one of the children.
   await page.locator('[data-testid^="mindmap-node-"]').nth(1).click();
@@ -131,7 +131,7 @@ test('mind map: empty state → create → add children → notes → collapse �
   await searchInput.waitFor({ state: 'visible', timeout: 3000 });
   await searchInput.fill('产品');
   await page.waitForTimeout(500);
-  await page.screenshot({ path: '/Users/fangchen/Baidu/GitHub/dailyflow/visual-mindmap-4-search.png' });
+  await page.screenshot({ path: 'visual-mindmap-4-search.png' });
   // Close the search bar with Escape.
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
