@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+const initialLoadHealthTest = 'no unexpected console or HTTP errors on initial load';
+
 test.describe('DailyFlow Smoke Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (testInfo.title !== initialLoadHealthTest) {
+      await page.goto('http://localhost:3000');
+    }
   });
 
   test('page loads with correct title', async ({ page }) => {
@@ -41,7 +45,7 @@ test.describe('DailyFlow Smoke Tests', () => {
     await expect(page.locator('text=/Settings|Configuration|Config|设置|全局设置/i').first()).toBeVisible();
   });
 
-  test('no unexpected console or HTTP errors on initial load', async ({ page }) => {
+  test(initialLoadHealthTest, async ({ page }) => {
     const consoleErrors: string[] = [];
     const httpErrors: string[] = [];
     page.on('console', msg => {
@@ -55,8 +59,9 @@ test.describe('DailyFlow Smoke Tests', () => {
       }
     });
 
-    // Install the listeners before a full reload so initial requests are observable.
-    await page.reload();
+    // Install listeners before the only navigation so no in-flight requests are
+    // aborted by a reload and every initial response remains observable.
+    await page.goto('http://localhost:3000');
     await page.waitForLoadState('networkidle');
 
     // Chromium emits a generic console error for every failed HTTP response. The
