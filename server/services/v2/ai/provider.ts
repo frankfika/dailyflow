@@ -18,6 +18,7 @@
  * read v1 config (`AI_API_KEY` etc) so we don't leak legacy secrets.
  */
 import type { SourceItem } from '../../../domain/v2/types.js';
+import { loadConfig } from '../../config.js';
 
 export interface ModelMessage {
   role: 'system' | 'user' | 'assistant';
@@ -227,20 +228,50 @@ export function buildProvider(cfg: V2AIConfig | undefined): AIProvider {
   });
 }
 
-export function loadV2AIConfig(): V2AIConfig | undefined {
-  // Read from env or v2-only config (legacy AI_API_KEY is intentionally
-  // not consumed here to avoid leaking it into v2 schema/test surfaces).
-  const provider = (process.env.V2_AI_PROVIDER as V2AIConfig['provider']) || 'local-deterministic';
-  if (provider === 'local-deterministic') return { provider };
-  const apiKey = process.env.V2_AI_API_KEY;
-  if (!apiKey) return { provider: 'local-deterministic' };
-  return {
-    provider,
-    apiKey,
-    baseUrl: process.env.V2_AI_BASE_URL ?? 'https://api.openai.com',
-    model: process.env.V2_AI_MODEL ?? 'gpt-4o-mini',
-    format: (process.env.V2_AI_FORMAT as 'openai' | 'anthropic') ?? 'openai',
-  };
+export async function loadV2AIConfig(role: 'chat' | 'meetingSummary' = 'meetingSummary'): Promise<V2AIConfig> {
+  // Explicit environment configuration remains the headless/deployment
+  // override. Desktop runtime otherwise reads the same Model Center that the
+  // chat and meeting settings UI writes.
+  const envProvider = process.env.V2_AI_PROVIDER as V2AIConfig['provider'] | undefined;
+  if (envProvider) {
+    if (envProvider === 'local-deterministic') return { provider: envProvider };
+    const apiKey = process.env.V2_AI_API_KEY;
+    if (!apiKey) return { provider: 'local-deterministic' };
+    return {
+      provider: envProvider,
+      apiKey,
+      baseUrl: process.env.V2_AI_BASE_URL ?? 'https://api.openai.com/v1',
+      model: process.env.V2_AI_MODEL ?? 'gpt-4o-mini',
+      format: (process.env.V2_AI_FORMAT as 'openai' | 'anthropic') ?? 'openai',
+    };
+  }
+
+  try {
+    const config = await loadConfig();
+    const serialized = config.modelCenter || config.providerConfigs;
+    if (!serialized) return { provider: 'local-deterministic' };
+    const center = JSON.parse(serialized) as {
+      configs?: Array<{ id: string; apiKey?: string; baseUrl?: string; model?: string }>;
+      activeId?: string | null;
+      roles?: { chatProviderId?: string | null; meetingSummaryProviderId?: string | null };
+    };
+    const roleId = role === 'meetingSummary'
+      ? center.roles?.meetingSummaryProviderId
+      : center.roles?.chatProviderId;
+    const selected = center.configs?.find(item => item.id === (roleId || center.activeId));
+    if (!selected?.apiKey || !selected.baseUrl || !selected.model) {
+      return { provider: 'local-deterministic' };
+    }
+    return {
+      provider: 'openai-compatible',
+      apiKey: selected.apiKey,
+      baseUrl: selected.baseUrl,
+      model: selected.model,
+      format: 'openai',
+    };
+  } catch {
+    return { provider: 'local-deterministic' };
+  }
 }
 
 export function isFallbackResult(r: CompletionResult): boolean {

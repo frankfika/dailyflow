@@ -58,6 +58,9 @@ export interface ConfigData {
   ipfsApiKey?: string;
   ipfsGateway?: string;
   providerConfigs?: string;
+  /** Unified model registry and role assignments. `providerConfigs` is read
+   * only as a one-time migration fallback. */
+  modelCenter?: string;
   feishuSyncEnabled?: boolean;
   feishuSyncIntervalMinutes?: number;
   feishuTaskSyncEnabled?: boolean;
@@ -622,70 +625,6 @@ export interface WorkspaceTimelineEntryData {
   type: 'log' | 'decision' | 'blocker' | 'ai_review';
 }
 
-export interface ThinkingWorkspaceData {
-  id: string;
-  title: string;
-  kind: 'workspace';
-  type?: 'goal' | 'problem' | 'research' | 'product_design' | 'project_phase' | 'general';
-  status: 'active' | 'paused' | 'completed' | 'archived';
-  projectId?: string;
-  tags?: string[];
-  intent: string;
-  scratchpad: string;
-  brief?: string;
-  journey?: string;
-  tasksMarkdown?: string;
-  mindmapMarkdown?: string;
-  taskIds: string[];
-  linkedNoteIds: string[];
-  timeline: WorkspaceTimelineEntryData[];
-  createdAt: string;
-  updatedAt: string;
-  filePath?: string;
-}
-
-export const thinkingWorkspacesApi = {
-  async getAll(filters?: { status?: string; projectId?: string; tag?: string; query?: string }): Promise<ThinkingWorkspaceData[]> {
-    const params = new URLSearchParams();
-    if (filters) Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
-    const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_BASE}/thinking-workspaces${query}`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch workspaces');
-    return res.json();
-  },
-
-  async getById(id: string): Promise<ThinkingWorkspaceData> {
-    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch workspace');
-    return res.json();
-  },
-
-  async create(data: Partial<ThinkingWorkspaceData> & { title: string }): Promise<ThinkingWorkspaceData> {
-    const res = await fetch(`${API_BASE}/thinking-workspaces`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to create workspace');
-    return res.json();
-  },
-
-  async update(id: string, updates: Partial<Omit<ThinkingWorkspaceData, 'id' | 'createdAt' | 'filePath'>>): Promise<ThinkingWorkspaceData> {
-    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to update workspace');
-    return res.json();
-  },
-
-  async delete(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/thinking-workspaces/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw await httpError(res, 'Failed to delete workspace');
-  },
-};
-
 // ---------------------------------------------------------------------------
 // Topic Space (Phase 1) — superset of ThinkingWorkspace with a 1:1
 // mindmapId binding and a context discriminator. `kind: 'topic-space'`
@@ -700,9 +639,9 @@ export type TopicSpaceStatus = 'active' | 'paused' | 'completed' | 'archived';
 export interface TopicSpace {
   id: string;
   title: string;
-  /** `'topic-space'` for new files; legacy 'workspace' files are read
-   *  through the `/api/thinking-workspaces` endpoint instead. */
-  kind: 'topic-space';
+  /** New files use `topic-space`; the same API reads legacy `workspace`
+   * files without rewriting them until the user explicitly edits one. */
+  kind: 'topic-space' | 'workspace';
   /** Which context this space lives under. Defaults to 'unclassified'
    *  during the migration window. */
   context: TopicSpaceContext;
@@ -814,118 +753,6 @@ export const topicSpacesApi = {
       body: JSON.stringify({ context, orderedIds }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to reorder topic spaces');
-  },
-};
-
-export interface ProjectData {
-  id: string;
-  name: string;
-  description?: string;
-  status: 'active' | 'completed' | 'archived';
-  createdAt: string;
-  updatedAt: string;
-  tags?: string[];
-  deadline?: string;
-  filePath?: string;
-}
-
-/**
- * 项目管理 API
- */
-export const projectsApi = {
-  async getAll(): Promise<ProjectData[]> {
-    const res = await fetch(`${API_BASE}/projects`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch projects');
-    return res.json();
-  },
-
-  async getById(id: string): Promise<ProjectData> {
-    const res = await fetch(`${API_BASE}/projects/${id}`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch project');
-    return res.json();
-  },
-
-  async create(project: Omit<ProjectData, 'id' | 'createdAt' | 'updatedAt' | 'filePath'>): Promise<ProjectData> {
-    const res = await fetch(`${API_BASE}/projects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(project),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to create project');
-    return res.json();
-  },
-
-  async update(id: string, updates: Partial<Omit<ProjectData, 'id' | 'createdAt' | 'filePath'>>): Promise<ProjectData> {
-    const res = await fetch(`${API_BASE}/projects/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to update project');
-    return res.json();
-  },
-
-  async delete(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/projects/${id}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to delete project');
-  },
-};
-
-export interface GitStatus {
-  hasChanges: boolean;
-  branch: string;
-  ahead: number;
-  behind: number;
-  staged: string[];
-  unstaged: string[];
-  untracked: string[];
-  lastCommitTime?: string;
-}
-
-export interface GitSyncResult {
-  success: boolean;
-  commitHash?: string;
-  message?: string;
-  error?: string;
-  stage?: string;
-}
-
-/**
- * Git 操作 API
- */
-export const gitApi = {
-  async getStatus(): Promise<GitStatus> {
-    const res = await fetch(`${API_BASE}/git/status`);
-    if (!res.ok) throw await httpError(res, 'Failed to get git status');
-    return res.json();
-  },
-
-  async sync(message: string, token?: string): Promise<GitSyncResult> {
-    const res = await fetch(`${API_BASE}/git/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, token }),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to sync');
-    return res.json();
-  },
-
-  async init(): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/git/init`, {
-      method: 'POST',
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to init git repo');
-    return res.json();
-  },
-
-  async setRemote(): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch(`${API_BASE}/git/set-remote`, {
-      method: 'POST',
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to set remote');
-    return res.json();
   },
 };
 
@@ -1449,171 +1276,6 @@ export const aiApi = {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw await httpError(res, data.error || data.detail || `AI request failed (${res.status})`);
-    }
-    return res.json();
-  },
-};
-
-/**
- * Meetings API (Granola Phase 1).
- *
- * Transcribe takes raw text (Phase 1 mock) or audio (Phase 2 whisper.cpp)
- * and returns timestamped segments. Summarize takes the transcript plus the
- * user's provider config and returns a structured Markdown note + action
- * items, both proxied through the backend so the API key never reaches the
- * browser.
- */
-export interface MeetingSegment {
-  start: number;
-  end: number;
-  speaker?: string;
-  text: string;
-}
-
-export interface MeetingTranscribeRequest {
-  text: string;
-  date?: string;
-  participants?: string[];
-}
-
-export interface MeetingTranscribeResponse {
-  segments: MeetingSegment[];
-  text: string;
-  date: string;
-  participants: string[];
-  recordingPath?: string;
-  transcriptionMode?: 'whisper' | 'mock' | 'mock-with-audio';
-  model?: string;
-}
-
-/**
- * Phase 2 audio request: MediaRecorder produces a Blob, we read it as
- * base64 and forward to the server. The server saves the file to
- * `~/.dailyflow/recordings/{date}/{uuid}.{ext}` and (when `whisperConfig`
- * is provided) forwards to an OpenAI-compatible `/audio/transcriptions`
- * endpoint.
- */
-export interface MeetingAudioTranscribeRequest {
-  audio: {
-    /** Base64-encoded audio bytes (with or without the data: URL prefix). */
-    data: string;
-    /** MIME type as reported by MediaRecorder, e.g. "audio/webm". */
-    mimeType: string;
-    /** Original filename (used to pick the right extension on disk). */
-    filename?: string;
-  };
-  date?: string;
-  participants?: string[];
-  /** When set, server forwards to the configured Whisper API. */
-  whisperConfig?: {
-    apiKey?: string;
-    baseUrl: string;
-    model?: string;
-    language?: string;
-  };
-  language?: 'zh' | 'en';
-}
-
-export interface MeetingActionItem {
-  title: string;
-  owner?: string;
-  due?: string;
-  priority?: 'high' | 'medium' | 'low';
-}
-
-export interface MeetingSummarizeRequest {
-  apiKey: string;
-  model?: string;
-  baseUrl: string;
-  transcript?: string;
-  segments?: MeetingSegment[];
-  title: string;
-  participants?: string[];
-  date?: string;
-  time?: string;
-  endTime?: string;
-  maxTokens?: number;
-  language?: 'zh' | 'en';
-}
-
-export interface MeetingSummarizeResponse {
-  markdown: string;
-  actionItems: MeetingActionItem[];
-  model: string;
-}
-
-export interface MeetingExtractActionsRequest {
-  apiKey: string;
-  baseUrl: string;
-  model?: string;
-  markdown: string;
-  language?: 'zh' | 'en';
-  maxTokens?: number;
-}
-
-export interface MeetingExtractActionsResponse {
-  actionItems: MeetingActionItem[];
-  model: string;
-}
-
-export const meetingsApi = {
-  async transcribe(req: MeetingTranscribeRequest): Promise<MeetingTranscribeResponse> {
-    const res = await fetch(`${API_BASE}/meetings/transcribe`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw await httpError(res, data.error || data.detail || `Meeting transcribe failed (${res.status})`);
-    }
-    return res.json();
-  },
-  /**
-   * Phase 2: real audio transcription. Sends the MediaRecorder Blob to the
-   * server, which saves it to `~/.dailyflow/recordings/{date}/` and (when
-   * `whisperConfig` is provided) forwards to an OpenAI-compatible
-   * `/audio/transcriptions` endpoint. Without `whisperConfig` the server
-   * still saves the file and returns a mock scaffold.
-   */
-  async transcribeAudio(req: MeetingAudioTranscribeRequest): Promise<MeetingTranscribeResponse> {
-    const res = await fetch(`${API_BASE}/meetings/transcribe`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw await httpError(res, data.error || data.detail || `Meeting audio transcribe failed (${res.status})`);
-    }
-    return res.json();
-  },
-  async summarize(req: MeetingSummarizeRequest): Promise<MeetingSummarizeResponse> {
-    const res = await fetch(`${API_BASE}/meetings/summarize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw await httpError(res, data.error || data.detail || `Meeting summarize failed (${res.status})`);
-    }
-    return res.json();
-  },
-  /**
-   * Phase 2: re-run the LLM on a finalized meeting note to surface action
-   * items. The frontend uses this to power the "Review N Action Items" card
-   * before tasks land in the user's daily file.
-   */
-  async extractActions(req: MeetingExtractActionsRequest): Promise<MeetingExtractActionsResponse> {
-    const res = await fetch(`${API_BASE}/meetings/extract-actions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw await httpError(res, data.error || data.detail || `Meeting extract-actions failed (${res.status})`);
     }
     return res.json();
   },

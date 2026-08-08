@@ -92,6 +92,8 @@ describe('Meeting service (Phase 3)', () => {
     expect(result.decisionCount).toBe(1);
     expect(await repo.listDecisions()).toHaveLength(0);
     expect(result.proposal.changes.filter(change => change.entity === 'decision')).toHaveLength(1);
+    const evidence = (await repo.listEvidence()).find(item => item.quote === '决定：采用两档定价。');
+    expect(evidence?.locator).toEqual({ kind: 'text', start: 0, end: '决定：采用两档定价。'.length });
   });
 
   it('getMeetingStats returns counts', async () => {

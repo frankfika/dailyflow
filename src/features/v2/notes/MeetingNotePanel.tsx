@@ -13,7 +13,7 @@ import {
   type NoteDocument,
   type SourceItem,
 } from '../api/client';
-import { isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings } from './meetingTranscription';
+import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings } from './meetingTranscription';
 
 export interface MeetingNotePanelProps {
   note: NoteDocument;
@@ -66,6 +66,11 @@ const COPY = {
     serviceUrl: '服务地址',
     apiKey: 'API Key',
     modelName: '模型名称',
+    provider: '服务商',
+    diarize: '区分说话人（推荐）',
+    speakerCount: '预计人数（0 = 自动）',
+    keyterms: '术语 / 人名（逗号分隔）',
+    consent: '我已告知参会者，并确认有权录音和处理本次会议内容',
     insertTranscript: '加入笔记并编辑',
     backgroundTranscribing: '录音已保存，本地转写正在后台运行。你可以继续编辑或离开此页面。',
     transcribeLater: '转写这段录音',
@@ -115,6 +120,11 @@ const COPY = {
     serviceUrl: 'Service URL',
     apiKey: 'API Key',
     modelName: 'Model name',
+    provider: 'Provider',
+    diarize: 'Identify speakers (recommended)',
+    speakerCount: 'Expected speakers (0 = auto)',
+    keyterms: 'Names / key terms (comma-separated)',
+    consent: 'I have notified participants and have the right to record and process this meeting',
     insertTranscript: 'Add to note and edit',
     backgroundTranscribing: 'Recording saved. Local transcription is running in the background; you can keep editing or leave this page.',
     transcribeLater: 'Transcribe this recording',
@@ -175,6 +185,7 @@ export function MeetingNotePanel({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [recordingConsent, setRecordingConsent] = useState(false);
   const [sources, setSources] = useState<SourceItem[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -195,6 +206,10 @@ export function MeetingNotePanel({
         apiKey: transcriptionSettings.remoteApiKey,
         baseUrl: transcriptionSettings.remoteBaseUrl,
         model: transcriptionSettings.remoteModel,
+        provider: transcriptionSettings.remoteProvider,
+        diarize: transcriptionSettings.diarize,
+        speakerCount: transcriptionSettings.speakerCount || undefined,
+        keyterms: transcriptionSettings.keyterms.split(/[,，\n]/).map(term => term.trim()).filter(Boolean),
       }
     : null;
   const localModelReady = localStatus
@@ -333,9 +348,11 @@ export function MeetingNotePanel({
     : selectedMode === 'local-endpoint'
       ? {
           mode: 'local-endpoint' as const,
+          provider: 'openai-compatible' as const,
           baseUrl: transcriptionSettings.localEndpointBaseUrl,
           model: transcriptionSettings.localEndpointModel,
           language,
+          diarize: false,
         }
       : {
           mode: 'local-managed' as const,
@@ -487,6 +504,33 @@ export function MeetingNotePanel({
         <details className="mt-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-xs">
           <summary className="cursor-pointer font-medium text-text-secondary">{t.serviceSettings}</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {selectedMode === 'remote' && (
+              <label className="grid gap-1 text-text-muted">
+                <span>{t.provider}</span>
+                <select
+                  value={transcriptionSettings.remoteProvider}
+                  onChange={(event) => {
+                    const provider = event.target.value as keyof typeof MEETING_TRANSCRIPTION_PRESETS;
+                    const preset = MEETING_TRANSCRIPTION_PRESETS[provider];
+                    const next = {
+                      ...transcriptionSettings,
+                      remoteProvider: provider,
+                      remoteBaseUrl: preset.baseUrl,
+                      remoteModel: preset.model,
+                      diarize: provider !== 'openai-compatible',
+                    };
+                    setTranscriptionSettings(next);
+                    saveMeetingTranscriptionSettings(next);
+                  }}
+                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="deepgram">Deepgram</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                  <option value="openai-compatible">OpenAI compatible</option>
+                </select>
+              </label>
+            )}
             <label className="grid gap-1 text-text-muted sm:col-span-2">
               <span>{t.serviceUrl}</span>
               <input
@@ -530,6 +574,49 @@ export function MeetingNotePanel({
                 className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
               />
             </label>
+            {selectedMode === 'remote' && (
+              <>
+                <label className="flex items-center gap-2 text-text-muted">
+                  <input
+                    type="checkbox"
+                    checked={transcriptionSettings.diarize}
+                    onChange={(event) => {
+                      const next = { ...transcriptionSettings, diarize: event.target.checked };
+                      setTranscriptionSettings(next);
+                      saveMeetingTranscriptionSettings(next);
+                    }}
+                  />
+                  <span>{t.diarize}</span>
+                </label>
+                <label className="grid gap-1 text-text-muted">
+                  <span>{t.speakerCount}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={32}
+                    value={transcriptionSettings.speakerCount}
+                    onChange={(event) => {
+                      const next = { ...transcriptionSettings, speakerCount: Number(event.target.value) || 0 };
+                      setTranscriptionSettings(next);
+                      saveMeetingTranscriptionSettings(next);
+                    }}
+                    className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
+                  />
+                </label>
+                <label className="grid gap-1 text-text-muted sm:col-span-2">
+                  <span>{t.keyterms}</span>
+                  <input
+                    value={transcriptionSettings.keyterms}
+                    onChange={(event) => {
+                      const next = { ...transcriptionSettings, keyterms: event.target.value };
+                      setTranscriptionSettings(next);
+                      saveMeetingTranscriptionSettings(next);
+                    }}
+                    className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
+                  />
+                </label>
+              </>
+            )}
           </div>
         </details>
       )}
@@ -589,14 +676,26 @@ export function MeetingNotePanel({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {state === 'idle' && (
-          <button
-            type="button"
-            onClick={startRecording}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Mic className="h-3.5 w-3.5" aria-hidden="true" />
-            {t.start}
-          </button>
+          <div className="grid gap-2">
+            <label className="flex max-w-2xl items-start gap-2 text-[11px] leading-5 text-text-muted">
+              <input
+                type="checkbox"
+                checked={recordingConsent}
+                onChange={(event) => setRecordingConsent(event.target.checked)}
+                className="mt-1"
+              />
+              <span>{t.consent}</span>
+            </label>
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={!recordingConsent}
+              className="inline-flex w-max items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+              {t.start}
+            </button>
+          </div>
         )}
         {state === 'requesting' && (
           <span className="inline-flex items-center gap-2 text-xs text-text-secondary">

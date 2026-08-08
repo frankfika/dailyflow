@@ -32,6 +32,8 @@ export interface NotesViewProps {
   sidebarOpen?: boolean;
   /** App-level toast for saves and actions that change selection. */
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
+  /** Select a note created by a global entry point, such as meeting capture. */
+  requestedNoteId?: string | null;
 }
 
 const STORAGE_KEY = 'df_notes_layout';
@@ -61,7 +63,7 @@ function saveLayout(layout: NotesLayout) {
   }
 }
 
-export function NotesView({ language = 'en', sidebarOpen = true, onNotice }: NotesViewProps) {
+export function NotesView({ language = 'en', sidebarOpen = true, onNotice, requestedNoteId }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layout, setLayout] = useState<NotesLayout>(() => loadLayout());
   const [isMobile, setIsMobile] = useState(() =>
@@ -71,6 +73,10 @@ export function NotesView({ language = 'en', sidebarOpen = true, onNotice }: Not
   useEffect(() => {
     saveLayout(layout);
   }, [layout]);
+
+  useEffect(() => {
+    if (requestedNoteId) setSelectedId(requestedNoteId);
+  }, [requestedNoteId]);
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 767px)');

@@ -59,6 +59,8 @@ export interface Config {
   ipfsGateway?: string; // e.g. https://gateway.pinata.cloud or https://ipfs.io
   // AI Provider Configs (JSON string for durability across updates)
   providerConfigs?: string;
+  /** Unified model registry (chat, meeting summary, and transcription). */
+  modelCenter?: string;
   // Feishu enterprise sync. OAuth tokens are owned by lark-cli / the OS
   // credential store and are never persisted in DailyFlow's config.
   feishuSyncEnabled?: boolean;

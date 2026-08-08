@@ -13,6 +13,7 @@ import {
   saveProviderConfigs,
   PROVIDER_TEMPLATES,
   type ProviderConfig,
+  type ProviderConfigStore,
   type ProviderTemplate,
 } from '../types/models';
 import { aiApi } from '../api/client';
@@ -24,10 +25,12 @@ interface ModelLibraryProps {
 }
 
 type CategoryFilter = 'all' | 'official' | 'aggregator' | 'custom';
+type ModelRoles = NonNullable<ProviderConfigStore['roles']>;
 
 export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps) {
   const [configs, setConfigs] = useState<ProviderConfig[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<ModelRoles>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<ProviderConfig>>({});
@@ -42,6 +45,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     const store = loadProviderConfigs();
     setConfigs(store.configs);
     setActiveId(store.activeId);
+    setRoles(store.roles || {});
   }, []);
 
   useEffect(() => {
@@ -59,10 +63,11 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
     }
   }, [drawerOpen]);
 
-  const persist = (newConfigs: ProviderConfig[], newActiveId: string | null) => {
-    saveProviderConfigs({ configs: newConfigs, activeId: newActiveId });
+  const persist = (newConfigs: ProviderConfig[], newActiveId: string | null, newRoles: ModelRoles = roles) => {
+    saveProviderConfigs({ configs: newConfigs, activeId: newActiveId, roles: newRoles });
     setConfigs(newConfigs);
     setActiveId(newActiveId);
+    setRoles(newRoles);
   };
 
   const openAddDrawer = () => {
@@ -128,7 +133,10 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
       };
       const updated = [...configs, newConfig];
       const newActiveId = configs.length === 0 ? newConfig.id : activeId;
-      persist(updated, newActiveId);
+      const nextRoles = configs.length === 0
+        ? { chatProviderId: newConfig.id, meetingSummaryProviderId: newConfig.id }
+        : roles;
+      persist(updated, newActiveId, nextRoles);
       if (newActiveId === newConfig.id) onProviderActivate?.(newConfig);
     }
     closeDrawer();
@@ -145,12 +153,26 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
         if (next) onProviderActivate?.(next);
       }
     }
-    persist(updated, newActiveId);
+    const fallbackId = updated[0]?.id || null;
+    const nextRoles = {
+      chatProviderId: roles.chatProviderId === id ? fallbackId : roles.chatProviderId,
+      meetingSummaryProviderId: roles.meetingSummaryProviderId === id ? fallbackId : roles.meetingSummaryProviderId,
+    };
+    persist(updated, newActiveId, nextRoles);
   };
 
   const handleActivate = (config: ProviderConfig) => {
-    persist(configs, config.id);
+    persist(configs, config.id, { ...roles, chatProviderId: config.id });
     onProviderActivate?.(config);
+  };
+
+  const assignRole = (role: keyof ModelRoles, providerId: string) => {
+    const nextRoles = { ...roles, [role]: providerId || null };
+    persist(configs, role === 'chatProviderId' ? providerId : activeId, nextRoles);
+    if (role === 'chatProviderId') {
+      const selected = configs.find(config => config.id === providerId);
+      if (selected) onProviderActivate?.(selected);
+    }
   };
 
   const handleTest = async (config: Partial<ProviderConfig>) => {
@@ -237,6 +259,37 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
           </div>
         ) : (
           <div className="space-y-3">
+            <div className="grid gap-3 rounded-lg border border-border bg-surface-white p-4 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  {language === 'zh' ? '聊天模型' : 'Chat model'}
+                </span>
+                <select
+                  value={roles.chatProviderId || activeId || ''}
+                  onChange={event => assignRole('chatProviderId', event.target.value)}
+                  className="w-full rounded-md border border-border bg-surface px-2.5 py-2 text-xs text-text-heading"
+                >
+                  {configs.map(config => <option key={config.id} value={config.id}>{config.name} · {config.model}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  {language === 'zh' ? '会议总结 / 结构化提取模型' : 'Meeting summary / extraction'}
+                </span>
+                <select
+                  value={roles.meetingSummaryProviderId || activeId || ''}
+                  onChange={event => assignRole('meetingSummaryProviderId', event.target.value)}
+                  className="w-full rounded-md border border-border bg-surface px-2.5 py-2 text-xs text-text-heading"
+                >
+                  {configs.map(config => <option key={config.id} value={config.id}>{config.name} · {config.model}</option>)}
+                </select>
+              </label>
+              <p className="text-[11px] text-text-muted sm:col-span-2">
+                {language === 'zh'
+                  ? '语音转写模型也保存在同一模型中心，在任一会议笔记的录音面板中配置。'
+                  : 'Speech transcription is stored in the same Model Center and configured from any meeting note recording panel.'}
+              </p>
+            </div>
             {sortedConfigs.map(config => (
               <motion.div
                 key={config.id}

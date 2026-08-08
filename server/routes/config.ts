@@ -101,6 +101,9 @@ router.patch('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Warning', '299 DailyFlow "POST /api/config is deprecated; use versioned PATCH /api/config"');
+    res.setHeader('Link', '</api/config>; rel="successor-version"');
     await saveConfig(req.body);
     res.json({ success: true });
   } catch (error: any) {

@@ -19,6 +19,16 @@ export interface ProviderConfig {
 export interface ProviderConfigStore {
   configs: ProviderConfig[];
   activeId: string | null;
+  /** Role assignments let chat and structured meeting extraction evolve
+   * independently while still sharing one provider registry. */
+  roles?: {
+    chatProviderId?: string | null;
+    meetingSummaryProviderId?: string | null;
+  };
+  /** Speech models use a different protocol but live in the same model
+   * center so settings and migrations have a single source of truth. */
+  meetingTranscription?: Record<string, unknown>;
+  version?: 1;
 }
 
 export interface ProviderTemplate {
@@ -180,28 +190,86 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
   },
 ];
 
-const STORAGE_KEY = 'df_provider_configs';
+const STORAGE_KEY = 'df_model_center';
+const LEGACY_PROVIDER_STORAGE_KEY = 'df_provider_configs';
+const LEGACY_TRANSCRIPTION_STORAGE_KEY = 'df_meeting_transcription_settings';
+
+function normalizeStore(raw: Partial<ProviderConfigStore> | null | undefined): ProviderConfigStore {
+  const configs = (raw?.configs || []).map(({ type: _ignored, ...rest }: ProviderConfig & { type?: unknown }) => rest as ProviderConfig);
+  const activeId = configs.some(config => config.id === raw?.activeId)
+    ? raw?.activeId ?? null
+    : configs[0]?.id ?? null;
+  const chatProviderId = configs.some(config => config.id === raw?.roles?.chatProviderId)
+    ? raw?.roles?.chatProviderId ?? null
+    : activeId;
+  const meetingSummaryProviderId = configs.some(config => config.id === raw?.roles?.meetingSummaryProviderId)
+    ? raw?.roles?.meetingSummaryProviderId ?? null
+    : activeId;
+  return {
+    version: 1,
+    configs,
+    activeId,
+    roles: { chatProviderId, meetingSummaryProviderId },
+    meetingTranscription: raw?.meetingTranscription,
+  };
+}
+
+function readStoredModelCenter(): { store: ProviderConfigStore; migrated: boolean } {
+  const unified = localStorage.getItem(STORAGE_KEY);
+  if (unified) return { store: normalizeStore(JSON.parse(unified)), migrated: false };
+
+  const legacyProviders = localStorage.getItem(LEGACY_PROVIDER_STORAGE_KEY);
+  const legacyTranscription = localStorage.getItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
+  const raw = legacyProviders ? JSON.parse(legacyProviders) as Partial<ProviderConfigStore> : {};
+  if (legacyTranscription) raw.meetingTranscription = JSON.parse(legacyTranscription) as Record<string, unknown>;
+  return { store: normalizeStore(raw), migrated: Boolean(legacyProviders || legacyTranscription) };
+}
 
 export function loadProviderConfigs(): ProviderConfigStore {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved) as { configs?: any[]; activeId?: string | null };
-      // Strip legacy `type` field from any pre-migration entries.
-      const configs = (parsed.configs || []).map(({ type: _ignored, ...rest }) => rest as ProviderConfig);
-      return { configs, activeId: parsed.activeId ?? null };
+    const { store, migrated } = readStoredModelCenter();
+    if (migrated) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      localStorage.removeItem(LEGACY_PROVIDER_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
     }
+    return store;
   } catch (e) {
-    console.error('Failed to load provider configs:', e);
+    console.error('Failed to load model center:', e);
   }
-  return { configs: [], activeId: null };
+  return normalizeStore(null);
 }
 
 export function saveProviderConfigs(store: ProviderConfigStore): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  const current = loadProviderConfigs();
+  const normalized = normalizeStore({
+    ...current,
+    ...store,
+    roles: { ...current.roles, ...store.roles },
+    meetingTranscription: store.meetingTranscription ?? current.meetingTranscription,
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  localStorage.removeItem(LEGACY_PROVIDER_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
   try {
-    dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'provider-store' });
+    dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'model-center' });
   } catch { /* ignore */ }
+}
+
+export function importModelCenter(serialized: string): ProviderConfigStore {
+  const parsed = normalizeStore(JSON.parse(serialized) as Partial<ProviderConfigStore>);
+  saveProviderConfigs(parsed);
+  return parsed;
+}
+
+export function loadMeetingTranscriptionModelSettings<T extends object>(defaults: T): T {
+  const stored = loadProviderConfigs().meetingTranscription;
+  return { ...defaults, ...(stored || {}) } as T;
+}
+
+export function saveMeetingTranscriptionModelSettings(settings: object): void {
+  const current = loadProviderConfigs();
+  saveProviderConfigs({ ...current, meetingTranscription: settings as Record<string, unknown> });
 }
 
 /**
@@ -212,7 +280,7 @@ export async function persistProviderConfigsToBackend(): Promise<void> {
   try {
     const store = loadProviderConfigs();
     const config = await configApi.get();
-    await configApi.update({ providerConfigs: JSON.stringify(store) }, config.version);
+    await configApi.update({ modelCenter: JSON.stringify(store), providerConfigs: null }, config.version);
   } catch {
     // Best-effort persistence to backend
   }
@@ -224,9 +292,12 @@ export interface ActiveAiConfig {
   baseUrl: string;
 }
 
-export function getActiveAiConfig(): ActiveAiConfig | null {
+export function getActiveAiConfig(role: 'chat' | 'meetingSummary' = 'chat'): ActiveAiConfig | null {
   const store = loadProviderConfigs();
-  const active = store.configs.find(c => c.id === store.activeId);
+  const roleId = role === 'meetingSummary'
+    ? store.roles?.meetingSummaryProviderId
+    : store.roles?.chatProviderId;
+  const active = store.configs.find(c => c.id === (roleId || store.activeId));
   if (!active) return null;
   return {
     apiKey: active.apiKey,

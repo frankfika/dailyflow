@@ -26,7 +26,7 @@ export interface ChatInputAreaProps {
   onStop: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onOpenContextPicker: () => void;
-  onOpenMeetingCapture?: () => void;  // AIChat-only
+  onCreateMeetingNote?: () => void;  // AIChat-only
   onOpenSettings: () => void;
   onRemoveContext: (id: string) => void;
 
@@ -52,7 +52,7 @@ export interface ChatInputAreaProps {
 export function ChatInputArea({
   language, activeSession, inputValue, isStreaming, isComposing,
   onInputChange, onSend, onStop, onKeyDown,
-  onOpenContextPicker, onOpenMeetingCapture, onOpenSettings, onRemoveContext,
+  onOpenContextPicker, onCreateMeetingNote, onOpenSettings, onRemoveContext,
   skills, pendingSkillId, activeSkill, onSelectSkill, onClearPendingSkill,
   providers, activeProvider, onChangeProvider,
   draftSourceTitle, onClearDraftSource, textareaRef,
@@ -139,11 +139,11 @@ export function ChatInputArea({
               )}
             </button>
 
-            {onOpenMeetingCapture && (
+            {onCreateMeetingNote && (
               <button
-                onClick={onOpenMeetingCapture}
+                onClick={onCreateMeetingNote}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-text-muted hover:text-accent hover:bg-accent/5 transition-colors"
-                title={language === 'zh' ? '会议 Capture (Granola Phase 1)' : 'Meeting Capture (Granola Phase 1)'}
+                title={language === 'zh' ? '新建会议记录并打开录音' : 'Create a meeting note and open recording'}
               >
                 <Mic className="w-3.5 h-3.5" />
                 {language === 'zh' ? '会议' : 'Meeting'}

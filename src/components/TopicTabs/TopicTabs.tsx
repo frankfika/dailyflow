@@ -21,8 +21,8 @@ export type TopicTabValue = string | null | '__unclassified__';
 
 /**
  * The shape TopicTabs actually needs. A new `TopicSpace` plus a thin
- * legacy shape for spaces that predate Phase 1 (read through
- * `/api/thinking-workspaces` and tagged `kind: 'workspace'`). The
+ * legacy shape for spaces that predate Phase 1 (read through the canonical
+ * Topic Space API and tagged `kind: 'workspace'`). The
  * component itself doesn't care which is which — the discriminator is
  * only used for the "（旧版）" badge.
  */
