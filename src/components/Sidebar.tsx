@@ -153,14 +153,17 @@ export function Sidebar({
   const isTablet = viewport === 'tablet';
   const isDesktop = viewport === 'desktop';
 
-  // compact = tablet / desktop at rest (60px icon strip). Collapsing never
-  // removes primary navigation from non-mobile layouts.
+  // compact = persistent 60px icon strip on tablet and desktop. Primary
+  // navigation must remain discoverable after the expanded sidebar closes.
   const isCompact = !isMobile && !isSidebarOpen;
   // expanded = sidebar showing the full 230px layout. Mobile, tablet with
   // overlay, or desktop in flow.
   const isExpanded = isSidebarOpen;
 
-  const showExpandedWidth = isExpanded;
+  // Hover-expand: meaningful whenever the icon rail is compact. Letting motion own the
+  // width keeps the click-toggle and hover-expand animations in lockstep.
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const showExpandedWidth = isExpanded || (isCompact && hoverExpanded);
 
   // --- Esc to close on mobile / tablet overlay ---
   useEffect(() => {
@@ -257,8 +260,9 @@ export function Sidebar({
   } else if (isTablet) {
     motionAnimate = { width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH };
   } else {
+    // desktop: retain the compact rail instead of hiding navigation entirely
     motionAnimate = {
-      width: isExpanded ? FULL_WIDTH : COMPACT_WIDTH,
+      width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH,
       marginLeft: '0px',
     };
   }
@@ -319,6 +323,7 @@ export function Sidebar({
         }}
       >
         <div
+          data-testid="sidebar-inner"
           className="px-2.5 py-4 flex flex-col h-full"
           style={{ width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
         >

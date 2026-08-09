@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Plus, Sparkles, Settings, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, Bot, Loader2 } from 'lucide-react';
+import { Plus, Sparkles, Settings, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, Bot, Loader2, Maximize2, X } from 'lucide-react';
 import { persistProviderConfigsToBackend } from '../types/models';
 import { type ChatMessage, type ContextItem } from '../types/chat';
 import { useAiSession } from '../hooks/useAiSession';
@@ -26,9 +26,12 @@ interface AIChatProps {
   onDraftConsumed?: () => void;
   onCreateMeetingNote?: () => void;
   onNoteCreated?: () => void;
+  compact?: boolean;
+  onClose?: () => void;
+  onOpenFullChat?: () => void;
 }
 
-export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated }: AIChatProps) {
+export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated, compact = false, onClose, onOpenFullChat }: AIChatProps) {
   const {
     sessions, activeSession, setActiveSessionId, createSession, prepareSessionForDraft, deleteSession, renameSession,
     isStreaming, sendMessage, stopMessage, retryMessage,
@@ -158,9 +161,9 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
   };
 
   return (
-    <div className="flex h-full min-h-0 bg-background">
+    <div className="flex h-full min-h-0 bg-background" data-testid={compact ? 'compact-ai-chat' : 'full-ai-chat'}>
       {/* —— Left: sessions —— */}
-      <aside className={`flex min-h-0 flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-0 md:w-12 items-center overflow-hidden' : 'w-[260px]'}`}>
+      {!compact && <aside className={`flex min-h-0 flex-col border-r border-border bg-surface transition-all duration-200 ${sidebarCollapsed ? 'w-0 md:w-12 items-center overflow-hidden' : 'w-[260px]'}`}>
         {!sidebarCollapsed ? (
           <>
             <div className="px-4 pt-5 pb-3 border-b border-border">
@@ -288,22 +291,29 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
             </div>
           </>
         )}
-      </aside>
+      </aside>}
 
       {/* —— Right: chat —— */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="px-4 md:px-6 py-3 md:py-4 border-b border-border bg-background flex items-center justify-between shrink-0 gap-2">
+        <header className={`${compact ? 'px-4 py-3' : 'px-4 md:px-6 py-3 md:py-4'} border-b border-border bg-background flex items-center justify-between shrink-0 gap-2`}>
           <div className="flex items-center gap-2 min-w-0">
-            <button
+            {!compact && <button
               onClick={() => setSidebarCollapsed(false)}
               className="md:hidden p-1 text-text-muted hover:text-text-heading shrink-0"
               title={language === 'zh' ? '打开对话列表' : 'Open sessions'}
             >
               <PanelLeftOpen className="w-4 h-4" />
-            </button>
+            </button>}
+            {compact && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+                <Sparkles className="h-4 w-4" />
+              </div>
+            )}
             <div className="min-w-0 flex-1">
-              <h2 className="text-base font-semibold text-text-heading truncate">
-                {activeSession?.title || (language === 'zh' ? '新对话' : 'New chat')}
+              <h2 className={`${compact ? 'text-sm' : 'text-base'} font-semibold text-text-heading truncate`}>
+                {compact
+                  ? (language === 'zh' ? 'AI 助手' : 'AI Assistant')
+                  : (activeSession?.title || (language === 'zh' ? '新对话' : 'New chat'))}
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 {activeProvider ? (
@@ -324,48 +334,86 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
               </div>
             </div>
           </div>
+          {compact && (
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => createSession()}
+                className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface hover:text-text-heading"
+                title={language === 'zh' ? '新对话' : 'New chat'}
+                aria-label={language === 'zh' ? '新对话' : 'New chat'}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              {onOpenFullChat && (
+                <button
+                  type="button"
+                  onClick={onOpenFullChat}
+                  className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface hover:text-text-heading"
+                  title={language === 'zh' ? '打开完整 AI 对话' : 'Open full AI Chat'}
+                  aria-label={language === 'zh' ? '打开完整 AI 对话' : 'Open full AI Chat'}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+              )}
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface hover:text-text-heading"
+                  title={language === 'zh' ? '关闭' : 'Close'}
+                  aria-label={language === 'zh' ? '关闭' : 'Close'}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
         </header>
 
         {/* Messages */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="chat-message-scroll-region">
           {!activeSession || activeSession.messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center px-4 md:px-6">
-              <div className="text-center max-w-xl w-full">
-                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-accent to-accent/60 text-white flex items-center justify-center shadow-lg">
-                  <Sparkles className="w-8 h-8" />
+            <div className={`h-full flex items-center justify-center ${compact ? 'px-5' : 'px-4 md:px-6'}`}>
+              <div className={`text-center w-full ${compact ? 'max-w-sm' : 'max-w-xl'}`}>
+                <div className={`${compact ? 'w-10 h-10 mb-4 rounded-xl' : 'w-16 h-16 mb-6 rounded-2xl shadow-lg'} mx-auto bg-accent text-white flex items-center justify-center`}>
+                  <Sparkles className={compact ? 'w-5 h-5' : 'w-8 h-8'} />
                 </div>
-                <h2 className="text-2xl font-bold text-text-heading mb-2">
-                  {language === 'zh' ? '今天想聊点什么？' : 'What can I help with?'}
+                <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-semibold text-text-heading mb-2`}>
+                  {compact
+                    ? (language === 'zh' ? '需要我帮你做什么？' : 'How can I help?')
+                    : (language === 'zh' ? '今天想聊点什么？' : 'What can I help with?')}
                 </h2>
-                <p className="text-sm text-text-muted mb-8">
+                <p className={`${compact ? 'text-xs mb-5' : 'text-sm mb-8'} text-text-muted`}>
                   {language === 'zh'
                     ? '把今日任务、笔记或某个项目挂上来当上下文，我会基于真实数据帮你分析'
                     : 'Attach tasks, notes, or projects as context. I will work with your real data.'}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+                <div className={compact ? 'flex flex-wrap justify-center gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left'}>
                   {[
                     { icon: '📝', label: language === 'zh' ? '总结今日任务' : 'Summarize today', hint: language === 'zh' ? '一段话回顾今天' : 'Recap today in a paragraph' },
                     { icon: '📊', label: language === 'zh' ? '生成周报' : 'Weekly report', hint: language === 'zh' ? '按项目维度汇总' : 'Group by project' },
                     { icon: '🏷️', label: language === 'zh' ? '推荐标签' : 'Suggest tags', hint: language === 'zh' ? '帮我归类未打标的任务' : 'Classify untagged tasks' },
                     { icon: '📋', label: language === 'zh' ? '拆解一个目标' : 'Break down a goal', hint: language === 'zh' ? '变成可执行的子任务' : 'Into actionable steps' },
-                  ].map(s => (
+                  ].slice(0, compact ? 3 : 4).map(s => (
                     <button
                       key={s.label}
                       onClick={() => { setInputValue(s.label); textareaRef.current?.focus(); }}
-                      className="group flex items-start gap-3 p-3.5 bg-surface border border-border rounded-xl hover:border-accent/40 hover:bg-surface-white transition-all"
+                      className={compact
+                        ? 'rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text-main transition-colors hover:border-accent/30 hover:bg-accent/5'
+                        : 'group flex items-start gap-3 p-3.5 bg-surface border border-border rounded-xl hover:border-accent/40 hover:bg-surface-white transition-all'}
                     >
-                      <span className="text-xl leading-none mt-0.5">{s.icon}</span>
-                      <div className="min-w-0">
+                      {compact ? s.label : <><span className="text-xl leading-none mt-0.5">{s.icon}</span><div className="min-w-0">
                         <div className="text-sm font-semibold text-text-heading">{s.label}</div>
                         <div className="text-[11px] text-text-muted mt-0.5">{s.hint}</div>
-                      </div>
+                      </div></>}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="w-full px-4 md:px-8 lg:px-12 py-6 md:py-8 space-y-6 md:space-y-8">
+            <div className={`w-full ${compact ? 'px-4 py-4 space-y-5' : 'px-4 md:px-8 lg:px-12 py-6 md:py-8 space-y-6 md:space-y-8'}`}>
               <AnimatePresence initial={false}>
                 {activeSession.messages.map((msg, i) => (
                   <MessageBubble
@@ -423,6 +471,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
           draftSourceTitle={draftSourceTitle}
           onClearDraftSource={() => setDraftSourceTitle(null)}
           textareaRef={textareaRef}
+          compact={compact}
         />
       </section>
 
