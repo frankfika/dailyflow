@@ -1239,7 +1239,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 12, scale: 0.98 }}
                 transition={{ duration: 0.2 }}
-                className="fixed bottom-20 right-5 z-[80] h-[min(680px,calc(100dvh-7rem))] w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+                className="fixed bottom-20 right-5 z-[80] h-[min(620px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
                 data-testid="floating-ai-chat"
               >
                 <AIChat
@@ -1252,6 +1252,12 @@ export default function App() {
                   showToast={showToast}
                   initialDraft={null}
                   onCreateMeetingNote={() => void openMeetingNote()}
+                  compact
+                  onClose={() => setShowFloatingChat(false)}
+                  onOpenFullChat={() => {
+                    setShowFloatingChat(false);
+                    setActiveTab('ai-chat');
+                  }}
                   onNoteCreated={() => {
                     const today = getTodayStr();
                     notesApi.getByDate(today).then(dateNotes => {

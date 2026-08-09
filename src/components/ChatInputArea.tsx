@@ -47,6 +47,7 @@ export interface ChatInputAreaProps {
   onClearDraftSource: () => void;
 
   textareaRef: React.RefObject<HTMLTextAreaElement>;
+  compact?: boolean;
 }
 
 export function ChatInputArea({
@@ -55,13 +56,13 @@ export function ChatInputArea({
   onOpenContextPicker, onCreateMeetingNote, onOpenSettings, onRemoveContext,
   skills, pendingSkillId, activeSkill, onSelectSkill, onClearPendingSkill,
   providers, activeProvider, onChangeProvider,
-  draftSourceTitle, onClearDraftSource, textareaRef,
+  draftSourceTitle, onClearDraftSource, textareaRef, compact = false,
 }: ChatInputAreaProps) {
   const [showSkillMenu, setShowSkillMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
 
   return (
-    <div className="px-4 md:px-8 pb-4 md:pb-6 pt-2 shrink-0">
+    <div className={`${compact ? 'px-3 pb-3 pt-2' : 'px-4 md:px-8 pb-4 md:pb-6 pt-2'} shrink-0`}>
       <div className="w-full">
         {activeSession && activeSession.contextItems.length > 0 && (
           <div className="mb-1.5 flex items-center gap-1.5 flex-wrap px-1">
@@ -116,9 +117,11 @@ export function ChatInputArea({
             onCompositionStart={() => {/* isComposing handled by parent */}}
             onCompositionEnd={() => {/* isComposing handled by parent */}}
             onKeyDown={onKeyDown}
-            placeholder={language === 'zh' ? '问点什么…  Enter 发送 / Shift+Enter 换行' : 'Ask anything…  Enter to send · Shift+Enter for new line'}
-            rows={2}
-            className="w-full px-5 pt-4 pb-2 text-[15px] bg-transparent focus:outline-none resize-none placeholder:text-text-muted/60 leading-relaxed"
+            placeholder={compact
+              ? (language === 'zh' ? '给 DailyFlow 发消息…' : 'Message DailyFlow…')
+              : (language === 'zh' ? '问点什么…  Enter 发送 / Shift+Enter 换行' : 'Ask anything…  Enter to send · Shift+Enter for new line')}
+            rows={compact ? 1 : 2}
+            className={`w-full bg-transparent focus:outline-none resize-none placeholder:text-text-muted/60 leading-relaxed ${compact ? 'px-4 pt-3 pb-2 text-sm' : 'px-5 pt-4 pb-2 text-[15px]'}`}
           />
 
           <div className="flex items-center gap-1.5 px-3 pb-3">
@@ -139,7 +142,7 @@ export function ChatInputArea({
               )}
             </button>
 
-            {onCreateMeetingNote && (
+            {!compact && onCreateMeetingNote && (
               <button
                 onClick={onCreateMeetingNote}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-text-muted hover:text-accent hover:bg-accent/5 transition-colors"
@@ -151,7 +154,7 @@ export function ChatInputArea({
             )}
 
             {/* Skill picker */}
-            <div className="relative">
+            {!compact && <div className="relative">
               <button
                 onClick={() => { setShowSkillMenu(!showSkillMenu); setShowModelMenu(false); }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -201,10 +204,10 @@ export function ChatInputArea({
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Model picker */}
-            <div className="relative ml-auto">
+            {!compact && <div className="relative ml-auto">
               <button
                 onClick={() => { setShowModelMenu(!showModelMenu); setShowSkillMenu(false); }}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-text-muted hover:text-accent hover:bg-accent/5 rounded-lg transition-colors"
@@ -252,12 +255,12 @@ export function ChatInputArea({
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             <button
               onClick={isStreaming ? onStop : onSend}
               disabled={!isStreaming && !inputValue.trim()}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              className={`${compact ? 'ml-auto' : ''} p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 isStreaming ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-accent text-white hover:bg-accent/90'
               }`}
             >
@@ -266,11 +269,11 @@ export function ChatInputArea({
           </div>
         </div>
 
-        <p className="text-[10px] text-text-muted/70 text-center mt-2">
+        {!compact && <p className="text-[10px] text-text-muted/70 text-center mt-2">
           {language === 'zh'
             ? `通过「模型 & Skills 设置」管理供应商与提示词预设`
             : `Manage providers & prompt presets in "Models & Skills"`}
-        </p>
+        </p>}
       </div>
     </div>
   );

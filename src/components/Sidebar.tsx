@@ -29,8 +29,8 @@ import { getTodayStr } from '../utils/tagColors';
  *                        hover expands to 230px overlay; Esc / outside-click
  *                        collapses back to 60px (NOT fully hidden, so the
  *                        user always sees the icon strip)
- *  - > 1024px (desktop): 230px in flow; toggle hides via margin-left
- *                        (matches pre-audit behaviour, owned by App.tsx)
+ *  - > 1024px (desktop): 230px in flow; collapsing keeps a 60px icon rail
+ *                        so primary navigation never disappears completely
  *
  * User toggle on tablet / desktop persists to localStorage so the choice
  * survives a reload. Mobile ignores storage (always closed by design).
@@ -153,14 +153,14 @@ export function Sidebar({
   const isTablet = viewport === 'tablet';
   const isDesktop = viewport === 'desktop';
 
-  // compact = tablet at rest (60px icon strip). Only when the user has
-  // explicitly closed the sidebar on tablet.
-  const isCompact = isTablet && !isSidebarOpen;
+  // compact = persistent 60px icon strip on tablet and desktop. Primary
+  // navigation must remain discoverable after the expanded sidebar closes.
+  const isCompact = !isMobile && !isSidebarOpen;
   // expanded = sidebar showing the full 230px layout. Mobile, tablet with
   // overlay, or desktop in flow.
   const isExpanded = isSidebarOpen;
 
-  // Hover-expand: only meaningful on tablet compact. Letting motion own the
+  // Hover-expand: meaningful whenever the icon rail is compact. Letting motion own the
   // width keeps the click-toggle and hover-expand animations in lockstep.
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const showExpandedWidth = isExpanded || (isCompact && hoverExpanded);
@@ -243,7 +243,7 @@ export function Sidebar({
   // --- Animation targets ---
   // Mobile: slide from left. Hidden ↔ -100% x-offset.
   // Tablet: width 60 ↔ 230 (icon strip ↔ overlay).
-  // Desktop: in flow, margin-left 0 ↔ -230 (legacy pattern, kept intact).
+  // Desktop: always in flow, switching between the 60px rail and 230px pane.
   const motionInitial = false; // don't replay on every prop change
   const motionTransition = { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] as const };
 
@@ -253,9 +253,9 @@ export function Sidebar({
   } else if (isTablet) {
     motionAnimate = { width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH };
   } else {
-    // desktop: 0 width when collapsed so the flex parent reclaims the space
+    // desktop: retain the compact rail instead of hiding navigation entirely
     motionAnimate = {
-      width: isExpanded ? FULL_WIDTH : 0,
+      width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH,
       marginLeft: '0px',
     };
   }
@@ -328,8 +328,9 @@ export function Sidebar({
         }}
       >
         <div
+          data-testid="sidebar-inner"
           className="px-2.5 py-4 flex flex-col h-full"
-          style={{ width: isDesktop || showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
+          style={{ width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
         >
           {/* Logo + collapse */}
           <div

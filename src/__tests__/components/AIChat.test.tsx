@@ -41,6 +41,7 @@ vi.mock('lucide-react', () => ({
   PanelLeftOpen: () => React.createElement('span', { 'data-testid': 'icon-panel-open' }),
   Bookmark: () => React.createElement('span', { 'data-testid': 'icon-bookmark' }),
   Mic: () => React.createElement('span', { 'data-testid': 'icon-mic' }),
+  Maximize2: () => React.createElement('span', { 'data-testid': 'icon-maximize' }),
 }));
 
 vi.mock('../../api/client', () => ({
@@ -218,5 +219,30 @@ describe('AIChat initialDraft', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Meeting' }));
 
     expect(onCreateMeetingNote).toHaveBeenCalledOnce();
+  });
+
+  it('uses a simplified layout in the floating compact mode', () => {
+    const onClose = vi.fn();
+    const onOpenFullChat = vi.fn();
+    render(
+      <AIChat
+        {...baseProps}
+        compact
+        onClose={onClose}
+        onOpenFullChat={onOpenFullChat}
+        onCreateMeetingNote={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('compact-ai-chat')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-session-scroll-region')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Meeting' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Skill' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open full AI Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onOpenFullChat).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
