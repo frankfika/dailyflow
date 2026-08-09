@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6](https://github.com/frankfika/dailyflow/compare/v1.5.5...v1.5.6) (2026-08-09)
+
+
+### Bug Fixes
+
+* save long meeting recordings reliably ([#28](https://github.com/frankfika/dailyflow/issues/28)) ([eec26ed](https://github.com/frankfika/dailyflow/commit/eec26ed5c4df465a565df13052fee9d697f228d7))
+
 ## [1.5.5](https://github.com/frankfika/dailyflow/compare/v1.5.4...v1.5.5) (2026-08-09)
 
 
