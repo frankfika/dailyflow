@@ -7,6 +7,7 @@ import {
   archiveNote,
   createNote,
   captureNoteMeeting,
+  captureNoteMeetingBinary,
   getNoteMeetingAudioUrl,
   listInbox,
   processSource,
@@ -86,6 +87,22 @@ describe('v2/client', () => {
       durationSeconds: 42,
       language: 'zh',
     });
+  });
+
+  it('uploads long meeting audio as raw binary without base64 JSON', async () => {
+    const audio = new Blob(['raw-audio'], { type: 'audio/mp4' });
+    await captureNoteMeetingBinary('note_01', {
+      audio,
+      filename: 'weekly sync.m4a',
+      durationSeconds: 6624,
+      language: 'zh',
+    });
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toBe(
+      `${API_BASE.api}/api/v2/notes/note_01/meeting/capture-binary?filename=weekly+sync.m4a&durationSeconds=6624&language=zh`,
+    );
+    expect(call[1]).toMatchObject({ method: 'POST', body: audio });
+    expect(call[1].headers).toEqual({ 'content-type': 'audio/mp4' });
   });
 
   it('getNoteMeetingAudioUrl builds a restart-safe streaming URL', () => {

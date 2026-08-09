@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileAudio, FileText, Loader2, Mic, Square, Trash2 } from 'lucide-react';
 import {
-  captureNoteMeeting,
+  captureNoteMeetingBinary,
   transcribeNoteMeeting,
   getNoteMeetingAudioUrl,
   getLocalTranscriptionConfig,
@@ -61,6 +61,7 @@ const COPY = {
     noMicrophone: '当前环境不支持麦克风录音。',
     permissionDenied: '无法访问麦克风，请检查系统或浏览器权限。',
     emptyRecording: '没有录到可保存的音频，请重新录制。',
+    previewUnavailable: '当前播放器无法预览这段录音，但录音内容仍然完整，可以继续保存。',
     saveFailed: '保存录音失败',
     serviceSettings: '转写服务设置',
     serviceUrl: '服务地址',
@@ -115,6 +116,7 @@ const COPY = {
     noMicrophone: 'Microphone recording is not supported in this environment.',
     permissionDenied: 'Microphone access failed. Check your system or browser permission.',
     emptyRecording: 'No audio was captured. Please record again.',
+    previewUnavailable: 'This player cannot preview the recording, but the audio is intact and can still be saved.',
     saveFailed: 'Failed to save recording',
     serviceSettings: 'Transcription service settings',
     serviceUrl: 'Service URL',
@@ -141,28 +143,24 @@ const COPY = {
 function pickMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return '';
   const candidates = [
+    // DailyFlow's desktop app uses WKWebView. MP4/M4A is substantially more
+    // reliable there, especially for long recordings and local blob previews.
+    'audio/mp4',
     'audio/webm;codecs=opus',
     'audio/webm',
     'audio/ogg;codecs=opus',
     'audio/ogg',
-    'audio/mp4',
   ];
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
 }
 
-function formatDuration(seconds: number): string {
+export function formatMeetingDuration(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
   const minutes = Math.floor(total / 60);
-  return `${String(minutes).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read audio'));
-    reader.readAsDataURL(blob);
-  });
+  const minutePart = hours > 0 ? minutes % 60 : minutes;
+  const clock = `${String(minutePart).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock;
 }
 
 function extensionForMimeType(mimeType: string): string {
@@ -183,6 +181,7 @@ export function MeetingNotePanel({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPreviewFailed, setAudioPreviewFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [recordingConsent, setRecordingConsent] = useState(false);
@@ -311,6 +310,7 @@ export function MeetingNotePanel({
           return;
         }
         setAudioBlob(blob);
+        setAudioPreviewFailed(false);
         setAudioUrl(URL.createObjectURL(blob));
         setState('ready');
       };
@@ -336,6 +336,7 @@ export function MeetingNotePanel({
   const discardRecording = () => {
     setAudioBlob(null);
     setAudioUrl(null);
+    setAudioPreviewFailed(false);
     setElapsedSeconds(0);
     setError('');
     setNotice('');
@@ -409,17 +410,12 @@ export function MeetingNotePanel({
     setError('');
     setNotice('');
     try {
-      const data = await blobToDataUrl(audioBlob);
       const mimeType = audioBlob.type || recorderRef.current?.mimeType || 'audio/webm';
-      const captureResult = await captureNoteMeeting(note.id, {
-        audio: {
-          data,
-          mimeType,
-          filename: `meeting-${note.id}.${extensionForMimeType(mimeType)}`,
-        },
+      const captureResult = await captureNoteMeetingBinary(note.id, {
+        audio: audioBlob,
+        filename: `meeting-${note.id}.${extensionForMimeType(mimeType)}`,
         durationSeconds: Math.round(elapsedSeconds),
         language,
-        transcription: { mode: 'save-only' },
       });
       setSources((current) => [
         ...current.filter((item) => item.id !== captureResult.audioSource.id),
@@ -428,6 +424,7 @@ export function MeetingNotePanel({
       onNoteUpdated?.(captureResult.note, captureResult);
       setAudioBlob(null);
       setAudioUrl(null);
+      setAudioPreviewFailed(false);
       setElapsedSeconds(0);
       chunksRef.current = [];
       setState('idle');
@@ -707,7 +704,7 @@ export function MeetingNotePanel({
           <>
             <span className="inline-flex items-center gap-2 font-mono text-sm font-semibold text-red-600" aria-live="polite">
               <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-              {formatDuration(elapsedSeconds)}
+              {formatMeetingDuration(elapsedSeconds)}
             </span>
             <button
               type="button"
@@ -721,8 +718,20 @@ export function MeetingNotePanel({
         )}
         {(state === 'ready' || state === 'saving') && audioUrl && (
           <>
-            <audio controls src={audioUrl} className="h-9 max-w-full" aria-label={t.title} />
-            <span className="font-mono text-xs text-text-muted">{formatDuration(elapsedSeconds)}</span>
+            {audioPreviewFailed ? (
+              <p className="max-w-xl text-xs text-amber-700" role="status">
+                {t.previewUnavailable}
+              </p>
+            ) : (
+              <audio
+                controls
+                src={audioUrl}
+                className="h-9 max-w-full"
+                aria-label={t.title}
+                onError={() => setAudioPreviewFailed(true)}
+              />
+            )}
+            <span className="font-mono text-xs text-text-muted">{formatMeetingDuration(elapsedSeconds)}</span>
             <button
               type="button"
               onClick={discardRecording}

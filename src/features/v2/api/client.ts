@@ -293,6 +293,32 @@ export interface MeetingCaptureResult {
 export const captureNoteMeeting = (id: string, input: MeetingCaptureInput) =>
   request<MeetingCaptureResult>('POST', `/notes/${id}/meeting/capture`, input);
 
+export async function captureNoteMeetingBinary(id: string, input: {
+  audio: Blob;
+  filename: string;
+  durationSeconds?: number;
+  language?: 'zh' | 'en';
+}): Promise<MeetingCaptureResult> {
+  const query = new URLSearchParams({ filename: input.filename });
+  if (input.durationSeconds !== undefined) query.set('durationSeconds', String(input.durationSeconds));
+  if (input.language) query.set('language', input.language);
+  const url = `${API_BASE.api}/api/v2/notes/${encodeURIComponent(id)}/meeting/capture-binary?${query}`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': input.audio.type || 'audio/webm' },
+    body: input.audio,
+  });
+  const text = await resp.text();
+  let json: unknown = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+  if (!resp.ok) {
+    const err = (json as { error?: V2Error } | null)?.error
+      ?? { code: 'http_error', message: `HTTP ${resp.status}` };
+    throw new V2ApiError(resp.status, err);
+  }
+  return json as MeetingCaptureResult;
+}
+
 /** Typed seam for a local/async ASR worker. Older servers may return 404; the audio remains saved. */
 export const transcribeNoteMeeting = (noteId: string, input: {
   sourceId: string;
