@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5](https://github.com/frankfika/dailyflow/compare/v1.5.4...v1.5.5) (2026-08-09)
+
+
+### Bug Fixes
+
+* clarify task planning and preserve sidebar navigation ([#26](https://github.com/frankfika/dailyflow/issues/26)) ([e2e83be](https://github.com/frankfika/dailyflow/commit/e2e83bedec64ec2baba3e7e6704f430e6d2e8e53))
+
 ## [1.5.4](https://github.com/frankfika/dailyflow/compare/v1.5.3...v1.5.4) (2026-08-09)
 
 
