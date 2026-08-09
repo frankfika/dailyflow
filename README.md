@@ -158,7 +158,7 @@ npm run dev:all
 npm run tauri dev
 ```
 
-打开 <http://localhost:3000> 后，按引导选择工作区。生产构建：
+打开 <http://localhost:47831> 后，按引导选择工作区。生产构建：
 
 ```bash
 npm run build

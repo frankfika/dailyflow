@@ -5,7 +5,7 @@ const initialLoadHealthTest = 'no unexpected console or HTTP errors on initial l
 test.describe('DailyFlow Smoke Tests', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     if (testInfo.title !== initialLoadHealthTest) {
-      await page.goto('http://localhost:3000');
+      await page.goto('http://localhost:47831');
     }
   });
 
@@ -61,7 +61,7 @@ test.describe('DailyFlow Smoke Tests', () => {
 
     // Install listeners before the only navigation so no in-flight requests are
     // aborted by a reload and every initial response remains observable.
-    await page.goto('http://localhost:3000');
+    await page.goto('http://localhost:47831');
     await page.waitForLoadState('networkidle');
 
     // Chromium emits a generic console error for every failed HTTP response. The
@@ -71,7 +71,7 @@ test.describe('DailyFlow Smoke Tests', () => {
       !error.includes('Failed to load resource'),
     );
     const unexpectedHttpErrors = httpErrors.filter(error =>
-      !/^404 http:\/\/localhost:3000\/api\/files\/\d{4}-\d{2}-\d{2}$/.test(error),
+      !/^404 http:\/\/localhost:47831\/api\/files\/\d{4}-\d{2}-\d{2}$/.test(error),
     );
 
     expect(realConsoleErrors).toHaveLength(0);

@@ -19,9 +19,9 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     test(`closed default @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       // Clear any persisted sidebar preference from a prior test run.
-      await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+      await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => localStorage.removeItem('df_sidebar_collapsed'));
-      await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+      await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
       await page.waitForTimeout(1500);
       // Today view should be the default
       const sidebar = page.locator('[data-testid="nav-today"]').first();
@@ -37,9 +37,9 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     test(`open overlay @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       // Clear any persisted sidebar preference from a prior test run.
-      await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+      await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => localStorage.removeItem('df_sidebar_collapsed'));
-      await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+      await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
       // Wait for the workspace to load and the sidebar to be ready. The
       // bootstrap call (POST /api/config/workspaces + activate) is async,
       // and the check-first-run flip from true→false happens after the

@@ -250,7 +250,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {(task.project || task.deadline || task.priority || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
+        {(task.project || task.deadline || task.priority || task.spaceId || task.originMindmapId || task.source_date !== currentFileDate || (task.tags && task.tags.length > 0)) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {task.source_date && task.source_date !== currentFileDate && (
               // Demoted to a small inline annotation — was a bright accent pill
@@ -266,7 +266,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span>#{tag}</span>
               </span>
             ))}
-            {task.spaceId && (
+            {(task.spaceId || task.originMindmapId) && (
               // Phase 4 (Topic Spaces): show a "已绑定到 [Space]" indicator
               // when the task is bound to a topic space. The title comes
               // from a lookup; we fall back to the id if the parent
@@ -276,7 +276,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent-light)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]"
               >
                 <span className="font-mono text-[9px] opacity-70">@</span>
-                <span>{spaceTitle ?? task.spaceId}</span>
+                <span>{spaceTitle ?? (language === 'zh' ? '来自思维导图' : 'From mind map')}</span>
                 {onUnlinkFromSpace && (
                   <button
                     type="button"

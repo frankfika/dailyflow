@@ -124,7 +124,7 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
     expect(screen.getByTestId('mindmap-node-tn1').textContent).toContain('起草合同');
     // Status icon is the empty circle.
     const statusBtn = screen.getByTestId('mindmap-status-tn1');
-    expect(statusBtn.getAttribute('title')).toContain('待办');
+    expect(statusBtn.getAttribute('title')).toContain('标记完成');
 
     // Now the parent re-renders with the new title (from a refreshed
     // task list) and a 'done' status. The mirror inside MindMapView
@@ -204,17 +204,15 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
     expect(screen.queryByTestId('mindmap-open-task-b1')).not.toBeInTheDocument();
   });
 
-  it('shows an explicit primary “make task” action for a selected branch', () => {
-    const onPromoteToTask = vi.fn();
+  it('does not expose a separate “make task” action for a selected node', () => {
     renderNode('branch-primary', makeData({
       text: '可执行节点',
       kind: 'branch',
       isSelected: true,
       language: 'zh',
-      onPromoteToTask,
     }));
-    screen.getByTestId('mindmap-promote-branch-primary').click();
-    expect(onPromoteToTask).toHaveBeenCalledWith('branch-primary');
+    expect(screen.queryByTestId('mindmap-promote-branch-primary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mindmap-status-branch-primary')).toBeInTheDocument();
   });
 
   it('uses persisted taskDate before the loaded task list lookup', () => {

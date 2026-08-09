@@ -95,8 +95,8 @@ tasks:
       10. `grep "df_ai_chat_store" src/hooks/useAiSession.ts src/components/AIChat.tsx src/components/FloatingAIPanel.tsx` — localStorage key 兼容 (不能改)
 
       ## 行为验证 (独立)
-      1. 跑 `npm run dev:all` (后台) 30s, 用 `curl http://localhost:3000` 看 vite 起来
-      2. `curl http://localhost:3003/api/health` 看后端健康
+      1. 跑 `npm run dev:all` (后台) 30s, 用 `curl http://localhost:47831` 看 vite 起来
+      2. `curl http://localhost:47832/api/health` 看后端健康
       3. 杀掉 vite/server 进程
       4. **不要截图** (没 GUI)
 
@@ -253,8 +253,8 @@ tasks:
       1. 启 `npm run dev:all` (后台, 30s 后杀):
          - `npm run dev:all &` (后台) — 或拆 `npm run server &` + `npm run dev &`
          - sleep 5
-         - `curl http://localhost:3003/api/health` (或 `curl http://localhost:3000`) 看后端健康
-         - `curl -X POST http://localhost:3003/api/meetings/summarize -H 'Content-Type: application/json' -d '{"transcript":"Alex: 我们 Q3 要扩 Acme 客户","title":"Q3 GTM","participants":["Alex"]}'` — 走通 (或返回友好错误如果 model 未配)
+         - `curl http://localhost:47832/api/health` (或 `curl http://localhost:47831`) 看后端健康
+         - `curl -X POST http://localhost:47832/api/meetings/summarize -H 'Content-Type: application/json' -d '{"transcript":"Alex: 我们 Q3 要扩 Acme 客户","title":"Q3 GTM","participants":["Alex"]}'` — 走通 (或返回友好错误如果 model 未配)
          - 杀掉 server 进程 (`pkill -f "tsx server"`)
       2. **不要截图** (没 GUI)
 

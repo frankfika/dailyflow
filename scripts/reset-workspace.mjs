@@ -19,9 +19,9 @@
  *      doesn't fall back to WorkspaceSetup on the next run.
  *
  * Run with: `node scripts/reset-workspace.mjs`
- * Default port: 3003. Override with `DAILYFLOW_PORT=...`.
+ * Default port: 47832. Override with `DAILYFLOW_PORT=...`.
  */
-const PORT = process.env.DAILYFLOW_PORT ?? '3003';
+const PORT = process.env.DAILYFLOW_PORT ?? '47832';
 const BASE = `http://localhost:${PORT}`;
 
 async function api(path, init = {}) {

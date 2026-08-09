@@ -150,7 +150,7 @@ npm run dev:all
 npm run tauri dev
 ```
 
-Open <http://localhost:3000>, then follow the workspace setup flow. Build a production desktop bundle with:
+Open <http://localhost:47831>, then follow the workspace setup flow. Build a production desktop bundle with:
 
 ```bash
 npm run build

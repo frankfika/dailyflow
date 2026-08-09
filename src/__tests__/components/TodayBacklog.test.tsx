@@ -9,10 +9,13 @@ function renderBacklog(tasks: Array<{
   title: string;
   status: 'todo' | 'done' | 'migrated';
   deadline?: string;
-}>, focusTaskIds: string[] = []) {
+  spaceId?: string;
+  originMindmapId?: string;
+}>, focusTaskIds: string[] = [], withPlanning = false) {
   return render(
     <TodayBacklog
       tasks={tasks}
+      planningGroups={withPlanning ? [{ id: 'mm-1', mindmapId: 'mm-1', spaceId: 'space-1', title: 'Launch plan', taskIds: tasks.map(task => task.id), completedTaskIds: tasks.filter(task => task.status === 'done').map(task => task.id) }] : []}
       selectedDate="2026-07-28"
       categories={[]}
       focusTaskIds={focusTaskIds}
@@ -31,6 +34,14 @@ function renderBacklog(tasks: Array<{
 }
 
 describe('TodayBacklog completion flow', () => {
+  it('shows mindmap hierarchy above tasks and exposes navigation', () => {
+    renderBacklog([{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'mm-1' }], [], true);
+
+    expect(screen.getByTestId('today-planning')).toBeInTheDocument();
+    expect(screen.getByText('Mind maps sit above tasks')).toBeInTheDocument();
+    expect(screen.getAllByText('Launch plan')).toHaveLength(2);
+    expect(screen.getByTestId('task-card-space-binding-planned')).toHaveTextContent('Launch plan');
+  });
   it('keeps a completed focus task visible and advances focus progress', () => {
     renderBacklog(
       [{ id: 'focus-done', title: 'Ship the release', status: 'done' }],

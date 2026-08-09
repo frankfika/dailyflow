@@ -121,7 +121,7 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     await updateMindMap(space.mindmapId, {
       nodes: [
         ...map.nodes,
-        { id: branchId, text: '准备BP #投资人', position: { x: 1, y: 0 }, kind: 'branch' },
+        { id: branchId, text: '准备BP #投资人', tags: ['法务'], position: { x: 1, y: 0 }, kind: 'branch' },
       ],
       edges: [...map.edges, { id: 'e1', source: map.rootId, target: branchId }],
     });
@@ -138,6 +138,7 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     expect(res.body.task.originNodeId).toBe(branchId);
     // The user-supplied tag (#投资人) is preserved in the task tags.
     expect(res.body.task.tags).toContain('投资人');
+    expect(res.body.task.tags).toContain('法务');
     // The new task id starts with "t_".
     expect(res.body.task.id.startsWith('t_')).toBe(true);
     // The node was flipped to kind: 'task' with the new taskId.

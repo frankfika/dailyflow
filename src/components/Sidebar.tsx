@@ -26,9 +26,9 @@ import { getTodayStr } from '../utils/tagColors';
  *  - ≤ 640px (mobile):   hidden by default; full 230px overlay with backdrop
  *                        on top, click outside / Esc / nav-click closes
  *  - 641-1024px (tablet): icon-only 60px strip by default; click icon or
- *                        hover expands to 230px overlay; Esc / outside-click
- *                        collapses back to 60px (NOT fully hidden, so the
- *                        user always sees the icon strip)
+ *                        hover expands to 230px overlay. Mind Map keeps the
+ *                        full navigation visible because it already owns a
+ *                        second, map-specific sidebar.
  *  - > 1024px (desktop): 230px in flow; toggle hides via margin-left
  *                        (matches pre-audit behaviour, owned by App.tsx)
  *
@@ -215,7 +215,13 @@ export function Sidebar({
 
   const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
     setActiveTab(tab);
-    if (isMobile || isTablet) {
+    if (tab === 'mindmap' && !isMobile) {
+      // DailyFlow's default desktop window can land exactly on the tablet
+      // breakpoint. Auto-collapsing here made the global navigation appear
+      // to vanish as soon as users entered Mind Map.
+      setHoverExpanded(false);
+      setIsSidebarOpen(true);
+    } else if (isMobile || isTablet) {
       setHoverExpanded(false);
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
     }
