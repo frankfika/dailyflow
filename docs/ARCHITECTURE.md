@@ -54,7 +54,7 @@ dailyflow/
 │   ├── api/                    # API 客户端
 │   └── types/                  # TypeScript 类型
 ├── server/                     # 后端代码 (Express + TypeScript)
-│   ├── index.ts                # 服务器入口 (端口 3003)
+│   ├── index.ts                # 服务器入口 (端口 47832)
 │   ├── routes/                 # API 路由
 │   │   ├── files.ts
 │   │   ├── tasks.ts
@@ -253,8 +253,8 @@ CREATE VIRTUAL TABLE task_search USING fts5(title, body, tags);
 npm run dev:all
 
 # 或分别启动
-npm run dev      # 前端 (Vite, 端口 3000)
-npm run server   # 后端 (Express, 端口 3003)
+npm run dev      # 前端 (Vite, 端口 47831)
+npm run server   # 后端 (Express, 端口 47832)
 
 # 启动 Tauri 桌面应用
 npm run tauri dev

@@ -287,7 +287,7 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
     //    node sits under any ancestor `kind: 'tag'` node, those
     //    labels flow down into the task's tag list.
     const inheritedTags = getInheritedTagsFromMap(map, node.id);
-    const userTags = extractUserTags(node.text);
+    const userTags = [...(node.tags ?? []), ...extractUserTags(node.text)];
     // De-dup inherited vs user tags (case-insensitive, first wins).
     const seen = new Set<string>();
     const mergedTags: string[] = [];

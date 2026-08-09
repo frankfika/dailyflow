@@ -67,7 +67,7 @@ test.describe('Notes focus mode (default layout)', () => {
    * test starts from a known default.
    */
   async function openNotesTab(page: import('@playwright/test').Page): Promise<void> {
-    await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
     // Wipe any stored layout so the test starts from the actual
     // loadLayout() default, not whatever a previous test / dev
     // session left in localStorage.

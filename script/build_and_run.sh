@@ -12,6 +12,7 @@ APP_BINARY="$APP_BUNDLE/Contents/MacOS/$PROCESS_NAME"
 
 pkill -x "$PROCESS_NAME" >/dev/null 2>&1 || true
 pkill -f '/DailyFlow\.app/Contents/Resources/.*/dist-server/index\.cjs' >/dev/null 2>&1 || true
+pkill -f '/DailyFlow\.app/Contents/Resources/.*/dist-server/node' >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
 
@@ -21,7 +22,14 @@ case "$MODE" in
     exit 0
     ;;
   run|--logs|logs|--telemetry|telemetry|--verify|verify)
-    npm run tauri -- build --bundles app
+    if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+      npm run tauri -- build --bundles app
+    else
+      # Local runs do not need updater artifacts. Disabling them avoids a
+      # false build failure when the repository contains the updater public
+      # key but this machine (correctly) does not have the release private key.
+      npm run tauri -- build --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+    fi
     ;;
   *)
     echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2

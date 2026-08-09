@@ -18,21 +18,13 @@ import {
   type MindMap,
   type MindMapEdge,
   type MindMapNode,
-  type MindMapNodeKind,
 } from '../../api/client';
 import { MindMapCanvas } from './MindMapCanvas';
 import { MindMapList } from './MindMapList';
-import { layoutMindMap, toMarkdown } from './layout';
+import { layoutMindMap } from './layout';
 import { MINDMAP_TEMPLATES } from './templates';
-import { NodeContextMenu, type NodeContextMenuTaskOption } from './NodeContextMenu';
+import { usePromoteNodeToTask } from '../../hooks/useMindMapActions';
 import {
-  useLinkNodeToTask,
-  usePromoteNodeToTask,
-  useUpdateNodeKind,
-} from '../../hooks/useMindMapActions';
-import {
-  Clipboard,
-  Check,
   Network,
   Undo2,
   Redo2,
@@ -42,8 +34,6 @@ import {
   Upload,
   CheckCircle2,
   ListChecks,
-  Maximize2,
-  Minimize2,
 } from 'lucide-react';
 
 interface MindMapViewProps {
@@ -93,8 +83,6 @@ interface MindMapViewProps {
    * date). Required to enable the "Open task" link on kind: 'task' nodes.
    */
   onOpenTask?: (taskId: string, date: string) => void;
-  /** Lets the app shell remove global chrome while the canvas is immersive. */
-  onImmersiveChange?: (immersive: boolean) => void;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
@@ -151,7 +139,6 @@ export function MindMapView({
   todayDate,
   linkableTasks = [],
   onOpenTask,
-  onImmersiveChange,
 }: MindMapViewProps) {
   const [maps, setMaps] = useState<MindMap[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -162,8 +149,6 @@ export function MindMapView({
   const [isMapLoading, setIsMapLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
-  const [didCopyMarkdown, setDidCopyMarkdown] = useState(false);
-  const [immersive, setImmersive] = useState(false);
   const [pendingNodeDelete, setPendingNodeDelete] = useState<string | null>(null);
   const flushSaveRef = useRef<(id: string) => Promise<MindMap | null>>(async () => null);
   const rebasePendingSaveRef = useRef<(map: MindMap) => MindMap>((map) => map);
@@ -172,15 +157,6 @@ export function MindMapView({
     expected: Partial<MindMapNode>,
     patch: Partial<MindMapNode>,
   ) => void>(() => undefined);
-
-  // Phase 2: right-click context menu state. We keep the node id and
-  // cursor coords here so the menu can position itself outside the
-  // canvas. The menu handles its own close on outside click / Escape.
-  const [contextMenu, setContextMenu] = useState<{
-    nodeId: string;
-    kind: MindMapNodeKind;
-    position: { x: number; y: number };
-  } | null>(null);
 
   // Phase 2: the date the active mind map was "born" on. We use it as
   // the default `source_date` when promoting a node to a task. Falls
@@ -195,12 +171,8 @@ export function MindMapView({
     return todayDate;
   }, [activeMap, todayDate]);
 
-  // Phase 2: tanstack-query mutations for the right-click actions. We
-  // keep them inside the view so the onSuccess handlers can update
-  // local map state (no extra round-trip).
   const promoteMut = usePromoteNodeToTask();
-  const linkMut = useLinkNodeToTask();
-  const setKindMut = useUpdateNodeKind();
+  const ensureTaskInFlightRef = useRef<Set<string>>(new Set());
 
   const resolveNodeTaskDate = useCallback(
     (node: MindMapNode): string | undefined =>
@@ -246,62 +218,61 @@ export function MindMapView({
     [language, resolveNodeTaskDate, showToast],
   );
 
-  const handleContextMenu = useCallback(
-    (nodeId: string, position: { x: number; y: number }) => {
-      if (!activeMap) return;
-      const target = activeMap.nodes.find((n) => n.id === nodeId);
-      if (!target) return;
-      const kind = target.kind ?? (target.id === activeMap.rootId ? 'root' : 'branch');
-      if (kind === 'root') return;
-      setContextMenu({
-        nodeId,
-        kind,
-        position,
-      });
+  const handleLinkedNodeTagsChange = useCallback(
+    async (node: MindMapNode, tags: string[]) => {
+      if (!node.taskId) return;
+      const date = resolveNodeTaskDate(node);
+      if (!date) {
+        showToast(language === 'zh' ? '找不到关联任务所在日期' : 'Linked task date is missing', 'error');
+        return;
+      }
+      try {
+        await tasksApi.edit(node.taskId, date, { tags });
+      } catch (error) {
+        rollbackNodeRef.current(node.id, { tags }, { tags: node.tags });
+        showToast(language === 'zh' ? '标签同步失败，已回滚' : 'Tag sync failed; node reverted', 'error');
+        console.error('[mindmap] linked task tags sync failed:', error);
+      }
     },
-    [activeMap],
+    [language, resolveNodeTaskDate, showToast],
   );
 
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
-
-  const handlePromoteNodes = useCallback(async (nodeIds: string[]) => {
-    if (!activeMap || nodeIds.length === 0) return;
+  const handleEnsureNodeTask = useCallback(async (nodeId: string) => {
+    const current = activeMapRef.current;
+    if (!current || nodeId === current.rootId) return;
+    const currentNode = current.nodes.find((node) => node.id === nodeId);
+    if (!currentNode || currentNode.taskId || ensureTaskInFlightRef.current.has(nodeId)) return;
     if (!activeMapSourceDate) {
       showToast(
         language === 'zh'
-          ? '需要先知道今天的日期才能转为待办'
-          : 'Need today\'s date to promote a node',
+          ? '需要先知道今天的日期才能创建任务'
+          : 'Need today\'s date to create the task',
         'error',
       );
       return;
     }
+    ensureTaskInFlightRef.current.add(nodeId);
     try {
-      await flushSaveRef.current(activeMap.id);
-      let updated = activeMap;
-      let promoted = 0;
-      for (const nodeId of nodeIds) {
-        const node = updated.nodes.find((item) => item.id === nodeId);
-        if (!node || node.id === updated.rootId || (node.kind ?? 'branch') !== 'branch') continue;
-        updated = await promoteMut.mutateAsync({
-          mapId: activeMap.id,
-          nodeId,
-          date: activeMapSourceDate,
-          context: activeContext,
-        });
-        promoted += 1;
-      }
+      const persisted = await flushSaveRef.current(current.id);
+      const savedNode = persisted?.nodes.find((node) => node.id === nodeId);
+      if (savedNode?.taskId) return;
+      const updated = await promoteMut.mutateAsync({
+        mapId: current.id,
+        nodeId,
+        date: activeMapSourceDate,
+        context: activeContext,
+      });
       const rebased = rebasePendingSaveRef.current(updated);
+      activeMapRef.current = rebased;
       setActiveMap(rebased);
       setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
-      showToast(
-        language === 'zh' ? `已将 ${promoted} 个节点设为任务` : `${promoted} node(s) promoted`,
-        'success',
-      );
-    } catch {
-      showToast(language === 'zh' ? '转为待办失败' : 'Failed to promote', 'error');
+    } catch (error) {
+      showToast(language === 'zh' ? '节点已保存，但同步到 Today 失败' : 'Node saved, but Today sync failed', 'error');
+      console.error('[mindmap] ensure node task failed:', error);
+    } finally {
+      ensureTaskInFlightRef.current.delete(nodeId);
     }
   }, [
-    activeMap,
     activeMapSourceDate,
     activeContext,
     promoteMut,
@@ -309,15 +280,12 @@ export function MindMapView({
     language,
   ]);
 
-  const handlePromoteNode = useCallback(() => {
-    if (contextMenu) void handlePromoteNodes([contextMenu.nodeId]);
-  }, [contextMenu, handlePromoteNodes]);
-
-  const handleDeleteNode = useCallback(async (taskPolicy: 'keep-tasks' | 'delete-tasks') => {
+  const handleDeleteNode = useCallback(async () => {
     if (!activeMap || !pendingNodeDelete) return;
     try {
       await flushSaveRef.current(activeMap.id);
-      const updated = await mindmapsApi.deleteNodeSubtree(activeMap.id, pendingNodeDelete, taskPolicy);
+      // A non-root node is the Task, so deletion has one clear meaning.
+      const updated = await mindmapsApi.deleteNodeSubtree(activeMap.id, pendingNodeDelete, 'delete-tasks');
       setActiveMap(updated);
       setMaps((current) => current.map((map) => map.id === updated.id ? updated : map));
       setPendingNodeDelete(null);
@@ -327,65 +295,6 @@ export function MindMapView({
       console.error('[mindmap] delete node failed:', error);
     }
   }, [activeMap, language, pendingNodeDelete, showToast]);
-
-  const handleLinkNodeToTask = useCallback(
-    async (taskId: string, date: string) => {
-      if (!activeMap || !contextMenu) return;
-      try {
-        await flushSaveRef.current(activeMap.id);
-        const updated = await linkMut.mutateAsync({
-          mapId: activeMap.id,
-          nodeId: contextMenu.nodeId,
-          taskId,
-          date,
-        });
-        const rebased = rebasePendingSaveRef.current(updated);
-        setActiveMap(rebased);
-        setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
-        showToast(language === 'zh' ? '已关联到 Task' : 'Linked to task', 'success');
-      } catch {
-        showToast(language === 'zh' ? '关联失败' : 'Failed to link', 'error');
-      }
-    },
-    [activeMap, contextMenu, linkMut, showToast, language],
-  );
-
-  const handleSetNodeTag = useCallback(async () => {
-    if (!activeMap || !contextMenu) return;
-    const target = activeMap.nodes.find((n) => n.id === contextMenu.nodeId);
-    if (!target) return;
-    try {
-      await flushSaveRef.current(activeMap.id);
-      const updated = await setKindMut.mutateAsync({
-        mapId: activeMap.id,
-        nodeId: contextMenu.nodeId,
-        kind: 'tag',
-        tag: target.text,
-      });
-      const rebased = rebasePendingSaveRef.current(updated);
-      setActiveMap(rebased);
-      setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
-    } catch {
-      showToast(language === 'zh' ? '标记 Tag 失败' : 'Failed to mark as tag', 'error');
-    }
-  }, [activeMap, contextMenu, setKindMut, showToast, language]);
-
-  const handleUnclassifyNode = useCallback(async () => {
-    if (!activeMap || !contextMenu) return;
-    try {
-      await flushSaveRef.current(activeMap.id);
-      const updated = await setKindMut.mutateAsync({
-        mapId: activeMap.id,
-        nodeId: contextMenu.nodeId,
-        kind: 'branch',
-      });
-      const rebased = rebasePendingSaveRef.current(updated);
-      setActiveMap(rebased);
-      setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
-    } catch {
-      showToast(language === 'zh' ? '取消分类失败' : 'Failed to unclassify', 'error');
-    }
-  }, [activeMap, contextMenu, setKindMut, showToast, language]);
 
   // Undo / redo — we keep two stacks keyed by map id so switching maps
   // doesn't lose history. Coalesce rapid changes (typing, dragging)
@@ -827,22 +736,6 @@ export function MindMapView({
     return { done, total };
   }, [activeMap]);
 
-  useEffect(() => {
-    if (!immersive) return;
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      setImmersive(false);
-    };
-    window.addEventListener('keydown', onEscape, { capture: true });
-    return () => window.removeEventListener('keydown', onEscape, { capture: true });
-  }, [immersive]);
-
-  useEffect(() => {
-    onImmersiveChange?.(immersive);
-    return () => onImmersiveChange?.(false);
-  }, [immersive, onImmersiveChange]);
-
   // Phase 2: task mirror. Whenever the `linkableTasks` list changes
   // (the parent refetched tasks, the user promoted a new node, the
   // task title was edited in TodayView), we look at each `kind: 'task'`
@@ -1020,26 +913,6 @@ export function MindMapView({
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, searchOpen, cycleMatch]);
 
-  const handleCopyMarkdown = useCallback(async () => {
-    if (!activeMap) return;
-    const md = toMarkdown(activeMap);
-    try {
-      await navigator.clipboard.writeText(md);
-      setDidCopyMarkdown(true);
-      showToast(
-        language === 'zh' ? '已复制为 Markdown' : 'Copied as Markdown',
-        'success',
-      );
-      setTimeout(() => setDidCopyMarkdown(false), 1500);
-    } catch (err) {
-      console.error('[mindmap] clipboard write failed:', err);
-      showToast(
-        language === 'zh' ? '复制失败' : 'Copy failed',
-        'error',
-      );
-    }
-  }, [activeMap, language, showToast]);
-
   const handleCreate = useCallback(async () => {
     try {
       const created = await mindmapsApi.create({ title: '' });
@@ -1195,20 +1068,18 @@ export function MindMapView({
   }, [pendingDelete, activeId, language, showToast]);
 
   return (
-    <div className={`flex h-full min-h-0 w-full overflow-hidden bg-background ${immersive ? 'fixed inset-0 z-[100]' : ''}`} data-immersive={immersive}>
-      {!immersive && (
-        <MindMapList
-          maps={visibleMaps}
-          activeId={activeId}
-          language={language}
-          isLoading={isListLoading}
-          onSelect={(id) => setActiveId(id)}
-          onCreate={handleCreate}
-          onDelete={handleDelete}
-          onImport={() => fileInputRef.current?.click()}
-          onExport={handleExport}
-        />
-      )}
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-background" data-immersive="false">
+      <MindMapList
+        maps={visibleMaps}
+        activeId={activeId}
+        language={language}
+        isLoading={isListLoading}
+        onSelect={(id) => setActiveId(id)}
+        onCreate={handleCreate}
+        onDelete={handleDelete}
+        onImport={() => fileInputRef.current?.click()}
+        onExport={handleExport}
+      />
       <div className="relative min-w-0 flex-1">
         {loadError ? (
           <ErrorPanel
@@ -1243,7 +1114,7 @@ export function MindMapView({
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col">
-            <header className={`flex shrink-0 items-center gap-2 border-border/60 bg-surface/80 px-4 py-2.5 backdrop-blur-xl ${immersive ? 'absolute left-1/2 top-3 z-30 w-[min(760px,calc(100%-32px))] -translate-x-1/2 rounded-xl border shadow-lg' : 'border-b'}`}>
+            <header className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-surface/80 px-4 py-2.5 backdrop-blur-xl">
               {searchOpen ? (
                 <div className="flex flex-1 items-center gap-1 rounded-md border border-[var(--color-accent)]/40 bg-white/95 px-2 py-1">
                   <Search className="h-3.5 w-3.5 text-text-muted" />
@@ -1341,34 +1212,6 @@ export function MindMapView({
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
-              <button
-                type="button"
-                onClick={handleCopyMarkdown}
-                className="flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-xs font-medium text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
-                title={language === 'zh' ? '复制为 Markdown' : 'Copy as Markdown'}
-                data-testid="mindmap-copy-markdown"
-              >
-                {didCopyMarkdown ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" />
-                    {language === 'zh' ? '已复制' : 'Copied'}
-                  </>
-                ) : (
-                  <>
-                    <Clipboard className="h-3.5 w-3.5" />
-                    {language === 'zh' ? '复制 Markdown' : 'Copy Markdown'}
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setImmersive((value) => !value)}
-                className="rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
-                title={immersive ? (language === 'zh' ? '退出沉浸模式 (Esc)' : 'Exit immersive mode (Esc)') : (language === 'zh' ? '沉浸模式' : 'Immersive mode')}
-                data-testid="mindmap-immersive-toggle"
-              >
-                {immersive ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-              </button>
             </header>
             <div className="min-h-0 flex-1">
               <MindMapCanvas
@@ -1381,12 +1224,12 @@ export function MindMapView({
                 focusedMatchId={focusedMatchId}
                 onCycleMatch={cycleMatch}
                 reLayoutVersion={reLayoutVersion}
-                onNodeContextMenu={handleContextMenu}
                 onNodeOpenTask={onOpenTask}
                 taskSourceDateByNodeId={taskSourceDateByNodeId}
                 onLinkedNodeTitleChange={handleLinkedNodeTitleChange}
+                onLinkedNodeTagsChange={handleLinkedNodeTagsChange}
                 onLinkedNodeStatusChange={handleLinkedNodeStatusChange}
-                onPromoteNodes={(nodeIds) => void handlePromoteNodes(nodeIds)}
+                onEnsureNodeTask={(nodeId) => void handleEnsureNodeTask(nodeId)}
                 onDeleteNodeRequest={setPendingNodeDelete}
               />
             </div>
@@ -1407,31 +1250,14 @@ export function MindMapView({
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
-      {contextMenu && (
-        <NodeContextMenu
-          open={!!contextMenu}
-          position={contextMenu.position}
-          kind={contextMenu.kind}
-          language={language}
-          taskOptions={linkableTasks as ReadonlyArray<NodeContextMenuTaskOption>}
-          onPromote={handlePromoteNode}
-          onLink={handleLinkNodeToTask}
-          onSetTag={handleSetNodeTag}
-          onUnclassify={handleUnclassifyNode}
-          onClose={closeContextMenu}
-        />
-      )}
       {pendingNodeDelete && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="mindmap-delete-node-dialog">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-white/95 p-5 shadow-2xl">
             <h3 className="text-base font-semibold text-text-heading">{language === 'zh' ? '删除节点' : 'Delete node'}</h3>
-            <p className="mt-2 text-sm leading-6 text-text-muted">{language === 'zh' ? '该节点及其子分支会被删除。关联的任务要如何处理？' : 'This node and its branch will be deleted. What should happen to linked tasks?'}</p>
+            <p className="mt-2 text-sm leading-6 text-text-muted">{language === 'zh' ? '该任务及其子任务会从导图和 Today 中删除。' : 'This task and its subtasks will be removed from the map and Today.'}</p>
             <div className="mt-5 flex flex-col gap-2">
-              <button type="button" onClick={() => void handleDeleteNode('keep-tasks')} className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text-heading hover:bg-black/[0.03]" data-testid="mindmap-delete-keep-tasks">
-                {language === 'zh' ? '保留 Tasks，并解除关联' : 'Keep tasks and unlink'}
-              </button>
-              <button type="button" onClick={() => void handleDeleteNode('delete-tasks')} className="rounded-lg bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white hover:opacity-90" data-testid="mindmap-delete-with-tasks">
-                {language === 'zh' ? '同时删除关联 Tasks' : 'Delete linked tasks too'}
+              <button type="button" onClick={() => void handleDeleteNode()} className="rounded-lg bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white hover:opacity-90" data-testid="mindmap-delete-with-tasks">
+                {language === 'zh' ? '删除任务' : 'Delete task'}
               </button>
               <button type="button" onClick={() => setPendingNodeDelete(null)} className="rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-black/[0.03]">
                 {language === 'zh' ? '取消' : 'Cancel'}

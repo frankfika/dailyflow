@@ -94,8 +94,8 @@ dailyflow/
 npm run dev:all
 
 # 或分别启��
-npm run dev      # ��端 (端口 3000)
-npm run server   # 后端 (端口 3003)
+npm run dev      # 前端 (端口 47831)
+npm run server   # 后端 (端口 47832)
 ```
 
 ### 测试
@@ -105,9 +105,9 @@ npm run server   # 后端 (端口 3003)
 bash test-api.sh
 
 # 手动���试
-curl http://localhost:3003/health
-curl http://localhost:3003/api/config
-curl http://localhost:3003/api/tasks/2026-05-04
+curl http://localhost:47832/health
+curl http://localhost:47832/api/config
+curl http://localhost:47832/api/tasks/2026-05-04
 ```
 
 ### 配置
@@ -156,7 +156,7 @@ curl http://localhost:3003/api/tasks/2026-05-04
 
 ✅ **Phase 1 已完��** - ��有后端��础架构��核心 API 已实��并测���通过。
 
-后端服务��运行��� `http://localhost:3003`，所有 API 端点��常工���，可以开始��端集成。
+后端服务��运行��� `http://localhost:47832`，所有 API 端点��常工���，可以开始��端集成。
 
 ---
 

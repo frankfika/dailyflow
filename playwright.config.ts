@@ -14,7 +14,7 @@ export default defineConfig({
   testIgnore: process.env.CI ? ['**/mindmap-visual.spec.ts'] : [],
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:47831',
     trace: 'on-first-retry',
   },
   projects: [
@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev:all',
-    url: 'http://localhost:3000',
+    url: 'http://localhost:47831',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

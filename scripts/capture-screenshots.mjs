@@ -15,7 +15,7 @@ const rootDir = join(__dirname, '..');
 const assetsDir = join(rootDir, 'docs', 'assets');
 
 const VIEWPORT = { width: 1280, height: 800 };
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:47831';
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));

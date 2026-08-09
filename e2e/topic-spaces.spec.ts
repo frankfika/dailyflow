@@ -51,7 +51,7 @@ test('topic spaces: 全部 / 未分类 pills, create flow, auto-select', async (
     consoleLog.push({ type: 'pageerror', text: String(err) });
   });
 
-  const cfgRes = await request.post('http://localhost:3000/api/config', {
+  const cfgRes = await request.post('http://localhost:47831/api/config', {
     data: {
       workspaceRoot: ws,
       activeWorkspaceId: 'ts',
@@ -65,7 +65,7 @@ test('topic spaces: 全部 / 未分类 pills, create flow, auto-select', async (
   }
 
   // 1. Open the MindMap tab.
-  await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
   await page.getByTestId('nav-mindmap').click();
   await page.waitForTimeout(500);
 
@@ -134,4 +134,3 @@ test('topic spaces: 全部 / 未分类 pills, create flow, auto-select', async (
 
   await expect(newTab).toHaveAttribute('data-active', 'true');
 });
-

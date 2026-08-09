@@ -26,7 +26,7 @@ router.post('/configure', async (req, res) => {
 
 router.post('/auth/start', async (_req, res) => {
   try {
-    const port = Number(process.env.PORT ?? 3003);
+    const port = Number(process.env.PORT ?? 47832);
     const redirectUri = `http://127.0.0.1:${port}/api/google-calendar/auth/callback`;
     res.json(await startGoogleCalendarAuthorization(redirectUri));
   } catch (error: any) {

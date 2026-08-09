@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 const API_BASE = import.meta.env.DEV
   ? '/api'
-  : `${import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:3003'}/api`;
+  : `${import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:47832'}/api`;
 
 /**
  * Build an Error that carries the HTTP status code so call sites can decide
@@ -1042,6 +1042,8 @@ export const MINDMAP_NODE_STATUSES: readonly MindMapNodeStatus[] = [
 export interface MindMapNode {
   id: string;
   text: string;
+  /** User-facing task labels. Every non-root node behaves like a task. */
+  tags?: string[];
   color?: MindMapNodeColor;
   position: { x: number; y: number };
   /** When true, the node's subtree is collapsed in the canvas. */

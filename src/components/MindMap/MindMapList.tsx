@@ -55,7 +55,7 @@ export function MindMapList({
   onExport,
 }: MindMapListProps) {
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface/40">
+    <div className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface/40" data-testid="mindmap-list">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2.5">
         <div className="flex items-center gap-2 text-text-muted">
           <Network className="h-4 w-4" />

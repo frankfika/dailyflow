@@ -202,7 +202,7 @@ DailyFlow 是一个本地优先的每日任务管理工具，基于 Markdown 驱
 
 ## Tech Stack
 - **Frontend**: React 19 + TypeScript + Tailwind CSS + Tauri v2
-- **Backend**: Node.js + Express (port 3003)
+- **Backend**: Node.js + Express (port 47832)
 - **Storage**: 本地 Markdown 文件系统
 - **AI**: OpenAI-compatible API（DeepSeek、Moonshot、MiniMax、Anthropic 等）
 

@@ -25,6 +25,8 @@ export const DEFAULT_MINDMAP_NODE_KIND: MindMapNodeKind = 'branch';
 export interface MindMapNode {
   id: string;
   text: string;
+  /** User-facing task labels stored directly on the node. */
+  tags?: string[];
   /** Optional tailwind-style color key, see MINDMAP_NODE_COLORS. */
   color?: MindMapNodeColor;
   /** x/y in canvas coordinates. */

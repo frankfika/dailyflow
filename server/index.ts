@@ -19,19 +19,23 @@ import diagnosticsRouter from './routes/diagnostics.js';
 import { v2Router } from './routes/v2/index.js';
 
 const app = express();
-const PORT = Number(process.env.PORT ?? 3003);
+const PORT = Number(process.env.PORT ?? 47832);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // 中间件
 // CORS: restrict to Tauri frontend origins and local dev server.
-// In development, allow any localhost origin so Vite's auto-incremented port
-// (3000, 3001, 3002, ...) doesn't break API calls.
+// Development uses a dedicated high port. The regex remains as a convenience
+// for local tooling that explicitly overrides the frontend port.
 const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:3001',
+  'http://localhost:47831',
   'http://localhost:5173',
   'https://localhost:5173',
   'tauri://localhost',
+  // Tauri v2's production custom protocol is exposed as a local HTTP(S)
+  // origin by WKWebView on macOS. Keep both schemes because the exact one
+  // depends on the platform/custom-protocol configuration.
+  'http://tauri.localhost',
+  'https://tauri.localhost',
 ];
 const LOCALHOST_ORIGIN_RE = /^https?:\/\/localhost(:\d+)?$/;
 app.use(cors({

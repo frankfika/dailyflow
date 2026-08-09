@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Check, ChevronDown, Clock3, Eye, Flame, Sparkles, Target, WandSparkles, X } from 'lucide-react';
+import { ArrowRight, Calendar, Check, ChevronDown, Clock3, Eye, Flame, Network, Sparkles, Target, WandSparkles, X } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 
 type Task = {
@@ -15,12 +15,27 @@ type Task = {
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  spaceId?: string;
+  originMindmapId?: string;
+  originNodeId?: string;
+  planOrder?: number;
 };
+
+export interface TodayPlanningGroup {
+  id: string;
+  mindmapId: string;
+  spaceId?: string;
+  title: string;
+  taskIds: string[];
+  completedTaskIds: string[];
+}
 
 type Filter = 'all' | 'today' | 'overdue' | 'upcoming';
 
 interface TodayBacklogProps {
   tasks: Task[];
+  planningGroups?: TodayPlanningGroup[];
+  onOpenPlanningGroup?: (group: TodayPlanningGroup) => void;
   selectedDate: string;
   categories: string[];
   focusTaskIds: string[];
@@ -85,6 +100,8 @@ function compareTasks(a: Task, b: Task, today: string): number {
 
 export function TodayBacklog({
   tasks,
+  planningGroups = [],
+  onOpenPlanningGroup,
   selectedDate,
   categories,
   focusTaskIds,
@@ -199,8 +216,68 @@ export function TodayBacklog({
     upcoming: language === 'zh' ? '接下来' : 'Upcoming',
   };
 
+  const planningGroupByTaskId = useMemo(() => {
+    const lookup = new Map<string, TodayPlanningGroup>();
+    for (const group of planningGroups) {
+      for (const taskId of group.taskIds) lookup.set(taskId, group);
+    }
+    return lookup;
+  }, [planningGroups]);
+
   return (
     <div className="today-backlog" data-testid="today-backlog">
+      <section className="today-planning" data-testid="today-planning">
+        <header className="today-planning-header">
+          <span className="today-planning-mark"><Network className="h-4 w-4" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="today-planning-eyebrow">{language === 'zh' ? '思维导图在任务之上' : 'Mind maps sit above tasks'}</p>
+            <h2 className="today-planning-title">{language === 'zh' ? '今日规划脉络' : "Today's planning map"}</h2>
+          </div>
+          <span className="today-planning-summary">
+            {planningGroups.length > 0
+              ? (language === 'zh' ? `${planningGroups.length} 张导图 · ${planningGroups.reduce((sum, group) => sum + group.taskIds.length, 0)} 个任务` : `${planningGroups.length} maps · ${planningGroups.reduce((sum, group) => sum + group.taskIds.length, 0)} tasks`)
+              : (language === 'zh' ? '尚无关联' : 'No links yet')}
+          </span>
+        </header>
+
+        {planningGroups.length > 0 ? (
+          <div className="today-planning-groups">
+            {planningGroups.map((group) => {
+              const groupTasks = group.taskIds
+                .map((taskId) => tasks.find((task) => task.id === taskId))
+                .filter((task): task is Task => Boolean(task));
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  className="today-planning-group"
+                  onClick={() => onOpenPlanningGroup?.(group)}
+                  data-testid={`today-planning-group-${group.id}`}
+                >
+                  <span className="today-planning-node"><Network className="h-3.5 w-3.5" /></span>
+                  <span className="today-planning-group-body">
+                    <span className="today-planning-group-title">{group.title}</span>
+                    <span className="today-planning-task-chain">
+                      {groupTasks.slice(0, 3).map((task) => (
+                        <span key={task.id} className={task.status === 'done' ? 'is-done' : ''}>{task.title}</span>
+                      ))}
+                      {groupTasks.length > 3 && <span>+{groupTasks.length - 3}</span>}
+                    </span>
+                  </span>
+                  <span className="today-planning-progress">{group.completedTaskIds.length}/{group.taskIds.length}</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-text-muted" />
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <button type="button" className="today-planning-empty" onClick={() => onOpenPlanningGroup?.({ id: '', mindmapId: '', title: '', taskIds: [], completedTaskIds: [] })}>
+            <span>{language === 'zh' ? '先在思维导图里拆解，再把可执行节点设为任务；关联后会自动出现在这里。' : 'Break work down in a mind map, then make actionable nodes into tasks. Linked work appears here automatically.'}</span>
+            <span className="today-planning-empty-action">{language === 'zh' ? '打开思维导图' : 'Open mind maps'} <ArrowRight className="h-3 w-3" /></span>
+          </button>
+        )}
+      </section>
+
       {/* Focus bar (sticky on desktop, collapsible on mobile) */}
       <section
         className={`today-focus-bar ${draggingTaskId ? 'ring-1 ring-accent/30 bg-accent/[0.03]' : ''}`}
@@ -335,6 +412,7 @@ export function TodayBacklog({
                     >
                       <TaskCard
                         task={task}
+                        spaceTitle={planningGroupByTaskId.get(task.id)?.title}
                         language={language}
                         categories={categories}
                         currentFileDate={today}
@@ -432,6 +510,7 @@ export function TodayBacklog({
                 >
                   <TaskCard
                     task={task}
+                    spaceTitle={planningGroupByTaskId.get(task.id)?.title}
                     language={language}
                     categories={categories}
                     currentFileDate={today}
@@ -516,6 +595,7 @@ export function TodayBacklog({
                   <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
                     <TaskCard
                       task={task}
+                      spaceTitle={planningGroupByTaskId.get(task.id)?.title}
                       language={language}
                       categories={categories}
                       currentFileDate={today}

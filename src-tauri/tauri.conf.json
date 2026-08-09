@@ -5,7 +5,7 @@
   "identifier": "com.dailyflow.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:47831",
     "beforeDevCommand": "npm run dev:all",
     "beforeBuildCommand": "npm run build && npm run build:server"
   },
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:3003 https://api.github.com https://api.pinata.cloud https://gateway.pinata.cloud https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.deepseek.com https://api.moonshot.cn https://api.minimax.chat https://open.bigmodel.cn https://dashscope.aliyuncs.com https://api.siliconflow.cn https://api.groq.com https://api.openrouter.ai https://api.baichuan-ai.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:47832 https://api.github.com https://api.pinata.cloud https://gateway.pinata.cloud https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.deepseek.com https://api.moonshot.cn https://api.minimax.chat https://open.bigmodel.cn https://dashscope.aliyuncs.com https://api.siliconflow.cn https://api.groq.com https://api.openrouter.ai https://api.baichuan-ai.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     }
   },
   "bundle": {

@@ -21,7 +21,7 @@ export default defineConfig(() => {
       // The Tauri shell is pinned to this URL. Vite's default behaviour is to
       // silently move to the next free port, which leaves the shell connected
       // to an unrelated service and presents as a blank window.
-      port: 3000,
+      port: 47831,
       strictPort: true,
       // Utility scripts at the project root (e.g. _demo-record.mjs,
       // webbridge-*.mjs) are tooling, not source — but Vite still
@@ -39,7 +39,7 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:3003',
+          target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:47832',
           changeOrigin: true,
         },
       },
@@ -47,21 +47,17 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: (id) => {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
-            if (id.includes('react-markdown') || id.includes('remark') || id.includes('mdast') || id.includes('micromark')) return 'markdown';
-            if (id.includes('lucide-react')) return 'lucide';
-            if (id.includes('@tanstack')) return 'tanstack';
-            if (id.includes('react') || id.includes('scheduler')) return 'react';
-            return 'vendor';
-          },
+          // Let Rollup preserve module evaluation order. The previous
+          // package-name splitter produced `vendor -> react -> vendor`, a
+          // circular chunk graph that Chrome tolerated but WKWebView could
+          // evaluate in the wrong order, leaving the packaged app blank
+          // before React mounted.
         },
         input: {
           main: path.resolve(__dirname, 'index.html'),
         },
       },
-      chunkSizeWarningLimit: 800,
+      chunkSizeWarningLimit: 1600,
     },
   };
 });

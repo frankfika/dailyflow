@@ -57,6 +57,10 @@ type Task = {
   // The server keeps it in memory for now (no markdown marker); the
   // list view filters by it and the unlink button clears it.
   spaceId?: string;
+  originMindmapId?: string;
+  originNodeId?: string;
+  parentTaskId?: string;
+  planOrder?: number;
 };
 
 async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
@@ -99,7 +103,6 @@ export default function App() {
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [showFloatingChat, setShowFloatingChat] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
-  const [mindMapImmersive, setMindMapImmersive] = useState(false);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -377,6 +380,43 @@ export default function App() {
     return Array.from(pool).sort();
   }, [tasksInActiveSpace, activeSpace]);
 
+  const todayPlanningGroups = useMemo(() => {
+    const claimedTaskIds = new Set<string>();
+    const groups = topicSpaces.map((space) => {
+      const groupTasks = tasks
+        .filter((task) => task.originMindmapId === space.mindmapId || task.spaceId === space.id)
+        .sort((a, b) => (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER));
+      groupTasks.forEach((task) => claimedTaskIds.add(task.id));
+      return {
+        id: space.mindmapId,
+        mindmapId: space.mindmapId,
+        spaceId: space.id,
+        title: space.title,
+        taskIds: groupTasks.map((task) => task.id),
+        completedTaskIds: groupTasks.filter((task) => task.status === 'done').map((task) => task.id),
+      };
+    }).filter((group) => group.taskIds.length > 0);
+
+    const orphanMaps = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!task.originMindmapId || claimedTaskIds.has(task.id)) continue;
+      const current = orphanMaps.get(task.originMindmapId) ?? [];
+      current.push(task);
+      orphanMaps.set(task.originMindmapId, current);
+    }
+    for (const [mindmapId, mapTasks] of orphanMaps) {
+      groups.push({
+        id: mindmapId,
+        mindmapId,
+        spaceId: undefined,
+        title: language === 'zh' ? `思维导图 ${mindmapId.slice(-6)}` : `Mind map ${mindmapId.slice(-6)}`,
+        taskIds: mapTasks.map((task) => task.id),
+        completedTaskIds: mapTasks.filter((task) => task.status === 'done').map((task) => task.id),
+      });
+    }
+    return groups;
+  }, [tasks, topicSpaces, language]);
+
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -642,7 +682,6 @@ export default function App() {
       } catch (e) {
         if (!cancelled) {
           console.error('Failed to load file list', e);
-          setLoadError('Failed to load files. Is the backend running?');
         }
       }
     };
@@ -656,7 +695,28 @@ export default function App() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const data = await filesApi.get(date);
+      // The packaged webview becomes interactive slightly before the bundled
+      // Node process has bound its socket. Keep the primary workspace in its
+      // loading state during that short window instead of requiring a manual
+      // retry on every cold launch.
+      const maxAttempts = import.meta.env.DEV ? 1 : 40;
+      let data: Awaited<ReturnType<typeof filesApi.get>> = null;
+      let loaded = false;
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          data = await filesApi.get(date);
+          loaded = true;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (revision !== loadRevisionRef.current) return;
+          if (attempt < maxAttempts) {
+            await new Promise(resolve => window.setTimeout(resolve, 200));
+          }
+        }
+      }
+      if (!loaded) throw lastError;
       if (revision !== loadRevisionRef.current) return;
       if (data) {
         setMarkdown(data.content);
@@ -1180,7 +1240,7 @@ export default function App() {
         onConfirm={handleConfirmRollover}
       />
 
-      {!mindMapImmersive && <Sidebar
+      <Sidebar
         language={language}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
@@ -1224,13 +1284,13 @@ export default function App() {
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
         onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
-      />}
+      />
 
       {/* AI Chat is available from every workspace surface. It used to be
           only reachable through the sidebar tab, which made it disappear
           while working in Notes, Inbox, Today, or Calendar. Keep a compact
           launcher and an overlay session so the current page stays visible. */}
-      {activeTab !== 'ai-chat' && !mindMapImmersive && (
+      {activeTab !== 'ai-chat' && (
         <>
           <AnimatePresence>
             {showFloatingChat && (
@@ -1277,9 +1337,9 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen && !mindMapImmersive ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
+      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
-        {!isSidebarOpen && !mindMapImmersive && (
+        {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 sm:hidden min-[1025px]:block"
@@ -1442,6 +1502,12 @@ export default function App() {
 
                   <TodayBacklog
                     tasks={todayTasks}
+                    planningGroups={todayPlanningGroups}
+                    onOpenPlanningGroup={(group) => {
+                      setActiveSpaceId(group.spaceId ?? null);
+                      setViewOverride('mindmap');
+                      setActiveTab('mindmap');
+                    }}
                     selectedDate={currentFileDate}
                     categories={categories}
                     focusTaskIds={focusTaskIds}
@@ -1545,7 +1611,7 @@ export default function App() {
                   transition={{ delay: 0.1 }}
                   className="flex h-full min-h-0 flex-col overflow-hidden"
                 >
-                  {!mindMapImmersive && <TopicTabs
+                  <TopicTabs
                     context={activeContext}
                     spaces={topicSpaces.map((s) => ({
                       id: s.id,
@@ -1558,10 +1624,10 @@ export default function App() {
                     onSelect={setActiveSpaceId}
                     onCreate={handleCreateTopic}
                     isLoading={topicSpacesQuery.isLoading}
-                  />}
+                  />
                   {/* Phase 2: view switcher (mindmap / list). Hidden for
                       "全部" / "未分类" where only the mindmap makes sense. */}
-                  {activeSpace && !mindMapImmersive && (
+                  {activeSpace && (
                     <div
                       className="flex shrink-0 items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-1"
                       data-testid="topic-space-view-switcher"
@@ -1591,7 +1657,7 @@ export default function App() {
                       tags to filter. The list view applies the filter
                       client-side; the mindmap view also uses it to
                       hide non-matching nodes. */}
-                  {activeSpace && !mindMapImmersive && spaceTagPool.length > 0 && activeView === 'list' && (
+                  {activeSpace && spaceTagPool.length > 0 && activeView === 'list' && (
                     <TagFilterRow
                       tags={spaceTagPool}
                       selected={tagFilter}
@@ -1649,7 +1715,6 @@ export default function App() {
                               }))
                         }
                         onOpenTask={handleOpenTask}
-                        onImmersiveChange={setMindMapImmersive}
                       />
                     )}
                   </div>
