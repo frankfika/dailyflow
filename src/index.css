@@ -361,6 +361,29 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 
 /* Sidebar nav item */
+.sidebar-reveal-button {
+  display: none;
+}
+
+.sidebar-collapsed-main {
+  margin-left: 0;
+}
+
+/* Tablet keeps a 60px navigation strip in front of the content. */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .sidebar-collapsed-main {
+    margin-left: 60px;
+  }
+}
+
+/* Mobile has no persistent strip, so it needs a floating reveal control.
+   Tablet already has a 60px compact strip and desktop navigation is permanent. */
+@media (max-width: 640px) {
+  .sidebar-reveal-button {
+    display: block;
+  }
+}
+
 .nav-item {
   transition: all 0.2s var(--ease-native);
 }
@@ -487,28 +510,29 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-planning-eyebrow { margin: 0; color: var(--color-text-muted); font-size: 0.64rem; font-weight: 600; }
 .today-planning-title { margin: 0.12rem 0 0; color: var(--color-text-heading); font-size: 0.9rem; font-weight: 650; }
 .today-planning-summary { color: var(--color-text-muted); font-size: 0.68rem; font-weight: 600; }
-.today-planning-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.45rem; }
+.today-planning-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.55rem; }
 .today-planning-group {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
   min-width: 0;
-  padding: 0.55rem 0.65rem;
+  padding: 0.55rem;
   border: 1px solid var(--color-border);
   border-radius: 0.6rem;
   background: color-mix(in srgb, var(--color-surface-elevated) 88%, transparent);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 }
-.today-planning-group:hover { border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border)); background: var(--color-surface-elevated); transform: translateY(-1px); }
-.today-planning-group-body { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.2rem; }
+.today-planning-group:hover { border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); background: var(--color-surface-elevated); }
+.today-planning-group-header { display: flex; min-width: 0; align-items: center; gap: 0.5rem; padding: 0.1rem 0.1rem 0.5rem; }
 .today-planning-group-title { overflow: hidden; color: var(--color-text-heading); font-size: 0.76rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.today-planning-task-chain { display: flex; min-width: 0; gap: 0.25rem; overflow: hidden; color: var(--color-text-muted); font-size: 0.62rem; white-space: nowrap; }
-.today-planning-task-chain span { max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; }
-.today-planning-task-chain span + span::before { content: '›'; margin-right: 0.25rem; color: var(--color-border-strong); }
-.today-planning-task-chain .is-done { text-decoration: line-through; opacity: 0.55; }
 .today-planning-progress { color: var(--color-text-muted); font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.today-planning-open-map { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.2rem; border-radius: 0.35rem; padding: 0.25rem 0.35rem; color: var(--color-accent); font-size: 0.64rem; font-weight: 650; }
+.today-planning-open-map:hover { background: var(--color-accent-light); }
+.today-planning-task-list { display: flex; flex-direction: column; gap: 0.15rem; }
+.today-planning-task { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr) auto; align-items: center; gap: 0.45rem; border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); padding: 0.42rem 0.2rem; }
+.today-planning-task-check { display: inline-flex; width: 1rem; height: 1rem; align-items: center; justify-content: center; border: 1px solid var(--color-border-strong); border-radius: 50%; color: white; }
+.today-planning-task-check:hover { border-color: var(--color-accent); }
+.today-planning-task.is-done .today-planning-task-check { border-color: var(--color-success); background: var(--color-success); }
+.today-planning-task-title { min-width: 0; overflow: hidden; color: var(--color-text-main); font-size: 0.7rem; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.today-planning-task.is-done .today-planning-task-title { color: var(--color-text-muted); text-decoration: line-through; }
+.today-planning-task-time { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--color-text-muted); font-size: 0.61rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .today-planning-empty { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px dashed var(--color-border-strong); border-radius: 0.6rem; background: transparent; padding: 0.65rem 0.75rem; color: var(--color-text-muted); font-size: 0.7rem; line-height: 1.45; text-align: left; cursor: pointer; }
 .today-planning-empty:hover { border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border)); color: var(--color-text-heading); }
 .today-planning-empty-action { display: inline-flex; align-items: center; gap: 0.3rem; flex: 0 0 auto; color: var(--color-accent); font-weight: 650; }

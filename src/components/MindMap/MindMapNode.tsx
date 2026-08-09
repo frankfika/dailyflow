@@ -1,18 +1,19 @@
 /**
  * A deliberately small mind-map node.
  *
- * Product model: the root is the topic; every other node is a task. Tags are
- * task metadata, not a separate node kind. Advanced storage fields remain
- * backward-compatible but are intentionally not exposed as competing modes.
+ * Product model: the root is the topic; ordinary branch nodes hold thinking
+ * structure; only nodes explicitly promoted/linked as `kind: task` are tasks.
  */
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import {
   CheckCircle2,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   Circle,
   ExternalLink,
+  ListTodo,
   Pencil,
   Plus,
   Rows3,
@@ -49,6 +50,7 @@ export interface MindMapNodeData extends Record<string, unknown> {
   onToggleCollapsed: (id: string) => void;
   onCommitTags?: (id: string, tags: string[]) => void;
   onCycleStatus: (id: string) => void;
+  onMakeTask?: (id: string) => void;
   onOpenTask?: (taskId: string, date: string) => void;
   // Legacy callbacks remain optional so old saved maps/tests stay compatible.
   onCycleColor?: (id: string) => void;
@@ -83,6 +85,8 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
   const [tagEditing, setTagEditing] = useState(false);
   const language = d.language ?? 'zh';
   const active = selected || d.isSelected;
+  const nodeKind: MindMapNodeKind = d.isRoot ? 'root' : (d.kind ?? 'branch');
+  const isTask = nodeKind === 'task';
 
   useEffect(() => {
     if (!d.isEditing) setDraft(d.text);
@@ -106,8 +110,6 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
 
   const commit = useCallback(() => {
     const next = draft.trim() || d.text;
-    // Always commit: for a newly-added node this is also the moment the
-    // parent creates its one corresponding Task.
     d.onCommitEdit(id, next);
   }, [draft, d, id]);
 
@@ -142,7 +144,7 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
   }, [draft, d.isEditing]);
 
   return (
-    <div className="relative" data-testid={`mindmap-node-${id}`} data-kind={d.isRoot ? 'root' : 'task'}>
+    <div className="relative" data-testid={`mindmap-node-${id}`} data-kind={nodeKind}>
       <div
         className={`group relative flex items-start gap-2 rounded-xl border bg-white/95 shadow-sm transition-[border-color,box-shadow] ${
           d.isRoot ? ROOT_CARD : TASK_CARD
@@ -153,8 +155,10 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
               ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20 shadow-md'
               : d.isSearchMatch
                 ? 'border-[var(--color-warning)]/50'
-                : 'border-border-strong hover:border-border-strong hover:shadow-md'
-        }`}
+                : isTask
+                  ? 'border-[var(--color-accent)]/35 hover:border-[var(--color-accent)]/60 hover:shadow-md'
+                  : 'border-border-strong hover:border-border-strong hover:shadow-md'
+        } ${isTask ? 'border-l-[3px] border-l-[var(--color-accent)]' : ''}`}
         onDoubleClick={(event) => {
           event.stopPropagation();
           d.onStartEdit(id);
@@ -163,7 +167,7 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
         <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-text-muted" />
         <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-text-muted" />
 
-        {!d.isRoot && (
+        {isTask && (
           <button
             type="button"
             onClick={(event) => {
@@ -199,7 +203,22 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
             </div>
           )}
 
-          {!d.isRoot && (d.tags ?? []).length > 0 && (
+          {isTask && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-medium text-text-muted" data-testid={`mindmap-task-meta-${id}`}>
+              <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-light)] px-1.5 py-0.5 text-[var(--color-accent)]">
+                <ListTodo className="h-3 w-3" />
+                {language === 'zh' ? '任务' : 'Task'}
+              </span>
+              {d.sourceDate && (
+                <span className="inline-flex items-center gap-1 tabular-nums">
+                  <CalendarDays className="h-3 w-3" />
+                  {d.sourceDate}
+                </span>
+              )}
+            </div>
+          )}
+
+          {isTask && (d.tags ?? []).length > 0 && (
             <div className="mt-1.5 flex max-w-[220px] flex-wrap gap-1" data-testid={`mindmap-tags-${id}`}>
               {d.tags.map((tag) => (
                 <span key={tag} className="rounded bg-black/[0.045] px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
@@ -218,7 +237,7 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
               d.onToggleCollapsed(id);
             }}
             className="nodrag -mr-1 mt-0.5 rounded p-0.5 text-text-muted hover:bg-black/5 hover:text-text-heading"
-            title={d.collapsed ? (language === 'zh' ? '展开子任务' : 'Expand subtasks') : (language === 'zh' ? '折叠子任务' : 'Collapse subtasks')}
+            title={d.collapsed ? (language === 'zh' ? '展开子节点' : 'Expand child nodes') : (language === 'zh' ? '折叠子节点' : 'Collapse child nodes')}
           >
             {d.collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
@@ -232,30 +251,35 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
           data-testid={`mindmap-actions-${id}`}
         >
           <button type="button" onClick={() => d.onAddChild(id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-main hover:bg-black/5" data-testid={`mindmap-add-child-${id}`}>
-            <Plus className="h-3.5 w-3.5" />{language === 'zh' ? '子任务' : 'Subtask'}
+            <Plus className="h-3.5 w-3.5" />{language === 'zh' ? '子节点' : 'Child'}
           </button>
           {!d.isRoot && (
-            <button type="button" onClick={() => d.onAddSibling(id)} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '同级任务' : 'Sibling task'}>
+            <button type="button" onClick={() => d.onAddSibling(id)} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '同级节点' : 'Sibling node'}>
               <Rows3 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {!d.isRoot && !isTask && d.onMakeTask && (
+            <button type="button" onClick={() => d.onMakeTask?.(id)} className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light)] px-2 py-1 text-[11px] font-medium text-[var(--color-accent)] hover:brightness-95" data-testid={`mindmap-make-task-${id}`}>
+              <ListTodo className="h-3.5 w-3.5" />{language === 'zh' ? '设为任务' : 'Make task'}
             </button>
           )}
           <button type="button" onClick={() => d.onStartEdit(id)} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '编辑标题' : 'Edit title'}>
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          {!d.isRoot && (
+          {isTask && (
             <button type="button" onClick={() => setTagEditing((value) => !value)} className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ${tagEditing ? 'bg-black/5 text-text-heading' : 'text-text-muted hover:bg-black/5 hover:text-text-heading'}`} data-testid={`mindmap-edit-tags-${id}`}>
               <Tags className="h-3.5 w-3.5" />{language === 'zh' ? '标签' : 'Tags'}
             </button>
           )}
           {!d.isRoot && (
-            <button type="button" onClick={() => d.onDelete(id)} className="rounded-md p-1 text-text-muted hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)]" title={language === 'zh' ? '删除任务' : 'Delete task'}>
+            <button type="button" onClick={() => d.onDelete(id)} className="rounded-md p-1 text-text-muted hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)]" title={language === 'zh' ? '删除节点' : 'Delete node'}>
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
       )}
 
-      {tagEditing && !d.isRoot && (
+      {tagEditing && isTask && (
         <div className="nodrag absolute left-1/2 top-full z-30 mt-12 w-56 -translate-x-1/2 rounded-lg border border-border bg-white/95 p-2 shadow-lg" onClick={(event) => event.stopPropagation()}>
           <input
             ref={tagInputRef}

@@ -29,8 +29,8 @@ import { getTodayStr } from '../utils/tagColors';
  *                        hover expands to 230px overlay. Mind Map keeps the
  *                        full navigation visible because it already owns a
  *                        second, map-specific sidebar.
- *  - > 1024px (desktop): 230px in flow; toggle hides via margin-left
- *                        (matches pre-audit behaviour, owned by App.tsx)
+ *  - > 1024px (desktop): 230px expanded or 60px icon rail when collapsed.
+ *                        Primary navigation always remains visible.
  *
  * User toggle on tablet / desktop persists to localStorage so the choice
  * survives a reload. Mobile ignores storage (always closed by design).
@@ -124,13 +124,13 @@ export function Sidebar({
     return () => window.removeEventListener('resize', compute);
   }, []);
 
-  // --- Restore user preference once on mount (tablet/desktop only) ---
+  // --- Restore user preference once on mount (tablet / desktop) ---
   // App.tsx already seeds isSidebarOpen with a sensible viewport default;
   // this effect applies the user's persisted choice on top of that.
   const restoredRef = useRef(false);
   useEffect(() => {
     if (restoredRef.current) return;
-    if (viewport === 'mobile') return; // mobile always closed — ignore storage
+    if (viewport === 'mobile') return;
     const stored = readStoredCollapse();
     if (stored === null) return;
     restoredRef.current = true;
@@ -139,10 +139,10 @@ export function Sidebar({
     setIsSidebarOpen(!stored);
   }, [viewport, setIsSidebarOpen]);
 
-  // --- Persist user toggles on tablet/desktop ---
+  // --- Persist user toggles on tablet / desktop ---
   const persistToggle = useCallback(
     (next: boolean) => {
-      if (viewport === 'mobile') return; // mobile never persists
+      if (viewport === 'mobile') return;
       writeStoredCollapse(!next);
     },
     [viewport]
@@ -153,17 +153,14 @@ export function Sidebar({
   const isTablet = viewport === 'tablet';
   const isDesktop = viewport === 'desktop';
 
-  // compact = tablet at rest (60px icon strip). Only when the user has
-  // explicitly closed the sidebar on tablet.
-  const isCompact = isTablet && !isSidebarOpen;
+  // compact = tablet / desktop at rest (60px icon strip). Collapsing never
+  // removes primary navigation from non-mobile layouts.
+  const isCompact = !isMobile && !isSidebarOpen;
   // expanded = sidebar showing the full 230px layout. Mobile, tablet with
   // overlay, or desktop in flow.
   const isExpanded = isSidebarOpen;
 
-  // Hover-expand: only meaningful on tablet compact. Letting motion own the
-  // width keeps the click-toggle and hover-expand animations in lockstep.
-  const [hoverExpanded, setHoverExpanded] = useState(false);
-  const showExpandedWidth = isExpanded || (isCompact && hoverExpanded);
+  const showExpandedWidth = isExpanded;
 
   // --- Esc to close on mobile / tablet overlay ---
   useEffect(() => {
@@ -208,7 +205,6 @@ export function Sidebar({
     } else if (isTablet) {
       // On tablet, collapse back to the icon strip so the user can see
       // the content they just navigated to.
-      setHoverExpanded(false);
       setIsSidebarOpen(false);
     }
   };
@@ -219,10 +215,8 @@ export function Sidebar({
       // DailyFlow's default desktop window can land exactly on the tablet
       // breakpoint. Auto-collapsing here made the global navigation appear
       // to vanish as soon as users entered Mind Map.
-      setHoverExpanded(false);
       setIsSidebarOpen(true);
     } else if (isMobile || isTablet) {
-      setHoverExpanded(false);
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
     }
   };
@@ -231,7 +225,6 @@ export function Sidebar({
     setActiveTab('today');
     setCurrentFileDate(date);
     if (isMobile || isTablet) {
-      setHoverExpanded(false);
       setIsSidebarOpen(false);
     }
   };
@@ -239,6 +232,11 @@ export function Sidebar({
   const handleCollapse = () => {
     setIsSidebarOpen(false);
     persistToggle(false);
+  };
+
+  const handleExpand = () => {
+    setIsSidebarOpen(true);
+    persistToggle(true);
   };
 
   const previousDays = useMemo(
@@ -249,7 +247,7 @@ export function Sidebar({
   // --- Animation targets ---
   // Mobile: slide from left. Hidden ↔ -100% x-offset.
   // Tablet: width 60 ↔ 230 (icon strip ↔ overlay).
-  // Desktop: in flow, margin-left 0 ↔ -230 (legacy pattern, kept intact).
+  // Desktop: width 60 ↔ 230 in flow; it never reaches zero.
   const motionInitial = false; // don't replay on every prop change
   const motionTransition = { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] as const };
 
@@ -259,9 +257,8 @@ export function Sidebar({
   } else if (isTablet) {
     motionAnimate = { width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH };
   } else {
-    // desktop: 0 width when collapsed so the flex parent reclaims the space
     motionAnimate = {
-      width: isExpanded ? FULL_WIDTH : 0,
+      width: isExpanded ? FULL_WIDTH : COMPACT_WIDTH,
       marginLeft: '0px',
     };
   }
@@ -309,18 +306,6 @@ export function Sidebar({
         initial={motionInitial}
         animate={motionAnimate}
         transition={motionTransition}
-        onMouseEnter={() => {
-          if (isCompact) setHoverExpanded(true);
-        }}
-        onMouseLeave={() => {
-          if (isCompact) setHoverExpanded(false);
-        }}
-        onFocus={() => {
-          if (isCompact) setHoverExpanded(true);
-        }}
-        onBlur={() => {
-          if (isCompact) setHoverExpanded(false);
-        }}
         onClick={(e) => {
           // Keep navigation and utility buttons usable in compact mode.
           // Expanding from their bubbled click used to reopen the overlay
@@ -329,13 +314,13 @@ export function Sidebar({
           const isInteractive = Boolean(target.closest('button, a, input, select, textarea'));
           if (isCompact && !isInteractive) {
             e.stopPropagation();
-            setIsSidebarOpen(true);
+            handleExpand();
           }
         }}
       >
         <div
           className="px-2.5 py-4 flex flex-col h-full"
-          style={{ width: isDesktop || showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
+          style={{ width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
         >
           {/* Logo + collapse */}
           <div
@@ -343,12 +328,28 @@ export function Sidebar({
               isCompact ? 'justify-center' : 'gap-2.5 px-1.5'
             }`}
           >
-            <div
-              className="w-7 h-7 bg-gradient-to-br from-accent to-accent-warm text-white flex items-center justify-center text-sm font-bold rounded-xl shadow-sm shrink-0"
-              aria-hidden="true"
-            >
-              D
-            </div>
+            {isCompact ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleExpand();
+                }}
+                className="w-7 h-7 bg-gradient-to-br from-accent to-accent-warm text-white flex items-center justify-center text-sm font-bold rounded-xl shadow-sm shrink-0 transition-transform active:scale-95"
+                title={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
+                aria-label={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
+                data-testid="sidebar-expand"
+              >
+                D
+              </button>
+            ) : (
+              <div
+                className="w-7 h-7 bg-gradient-to-br from-accent to-accent-warm text-white flex items-center justify-center text-sm font-bold rounded-xl shadow-sm shrink-0"
+                aria-hidden="true"
+              >
+                D
+              </div>
+            )}
             <AnimatePresence initial={false}>
               {!isCompact && (
                 <motion.span
