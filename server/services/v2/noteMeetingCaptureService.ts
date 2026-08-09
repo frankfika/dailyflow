@@ -25,10 +25,13 @@ import {
 import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
 
-const AudioSchema = z.object({
-  data: z.string().min(1).max(140_000_000),
+const AudioMetadataSchema = z.object({
   mimeType: z.string().trim().min(1).max(100),
   filename: z.string().trim().min(1).max(255).optional(),
+});
+
+const AudioSchema = AudioMetadataSchema.extend({
+  data: z.string().min(1).max(140_000_000),
 });
 
 const EndpointTranscriptionSchema = z.object({
@@ -60,6 +63,16 @@ export const NoteMeetingCaptureInputSchema = z.object({
   ]).optional(),
 });
 export type NoteMeetingCaptureInput = z.infer<typeof NoteMeetingCaptureInputSchema>;
+
+export interface NoteMeetingBinaryCaptureInput {
+  audio: {
+    bytes: Uint8Array<ArrayBufferLike>;
+    mimeType: string;
+    filename?: string;
+  };
+  durationSeconds?: number;
+  language?: 'zh' | 'en';
+}
 
 export const StoredMeetingTranscriptionInputSchema = z.object({
   sourceId: z.string().min(1),
@@ -544,6 +557,50 @@ export async function captureNoteMeeting(
   fetchImpl: Fetch = fetch,
 ): Promise<NoteMeetingCaptureResult> {
   const parsed = NoteMeetingCaptureInputSchema.parse(input);
+  return persistNoteMeetingAudio(repo, noteId, {
+    ...parsed,
+    audio: {
+      ...parsed.audio,
+      bytes: decodeBase64(parsed.audio.data),
+    },
+  }, fetchImpl);
+}
+
+/**
+ * Persists a raw recording upload without routing it through base64 JSON.
+ * This is the durable path used by the desktop client for long meetings.
+ */
+export async function captureNoteMeetingBinary(
+  repo: V2Repository,
+  noteId: string,
+  input: NoteMeetingBinaryCaptureInput,
+): Promise<NoteMeetingCaptureResult> {
+  const audio = AudioMetadataSchema.parse(input.audio);
+  const durationSeconds = z.number().nonnegative().max(86_400).optional().parse(input.durationSeconds);
+  const language = z.enum(['zh', 'en']).optional().parse(input.language);
+  if (!ArrayBuffer.isView(input.audio.bytes) || input.audio.bytes.byteLength === 0) {
+    throw new z.ZodError([{
+      code: z.ZodIssueCode.custom,
+      path: ['audio', 'bytes'],
+      message: 'Recording is empty.',
+    }]);
+  }
+  return persistNoteMeetingAudio(repo, noteId, {
+    audio: { ...audio, bytes: input.audio.bytes },
+    durationSeconds,
+    language,
+    transcription: { mode: 'save-only' },
+  });
+}
+
+async function persistNoteMeetingAudio(
+  repo: V2Repository,
+  noteId: string,
+  parsed: Omit<NoteMeetingCaptureInput, 'audio'> & {
+    audio: Omit<NoteMeetingCaptureInput['audio'], 'data'> & { bytes: Uint8Array };
+  },
+  fetchImpl: Fetch = fetch,
+): Promise<NoteMeetingCaptureResult> {
   if (!/^[A-Za-z0-9_-]+$/.test(noteId)) {
     throw new z.ZodError([{
       code: z.ZodIssueCode.custom,
@@ -556,7 +613,7 @@ export async function captureNoteMeeting(
 
   const mimeType = normalizeMimeType(parsed.audio.mimeType);
   const extension = audioExtension(mimeType, parsed.audio.filename);
-  const bytes = decodeBase64(parsed.audio.data);
+  const bytes = Buffer.from(parsed.audio.bytes);
   const now = new Date().toISOString();
   const audioId = newId('src');
   const audioAbsolute = path.join(

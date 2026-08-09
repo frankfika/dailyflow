@@ -161,6 +161,25 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       expect(audioPlayback.status).toBe(200);
       expect(audioPlayback.headers.get('content-type')).toContain('audio/webm');
       expect(Buffer.from(await audioPlayback.arrayBuffer()).toString('utf8')).toBe('route-test-audio');
+
+      // Desktop clients upload the recording as raw bytes so long meetings do
+      // not incur base64 expansion or duplicate the whole audio in JSON.
+      const binaryCaptureResponse = await fetch(
+        `http://localhost:9999/api/v2/notes/${meetingNote.body.note.id}/meeting/capture-binary?filename=long-meeting.m4a&durationSeconds=6624&language=zh`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'audio/mp4' },
+          body: Buffer.from('route-test-binary-audio'),
+        },
+      );
+      const binaryCapture = await binaryCaptureResponse.json();
+      expect(binaryCaptureResponse.status, JSON.stringify(binaryCapture)).toBe(200);
+      expect(binaryCapture.transcriptionMode).toBe('saved-only');
+      expect(binaryCapture.audioSource.meta.durationSeconds).toBe(6624);
+      expect(binaryCapture.audioSource.filePath).toMatch(/\.m4a$/);
+      expect(await fs.readFile(path.join(workspace, binaryCapture.audioSource.filePath), 'utf8'))
+        .toBe('route-test-binary-audio');
+
       const unrelatedAudio = await get(
         `/notes/${meetingNote.body.note.id}/meeting/audio/src_DOESNOTEXIST`,
       );

@@ -10,7 +10,7 @@
  * shape with appropriate HTTP status codes. Empty / loading / success
  * payloads are explicit so the UI can render every state.
  */
-import { Router, type Request, type Response } from 'express';
+import { Router, raw, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { newId } from '../../domain/v2/ulid.js';
 import { bootstrapV2 } from '../../services/v2/workspaceContext.js';
@@ -98,6 +98,7 @@ import {
 import { JobKindSchema, JobStatusSchema } from '../../domain/v2/jobs.js';
 import {
   captureNoteMeeting,
+  captureNoteMeetingBinary,
   MeetingAudioAccessError,
   NoteMeetingCaptureInputSchema,
   resolveNoteMeetingAudio,
@@ -486,6 +487,36 @@ v2Router.post('/notes/:id/meeting/capture', async (req, res) => {
     handleError(err, res);
   }
 });
+
+v2Router.post(
+  '/notes/:id/meeting/capture-binary',
+  raw({ type: 'audio/*', limit: '512mb' }),
+  async (req, res) => {
+    try {
+      const { repo } = getV2(res);
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({
+          error: { code: 'empty_recording', message: 'No audio bytes were received.' },
+        });
+      }
+      const durationParam = req.query.durationSeconds;
+      const languageParam = req.query.language;
+      const filenameParam = req.query.filename;
+      const result = await captureNoteMeetingBinary(repo, req.params.id, {
+        audio: {
+          bytes: req.body,
+          mimeType: req.get('content-type') || 'application/octet-stream',
+          filename: typeof filenameParam === 'string' ? filenameParam : undefined,
+        },
+        durationSeconds: typeof durationParam === 'string' ? Number(durationParam) : undefined,
+        language: languageParam === 'zh' || languageParam === 'en' ? languageParam : undefined,
+      });
+      res.status(200).json(result);
+    } catch (err) {
+      handleError(err, res);
+    }
+  },
+);
 
 v2Router.post('/notes/:id/meeting/transcribe', async (req, res) => {
   try {

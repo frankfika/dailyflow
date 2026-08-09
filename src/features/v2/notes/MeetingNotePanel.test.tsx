@@ -1,17 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MeetingCaptureResult, NoteDocument, SourceItem } from '../api/client';
-import { MeetingNotePanel } from './MeetingNotePanel';
+import { MeetingNotePanel, formatMeetingDuration } from './MeetingNotePanel';
 
-const { captureNoteMeeting, transcribeNoteMeeting, getSource } = vi.hoisted(() => ({
-  captureNoteMeeting: vi.fn(),
+const { captureNoteMeetingBinary, transcribeNoteMeeting, getSource } = vi.hoisted(() => ({
+  captureNoteMeetingBinary: vi.fn(),
   transcribeNoteMeeting: vi.fn(),
   getSource: vi.fn(),
 }));
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, captureNoteMeeting, transcribeNoteMeeting, getSource };
+  return { ...actual, captureNoteMeetingBinary, transcribeNoteMeeting, getSource };
 });
 
 function note(overrides: Partial<NoteDocument> = {}): NoteDocument {
@@ -56,11 +56,12 @@ class MockMediaRecorder {
   static isTypeSupported = vi.fn(() => true);
   static latest: MockMediaRecorder | null = null;
   state: RecordingState = 'inactive';
-  mimeType = 'audio/webm';
+  mimeType: string;
   ondataavailable: ((event: BlobEvent) => void) | null = null;
   onstop: (() => void) | null = null;
 
-  constructor(public stream: MediaStream) {
+  constructor(public stream: MediaStream, options?: MediaRecorderOptions) {
+    this.mimeType = options?.mimeType || 'audio/webm';
     MockMediaRecorder.latest = this;
   }
 
@@ -101,12 +102,17 @@ describe('MeetingNotePanel', () => {
       error: DOMException | null = null;
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
-      readAsDataURL() {
-        this.result = 'data:audio/webm;base64,YXVkaW8=';
+      readAsDataURL(blob: Blob) {
+        this.result = `data:${blob.type};base64,YXVkaW8=`;
         this.onload?.();
       }
     }
     vi.stubGlobal('FileReader', MockFileReader);
+  });
+
+  it('formats long recordings as an unambiguous hour clock', () => {
+    expect(formatMeetingDuration(24)).toBe('00:24');
+    expect(formatMeetingDuration(6624)).toBe('01:50:24');
   });
 
   it('only renders for meeting notes', () => {
@@ -122,7 +128,7 @@ describe('MeetingNotePanel', () => {
       audioSource,
       transcriptionMode: 'saved-only',
     };
-    captureNoteMeeting.mockResolvedValue(result);
+    captureNoteMeetingBinary.mockResolvedValue(result);
     const onNoteUpdated = vi.fn();
 
     render(<MeetingNotePanel note={note()} language="en" onNoteUpdated={onNoteUpdated} />);
@@ -130,18 +136,17 @@ describe('MeetingNotePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
     await screen.findByRole('button', { name: 'Stop' });
 
+    expect(MockMediaRecorder.latest?.mimeType).toBe('audio/mp4');
+
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(await screen.findByRole('button', { name: 'Save recording' })).toBeInTheDocument();
     expect(trackStop).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save recording' }));
-    await waitFor(() => expect(captureNoteMeeting).toHaveBeenCalled());
-    expect(captureNoteMeeting).toHaveBeenCalledWith('note_01', expect.objectContaining({
-      audio: expect.objectContaining({
-        data: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/webm',
-      }),
-      transcription: { mode: 'save-only' },
+    await waitFor(() => expect(captureNoteMeetingBinary).toHaveBeenCalled());
+    expect(captureNoteMeetingBinary).toHaveBeenCalledWith('note_01', expect.objectContaining({
+      audio: expect.any(Blob),
+      filename: 'meeting-note_01.m4a',
     }));
     expect(await screen.findByRole('status')).toHaveTextContent('Recording saved.');
     expect(onNoteUpdated).toHaveBeenCalledWith(updated, result);
@@ -162,7 +167,7 @@ describe('MeetingNotePanel', () => {
       text: 'A complete transcript',
       transcriptionMode: 'remote',
     };
-    captureNoteMeeting.mockResolvedValue({
+    captureNoteMeetingBinary.mockResolvedValue({
       note: note({ sourceIds: ['src_audio_new'] }),
       audioSource: result.audioSource,
       transcriptionMode: 'saved-only',
@@ -178,7 +183,7 @@ describe('MeetingNotePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
 
     await waitFor(() => expect(onTranscriptReady).toHaveBeenCalledWith('A complete transcript', result));
-    expect(captureNoteMeeting.mock.calls[0][1].transcription).toEqual({ mode: 'save-only' });
+    expect(captureNoteMeetingBinary.mock.calls[0][1].audio).toBeInstanceOf(Blob);
     expect(transcribeNoteMeeting).toHaveBeenCalledWith('note_01', {
       sourceId: 'src_audio_new',
       transcription: {
@@ -202,7 +207,7 @@ describe('MeetingNotePanel', () => {
     const audioSource = source('meeting_audio', 'src_local_audio');
     const saved = { note: note({ sourceIds: [audioSource.id] }), audioSource, transcriptionMode: 'saved-only' as const };
     const completed = { ...saved, transcriptSource: source('meeting_transcript', 'src_local_text', '本地转写'), text: '本地转写', transcriptionMode: 'local-managed' as const };
-    captureNoteMeeting.mockResolvedValue(saved);
+    captureNoteMeetingBinary.mockResolvedValue(saved);
     transcribeNoteMeeting.mockResolvedValue(completed);
 
     render(<MeetingNotePanel note={note()} language="zh" />);
@@ -226,7 +231,7 @@ describe('MeetingNotePanel', () => {
       remoteModel: 'whisper-1',
     }));
     const audioSource = source('meeting_audio', 'src_audio_new');
-    captureNoteMeeting.mockResolvedValue({
+    captureNoteMeetingBinary.mockResolvedValue({
       note: note(),
       audioSource,
       transcriptionMode: 'saved-only',
@@ -255,6 +260,21 @@ describe('MeetingNotePanel', () => {
     act(() => view.unmount());
     expect(trackStop).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:meeting-audio');
+  });
+
+  it('keeps a failed preview saveable and explains that the audio is intact', async () => {
+    render(<MeetingNotePanel note={note()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+    await screen.findByRole('button', { name: 'Stop' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+    const preview = screen.getByTestId('meeting-note-panel').querySelector('audio');
+    expect(preview).not.toBeNull();
+    fireEvent.error(preview!);
+
+    expect(screen.getByRole('status')).toHaveTextContent('audio is intact and can still be saved');
+    expect(screen.getByRole('button', { name: 'Save recording' })).toBeEnabled();
   });
 
   it('shows existing recording and transcript source counts', async () => {
