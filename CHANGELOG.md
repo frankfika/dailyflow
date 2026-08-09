@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4](https://github.com/frankfika/dailyflow/compare/v1.5.3...v1.5.4) (2026-08-09)
+
+
+### Bug Fixes
+
+* simplify mind map task workflow ([0a34741](https://github.com/frankfika/dailyflow/commit/0a34741650987cdc07fca9c92cafff470fbfe8f4))
+
 ## [1.5.3](https://github.com/frankfika/dailyflow/compare/v1.5.2...v1.5.3) (2026-08-08)
 
 
