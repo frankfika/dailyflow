@@ -12,7 +12,7 @@
  * latest linkableTasks input.
  */
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
 import { MindMapNode, type MindMapNodeData } from './MindMapNode';
 import { buildTaskSourceDateByNodeId } from './MindMapView';
@@ -204,15 +204,18 @@ describe('MindMapNode — task mirror (Phase 2)', () => {
     expect(screen.queryByTestId('mindmap-open-task-b1')).not.toBeInTheDocument();
   });
 
-  it('does not expose a separate “make task” action for a selected node', () => {
+  it('exposes an explicit “make task” action for a selected branch', () => {
+    const onMakeTask = vi.fn();
     renderNode('branch-primary', makeData({
       text: '可执行节点',
       kind: 'branch',
       isSelected: true,
       language: 'zh',
+      onMakeTask,
     }));
-    expect(screen.queryByTestId('mindmap-promote-branch-primary')).not.toBeInTheDocument();
-    expect(screen.getByTestId('mindmap-status-branch-primary')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mindmap-make-task-branch-primary'));
+    expect(onMakeTask).toHaveBeenCalledWith('branch-primary');
+    expect(screen.queryByTestId('mindmap-status-branch-primary')).not.toBeInTheDocument();
   });
 
   it('uses persisted taskDate before the loaded task list lookup', () => {

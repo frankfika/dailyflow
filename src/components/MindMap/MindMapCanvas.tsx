@@ -106,7 +106,7 @@ interface MindMapCanvasProps {
   onLinkedNodeTagsChange?: (node: MindMapNode, tags: string[]) => void;
   /** Persist the completion state of an already-linked task. */
   onLinkedNodeStatusChange?: (node: MindMapNode, status: MindMapNodeStatus) => void;
-  /** Ensure a non-root node has one corresponding persisted Task. */
+  /** Explicitly promote a non-root branch node to a persisted Task. */
   onEnsureNodeTask?: (nodeId: string) => void;
   onDeleteNodeRequest?: (nodeId: string) => void;
 }
@@ -420,10 +420,6 @@ function MindMapCanvasInner({
               onChangeRef.current({ nodes: next });
               if (source?.kind === 'task' && source.taskId && source.text !== text) {
                 onLinkedNodeTitleChangeRef.current?.(source, text);
-              } else if (source && source.id !== cur.rootId && !source.taskId) {
-                // Let React commit the title patch first. The parent flushes
-                // that pending save before creating the one linked Task.
-                window.setTimeout(() => onEnsureNodeTaskRef.current?.(id), 0);
               }
               setEditingId(null);
             },
@@ -552,6 +548,12 @@ function MindMapCanvasInner({
               if (source?.kind === 'task' && source.taskId) {
                 onLinkedNodeStatusChangeRef.current?.(source, status);
               }
+            },
+            onMakeTask: (id: string) => {
+              // Conversion is deliberately explicit: ordinary nodes remain
+              // part of the thinking structure until the user marks one as
+              // actionable.
+              onEnsureNodeTaskRef.current?.(id);
             },
             onOpenTask: (taskId: string, date: string) => {
               onNodeOpenTaskRef.current?.(taskId, date);

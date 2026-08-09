@@ -1337,14 +1337,15 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sm:ml-[60px] min-[1025px]:ml-0' : ''}`}>
+      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 sm:hidden min-[1025px]:block"
+            className="sidebar-reveal-button absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
             aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
+            data-testid="sidebar-reveal"
           >
             <Menu className="w-5 h-5" />
           </button>

@@ -74,11 +74,11 @@ function renderNode(id: string, data: MindMapNodeData) {
   );
 }
 
-describe('MindMapNode — simplified task model', () => {
-  it('treats every legacy non-root node as a task', () => {
+describe('MindMapNode — explicit task model', () => {
+  it('keeps a legacy non-root node as a normal branch', () => {
     renderNode('legacy', makeData({ kind: undefined }));
-    expect(screen.getByTestId('mindmap-node-legacy')).toHaveAttribute('data-kind', 'task');
-    expect(screen.getByTestId('mindmap-status-legacy')).toBeInTheDocument();
+    expect(screen.getByTestId('mindmap-node-legacy')).toHaveAttribute('data-kind', 'branch');
+    expect(screen.queryByTestId('mindmap-status-legacy')).not.toBeInTheDocument();
   });
 
   it('keeps the center topic separate from tasks', () => {
@@ -87,25 +87,33 @@ describe('MindMapNode — simplified task model', () => {
     expect(screen.queryByTestId('mindmap-status-root')).not.toBeInTheDocument();
   });
 
-  it('renders tags as task metadata instead of a separate node kind', () => {
+  it('keeps a tag node distinct from a task node', () => {
     renderNode('tagged', makeData({ text: '起草合同', kind: 'tag', tags: ['法务', '重要'] }));
-    expect(screen.getByTestId('mindmap-node-tagged')).toHaveAttribute('data-kind', 'task');
-    expect(screen.getByTestId('mindmap-tags-tagged')).toHaveTextContent('#法务');
-    expect(screen.getByTestId('mindmap-tags-tagged')).toHaveTextContent('#重要');
+    expect(screen.getByTestId('mindmap-node-tagged')).toHaveAttribute('data-kind', 'tag');
+    expect(screen.queryByTestId('mindmap-status-tagged')).not.toBeInTheDocument();
   });
 
   it('does not expose an internal linked-task id inside the node', () => {
-    renderNode('linked', makeData({ text: '起草合同', kind: 'task', taskId: 'task-abcdef1234' }));
+    renderNode('linked', makeData({ text: '起草合同', kind: 'task', taskId: 'task-abcdef1234', sourceDate: '2026-08-09' }));
     expect(screen.getByTestId('mindmap-node-linked')).not.toHaveTextContent('1234');
+    expect(screen.getByTestId('mindmap-task-meta-linked')).toHaveTextContent('任务');
+    expect(screen.getByTestId('mindmap-task-meta-linked')).toHaveTextContent('2026-08-09');
   });
 
   it('edits tags from one compact selected-node action', () => {
     const onCommitTags = vi.fn();
-    renderNode('task-tags', makeData({ isSelected: true, onCommitTags }));
+    renderNode('task-tags', makeData({ kind: 'task', isSelected: true, onCommitTags }));
     fireEvent.click(screen.getByTestId('mindmap-edit-tags-task-tags'));
     const input = screen.getByTestId('mindmap-tags-input-task-tags');
     fireEvent.change(input, { target: { value: '#工作, 重要 工作' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onCommitTags).toHaveBeenCalledWith('task-tags', ['工作', '重要']);
+  });
+
+  it('offers an explicit task conversion action for a selected branch', () => {
+    const onMakeTask = vi.fn();
+    renderNode('branch', makeData({ kind: 'branch', isSelected: true, onMakeTask }));
+    fireEvent.click(screen.getByTestId('mindmap-make-task-branch'));
+    expect(onMakeTask).toHaveBeenCalledWith('branch');
   });
 });

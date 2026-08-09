@@ -15,6 +15,28 @@ const VIEWPORTS = [
 ];
 
 test.describe('Sidebar viewport behavior (audit #11)', () => {
+  test('desktop collapses to a persistent icon rail and expands again', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => localStorage.setItem('df_sidebar_collapsed', 'true'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByTestId('nav-today')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('sidebar-collapse')).toHaveCount(0);
+    await expect(page.getByTestId('sidebar-expand')).toBeVisible();
+    const sidebar = page.locator('aside[role="navigation"]');
+    await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeCloseTo(60, 0);
+
+    await page.getByTestId('sidebar-expand').click();
+    await expect(page.getByTestId('sidebar-collapse')).toBeVisible();
+    await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeCloseTo(230, 0);
+
+    await page.getByTestId('sidebar-collapse').click();
+    await expect(page.getByTestId('sidebar-expand')).toBeVisible();
+    await expect(page.getByTestId('nav-today')).toBeVisible();
+    await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeCloseTo(60, 0);
+  });
+
   for (const vp of VIEWPORTS) {
     test(`closed default @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });

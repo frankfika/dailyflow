@@ -40,6 +40,9 @@ describe('TodayBacklog completion flow', () => {
     expect(screen.getByTestId('today-planning')).toBeInTheDocument();
     expect(screen.getByText('Mind maps sit above tasks')).toBeInTheDocument();
     expect(screen.getAllByText('Launch plan')).toHaveLength(2);
+    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('Write launch brief');
+    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('Planned 2026-07-28');
+    expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument();
     expect(screen.getByTestId('task-card-space-binding-planned')).toHaveTextContent('Launch plan');
   });
   it('keeps a completed focus task visible and advances focus progress', () => {

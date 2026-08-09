@@ -13,6 +13,7 @@ type Task = {
   tags?: string[];
   project?: string;
   deadline?: string;
+  time?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
   spaceId?: string;
@@ -247,26 +248,44 @@ export function TodayBacklog({
                 .map((taskId) => tasks.find((task) => task.id === taskId))
                 .filter((task): task is Task => Boolean(task));
               return (
-                <button
+                <article
                   key={group.id}
-                  type="button"
                   className="today-planning-group"
-                  onClick={() => onOpenPlanningGroup?.(group)}
                   data-testid={`today-planning-group-${group.id}`}
                 >
-                  <span className="today-planning-node"><Network className="h-3.5 w-3.5" /></span>
-                  <span className="today-planning-group-body">
+                  <header className="today-planning-group-header">
+                    <span className="today-planning-node"><Network className="h-3.5 w-3.5" /></span>
                     <span className="today-planning-group-title">{group.title}</span>
-                    <span className="today-planning-task-chain">
-                      {groupTasks.slice(0, 3).map((task) => (
-                        <span key={task.id} className={task.status === 'done' ? 'is-done' : ''}>{task.title}</span>
-                      ))}
-                      {groupTasks.length > 3 && <span>+{groupTasks.length - 3}</span>}
-                    </span>
-                  </span>
-                  <span className="today-planning-progress">{group.completedTaskIds.length}/{group.taskIds.length}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-text-muted" />
-                </button>
+                    <span className="today-planning-progress">{group.completedTaskIds.length}/{group.taskIds.length}</span>
+                    <button type="button" className="today-planning-open-map" onClick={() => onOpenPlanningGroup?.(group)}>
+                      {language === 'zh' ? '查看导图' : 'View map'} <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </header>
+                  <ul className="today-planning-task-list">
+                    {groupTasks.map((task) => {
+                      const scheduledDate = task.deadline ?? task.source_date ?? selectedDate;
+                      const timeLabel = task.deadline
+                        ? (language === 'zh' ? `截止 ${scheduledDate}` : `Due ${scheduledDate}`)
+                        : (language === 'zh' ? `计划 ${scheduledDate}` : `Planned ${scheduledDate}`);
+                      return (
+                        <li key={task.id} className={`today-planning-task ${task.status === 'done' ? 'is-done' : ''}`} data-testid={`today-planning-task-${task.id}`}>
+                          <button
+                            type="button"
+                            className="today-planning-task-check"
+                            onClick={() => onToggleTask(task.id)}
+                            aria-label={task.status === 'done' ? (language === 'zh' ? '恢复任务' : 'Reopen task') : (language === 'zh' ? '完成任务' : 'Complete task')}
+                          >
+                            {task.status === 'done' ? <Check className="h-3 w-3" /> : null}
+                          </button>
+                          <span className="today-planning-task-title">{task.title}</span>
+                          <span className="today-planning-task-time">
+                            <Clock3 className="h-3 w-3" />{timeLabel}{task.time ? ` · ${task.time}` : ''}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </article>
               );
             })}
           </div>
