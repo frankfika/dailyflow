@@ -1,0 +1,18 @@
+{
+  "id": "mm_owned",
+  "title": "Owned map title",
+  "rootId": "root_owned",
+  "version": 2,
+  "spaceId": "tw_owned",
+  "nodes": [
+    {
+      "id": "root_owned",
+      "text": "Owned map title",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    }
+  ],
+  "edges": [],
+  "createdAt": "2026-08-01T07:00:00.000Z",
+  "updatedAt": "2026-08-09T07:00:00.000Z"
+}

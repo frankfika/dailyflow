@@ -861,7 +861,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Content area */}
           <div className="min-h-[300px] relative">
             {isFormatting && (
-              <div className="absolute inset-0 z-10 bg-surface 1px] flex flex-col items-center justify-center gap-2 rounded">
+              <div className="absolute inset-0 z-10 bg-surface/70 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 rounded">
                 <Loader2 className="w-6 h-6 animate-spin text-accent" />
                 <span className="text-xs font-bold text-text-muted">
                   {language === 'zh' ? 'AI 整理中...' : 'AI formatting...'}

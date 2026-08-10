@@ -30,6 +30,7 @@ import {
   appendTaskToMarkdown,
   editTaskFullInMarkdown,
   updateTaskInMarkdown,
+  removeTaskFromMarkdown,
 } from './parser.js';
 import {
   addTaskIdToTopicSpace,
@@ -37,7 +38,7 @@ import {
   findTopicSpaceByTaskId,
   getTopicSpace,
 } from './topicSpaces.js';
-import { getMindMap, getInheritedTagsFromMap } from './mindmaps.js';
+import { getMindMap, getInheritedTagsFromMap, updateMindMap } from './mindmaps.js';
 import { setOriginMarkers, stripAllOriginMarkers } from './taskMetadata.js';
 import type { Config } from '../types/task.js';
 
@@ -302,4 +303,88 @@ export async function undoConvertStandaloneToEventNodeTask(params: {
   } catch { /* ignore */ }
 
   return { reverted: true, alreadyStandalone: false, removedFromSpace: removed };
+}
+
+/**
+ * Remove a scheduled projection while preserving the Event node itself.
+ * Both files are restored if updating the map fails, so callers never see a
+ * deleted daily task that is still marked as scheduled on the canvas.
+ */
+export async function unscheduleNodeTask(params: {
+  taskId: string;
+  scheduledDate: string;
+  mindmapId: string;
+  nodeId: string;
+  config?: Config;
+}): Promise<{ unscheduled: boolean; alreadyUnscheduled: boolean }> {
+  const cfg = await resolveConfig(params.config);
+  const map = await getMindMap(params.mindmapId);
+  if (!map) return { unscheduled: false, alreadyUnscheduled: false };
+  const node = map.nodes.find(item => item.id === params.nodeId);
+  if (!node) return { unscheduled: false, alreadyUnscheduled: false };
+
+  const note = await readDailyNote(params.scheduledDate, cfg);
+  const task = note ? findTaskByTaskId(parseMarkdown(note.content), params.taskId) : undefined;
+  if (!task && !node.taskId) return { unscheduled: false, alreadyUnscheduled: true };
+
+  const previousContent = note?.content ?? '';
+  if (note && task && typeof task.line === 'number') {
+    await writeDailyNote(params.scheduledDate, removeTaskFromMarkdown(note.content, task.line), cfg);
+  }
+
+  try {
+    const nodes = map.nodes.map(item => item.id === params.nodeId
+      ? { ...item, kind: 'branch' as const, taskId: undefined, taskDate: undefined, status: 'todo' as const }
+      : item);
+    const updated = await updateMindMap(map.id, { nodes });
+    if (!updated) throw new Error('Mind map disappeared while unscheduling');
+    if (map.spaceId) await removeTaskIdFromTopicSpace(map.spaceId, params.taskId).catch(() => null);
+    return { unscheduled: true, alreadyUnscheduled: false };
+  } catch (error) {
+    if (note) await writeDailyNote(params.scheduledDate, previousContent, cfg).catch(() => null);
+    throw error;
+  }
+}
+
+/** Move the same stable task projection to another day without duplication. */
+export async function rescheduleNodeTask(params: {
+  taskId: string;
+  fromDate: string;
+  toDate: string;
+  mindmapId: string;
+  nodeId: string;
+  config?: Config;
+}): Promise<{ rescheduled: boolean; alreadyScheduled: boolean }> {
+  if (params.fromDate === params.toDate) return { rescheduled: false, alreadyScheduled: true };
+  const cfg = await resolveConfig(params.config);
+  const map = await getMindMap(params.mindmapId);
+  if (!map) return { rescheduled: false, alreadyScheduled: false };
+  const node = map.nodes.find(item => item.id === params.nodeId);
+  if (!node) return { rescheduled: false, alreadyScheduled: false };
+
+  const fromNote = await readDailyNote(params.fromDate, cfg);
+  if (!fromNote) return { rescheduled: false, alreadyScheduled: false };
+  const sourceTask = findTaskByTaskId(parseMarkdown(fromNote.content), params.taskId);
+  if (!sourceTask || typeof sourceTask.line !== 'number') return { rescheduled: false, alreadyScheduled: false };
+
+  const toNote = await readDailyNote(params.toDate, cfg);
+  const toBefore = toNote?.content ?? '';
+  const fromBefore = fromNote.content;
+  const targetHasTask = Boolean(findTaskByTaskId(parseMarkdown(toBefore), params.taskId));
+  const toAfter = targetHasTask ? toBefore : appendTaskToMarkdown(toBefore, { ...sourceTask, source_date: sourceTask.source_date ?? params.fromDate }, params.toDate);
+
+  await writeDailyNote(params.toDate, toAfter, cfg);
+  try {
+    await writeDailyNote(params.fromDate, removeTaskFromMarkdown(fromBefore, sourceTask.line), cfg);
+    const nodes = map.nodes.map(item => item.id === params.nodeId
+      ? { ...item, kind: 'task' as const, taskId: params.taskId, taskDate: params.toDate }
+      : item);
+    const updated = await updateMindMap(map.id, { nodes });
+    if (!updated) throw new Error('Mind map disappeared while rescheduling');
+    return { rescheduled: true, alreadyScheduled: false };
+  } catch (error) {
+    await writeDailyNote(params.fromDate, fromBefore, cfg).catch(() => null);
+    await writeDailyNote(params.toDate, toBefore, cfg).catch(() => null);
+    throw error;
+  }
 }

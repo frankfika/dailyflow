@@ -20,7 +20,7 @@ import fs from 'fs/promises';
 import * as config from '../config.js';
 import { writeDailyNote, readDailyNote } from '../fileSystem.js';
 import { createTopicSpace, addTaskIdToTopicSpace } from '../topicSpaces.js';
-import { createMindMap } from '../mindmaps.js';
+import { createMindMap, getMindMap, updateMindMap } from '../mindmaps.js';
 import { parseMarkdown } from '../parser.js';
 import {
   createTaskForNode,
@@ -29,6 +29,8 @@ import {
   undoCompleteNodeTask,
   convertStandaloneToEventNodeTask,
   undoConvertStandaloneToEventNodeTask,
+  unscheduleNodeTask,
+  rescheduleNodeTask,
 } from '../eventExecutionService.js';
 
 describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
@@ -216,5 +218,58 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     expect(line).toContain(`^space:${space.id}`);
     expect(line).toContain('#life');
     expect(line).toContain('#urgent');
+  });
+
+  it('reschedules one stable projection and unschedules without deleting its Event node', async () => {
+    const fromDate = '2026-08-10';
+    const toDate = '2026-08-12';
+    const space = await createTopicSpace({ title: 'Release', context: 'work' });
+    const map = (await getMindMap(space.mindmapId))!;
+    const nodeId = 'n_ship';
+    await updateMindMap(map.id, {
+      nodes: [
+        ...map.nodes,
+        { id: nodeId, text: 'Ship build', position: { x: 300, y: 0 }, kind: 'task', status: 'todo' },
+      ],
+      edges: [...map.edges, { id: 'e_ship', source: map.rootId, target: nodeId }],
+    });
+    const created = await createTaskForNode({
+      mindmapId: map.id,
+      nodeId,
+      title: 'Ship build',
+      scheduledDate: fromDate,
+      config: cfg,
+    });
+    const linkedMap = (await getMindMap(map.id))!;
+    await updateMindMap(map.id, {
+      nodes: linkedMap.nodes.map(node => node.id === nodeId
+        ? { ...node, kind: 'task', taskId: created.taskId, taskDate: fromDate }
+        : node),
+    });
+
+    await expect(rescheduleNodeTask({
+      taskId: created.taskId,
+      fromDate,
+      toDate,
+      mindmapId: map.id,
+      nodeId,
+      config: cfg,
+    })).resolves.toEqual({ rescheduled: true, alreadyScheduled: false });
+    expect(parseMarkdown((await readDailyNote(fromDate, cfg))!.content).some(task => task.id === created.taskId)).toBe(false);
+    expect(parseMarkdown((await readDailyNote(toDate, cfg))!.content).filter(task => task.id === created.taskId)).toHaveLength(1);
+    expect((await getMindMap(map.id))!.nodes.find(node => node.id === nodeId)?.taskDate).toBe(toDate);
+
+    await expect(unscheduleNodeTask({
+      taskId: created.taskId,
+      scheduledDate: toDate,
+      mindmapId: map.id,
+      nodeId,
+      config: cfg,
+    })).resolves.toEqual({ unscheduled: true, alreadyUnscheduled: false });
+    expect(parseMarkdown((await readDailyNote(toDate, cfg))!.content).some(task => task.id === created.taskId)).toBe(false);
+    const preservedNode = (await getMindMap(map.id))!.nodes.find(node => node.id === nodeId);
+    expect(preservedNode?.text).toBe('Ship build');
+    expect(preservedNode?.taskId).toBeUndefined();
+    expect(preservedNode?.taskDate).toBeUndefined();
   });
 });

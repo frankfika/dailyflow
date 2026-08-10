@@ -4,6 +4,7 @@ import {
   dispatchDomainEvent,
   DOMAIN_EVENTS,
   dailyApi,
+  eventsApi,
   filesApi,
   mindmapsApi,
   rolloverApi,
@@ -64,6 +65,32 @@ describe('API Client', () => {
         '/api/daily/2026-07-28/initialize',
         expect.objectContaining({ method: 'POST', body: JSON.stringify({ context: 'work' }) }),
       );
+    });
+  });
+
+  describe('eventsApi compatibility facade', () => {
+    it('normalizes the server array responses used by event routes', async () => {
+      const event = { id: 'ev_1', title: 'Launch' };
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([event]) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(event) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([{ id: 'today_1' }]) });
+
+      await expect(eventsApi.list()).resolves.toEqual({ events: [event] });
+      await expect(eventsApi.getById('ev_1')).resolves.toEqual({ event });
+      await expect(eventsApi.listTodayItems('2026-08-10')).resolves.toEqual({ items: [{ id: 'today_1' }] });
+    });
+
+    it('uses Event semantic command endpoints for unschedule and reschedule', async () => {
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ unscheduled: true, alreadyUnscheduled: false }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ rescheduled: true, alreadyScheduled: false }) });
+
+      await eventsApi.unscheduleNodeTask({ taskId: 't1', scheduledDate: '2026-08-10', mindmapId: 'mm1', nodeId: 'n1' });
+      await eventsApi.rescheduleNodeTask({ taskId: 't1', fromDate: '2026-08-10', toDate: '2026-08-11', mindmapId: 'mm1', nodeId: 'n1' });
+
+      expect(fetch).toHaveBeenNthCalledWith(1, '/api/events/actions/unschedule-node-task', expect.objectContaining({ method: 'POST' }));
+      expect(fetch).toHaveBeenNthCalledWith(2, '/api/events/actions/reschedule-node-task', expect.objectContaining({ method: 'POST' }));
     });
   });
 

@@ -1,0 +1,32 @@
+{
+  "id": "mm_independent",
+  "title": "Independent launch plan",
+  "rootId": "root_independent",
+  "version": 2,
+  "nodes": [
+    {
+      "id": "root_independent",
+      "text": "Independent launch plan",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    },
+    {
+      "id": "n_independent_task",
+      "text": "Publish independent launch",
+      "position": { "x": 240, "y": 0 },
+      "kind": "task",
+      "taskId": "t_independent",
+      "taskDate": "2026-08-10",
+      "tags": ["launch"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_independent",
+      "source": "root_independent",
+      "target": "n_independent_task"
+    }
+  ],
+  "createdAt": "2026-08-01T08:00:00.000Z",
+  "updatedAt": "2026-08-10T08:00:00.000Z"
+}

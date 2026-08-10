@@ -13,6 +13,8 @@ import type {
 } from '../types/event.js';
 import type { TopicSpace, TopicSpaceContext } from '../types/topicSpace.js';
 import type { MindMap } from '../types/mindmap.js';
+import { loadConfig } from './config.js';
+import { getDailyNotePath } from './fileSystem.js';
 
 function hashStr(s: string): string {
   let hash = 0;
@@ -251,13 +253,78 @@ async function readMindMapSafe(workspaceRoot: string, mindmapId: string): Promis
   }
 }
 
-async function readDailyNoteSafe(workspaceRoot: string, date: string): Promise<string | null> {
-  const filePath = path.join(workspaceRoot, 'daily', `${date}.md`);
+async function scanMindMapsDir(workspaceRoot: string): Promise<MindMap[]> {
+  const dir = path.join(workspaceRoot, '.dailyflow', 'mindmaps');
   try {
-    return await fs.readFile(filePath, 'utf-8');
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const maps: MindMap[] = [];
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+      try {
+        const raw = await fs.readFile(path.join(dir, entry.name), 'utf-8');
+        const map = JSON.parse(raw) as MindMap;
+        if (map?.id && map?.title && Array.isArray(map.nodes) && Array.isArray(map.edges)) {
+          maps.push(map);
+        }
+      } catch {
+        // A malformed compatibility file must not hide the remaining events.
+      }
+    }
+    return maps;
   } catch {
-    return null;
+    return [];
   }
+}
+
+function standaloneMapAsSpace(map: MindMap): TopicSpace {
+  return {
+    id: map.id,
+    title: map.title,
+    kind: 'topic-space',
+    type: 'general',
+    status: 'active',
+    context: 'unclassified',
+    mindmapId: map.id,
+    order: 0,
+    defaultView: 'mindmap',
+    tags: [],
+    intent: '',
+    scratchpad: '',
+    brief: '',
+    journey: '',
+    tasksMarkdown: '',
+    mindmapMarkdown: '',
+    timeline: [],
+    taskIds: map.nodes.flatMap(node => node.taskId ? [node.taskId] : []),
+    linkedNoteIds: [],
+    createdAt: map.createdAt,
+    updatedAt: map.updatedAt,
+    filePath: '',
+  };
+}
+
+async function readDailyNoteSafe(workspaceRoot: string, date: string): Promise<string | null> {
+  const [year, month] = date.split('-');
+  const candidates = [
+    path.join(workspaceRoot, 'daily', `${date}.md`),
+    path.join(workspaceRoot, 'Daily', year, month, `${date}.md`),
+  ];
+  try {
+    const config = await loadConfig();
+    if (path.resolve(config.workspaceRoot) === path.resolve(workspaceRoot)) {
+      candidates.unshift(getDailyNotePath(date, config));
+    }
+  } catch {
+    // Explicit workspace roots used by adapters/tests need no global config.
+  }
+  for (const filePath of new Set(candidates)) {
+    try {
+      return await fs.readFile(filePath, 'utf-8');
+    } catch {
+      // Try the next supported storage layout.
+    }
+  }
+  return null;
 }
 
 function findTaskLineInContent(content: string, taskId: string): string | null {
@@ -414,9 +481,6 @@ export async function buildEventDetail(
     return null;
   }
 
-  const from = dateScanFrom || '2026-01-01';
-  const to = dateScanTo || '2099-12-31';
-
   let missingMap = false;
   let map: MindMap | null = null;
   if (space.mindmapId) {
@@ -426,6 +490,26 @@ export async function buildEventDetail(
     missingMap = true;
   }
 
+  return buildEventDetailFromSources(
+    workspaceRoot,
+    space,
+    map,
+    missingMap,
+    dateScanFrom,
+    dateScanTo,
+  );
+}
+
+async function buildEventDetailFromSources(
+  workspaceRoot: string,
+  space: TopicSpace,
+  map: MindMap | null,
+  missingMap: boolean,
+  dateScanFrom?: string,
+  dateScanTo?: string,
+): Promise<EventDetail> {
+  const from = dateScanFrom || '2026-01-01';
+  const to = dateScanTo || '2099-12-31';
   const sourceContextWasUnclassified = !space.context || space.context === 'unclassified';
 
   const nodes: EventNode[] = [];
@@ -563,6 +647,30 @@ export async function buildEventDetail(
   };
 }
 
+/**
+ * Read-only compatibility detail for a map that has no TopicSpace owner.
+ * The map remains the source of truth; no TopicSpace or replacement map is
+ * created on disk.
+ */
+export async function buildIndependentMindMapEventDetail(
+  workspaceRoot: string,
+  mindmapId: string,
+  dateScanFrom?: string,
+  dateScanTo?: string,
+): Promise<EventDetail | null> {
+  const maps = await scanMindMapsDir(workspaceRoot);
+  const map = maps.find(candidate => candidate.id === mindmapId);
+  if (!map) return null;
+  return buildEventDetailFromSources(
+    workspaceRoot,
+    standaloneMapAsSpace(map),
+    map,
+    false,
+    dateScanFrom,
+    dateScanTo,
+  );
+}
+
 async function scanWorkspacesDir(dir: string, out: string[]): Promise<void> {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -586,9 +694,35 @@ export async function listAllEvents(workspaceRoot: string): Promise<EventSummary
   await scanWorkspacesDir(workspacesDir, files);
 
   const events: EventSummary[] = [];
+  const representedMindmapIds = new Set<string>();
+  const representedSpaceIds = new Set<string>();
   for (const fp of files) {
     const ev = await summarizeTopicSpaceAsEvent(workspaceRoot, fp);
-    if (ev) events.push(ev);
+    if (!ev) continue;
+    events.push(ev);
+    representedSpaceIds.add(ev.id);
+    const space = await readTopicSpaceFileSafe(workspaceRoot, fp);
+    if (space?.mindmapId) representedMindmapIds.add(space.mindmapId);
+  }
+
+  // Legacy/standalone maps are Event shells too. A map already owned by a
+  // TopicSpace is deliberately omitted so one conceptual Event has one row.
+  const maps = await scanMindMapsDir(workspaceRoot);
+  for (const map of maps) {
+    if (representedMindmapIds.has(map.id)) continue;
+    if (map.spaceId && representedSpaceIds.has(map.spaceId)) continue;
+    const space = standaloneMapAsSpace(map);
+    const progress = await computeProgressFromSpace(workspaceRoot, space, map);
+    events.push({
+      id: map.id,
+      title: map.title,
+      context: 'work',
+      status: progress.allDone ? 'completed' : 'active',
+      progress: { done: progress.done, total: progress.total },
+      effectiveTags: [],
+      createdAt: map.createdAt,
+      updatedAt: map.updatedAt,
+    });
   }
 
   events.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

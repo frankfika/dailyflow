@@ -125,6 +125,28 @@ describe.sequential('EFP-003 / EFP-005 routes /api/events', () => {
     expect(res.body[0].id).toBe('tw_v1legacy');
   });
 
+  it('POST /api/events creates one Event and returns its single-map detail', async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-events-route-create-'));
+    vi.spyOn(config, 'loadConfig').mockResolvedValue({
+      workspaceRoot: tmpRoot,
+      dailyPathTemplate: 'daily/{date}.md',
+      rolloverTrigger: 'manual',
+      rolloverSkipTags: [],
+    } as any);
+    const created = await withServer(app, (p) => request(p, 'POST', '/api/events', {
+      title: 'Ship DailyFlow',
+      context: 'work',
+    }));
+    expect(created.status).toBe(201);
+    expect(created.body?.title).toBe('Ship DailyFlow');
+    expect(created.body?.id).toMatch(/^tw_/);
+    expect(created.body?.mindmapId).toMatch(/^[0-9A-Z]{26}$/);
+    expect(created.body?.nodes).toHaveLength(1);
+
+    const listed = await withServer(app, (p) => request(p, 'GET', '/api/events'));
+    expect(listed.body.map((event: any) => event.id)).toContain(created.body.id);
+  });
+
   it('GET /api/events/:nonexistent → returns 404 Event not found (EFP-005)', async () => {
     const mounted = await mountFixture(app, 'v1-map-unclassified');
     tmpRoot = mounted.tmpRoot;

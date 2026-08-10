@@ -12,7 +12,10 @@ import {
   undoCompleteNodeTask,
   convertStandaloneToEventNodeTask,
   undoConvertStandaloneToEventNodeTask,
+  unscheduleNodeTask,
+  rescheduleNodeTask,
 } from '../services/eventExecutionService.js';
+import { createTopicSpace } from '../services/topicSpaces.js';
 import type { EventContext } from '../types/event.js';
 
 const router = Router();
@@ -81,6 +84,22 @@ router.get('/standalone-tasks', async (req, res) => {
     console.error('[events] standalone-tasks error:', error);
     const status = error?.status ?? 500;
     res.status(status).json({ error: error.message });
+  }
+});
+
+/** Create the compatibility TopicSpace + dominant map, exposed as one Event. */
+router.post('/', async (req, res) => {
+  try {
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    if (!title) return res.status(400).json({ error: 'title is required' });
+    const context = isEventContext(req.body?.context) ? req.body.context : 'work';
+    const space = await createTopicSpace({ title, context });
+    const detail = await getEventById(space.id);
+    if (!detail) return res.status(500).json({ error: 'Event was created but could not be read' });
+    res.status(201).json(detail);
+  } catch (error: any) {
+    console.error('[events] create error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
   }
 });
 
@@ -268,6 +287,43 @@ router.post('/actions/undo-convert-standalone-to-event-node-task', async (req, r
     console.error('[events] undo-convert-standalone error:', error);
     const status = error?.status ?? 500;
     res.status(status).json({ error: error.message });
+  }
+});
+
+router.post('/actions/unschedule-node-task', async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.taskId || !b.scheduledDate || !b.mindmapId || !b.nodeId) {
+      return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate, mindmapId, nodeId' });
+    }
+    res.json(await unscheduleNodeTask({
+      taskId: b.taskId,
+      scheduledDate: b.scheduledDate,
+      mindmapId: b.mindmapId,
+      nodeId: b.nodeId,
+    }));
+  } catch (error: any) {
+    console.error('[events] unschedule error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
+  }
+});
+
+router.post('/actions/reschedule-node-task', async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.taskId || !b.fromDate || !b.toDate || !b.mindmapId || !b.nodeId) {
+      return res.status(400).json({ error: 'Required fields missing: taskId, fromDate, toDate, mindmapId, nodeId' });
+    }
+    res.json(await rescheduleNodeTask({
+      taskId: b.taskId,
+      fromDate: b.fromDate,
+      toDate: b.toDate,
+      mindmapId: b.mindmapId,
+      nodeId: b.nodeId,
+    }));
+  } catch (error: any) {
+    console.error('[events] reschedule error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
   }
 });
 

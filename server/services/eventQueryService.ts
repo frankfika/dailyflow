@@ -1,5 +1,5 @@
 import type { EventSummary, EventDetail, TodayItem, StandaloneTask, EventContext } from '../types/event.js';
-import { summarizeTopicSpaceAsEvent, buildEventDetail, listAllEvents, listTodayItems as adapterListToday, listStandaloneTasks as adapterListStandalone } from './eventAdapter.js';
+import { buildEventDetail, buildIndependentMindMapEventDetail, listAllEvents, listTodayItems as adapterListToday, listStandaloneTasks as adapterListStandalone } from './eventAdapter.js';
 import { loadConfig } from './config.js';
 import { getMindMap, listMindMaps } from './mindmaps.js';
 import { getTopicSpace, listTopicSpaces, findTopicSpaceByTaskId } from './topicSpaces.js';
@@ -108,9 +108,10 @@ export async function getEventById(
   scanFrom?: string,
   scanTo?: string,
 ): Promise<EventDetail | null> {
-  const spaceFile = await resolveEventIdToSpaceFile(eventId, workspaceRoot);
-  if (!spaceFile) return null;
-  return getEventDetail(spaceFile, workspaceRoot, scanFrom, scanTo);
+  const root = await resolveWorkspaceRoot(workspaceRoot);
+  const spaceFile = await resolveEventIdToSpaceFile(eventId, root);
+  if (spaceFile) return getEventDetail(spaceFile, root, scanFrom, scanTo);
+  return buildIndependentMindMapEventDetail(root, eventId, scanFrom, scanTo);
 }
 
 export async function listEvents(workspaceRoot?: string): Promise<EventSummary[]> {

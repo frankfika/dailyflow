@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TodayBacklog } from '../../components/TodayBacklog';
 
 const noop = vi.fn();
@@ -11,14 +11,21 @@ function renderBacklog(tasks: Array<{
   deadline?: string;
   spaceId?: string;
   originMindmapId?: string;
-}>, focusTaskIds: string[] = [], withPlanning = false) {
+}>, withPlanning = false) {
   return render(
     <TodayBacklog
       tasks={tasks}
-      planningGroups={withPlanning ? [{ id: 'mm-1', mindmapId: 'mm-1', spaceId: 'space-1', title: 'Launch plan', taskIds: tasks.map(task => task.id), completedTaskIds: tasks.filter(task => task.status === 'done').map(task => task.id) }] : []}
+      planningGroups={withPlanning ? [{
+        id: 'event-1',
+        mindmapId: 'map-1',
+        spaceId: 'space-1',
+        title: 'Launch event',
+        taskIds: tasks.filter(task => task.spaceId || task.originMindmapId).map(task => task.id),
+        completedTaskIds: tasks.filter(task => task.status === 'done' && (task.spaceId || task.originMindmapId)).map(task => task.id),
+      }] : []}
       selectedDate="2026-07-28"
       categories={[]}
-      focusTaskIds={focusTaskIds}
+      focusTaskIds={[]}
       onFocusTaskIdsChange={noop}
       onToggleTask={noop}
       onEditTask={noop}
@@ -33,46 +40,46 @@ function renderBacklog(tasks: Array<{
   );
 }
 
-describe('TodayBacklog simplified flow', () => {
-  it('keeps linked plans available without putting them above the task path', () => {
-    renderBacklog([{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'mm-1' }], [], true);
+describe('TodayBacklog Event-first execution flow', () => {
+  beforeEach(() => vi.clearAllMocks());
 
-    expect(screen.getByTestId('today-planning')).toBeInTheDocument();
-    expect(screen.getByText('Linked plans')).toBeInTheDocument();
-    expect(screen.getAllByText('Launch plan')).toHaveLength(2);
-    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('Write launch brief');
-    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('2026-07-28');
-    expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument();
-    expect(screen.getByTestId('task-card-space-binding-planned')).toHaveTextContent('Launch plan');
-  });
-  it('keeps a completed focus task visible and advances focus progress', () => {
-    renderBacklog(
-      [{ id: 'focus-done', title: 'Ship the release', status: 'done' }],
-      ['focus-done'],
-    );
+  it('renders one execution list without focus or linked-plan surfaces', () => {
+    renderBacklog([
+      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' },
+      { id: 'standalone', title: 'Buy groceries', status: 'todo' },
+    ], true);
 
-    expect(screen.getByText('Ship the release')).toBeInTheDocument();
-    expect(screen.getByText('1/3')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark incomplete' })).toBeInTheDocument();
+    const list = screen.getByTestId('today-execution-list');
+    expect(within(list).getAllByRole('article')).toHaveLength(2);
+    expect(screen.queryByTestId('today-focus-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('today-planning')).not.toBeInTheDocument();
+    expect(screen.queryByText('Linked plans')).not.toBeInTheDocument();
   });
 
-  it('shows non-focus completed tasks in a reopenable completed section', () => {
+  it('shows an Event breadcrumb or Standalone directly on each task row', () => {
+    renderBacklog([
+      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1' },
+      { id: 'standalone', title: 'Buy groceries', status: 'todo' },
+    ], true);
+
+    expect(screen.getByTestId('task-card-event-planned')).toHaveTextContent('Launch event');
+    expect(screen.getByTestId('task-card-event-standalone')).toHaveTextContent('Standalone');
+  });
+
+  it('preserves the quick standalone task action', () => {
+    renderBacklog([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+    expect(noop).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps completed tasks out of the execution list until explicitly expanded', () => {
     renderBacklog([
       { id: 'done', title: 'Reviewed notes', status: 'done' },
       { id: 'open', title: 'Plan tomorrow', status: 'todo' },
     ]);
 
-    expect(screen.getByTestId('today-group-completed')).toBeInTheDocument();
+    expect(within(screen.getByTestId('today-execution-list')).queryByText('Reviewed notes')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Completed 1/i }));
     expect(screen.getByText('Reviewed notes')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark as todo' })).toBeInTheDocument();
-  });
-
-  it('adds a task to focus from the task row', () => {
-    vi.clearAllMocks();
-    renderBacklog([{ id: 'drag-me', title: 'Drag this task', status: 'todo' }]);
-    fireEvent.click(screen.getByRole('button', { name: 'Make a focus task' }));
-
-    expect(noop).toHaveBeenCalledWith(['drag-me']);
   });
 });

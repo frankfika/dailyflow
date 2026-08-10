@@ -13,6 +13,7 @@ import {
   resolveTaskStateFromMarkdown,
   buildNodePath,
 } from '../eventAdapter.js';
+import { getEventById } from '../eventQueryService.js';
 
 const FIXTURES_ROOT = path.resolve(
   __dirname,
@@ -237,6 +238,83 @@ describe.sequential('EFP-002 event adapter (read-only)', () => {
       expect(nB.execution).toBeDefined();
       expect(nA.execution!.taskId).toBe('t_dup');
       expect(nB.execution!.taskId).toBe('t_dup');
+    });
+  });
+
+  describe('scenario 6 — independent MindMap compatibility Event', () => {
+    let root: string;
+    let dispose: () => Promise<void>;
+
+    beforeAll(async () => {
+      const w = await setupWorkspace('independent-mindmap');
+      root = w.root;
+      dispose = w.dispose;
+    });
+    afterAll(async () => { await dispose(); });
+
+    async function snapshotFiles(): Promise<Record<string, string>> {
+      const result: Record<string, string> = {};
+      const visit = async (dir: string): Promise<void> => {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const absolute = path.join(dir, entry.name);
+          if (entry.isDirectory()) await visit(absolute);
+          else result[path.relative(root, absolute)] = await fs.readFile(absolute, 'utf-8');
+        }
+      };
+      await visit(root);
+      return result;
+    }
+
+    it('lists an independent map as an Event shell and prevents owned-map duplicates', async () => {
+      const events = await listAllEvents(root);
+      expect(events.map(event => event.id).sort()).toEqual(['mm_independent', 'tw_owned']);
+      expect(events.some(event => event.id === 'mm_owned')).toBe(false);
+
+      const independent = events.find(event => event.id === 'mm_independent')!;
+      expect(independent.title).toBe('Independent launch plan');
+      expect(independent.context).toBe('work');
+      expect(independent.progress).toEqual({ done: 1, total: 1 });
+      expect(independent.status).toBe('completed');
+    });
+
+    it('gets independent map detail by its preserved map id with linked task state', async () => {
+      const detail = await getEventById(
+        'mm_independent',
+        root,
+        '2026-08-10',
+        '2026-08-10',
+      );
+      expect(detail).not.toBeNull();
+      expect(detail!.id).toBe('mm_independent');
+      expect(detail!.mindmapId).toBe('mm_independent');
+      expect(detail!.rootNodeId).toBe('root_independent');
+      expect(detail!.nodes.map(node => node.id)).toContain('n_independent_task');
+      expect(detail!.nodes.find(node => node.id === 'n_independent_task')!.execution).toMatchObject({
+        taskId: 't_independent',
+        status: 'done',
+        scheduledDate: '2026-08-10',
+      });
+    });
+
+    it('surfaces the same independent Event id in Today and performs zero writes', async () => {
+      const before = await snapshotFiles();
+      const events = await listAllEvents(root);
+      const detail = await getEventById('mm_independent', root);
+      const today = await listTodayItems(root, '2026-08-10');
+      const after = await snapshotFiles();
+
+      expect(events.some(event => event.id === 'mm_independent')).toBe(true);
+      expect(detail?.id).toBe('mm_independent');
+      expect(today).toHaveLength(1);
+      expect(today[0]).toMatchObject({
+        kind: 'event-node',
+        eventId: 'mm_independent',
+        nodeId: 'n_independent_task',
+        taskId: 't_independent',
+        status: 'done',
+      });
+      expect(after).toEqual(before);
     });
   });
 
