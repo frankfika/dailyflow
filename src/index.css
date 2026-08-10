@@ -917,6 +917,221 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   .today-focus-bar-meta { display: none; }
 }
 
+/* Simplified Today surface. The older class rules above remain for release
+   compatibility; these are the only structures rendered by TodayBacklog. */
+.today-simple {
+  gap: 1.35rem;
+}
+.today-simple section,
+.today-simple details {
+  min-width: 0;
+}
+.today-simple-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+.today-simple-section-header h2 {
+  margin: 0.1rem 0 0;
+  color: var(--color-text-heading);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.today-simple-eyebrow {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 550;
+}
+.today-simple-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.today-simple-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 650;
+  transition: opacity 0.2s var(--ease-native), transform 0.2s var(--ease-native);
+}
+.today-simple-add:hover { opacity: 0.9; transform: translateY(-1px); }
+.today-simple-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.today-simple-task {
+  position: relative;
+  min-width: 0;
+  border-radius: 0.65rem;
+}
+.today-simple-focus {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.5rem;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+}
+.today-simple-task:hover .today-simple-focus,
+.today-simple-task:focus-within .today-simple-focus,
+.today-simple-focus.is-active { opacity: 1; }
+.today-simple-focus:hover:not(:disabled),
+.today-simple-focus.is-active { border-color: var(--color-accent); background: var(--color-accent); color: white; }
+.today-simple-focus:disabled { cursor: not-allowed; opacity: 0.3; }
+.today-simple-focus-panel {
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 18%, var(--color-border));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--color-accent) 3%, var(--color-surface));
+}
+.today-simple-focus-panel .today-simple-section-header { align-items: center; margin-bottom: 0.55rem; }
+.today-simple-focus-panel .today-simple-section-header > span {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+.today-simple-focus-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.today-simple-focus-list li {
+  display: grid;
+  grid-template-columns: 1.45rem minmax(0, 1fr) 1.5rem;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-main);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+.today-simple-focus-list li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-simple-focus-list li.is-done > span { color: var(--color-text-muted); text-decoration: line-through; }
+.today-simple-focus-check {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.today-simple-focus-list li.is-done .today-simple-focus-check { border-color: var(--color-success); background: var(--color-success); color: white; }
+.today-simple-focus-remove {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.4rem;
+  color: var(--color-text-muted);
+}
+.today-simple-focus-remove:hover { background: var(--color-border); color: var(--color-text-heading); }
+.today-simple-disclosure,
+.today-simple-completed {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}
+.today-simple-disclosure > summary,
+.today-simple-completed > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.1rem;
+  padding: 0.3rem 0.15rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  list-style: none;
+  text-align: left;
+  cursor: pointer;
+}
+.today-simple-disclosure > summary::-webkit-details-marker { display: none; }
+.today-simple-disclosure > summary:hover,
+.today-simple-completed > button:hover { color: var(--color-text-heading); }
+.today-simple-disclosure-icon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.45rem;
+  background: var(--color-border);
+}
+.today-simple-disclosure-count {
+  display: grid;
+  place-items: center;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--color-border);
+  font-size: 0.64rem;
+}
+.today-simple-disclosure-chevron { margin-left: auto; transition: transform 0.2s var(--ease-native); }
+.today-simple-disclosure[open] .today-simple-disclosure-chevron { transform: rotate(180deg); }
+.today-simple-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.6rem;
+  padding-top: 0.55rem;
+}
+.today-simple-plan {
+  padding: 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: var(--color-surface);
+}
+.today-simple-plan header { display: flex; align-items: center; gap: 0.5rem; font-size: 0.7rem; }
+.today-simple-plan header strong { min-width: 0; overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-heading); }
+.today-simple-plan header span { color: var(--color-text-muted); }
+.today-simple-plan header button { color: var(--color-accent); font-weight: 600; }
+.today-simple-plan ul { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.55rem 0 0; padding: 0; list-style: none; }
+.today-simple-plan li { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto; align-items: center; gap: 0.45rem; border-top: 1px solid var(--color-border); padding-top: 0.4rem; font-size: 0.68rem; }
+.today-simple-plan li > button { display: grid; place-items: center; width: 1rem; height: 1rem; border: 1px solid var(--color-border-strong); border-radius: 50%; color: white; }
+.today-simple-plan li > small { display: flex; align-items: center; gap: 0.2rem; color: var(--color-text-muted); font-size: 0.6rem; }
+.today-simple-completed .today-simple-list { padding-top: 0.45rem; }
+
+@media (max-width: 768px) {
+  .today-simple-focus-list { grid-template-columns: 1fr; }
+  .today-simple-focus { opacity: 1; }
+  .today-simple-section-header { align-items: center; }
+}
+
 /* ==========================================================================
    Notes focus-mode icon strip — v1.1.4 cap + scroll cues
    Caps the strip at 12 visible dots (1 "+" + 11 notes, or 11 + 1 "N+" when

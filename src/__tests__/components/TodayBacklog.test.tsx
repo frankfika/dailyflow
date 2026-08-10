@@ -33,15 +33,15 @@ function renderBacklog(tasks: Array<{
   );
 }
 
-describe('TodayBacklog completion flow', () => {
-  it('shows mindmap hierarchy above tasks and exposes navigation', () => {
+describe('TodayBacklog simplified flow', () => {
+  it('keeps linked plans available without putting them above the task path', () => {
     renderBacklog([{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'mm-1' }], [], true);
 
     expect(screen.getByTestId('today-planning')).toBeInTheDocument();
-    expect(screen.getByText('Mind maps sit above tasks')).toBeInTheDocument();
+    expect(screen.getByText('Linked plans')).toBeInTheDocument();
     expect(screen.getAllByText('Launch plan')).toHaveLength(2);
     expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('Write launch brief');
-    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('Planned 2026-07-28');
+    expect(screen.getByTestId('today-planning-task-planned')).toHaveTextContent('2026-07-28');
     expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument();
     expect(screen.getByTestId('task-card-space-binding-planned')).toHaveTextContent('Launch plan');
   });
@@ -52,7 +52,7 @@ describe('TodayBacklog completion flow', () => {
     );
 
     expect(screen.getByText('Ship the release')).toBeInTheDocument();
-    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getByText('1/3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark incomplete' })).toBeInTheDocument();
   });
 
@@ -68,22 +68,10 @@ describe('TodayBacklog completion flow', () => {
     expect(screen.getByRole('button', { name: 'Mark as todo' })).toBeInTheDocument();
   });
 
-  it('adds a task to focus when it is dragged onto the focus area', () => {
+  it('adds a task to focus from the task row', () => {
     vi.clearAllMocks();
     renderBacklog([{ id: 'drag-me', title: 'Drag this task', status: 'todo' }]);
-    const row = screen.getByText('Drag this task').closest('li');
-    expect(row).not.toBeNull();
-    const values: Record<string, string> = {};
-    const dataTransfer = {
-      effectAllowed: '',
-      dropEffect: '',
-      setData: (type: string, value: string) => { values[type] = value; },
-      getData: (type: string) => values[type] ?? '',
-    };
-
-    fireEvent.dragStart(row!, { dataTransfer });
-    fireEvent.dragOver(screen.getByTestId('today-focus-bar'), { dataTransfer });
-    fireEvent.drop(screen.getByTestId('today-focus-bar'), { dataTransfer });
+    fireEvent.click(screen.getByRole('button', { name: 'Make a focus task' }));
 
     expect(noop).toHaveBeenCalledWith(['drag-me']);
   });

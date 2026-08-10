@@ -1,0 +1,32 @@
+{
+  "id": "mm_workplan",
+  "title": "Work plan",
+  "rootId": "root",
+  "version": 2,
+  "spaceId": "tw_workplan",
+  "nodes": [
+    {
+      "id": "root",
+      "text": "Work plan",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    },
+    {
+      "id": "n_act",
+      "text": "Action item",
+      "position": { "x": 1, "y": 0 },
+      "kind": "task",
+      "taskId": "t_ws1",
+      "taskDate": "2026-08-10"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e",
+      "source": "root",
+      "target": "n_act"
+    }
+  ],
+  "createdAt": "2026-06-01T10:00:00.000Z",
+  "updatedAt": "2026-08-10T07:15:00.000Z"
+}

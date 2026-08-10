@@ -79,6 +79,7 @@ export interface Config {
     todayV2?: boolean;
     memoryV2?: boolean;
     connectorsV2?: boolean;
+    eventFirst?: boolean;
     aiEnabled?: boolean;
     contextBudgetBytes?: number;
   };

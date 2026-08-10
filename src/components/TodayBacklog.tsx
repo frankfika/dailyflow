@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
-import { ArrowRight, Calendar, Check, ChevronDown, Clock3, Eye, Flame, Network, Sparkles, Target, WandSparkles, X } from 'lucide-react';
+import { Check, ChevronDown, Clock3, Network, Plus, Sparkles, Target, X } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 
 type Task = {
@@ -31,8 +30,6 @@ export interface TodayPlanningGroup {
   completedTaskIds: string[];
 }
 
-type Filter = 'all' | 'today' | 'overdue' | 'upcoming';
-
 interface TodayBacklogProps {
   tasks: Task[];
   planningGroups?: TodayPlanningGroup[];
@@ -55,48 +52,16 @@ interface TodayBacklogProps {
 }
 
 const FOCUS_LIMIT = 3;
+const PRIORITY_RANK: Record<'high' | 'medium' | 'low', number> = { high: 0, medium: 1, low: 2 };
 
-function startOfTodayIso(): string {
-  // Returns YYYY-MM-DD in the user's local time.
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
-function daysBetween(a: string, b: string): number {
-  // a, b are YYYY-MM-DD; returns signed day count (b - a).
-  const [ay, am, ad] = a.split('-').map(Number);
-  const [by, bm, bd] = b.split('-').map(Number);
-  const at = Date.UTC(ay, am - 1, ad);
-  const bt = Date.UTC(by, bm - 1, bd);
-  return Math.round((bt - at) / 86_400_000);
-}
-
-type Group = 'overdue' | 'today' | 'week' | 'later';
-
-function classifyDeadline(deadline: string | undefined, today: string): Group | null {
-  if (!deadline) return null;
-  const diff = daysBetween(today, deadline);
-  if (diff < 0) return 'overdue';
-  if (diff === 0) return 'today';
-  if (diff <= 7) return 'week';
-  return 'later';
-}
-
-const PRIORITY_RANK: Record<'high' | 'medium' | 'low', number> = {
-  high: 0,
-  medium: 1,
-  low: 2,
-};
-
-function compareTasks(a: Task, b: Task, today: string): number {
-  // Higher priority first; then sooner deadline; then keep stable order otherwise.
-  const pa = a.priority ? PRIORITY_RANK[a.priority] : 3;
-  const pb = b.priority ? PRIORITY_RANK[b.priority] : 3;
-  if (pa !== pb) return pa - pb;
-  const da = a.deadline || '9999-12-31';
-  const db = b.deadline || '9999-12-31';
-  if (da !== db) return da.localeCompare(db);
-  return 0;
+function compareTasks(a: Task, b: Task): number {
+  const aDeadline = a.deadline || '9999-12-31';
+  const bDeadline = b.deadline || '9999-12-31';
+  if (aDeadline !== bDeadline) return aDeadline.localeCompare(bDeadline);
+  const aPriority = a.priority ? PRIORITY_RANK[a.priority] : 3;
+  const bPriority = b.priority ? PRIORITY_RANK[b.priority] : 3;
+  if (aPriority !== bPriority) return aPriority - bPriority;
+  return (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function TodayBacklog({
@@ -119,104 +84,22 @@ export function TodayBacklog({
   completionPromptTaskIds = new Set<string>(),
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
-  const [filter, setFilter] = useState<Filter>('all');
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  // No-deadline tasks are visible by default so the Today view doesn't look
-  // empty; the checkbox below lets the user collapse them entirely when they
-  // want to focus on dated work.
-  const [hideNoDeadline, setHideNoDeadline] = useState(false);
 
-  const today = selectedDate || startOfTodayIso();
-
-  // Open (non-done) tasks; migrated tasks are excluded (they live in source_date).
   const openTasks = useMemo(
-    () => tasks.filter(t => t.status !== 'done' && t.status !== 'migrated'),
+    () => tasks.filter(task => task.status === 'todo').sort(compareTasks),
     [tasks],
   );
-
+  const completedTasks = useMemo(
+    () => tasks.filter(task => task.status === 'done'),
+    [tasks],
+  );
   const focusTasks = useMemo(
     () => focusTaskIds
-      .map(id => tasks.find(t => t.id === id && t.status !== 'migrated'))
-      .filter((t): t is Task => Boolean(t)),
+      .map(id => tasks.find(task => task.id === id && task.status !== 'migrated'))
+      .filter((task): task is Task => Boolean(task)),
     [focusTaskIds, tasks],
   );
-
-  const backlog = useMemo(
-    () => openTasks.filter(t => !focusTaskIds.includes(t.id)),
-    [openTasks, focusTaskIds],
-  );
-
-  // Group backlog tasks by urgency bucket.
-  const groups = useMemo(() => {
-    const buckets: Record<Group, Task[]> = { overdue: [], today: [], week: [], later: [] };
-    const noDeadline: Task[] = [];
-    for (const task of backlog) {
-      const bucket = classifyDeadline(task.deadline, today);
-      if (bucket) buckets[bucket].push(task);
-      else noDeadline.push(task);
-    }
-    for (const key of Object.keys(buckets) as Group[]) {
-      buckets[key].sort((a, b) => compareTasks(a, b, today));
-    }
-    noDeadline.sort((a, b) => compareTasks(a, b, today));
-    return { buckets, noDeadline };
-  }, [backlog, today]);
-
-  // Active filter: when user picks a specific bucket, only show that one
-  // group; the rest are hidden so the filter actually narrows the view.
-  const visibleBuckets: Record<Group, Task[]> = useMemo(() => {
-    if (filter === 'all') return groups.buckets;
-    return {
-      overdue: filter === 'overdue' ? groups.buckets.overdue : [],
-      today: filter === 'today' ? groups.buckets.today : [],
-      week: filter === 'upcoming' ? groups.buckets.week : [],
-      later: filter === 'upcoming' ? groups.buckets.later : [],
-    };
-  }, [groups, filter]);
-
-  const groupDefs: { key: Group; label: string; icon: typeof Flame; accent: string }[] = [
-    { key: 'overdue', label: language === 'zh' ? '已过期' : 'Overdue', icon: Flame, accent: 'overdue' },
-    { key: 'today',   label: language === 'zh' ? '今天截止' : 'Due today', icon: Target, accent: 'today' },
-    { key: 'week',    label: language === 'zh' ? '本周' : 'This week', icon: Calendar, accent: 'week' },
-    { key: 'later',   label: language === 'zh' ? '之后' : 'Later', icon: Clock3, accent: 'later' },
-  ];
-
-  const counts: Record<Group, number> = {
-    overdue: groups.buckets.overdue.length,
-    today: groups.buckets.today.length,
-    week: groups.buckets.week.length,
-    later: groups.buckets.later.length,
-  };
-
-  const addToFocus = (id: string) => {
-    if (focusTaskIds.length >= FOCUS_LIMIT) return;
-    if (focusTaskIds.includes(id)) return;
-    onFocusTaskIdsChange([...focusTaskIds, id]);
-  };
-  const removeFromFocus = (id: string) => {
-    onFocusTaskIdsChange(focusTaskIds.filter(fid => fid !== id));
-  };
-  const isInFocus = (id: string) => focusTaskIds.includes(id);
-
-  const completedFocus = focusTasks.filter(t => t.status === 'done').length;
-  const progress = focusTasks.length === 0 ? 0 : Math.round((completedFocus / focusTasks.length) * 100);
-
-  const completedTasks = useMemo(
-    () => tasks.filter(t => t.status === 'done'),
-    [tasks],
-  );
-  const dueTodayCount = groups.buckets.today.length;
-  const overdueCount = groups.buckets.overdue.length;
-
-  // i18n for filter pills
-  const labels: Record<string, string> = {
-    all: language === 'zh' ? '全部' : 'All',
-    today: language === 'zh' ? '今天截止' : 'Due today',
-    overdue: language === 'zh' ? '已过期' : 'Overdue',
-    upcoming: language === 'zh' ? '接下来' : 'Upcoming',
-  };
-
   const planningGroupByTaskId = useMemo(() => {
     const lookup = new Map<string, TodayPlanningGroup>();
     for (const group of planningGroups) {
@@ -225,432 +108,182 @@ export function TodayBacklog({
     return lookup;
   }, [planningGroups]);
 
-  return (
-    <div className="today-backlog" data-testid="today-backlog">
-      <section className="today-planning" data-testid="today-planning">
-        <header className="today-planning-header">
-          <span className="today-planning-mark"><Network className="h-4 w-4" /></span>
-          <div className="min-w-0 flex-1">
-            <p className="today-planning-eyebrow">{language === 'zh' ? '思维导图在任务之上' : 'Mind maps sit above tasks'}</p>
-            <h2 className="today-planning-title">{language === 'zh' ? '今日规划脉络' : "Today's planning map"}</h2>
-          </div>
-          <span className="today-planning-summary">
-            {planningGroups.length > 0
-              ? (language === 'zh' ? `${planningGroups.length} 张导图 · ${planningGroups.reduce((sum, group) => sum + group.taskIds.length, 0)} 个任务` : `${planningGroups.length} maps · ${planningGroups.reduce((sum, group) => sum + group.taskIds.length, 0)} tasks`)
-              : (language === 'zh' ? '尚无关联' : 'No links yet')}
-          </span>
-        </header>
+  const addToFocus = (id: string) => {
+    if (focusTaskIds.includes(id) || focusTaskIds.length >= FOCUS_LIMIT) return;
+    onFocusTaskIdsChange([...focusTaskIds, id]);
+  };
+  const removeFromFocus = (id: string) => {
+    onFocusTaskIdsChange(focusTaskIds.filter(taskId => taskId !== id));
+  };
 
-        {planningGroups.length > 0 ? (
-          <div className="today-planning-groups">
-            {planningGroups.map((group) => {
-              const groupTasks = group.taskIds
-                .map((taskId) => tasks.find((task) => task.id === taskId))
-                .filter((task): task is Task => Boolean(task));
-              return (
-                <article
-                  key={group.id}
-                  className="today-planning-group"
-                  data-testid={`today-planning-group-${group.id}`}
-                >
-                  <header className="today-planning-group-header">
-                    <span className="today-planning-node"><Network className="h-3.5 w-3.5" /></span>
-                    <span className="today-planning-group-title">{group.title}</span>
-                    <span className="today-planning-progress">{group.completedTaskIds.length}/{group.taskIds.length}</span>
-                    <button type="button" className="today-planning-open-map" onClick={() => onOpenPlanningGroup?.(group)}>
-                      {language === 'zh' ? '查看导图' : 'View map'} <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </header>
-                  <ul className="today-planning-task-list">
-                    {groupTasks.map((task) => {
-                      const scheduledDate = task.deadline ?? task.source_date ?? selectedDate;
-                      const timeLabel = task.deadline
-                        ? (language === 'zh' ? `截止 ${scheduledDate}` : `Due ${scheduledDate}`)
-                        : (language === 'zh' ? `计划 ${scheduledDate}` : `Planned ${scheduledDate}`);
-                      return (
-                        <li key={task.id} className={`today-planning-task ${task.status === 'done' ? 'is-done' : ''}`} data-testid={`today-planning-task-${task.id}`}>
-                          <button
-                            type="button"
-                            className="today-planning-task-check"
-                            onClick={() => onToggleTask(task.id)}
-                            aria-label={task.status === 'done' ? (language === 'zh' ? '恢复任务' : 'Reopen task') : (language === 'zh' ? '完成任务' : 'Complete task')}
-                          >
-                            {task.status === 'done' ? <Check className="h-3 w-3" /> : null}
-                          </button>
-                          <span className="today-planning-task-title">{task.title}</span>
-                          <span className="today-planning-task-time">
-                            <Clock3 className="h-3 w-3" />{timeLabel}{task.time ? ` · ${task.time}` : ''}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <button type="button" className="today-planning-empty" onClick={() => onOpenPlanningGroup?.({ id: '', mindmapId: '', title: '', taskIds: [], completedTaskIds: [] })}>
-            <span>{language === 'zh' ? '先在思维导图里拆解，再把可执行节点设为任务；关联后会自动出现在这里。' : 'Break work down in a mind map, then make actionable nodes into tasks. Linked work appears here automatically.'}</span>
-            <span className="today-planning-empty-action">{language === 'zh' ? '打开思维导图' : 'Open mind maps'} <ArrowRight className="h-3 w-3" /></span>
+  const renderTask = (task: Task) => {
+    const inFocus = focusTaskIds.includes(task.id);
+    return (
+      <li
+        key={task.id}
+        className="today-simple-task"
+      >
+        <TaskCard
+          task={task}
+          spaceTitle={planningGroupByTaskId.get(task.id)?.title}
+          language={language}
+          categories={categories}
+          currentFileDate={selectedDate}
+          linkedNotesCount={linkedNotesCount(task.id)}
+          onToggle={() => onToggleTask(task.id)}
+          onEdit={updates => onEditTask(task.id, updates)}
+          onDelete={() => onDeleteTask(task.id)}
+          onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
+          onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+          showCompletionPrompt={completionPromptTaskIds.has(task.id)}
+          onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
+        />
+        {isToday && task.status === 'todo' && (
+          <button
+            type="button"
+            className={`today-simple-focus ${inFocus ? 'is-active' : ''}`}
+            onClick={() => inFocus ? removeFromFocus(task.id) : addToFocus(task.id)}
+            disabled={!inFocus && focusTaskIds.length >= FOCUS_LIMIT}
+            aria-label={inFocus
+              ? (language === 'zh' ? '移出今日重点' : 'Remove from focus')
+              : (language === 'zh' ? '设为今日重点' : 'Make a focus task')}
+            title={inFocus
+              ? (language === 'zh' ? '今日重点' : 'In focus')
+              : (language === 'zh' ? '设为今日重点' : 'Make a focus task')}
+            data-testid={inFocus ? `in-focus-${task.id}` : `add-to-focus-${task.id}`}
+          >
+            {inFocus ? <Check className="h-3.5 w-3.5" /> : <Target className="h-3.5 w-3.5" />}
           </button>
         )}
-      </section>
+      </li>
+    );
+  };
 
-      {/* Focus bar (sticky on desktop, collapsible on mobile) */}
-      <section
-        className={`today-focus-bar ${draggingTaskId ? 'ring-1 ring-accent/30 bg-accent/[0.03]' : ''}`}
-        data-testid="today-focus-bar"
-        onDragOver={event => {
-          if (!isToday || focusTaskIds.length >= FOCUS_LIMIT) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-        }}
-        onDrop={event => {
-          event.preventDefault();
-          const taskId = event.dataTransfer.getData('text/dailyflow-task-id')
-            || event.dataTransfer.getData('text/plain');
-          if (taskId) addToFocus(taskId);
-          setDraggingTaskId(null);
-        }}
-      >
-        <div className="today-focus-bar-toggle">
-          <span className="today-focus-bar-mark"><Target className="w-4 h-4" /></span>
-          <div className="min-w-0 flex-1 text-left">
-            <p className="today-focus-bar-eyebrow">
-              {language === 'zh' ? '最多 3 件优先事项' : 'Up to 3 priorities'}
-            </p>
-            <h2 className="today-focus-bar-title">
-              {language === 'zh' ? '今日聚焦' : "Today's focus"}
-            </h2>
-          </div>
-          <div className="today-focus-bar-progress" aria-label={`${progress}%`}>
-            <span>{completedFocus}/{focusTasks.length || FOCUS_LIMIT}</span>
-            <div className="today-focus-bar-progress-track">
-              <motion.div
-                className="today-focus-bar-progress-value"
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.35 }}
-              />
+  return (
+    <div className="today-backlog today-simple" data-testid="today-backlog">
+      {focusTasks.length > 0 && (
+        <section
+          className="today-simple-focus-panel"
+          data-testid="today-focus-bar"
+        >
+          <header className="today-simple-section-header">
+            <div>
+              <p className="today-simple-eyebrow">{language === 'zh' ? '今天先做这些' : 'Do these first'}</p>
+              <h2>{language === 'zh' ? '今日重点' : "Today's focus"}</h2>
             </div>
-          </div>
-        </div>
-
-        {focusTasks.length === 0 ? (
-          <p className="today-focus-bar-empty" data-testid="today-focus-bar-anchor">
-            {language === 'zh'
-              ? `从下方任务右侧点击“+”加入聚焦 · ${dueTodayCount} 件今天截止，${overdueCount} 件已过期`
-              : `Use “+” on a task below to focus it · ${dueTodayCount} due today, ${overdueCount} overdue`}
-          </p>
-        ) : (
-          <ul className="today-focus-bar-list">
+            <span>{focusTasks.length}/{FOCUS_LIMIT}</span>
+          </header>
+          <ul className="today-simple-focus-list">
             {focusTasks.map((task, index) => (
-              <li key={task.id} className={`today-focus-bar-item ${task.status === 'done' ? 'is-done' : ''}`}>
+              <li key={task.id} className={task.status === 'done' ? 'is-done' : ''}>
                 <button
-                  className="today-focus-bar-check"
+                  className="today-simple-focus-check"
                   onClick={() => onToggleTask(task.id)}
                   aria-label={task.status === 'done' ? 'Mark incomplete' : 'Mark complete'}
                 >
-                  {task.status === 'done' ? <Check className="w-3.5 h-3.5" /> : <span>{index + 1}</span>}
+                  {task.status === 'done' ? <Check className="h-3.5 w-3.5" /> : index + 1}
                 </button>
-                <span className="today-focus-bar-task-title">{task.title}</span>
-                {task.deadline && <span className="today-focus-bar-meta">{task.deadline}</span>}
+                <span>{task.title}</span>
                 {isToday && (
-                  <button
-                    className="today-focus-bar-remove"
-                    onClick={() => removeFromFocus(task.id)}
-                    title={language === 'zh' ? '移出今日聚焦' : "Remove from today's focus"}
-                  >
-                    <X className="w-3.5 h-3.5" />
+                  <button className="today-simple-focus-remove" onClick={() => removeFromFocus(task.id)}>
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
-      {/* Filter pills */}
-      <div className="today-filter-row" role="tablist">
-        {(['all', 'today', 'overdue', 'upcoming'] as Filter[]).map(key => {
-          const count = key === 'all'
-            ? backlog.length
-            : key === 'upcoming'
-              ? counts.week + counts.later
-              : counts[key as 'today' | 'overdue'];
-          const isActive = filter === key;
-          return (
-            <button
-              key={key}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setFilter(key)}
-              className={`today-filter-pill ${isActive ? 'is-active' : ''} ${key !== 'all' ? `is-${key}` : ''}`}
-              data-testid={`today-filter-${key}`}
-            >
-              <span>{labels[key]}</span>
-              <span className="today-filter-pill-count">{count}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Backlog groups */}
-      <div className="today-backlog-groups">
-        {groupDefs.map(def => {
-          const items = visibleBuckets[def.key];
-          // All-view: hide empty groups so we don't ship blank sections.
-          // Filtered view: only render the active group, even if empty
-          // (so the "Nothing here" empty state stays visible).
-          if (items.length === 0 && filter === 'all') return null;
-          if (filter === 'upcoming' && def.key !== 'week' && def.key !== 'later') return null;
-          if (filter !== 'all' && filter !== 'upcoming' && def.key !== filter) return null;
-          const Icon = def.icon;
-          return (
-            <section key={def.key} className={`today-group is-${def.accent}`} data-testid={`today-group-${def.key}`}>
-              <header className="today-group-header">
-                <span className="today-group-mark"><Icon className="w-3.5 h-3.5" /></span>
-                <h3 className="today-group-title">{def.label}</h3>
-                <span className="today-group-count">{items.length}</span>
-              </header>
-              {items.length > 0 ? (
-                <ul className="today-group-list">
-                  {items.map(task => (
-                    <li
-                      key={task.id}
-                      className={`today-group-item ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
-                      data-priority={task.priority || 'none'}
-                      draggable={isToday}
-                      onDragStart={event => {
-                        event.dataTransfer.effectAllowed = 'move';
-                        event.dataTransfer.setData('text/dailyflow-task-id', task.id);
-                        event.dataTransfer.setData('text/plain', task.id);
-                        setDraggingTaskId(task.id);
-                      }}
-                      onDragEnd={() => setDraggingTaskId(null)}
-                    >
-                      <TaskCard
-                        task={task}
-                        spaceTitle={planningGroupByTaskId.get(task.id)?.title}
-                        language={language}
-                        categories={categories}
-                        currentFileDate={today}
-                        linkedNotesCount={linkedNotesCount(task.id)}
-                        onToggle={() => onToggleTask(task.id)}
-                        onEdit={updates => onEditTask(task.id, updates)}
-                        onDelete={() => onDeleteTask(task.id)}
-                        onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-                        onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                        showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                        onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
-                      />
-                      {!isInFocus(task.id) ? (
-                        <button
-                          className="today-group-add"
-                          onClick={() => addToFocus(task.id)}
-                          disabled={focusTaskIds.length >= FOCUS_LIMIT}
-                          title={
-                            focusTaskIds.length >= FOCUS_LIMIT
-                              ? (language === 'zh' ? '今天已经选了 3 件' : 'Already 3 picked')
-                              : (language === 'zh' ? '加进今天' : 'Add to today')
-                          }
-                          aria-label={language === 'zh' ? '加进今天' : 'Add to today'}
-                          data-testid={`add-to-focus-${task.id}`}
-                        >
-                          +
-                        </button>
-                      ) : (
-                        <button
-                          className="today-group-remove"
-                          onClick={() => removeFromFocus(task.id)}
-                          title={language === 'zh' ? '已在今日 3 件中（点此移出）' : 'In today’s 3 (click to remove)'}
-                          aria-label={language === 'zh' ? '已在今日 3 件' : 'In today’s 3'}
-                          data-testid={`in-focus-${task.id}`}
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : filter === def.key || filter === 'upcoming' ? (
-                <p className="today-group-empty">
-                  {language === 'zh' ? '这一组没有任务' : 'Nothing here'}
-                </p>
-              ) : null}
-            </section>
-          );
-        })}
-
-        {/* No-deadline tasks: expanded by default so they don't disappear
-            into a collapsed bucket. The "Hide" toggle above the list lets
-            the user collapse them entirely when they want to focus on
-            dated work. */}
-        {filter === 'all' && groups.noDeadline.length > 0 && !hideNoDeadline && (
-          <section
-            className="today-group is-nodate is-expanded"
-            data-testid="today-group-nodate"
-          >
-            <header className="today-group-header">
-              <span className="today-group-mark"><Clock3 className="w-3.5 h-3.5" /></span>
-              <h3 className="today-group-title">
-                {language === 'zh' ? '没有截止日期' : 'No deadline'}
-              </h3>
-              <span className="today-group-count">{groups.noDeadline.length}</span>
-              <label
-                className="today-nodate-toggle"
-                onClick={e => e.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  checked={hideNoDeadline}
-                  onChange={e => setHideNoDeadline(e.target.checked)}
-                  data-testid="today-hide-nodate"
-                />
-                <span>
-                  {language === 'zh' ? '隐藏没有截止日期的任务' : 'Hide tasks without deadline'}
-                </span>
-              </label>
-            </header>
-            <ul className="today-group-list">
-              {groups.noDeadline.map(task => (
-                <li
-                  key={task.id}
-                  className={`today-group-item ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
-                  data-priority={task.priority || 'none'}
-                  draggable={isToday}
-                  onDragStart={event => {
-                    event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.setData('text/dailyflow-task-id', task.id);
-                    event.dataTransfer.setData('text/plain', task.id);
-                    setDraggingTaskId(task.id);
-                  }}
-                  onDragEnd={() => setDraggingTaskId(null)}
-                >
-                  <TaskCard
-                    task={task}
-                    spaceTitle={planningGroupByTaskId.get(task.id)?.title}
-                    language={language}
-                    categories={categories}
-                    currentFileDate={today}
-                    linkedNotesCount={linkedNotesCount(task.id)}
-                    onToggle={() => onToggleTask(task.id)}
-                    onEdit={updates => onEditTask(task.id, updates)}
-                    onDelete={() => onDeleteTask(task.id)}
-                    onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-                    onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                    showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                    onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
-                  />
-                  {!isInFocus(task.id) ? (
-                    <button
-                      className="today-group-add"
-                      onClick={() => addToFocus(task.id)}
-                      disabled={focusTaskIds.length >= FOCUS_LIMIT}
-                      title={language === 'zh' ? '加进今天' : 'Add to today'}
-                      aria-label={language === 'zh' ? '加进今天' : 'Add to today'}
-                      data-testid={`add-to-focus-${task.id}`}
-                    >
-                      +
-                    </button>
-                  ) : (
-                    <button
-                      className="today-group-remove"
-                      onClick={() => removeFromFocus(task.id)}
-                      title={language === 'zh' ? '已在今日 3 件' : 'In today’s 3'}
-                      data-testid={`in-focus-${task.id}`}
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* When the user hides the no-deadline group, surface a small
-            row of controls so they can bring it back. */}
-        {filter === 'all' && groups.noDeadline.length > 0 && hideNoDeadline && (
-          <section className="today-group is-nodate is-collapsed" data-testid="today-group-nodate-collapsed">
-            <header className="today-group-header">
-              <span className="today-group-mark"><Clock3 className="w-3.5 h-3.5" /></span>
-              <h3 className="today-group-title">
-                {language === 'zh' ? '没有截止日期' : 'No deadline'}
-              </h3>
-              <span className="today-group-count">{groups.noDeadline.length}</span>
-              <button
-                className="today-nodate-toggle"
-                onClick={() => setHideNoDeadline(false)}
-                data-testid="today-show-nodate"
-              >
-                <Eye className="w-3 h-3" />
-                <span>
-                  {language === 'zh' ? '显示' : 'Show'}
-                </span>
-              </button>
-            </header>
-          </section>
-        )}
-
-        {filter === 'all' && completedTasks.length > 0 && (
-          <section className="today-group is-completed" data-testid="today-group-completed">
-            <button
-              type="button"
-              className="today-group-header today-group-header-collapsible"
-              onClick={() => setShowCompleted(value => !value)}
-              aria-expanded={showCompleted}
-            >
-              <span className="today-group-mark"><Check className="w-3.5 h-3.5" /></span>
-              <h3 className="today-group-title">
-                {language === 'zh' ? '已完成' : 'Completed'}
-              </h3>
-              <span className="today-group-count">{completedTasks.length}</span>
-              <ChevronDown className={`ml-auto h-3.5 w-3.5 text-text-muted transition-transform ${showCompleted ? 'rotate-180' : ''}`} />
-            </button>
-            {showCompleted && (
-              <ul className="today-group-list">
-                {completedTasks.map(task => (
-                  <li key={task.id} className="today-group-item" data-priority={task.priority || 'none'}>
-                    <TaskCard
-                      task={task}
-                      spaceTitle={planningGroupByTaskId.get(task.id)?.title}
-                      language={language}
-                      categories={categories}
-                      currentFileDate={today}
-                      linkedNotesCount={linkedNotesCount(task.id)}
-                      onToggle={() => onToggleTask(task.id)}
-                      onEdit={updates => onEditTask(task.id, updates)}
-                      onDelete={() => onDeleteTask(task.id)}
-                      onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-                      onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
-                      showCompletionPrompt={completionPromptTaskIds.has(task.id)}
-                      onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {backlog.length === 0 && groups.noDeadline.length === 0 && (
-          <div className="today-backlog-empty">
-            <Sparkles className="w-4 h-4 text-text-muted" />
-            <p>
-              {isToday
-                ? (language === 'zh' ? '今天还没有积压任务。记下一件事开始。' : 'No backlog yet. Capture something to get started.')
-                : (language === 'zh' ? '这一天没有积压任务。' : 'Nothing pending on this day.')}
-            </p>
+      <section className="today-simple-open">
+        <header className="today-simple-section-header">
+          <div>
+            <p className="today-simple-eyebrow">{language === 'zh' ? '按截止时间排列' : 'Sorted by due date'}</p>
+            <h2>{language === 'zh' ? '待办事项' : 'Open tasks'}</h2>
+          </div>
+          <div className="today-simple-header-actions">
+            <span>{openTasks.length}</span>
             {isToday && (
-              <button onClick={onAddTask} className="today-backlog-empty-cta">
-                <WandSparkles className="w-3.5 h-3.5" />
-                {language === 'zh' ? '记下一件事' : 'Capture a task'}
+              <button type="button" onClick={onAddTask} className="today-simple-add">
+                <Plus className="h-3.5 w-3.5" />
+                {language === 'zh' ? '记一件事' : 'Add task'}
               </button>
             )}
           </div>
+        </header>
+
+        {openTasks.length > 0 ? (
+          <ul className="today-simple-list">{openTasks.map(renderTask)}</ul>
+        ) : (
+          <div className="today-backlog-empty">
+            <Sparkles className="h-4 w-4" />
+            <p>{isToday
+              ? (language === 'zh' ? '今天还没有待办。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
+              : (language === 'zh' ? '这一天没有待办。' : 'No open tasks on this day.')}</p>
+            {isToday && <button onClick={onAddTask} className="today-backlog-empty-cta">{language === 'zh' ? '记一件事' : 'Add one thing'}</button>}
+          </div>
         )}
-      </div>
+      </section>
+
+      {planningGroups.length > 0 && (
+        <details className="today-simple-disclosure" data-testid="today-planning">
+          <summary>
+            <span className="today-simple-disclosure-icon"><Network className="h-3.5 w-3.5" /></span>
+            <span>{language === 'zh' ? '关联的计划' : 'Linked plans'}</span>
+            <span className="today-simple-disclosure-count">{planningGroups.length}</span>
+            <ChevronDown className="today-simple-disclosure-chevron h-3.5 w-3.5" />
+          </summary>
+          <div className="today-simple-plans">
+            <p className="sr-only">{language === 'zh' ? '思维导图关联的任务' : 'Tasks linked from mind maps'}</p>
+            {planningGroups.map(group => (
+              <article key={group.id} className="today-simple-plan">
+                <header>
+                  <strong>{group.title}</strong>
+                  <span>{group.completedTaskIds.length}/{group.taskIds.length}</span>
+                  <button type="button" onClick={() => onOpenPlanningGroup?.(group)}>
+                    {language === 'zh' ? '打开计划' : 'Open plan'}
+                  </button>
+                </header>
+                <ul>
+                  {group.taskIds
+                    .map(taskId => tasks.find(task => task.id === taskId))
+                    .filter((task): task is Task => Boolean(task))
+                    .map(task => (
+                      <li key={task.id} data-testid={`today-planning-task-${task.id}`}>
+                        <button
+                          type="button"
+                          onClick={() => onToggleTask(task.id)}
+                          aria-label={task.status === 'done' ? (language === 'zh' ? '恢复任务' : 'Reopen task') : (language === 'zh' ? '完成任务' : 'Complete task')}
+                        >
+                          {task.status === 'done' ? <Check className="h-3 w-3" /> : null}
+                        </button>
+                        <span>{task.title}</span>
+                        <small><Clock3 className="h-3 w-3" />{task.deadline ?? task.source_date ?? selectedDate}</small>
+                      </li>
+                    ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {completedTasks.length > 0 && (
+        <section className="today-simple-completed" data-testid="today-group-completed">
+          <button
+            type="button"
+            onClick={() => setShowCompleted(value => !value)}
+            aria-expanded={showCompleted}
+            aria-label={`${language === 'zh' ? '已完成' : 'Completed'} ${completedTasks.length}`}
+          >
+            <Check className="h-3.5 w-3.5" />
+            <span>{language === 'zh' ? '已完成' : 'Completed'}</span>
+            <span>{completedTasks.length}</span>
+            <ChevronDown className={`ml-auto h-3.5 w-3.5 transition-transform ${showCompleted ? 'rotate-180' : ''}`} />
+          </button>
+          {showCompleted && <ul className="today-simple-list">{completedTasks.map(renderTask)}</ul>}
+        </section>
+      )}
     </div>
   );
 }

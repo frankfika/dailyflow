@@ -1,5 +1,11 @@
 # DailyFlow 产品文档
 
+> **方向更新（2026-08-10）：** Event-first 产品模型、信息架构和迁移方案以
+> [`EVENT_FIRST_PRODUCT_UPGRADE_PLAN.md`](./EVENT_FIRST_PRODUCT_UPGRADE_PLAN.md) 为准。
+> 具体工程执行、接口冻结和逐任务验收以
+> [`EVENT_FIRST_IMPLEMENTATION_RUNBOOK.md`](./EVENT_FIRST_IMPLEMENTATION_RUNBOOK.md) 为准。
+> 本文保留为早期产品背景；其中项目、思考工作台、思维导图与 Task 并列的结构已被新方案覆盖。
+
 > 版本：0.1.0 产品设计稿  
 > 状态：需求梳理 / MVP 定义  
 > 关键词：本地优先、Markdown、自动迁移、长期项目、思维导图、Git 同步

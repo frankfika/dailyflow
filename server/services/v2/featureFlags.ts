@@ -19,6 +19,7 @@ export interface V2Flags {
   memoryV2: boolean;
   /** When true, Connector v2 routes are exposed (still no auth in 1.0). */
   connectorsV2: boolean;
+  eventFirst: boolean;
   /** When true, AI calls go through the real provider; otherwise fallback. */
   aiEnabled: boolean;
   /** Maximum bytes sent to the model per request (spec §15.4 budget). */
@@ -31,6 +32,7 @@ const DEFAULT_FLAGS: V2Flags = {
   todayV2: true,
   memoryV2: true,
   connectorsV2: false,
+  eventFirst: true,
   aiEnabled: true,
   contextBudgetBytes: 32_000,
 };

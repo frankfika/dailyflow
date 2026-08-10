@@ -70,11 +70,24 @@ export interface ConfigData {
   feishuSyncIntervalMinutes?: number;
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
+  v2?: { enabled?: boolean; inboxV2?: boolean; todayV2?: boolean; memoryV2?: boolean; connectorsV2?: boolean; eventFirst?: boolean; aiEnabled?: boolean; contextBudgetBytes?: number; };
 }
 
 export type ConfigPatch = Partial<Omit<ConfigData, 'version'>> & {
   [K in keyof Omit<ConfigData, 'version'>]?: Omit<ConfigData, 'version'>[K] | null;
 };
+
+  export type EventContext = 'work' | 'life';
+  export type EventStatus = 'active' | 'completed' | 'archived';
+  export type ExecutionStatus = 'todo' | 'done';
+  export type TagSuggestionState = 'suggested' | 'accepted' | 'rejected';
+  export interface SuggestedTag { value: string; source: 'ai'; confidence: number; state: TagSuggestionState; }
+  export interface EventSummary { id: string; title: string; context: EventContext; status: EventStatus; progress: { done: number; total: number }; effectiveTags: string[]; createdAt: string; updatedAt: string; }
+  export interface EventExecution { taskId: string; status: ExecutionStatus; scheduledDate: string; deadline?: string; priority?: 'high' | 'medium' | 'low'; completedAt?: string; }
+  export interface EventNode { id: string; eventId: string; parentId?: string; text: string; note?: string; position: { x: number; y: number }; collapsed?: boolean; manualTags: string[]; aiTags: SuggestedTag[]; execution?: EventExecution; }
+  export interface EventDetail extends EventSummary { mindmapId: string; rootNodeId: string; nodes: EventNode[]; edges: Array<{ id: string; source: string; target: string }>; manualTags: string[]; aiTags: SuggestedTag[]; integrity: { missingMap: boolean; sourceContextWasUnclassified: boolean; orphanTaskIds: string[]; duplicateNodeTaskIds: string[] }; }
+  export interface StandaloneTask { id: string; title: string; status: ExecutionStatus; scheduledDate: string; deadline?: string; note?: string; manualTags: string[]; aiTags: SuggestedTag[]; }
+  export type TodayItem = { kind: 'event-node'; id: string; eventId: string; nodeId: string; taskId: string; title: string; status: ExecutionStatus; scheduledDate: string; eventTitle: string; path: Array<{ id: string; text: string }>; effectiveTags: string[]; deadline?: string; priority?: 'high' | 'medium' | 'low' } | { kind: 'standalone'; id: string; taskId: string; title: string; status: ExecutionStatus; scheduledDate: string; effectiveTags: string[]; deadline?: string; priority?: 'high' | 'medium' | 'low' };
 
 export const DOMAIN_EVENTS = {
   calendarConnectionChanged: 'calendar.connectionChanged',
@@ -315,6 +328,124 @@ export const dailyApi = {
       body: JSON.stringify({ context }),
     });
     if (!res.ok) throw await httpError(res, 'Failed to initialize day');
+    return res.json();
+  },
+};
+
+export interface CreateTaskForNodeInput {
+  mindmapId: string;
+  nodeId: string;
+  title: string;
+  scheduledDate: string;
+  deadline?: string;
+  priority?: 'high' | 'medium' | 'low';
+}
+export interface EditNodeTaskInput {
+  taskId: string;
+  scheduledDate: string;
+  updates: {
+    title?: string;
+    note?: string;
+    tags?: string[];
+    deadline?: string;
+    priority?: 'high' | 'medium' | 'low';
+  };
+}
+export interface CompleteNodeTaskInput { taskId: string; scheduledDate: string; }
+export interface UndoCompleteNodeTaskInput { taskId: string; scheduledDate: string; }
+export interface ConvertStandaloneToEventNodeTaskInput {
+  taskId: string;
+  scheduledDate: string;
+  mindmapId: string;
+  nodeId: string;
+}
+export interface UndoConvertStandaloneToEventNodeTaskInput {
+  taskId: string;
+  scheduledDate: string;
+}
+
+export const eventsApi = {
+  async list(from?: string, to?: string): Promise<{ events: EventSummary[] }> {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    const qs = q.toString();
+    const res = await fetch(`${API_BASE}/events${qs ? `?${qs}` : ''}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch events');
+    return res.json();
+  },
+  async getById(eventId: string): Promise<{ event: EventDetail } | { event: null }> {
+    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}`);
+    if (res.status === 404) return { event: null };
+    if (!res.ok) throw await httpError(res, 'Failed to fetch event');
+    return res.json();
+  },
+  async listTodayItems(date: string): Promise<{ items: TodayItem[] }> {
+    const res = await fetch(`${API_BASE}/events/today-items?date=${encodeURIComponent(date)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch today items');
+    return res.json();
+  },
+  async listStandaloneTasks(from?: string, to?: string): Promise<{ tasks: StandaloneTask[] }> {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    const qs = q.toString();
+    const res = await fetch(`${API_BASE}/events/standalone-tasks${qs ? `?${qs}` : ''}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch standalone tasks');
+    return res.json();
+  },
+  async createTaskForNode(input: CreateTaskForNodeInput): Promise<{ taskId: string; appended: boolean; alreadyPresent: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/create-task-for-node`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create task for node');
+    return res.json();
+  },
+  async editNodeTask(input: EditNodeTaskInput): Promise<{ updated: boolean; taskLine?: string }> {
+    const res = await fetch(`${API_BASE}/events/actions/edit-node-task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to edit node task');
+    return res.json();
+  },
+  async completeNodeTask(input: CompleteNodeTaskInput): Promise<{ completed: boolean; alreadyDone: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/complete-node-task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to complete node task');
+    return res.json();
+  },
+  async undoCompleteNodeTask(input: UndoCompleteNodeTaskInput): Promise<{ undone: boolean; alreadyTodo: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/undo-complete-node-task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to undo complete node task');
+    return res.json();
+  },
+  async convertStandaloneToEventNodeTask(input: ConvertStandaloneToEventNodeTaskInput): Promise<{ converted: boolean; alreadyConverted: boolean; spaceLinked: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/convert-standalone-to-event-node-task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to convert standalone to event node task');
+    return res.json();
+  },
+  async undoConvertStandaloneToEventNodeTask(input: UndoConvertStandaloneToEventNodeTaskInput): Promise<{ reverted: boolean; alreadyStandalone: boolean; removedFromSpace: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/undo-convert-standalone-to-event-node-task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to undo convert standalone to event node task');
     return res.json();
   },
 };

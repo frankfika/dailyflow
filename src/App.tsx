@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download, MessageCircle } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
@@ -27,6 +27,7 @@ import { MindMapView } from './components/MindMap';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
+import { EventsView } from './features/v2/events/EventsView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -101,8 +102,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [showFloatingChat, setShowFloatingChat] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -202,7 +202,6 @@ export default function App() {
         date,
       });
       setRequestedV2NoteId(note.id);
-      setShowFloatingChat(false);
       showToast(language === 'zh' ? '已创建会议记录，可以开始录音' : 'Meeting note created — ready to record', 'info');
     } catch (error) {
       console.error('Failed to create meeting note:', error);
@@ -1286,62 +1285,6 @@ export default function App() {
         onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
       />
 
-      {/* AI Chat is available from every workspace surface. It used to be
-          only reachable through the sidebar tab, which made it disappear
-          while working in Notes, Inbox, Today, or Calendar. Keep a compact
-          launcher and an overlay session so the current page stays visible. */}
-      {activeTab !== 'ai-chat' && (
-        <>
-          <AnimatePresence>
-            {showFloatingChat && (
-              <motion.div
-                initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                transition={{ duration: 0.2 }}
-                className="fixed bottom-20 right-5 z-[80] h-[min(620px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
-                data-testid="floating-ai-chat"
-              >
-                <AIChat
-                  workspaceId={activeWorkspaceId || 'default'}
-                  language={language}
-                  activeContext={activeContext}
-                  tasks={contextFilteredTasks}
-                  notes={contextNotes}
-                  filesMap={filesMap}
-                  showToast={showToast}
-                  initialDraft={null}
-                  onCreateMeetingNote={() => void openMeetingNote()}
-                  compact
-                  onClose={() => setShowFloatingChat(false)}
-                  onOpenFullChat={() => {
-                    setShowFloatingChat(false);
-                    setActiveTab('ai-chat');
-                  }}
-                  onNoteCreated={() => {
-                    const today = getTodayStr();
-                    notesApi.getByDate(today).then(dateNotes => {
-                      setDailyNotes(prev => [...prev.filter(n => n.date !== today), ...dateNotes]);
-                    }).catch(err => console.error('Failed to refresh daily notes:', err));
-                    loadContextNotes();
-                  }}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            type="button"
-            onClick={() => setShowFloatingChat(value => !value)}
-            className="fixed bottom-10 right-10 z-[81] inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-lg transition hover:scale-105 hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/40"
-            aria-label={language === 'zh' ? '打开 AI 对话' : 'Open AI Chat'}
-            title={language === 'zh' ? 'AI 对话' : 'AI Chat'}
-            data-testid="floating-ai-chat-button"
-          >
-            <MessageCircle className="h-5 w-5" />
-          </button>
-        </>
-      )}
-
       {/* Main Content Area */}
       <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
@@ -1362,7 +1305,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' || activeTab === 'events' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
@@ -1449,6 +1392,23 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {categories.length > 0 && (
+                            <label className="sr-only" htmlFor="today-category-filter">
+                              {language === 'zh' ? '按标签筛选' : 'Filter by tag'}
+                            </label>
+                          )}
+                          {categories.length > 0 && (
+                            <select
+                              id="today-category-filter"
+                              value={selectedCategory ?? ''}
+                              onChange={event => setSelectedCategory(event.target.value || null)}
+                              className="max-w-36 rounded-lg border border-border/60 bg-surface/60 px-2.5 py-1.5 text-[11px] font-medium text-text-muted outline-none transition-colors hover:text-text-heading focus:border-accent/30"
+                              title={language === 'zh' ? '按标签筛选' : 'Filter by tag'}
+                            >
+                              <option value="">{language === 'zh' ? '全部任务' : 'All tasks'}</option>
+                              {categories.map(category => <option key={category} value={category}>{category}</option>)}
+                            </select>
+                          )}
                           {currentFileDate === getTodayStr() ? (
                             <button
                               onClick={handleManualRollover}
@@ -1467,44 +1427,8 @@ export default function App() {
                               {language === 'zh' ? '回到今天' : 'Back to today'}
                             </button>
                           )}
-                          {currentFileDate === getTodayStr() && (
-                            <button
-                              onClick={() => setShowTaskInput(true)}
-                              className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              {language === 'zh' ? '添加任务' : 'Add task'}
-                            </button>
-                          )}
                         </div>
                       </div>
-                    {categories.length > 0 && (
-                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                        <button
-                          onClick={() => setSelectedCategory(null)}
-                          className={`category-chip shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                            selectedCategory === null
-                              ? 'bg-text-heading text-white'
-                              : 'border border-border/60 text-text-muted hover:text-text-heading'
-                          }`}
-                        >
-                          {language === 'zh' ? '全部' : 'All'}
-                        </button>
-                        {categories.map(c => (
-                          <button
-                            key={c}
-                            onClick={() => setSelectedCategory(selectedCategory === c ? null : c)}
-                            className={`category-chip shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                              selectedCategory === c
-                                ? 'bg-accent text-white'
-                                : 'border border-border/60 text-text-muted hover:text-text-heading'
-                            }`}
-                          >
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                     </header>
 
                   <TodayBacklog
@@ -1725,6 +1649,20 @@ export default function App() {
                       />
                     )}
                   </div>
+                </motion.div>
+              ) : activeTab === 'events' ? (
+                <motion.div
+                  key="events"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="flex h-full min-h-0 flex-col overflow-hidden"
+                >
+                  <EventsView
+                    language={language}
+                    sidebarOpen={isSidebarOpen}
+                    onNotice={showToast}
+                  />
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">

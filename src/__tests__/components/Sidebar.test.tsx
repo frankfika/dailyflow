@@ -19,17 +19,20 @@ vi.mock('lucide-react', () => {
   const Icon = () => React.createElement('span');
   return {
     CalendarDays: Icon,
+    ChevronDown: Icon,
     Clock3: Icon,
     X: Icon,
     FileText: Icon,
     ListTodo: Icon,
     MessageCircle: Icon,
+    MoreHorizontal: Icon,
     Search: Icon,
     Settings: Icon,
     Briefcase: Icon,
     Heart: Icon,
     PanelLeftClose: Icon,
     Network: Icon,
+    Sparkles: Icon,
   };
 });
 
@@ -79,6 +82,7 @@ describe('Sidebar desktop compact mode', () => {
     expect(navigation).toHaveStyle({ width: '60px' });
     expect(screen.getByTestId('sidebar-inner')).toHaveStyle({ width: '60px' });
     expect(screen.getByRole('button', { name: 'Today' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'AI Chat' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
   });
 });

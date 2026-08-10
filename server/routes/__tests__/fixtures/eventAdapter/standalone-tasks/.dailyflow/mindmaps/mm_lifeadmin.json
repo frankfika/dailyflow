@@ -1,0 +1,18 @@
+{
+  "id": "mm_lifeadmin",
+  "title": "Life admin",
+  "rootId": "root",
+  "version": 2,
+  "spaceId": "tw_lifeadmin",
+  "nodes": [
+    {
+      "id": "root",
+      "text": "Life admin",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    }
+  ],
+  "edges": [],
+  "createdAt": "2026-07-20T11:00:00.000Z",
+  "updatedAt": "2026-08-09T20:00:00.000Z"
+}

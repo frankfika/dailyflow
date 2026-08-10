@@ -1,0 +1,31 @@
+{
+  "id": "mm_v1legacy",
+  "title": "Legacy project",
+  "rootId": "r1",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "r1",
+      "text": "Legacy project",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    },
+    {
+      "id": "n1",
+      "text": "Milestone 1",
+      "position": { "x": 1, "y": 0 },
+      "kind": "task",
+      "taskId": "t_m1",
+      "taskDate": "2026-08-10"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "r1",
+      "target": "n1"
+    }
+  ],
+  "createdAt": "2026-01-15T09:00:00.000Z",
+  "updatedAt": "2026-08-09T16:30:00.000Z"
+}

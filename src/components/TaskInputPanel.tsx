@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Plus, Sparkles, Loader2, Calendar, CornerUpRight, Trash2, Repeat } from 'lucide-react';
+import { X, Plus, Sparkles, Loader2, Calendar, ChevronDown, CornerUpRight, Trash2, Repeat } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { TagInput } from './TagInput';
 import { tasksApi, filesApi, recurringApi, type RecurrenceRule } from '../api/client';
@@ -81,9 +81,17 @@ export function TaskInputPanel({
 }: TaskInputPanelProps) {
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const recurrenceRef = useRef<HTMLDivElement>(null);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [isComposing, setIsComposing] = useState(false);
+
+  useEffect(() => {
+    if (!showTaskInput) {
+      setShowDetails(false);
+      setShowRecurrenceMenu(false);
+    }
+  }, [showTaskInput]);
 
   useEffect(() => {
     if (!showTaskInput) return;
@@ -182,7 +190,7 @@ export function TaskInputPanel({
             <textarea
               autoFocus
               aria-label={language === 'zh' ? '任务标题和描述' : 'Task title and description'}
-              placeholder={language === 'zh' ? "在此添加新任务，亦可换行添加描述..." : "Add a new task here, use new lines for description..."}
+              placeholder={language === 'zh' ? '你要做什么？' : 'What do you need to do?'}
               className="w-full py-1 outline-none font-semibold placeholder:text-text-muted/60 text-text-heading bg-transparent text-[14px] sm:text-[15px] resize-none overflow-hidden block min-h-[24px]"
               value={newTaskTitle}
               rows={1}
@@ -203,8 +211,25 @@ export function TaskInputPanel({
           </div>
 
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center w-full gap-2 pb-1 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !showDetails;
+                  setShowDetails(next);
+                  if (!next) {
+                    setShowRecurrenceMenu(false);
+                    setShowBrainDump(false);
+                  }
+                }}
+                aria-expanded={showDetails}
+                className={`flex h-[42px] items-center justify-center gap-1.5 rounded-lg border px-3 text-[11px] font-medium transition-colors ${showDetails ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border/60 bg-surface text-text-muted hover:text-text-heading'}`}
+              >
+                {language === 'zh' ? '更多选项' : 'More options'}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+              </button>
+
               {/* Quick Tag Selection */}
-              <div className="flex-1 flex flex-col gap-2 min-w-[200px]">
+              <div className={`${showDetails ? 'flex' : 'hidden'} flex-1 flex-col gap-2 min-w-[200px]`}>
                 <TagInput
                   tags={newTaskTagsList}
                   onChange={setNewTaskTagsList}
@@ -215,7 +240,7 @@ export function TaskInputPanel({
 
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                 {/* Deadline Button */}
-                <label className={`relative flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-lg border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-accent/10 text-accent border-accent/20 pr-9' : 'bg-surface text-text-muted border-border/60 hover:bg-black/[0.03]'} focus-within:ring-2 ring-accent/20`}>
+                <label className={`relative ${showDetails ? 'flex' : 'hidden'} flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 rounded-lg border transition-all h-[42px] cursor-pointer ${newTaskDeadline ? 'bg-accent/10 text-accent border-accent/20 pr-9' : 'bg-surface text-text-muted border-border/60 hover:bg-black/[0.03]'} focus-within:ring-2 ring-accent/20`}>
                   <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${newTaskDeadline ? 'opacity-100' : 'opacity-70'}`} />
                   <input
                     type="date"
@@ -243,7 +268,7 @@ export function TaskInputPanel({
                 </label>
 
                 {/* Repeat Button */}
-                <div className="relative" ref={recurrenceRef}>
+                <div className={`relative ${showDetails ? 'block' : 'hidden'}`} ref={recurrenceRef}>
                   <button
                     onClick={() => setShowRecurrenceMenu(!showRecurrenceMenu)}
                     className={`flex items-center justify-center rounded-lg transition-all h-[42px] w-[42px] shrink-0 border active:scale-95 ${recurrence ? 'bg-accent/10 text-accent border-accent/30 shadow-sm' : 'bg-surface hover:bg-black/[0.03] text-text-muted border-border/60'}`}
@@ -316,7 +341,7 @@ export function TaskInputPanel({
                 {/* AI Button */}
                 <button
                   onClick={() => setShowBrainDump(!showBrainDump)}
-                  className={`flex items-center justify-center rounded-lg transition-all h-[42px] w-[42px] shrink-0 border active:scale-95 ${showBrainDump ? 'bg-accent/10 text-accent border-accent/30 shadow-sm' : 'bg-surface hover:bg-black/[0.03] text-accent border-border/60'}`}
+                  className={`${showDetails ? 'flex' : 'hidden'} items-center justify-center rounded-lg transition-all h-[42px] w-[42px] shrink-0 border active:scale-95 ${showBrainDump ? 'bg-accent/10 text-accent border-accent/30 shadow-sm' : 'bg-surface hover:bg-black/[0.03] text-accent border-border/60'}`}
                   title={language === 'zh' ? 'AI 收集箱' : 'AI Brain Dump'}
                 >
                   <Sparkles className="w-4 h-4" />

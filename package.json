@@ -20,7 +20,8 @@
     "test:e2e": "playwright test",
     "tauri": "tauri",
     "bump": "node scripts/bump-version.mjs",
-    "migrate:topic-spaces": "tsx server/scripts/migrate-to-topic-spaces.ts"
+    "migrate:topic-spaces": "tsx server/scripts/migrate-to-topic-spaces.ts",
+    "migrate:event-first": "tsx server/scripts/migrate-event-first.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

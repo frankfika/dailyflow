@@ -1,0 +1,37 @@
+{
+  "id": "mm_dup",
+  "title": "dup",
+  "rootId": "root",
+  "version": 2,
+  "spaceId": "tw_dup",
+  "nodes": [
+    {
+      "id": "root",
+      "text": "dup",
+      "position": { "x": 0, "y": 0 },
+      "kind": "root"
+    },
+    {
+      "id": "n_a",
+      "text": "Node A",
+      "position": { "x": 1, "y": 0 },
+      "kind": "task",
+      "taskId": "t_dup",
+      "taskDate": "2026-08-10"
+    },
+    {
+      "id": "n_b",
+      "text": "Node B",
+      "position": { "x": 2, "y": 0 },
+      "kind": "task",
+      "taskId": "t_dup",
+      "taskDate": "2026-08-10"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "root", "target": "n_a" },
+    { "id": "e2", "source": "root", "target": "n_b" }
+  ],
+  "createdAt": "2026-08-01T08:00:00.000Z",
+  "updatedAt": "2026-08-10T06:00:00.000Z"
+}
