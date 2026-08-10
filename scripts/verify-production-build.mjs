@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const indexHtml = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
@@ -52,7 +51,7 @@ dom.window.matchMedia = () => ({
 });
 
 const entryUrl = new URL(`../dist${entryMatch[1]}`, import.meta.url);
-await import(pathToFileURL(entryUrl.pathname).href);
+await import(entryUrl.href);
 await new Promise((resolve) => setTimeout(resolve, 100));
 
 const root = dom.window.document.getElementById('root');
