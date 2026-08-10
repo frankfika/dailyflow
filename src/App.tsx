@@ -1344,7 +1344,7 @@ export default function App() {
                     <header className="space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface/60 p-0.5">
+                          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface p-0.5">
                         <button
                           onClick={() => {
                             const d = new Date(`${currentFileDate}T00:00:00Z`);
@@ -1402,7 +1402,7 @@ export default function App() {
                               id="today-category-filter"
                               value={selectedCategory ?? ''}
                               onChange={event => setSelectedCategory(event.target.value || null)}
-                              className="max-w-36 rounded-lg border border-border/60 bg-surface/60 px-2.5 py-1.5 text-[11px] font-medium text-text-muted outline-none transition-colors hover:text-text-heading focus:border-accent/30"
+                              className="max-w-36 rounded-lg border border-border/60 bg-surface px-2.5 py-1.5 text-[11px] font-medium text-text-muted outline-none transition-colors hover:text-text-heading focus:border-accent/30"
                               title={language === 'zh' ? '按标签筛选' : 'Filter by tag'}
                             >
                               <option value="">{language === 'zh' ? '全部任务' : 'All tasks'}</option>
@@ -1769,7 +1769,7 @@ export default function App() {
 
        {/* Quick Note Editor */}
        {showQuickNoteEditor && (
-         <div className="fixed inset-0 z-50 bg-black/15 backdrop-blur-md flex items-center justify-center p-4 sm:p-8">
+         <div className="fixed inset-0 z-50 bg-black/15 d flex items-center justify-center p-4 sm:p-8">
            <div className={`w-full min-h-0 ${isNoteEditorMaximized ? 'h-full max-w-none' : 'h-[85dvh] max-w-5xl'} floating-card overflow-hidden flex flex-col transition-all duration-200`}>
              <NoteEditor
              language={language}

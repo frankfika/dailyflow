@@ -123,11 +123,11 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-border-strong bg-surface-elevated/90 p-8 shadow-xl backdrop-blur-2xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border-strong bg-surface-elevated p-8 shadow-md xl"
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent text-white mb-5 shadow-[var(--shadow-accent-glow)]">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-accent text-white mb-5 shadow-[var(--shadow-accent-glow)]">
             <span className="text-xl font-semibold">3</span>
           </div>
           <h1 className="text-2xl font-bold mb-2">{t.title}</h1>

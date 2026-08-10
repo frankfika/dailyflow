@@ -43,7 +43,7 @@ export function ChatSettingsPanel({ language, onClose, initialTab = 'providers' 
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="absolute bottom-0 right-0 top-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden border-l border-border bg-background shadow-2xl"
+        className="absolute bottom-0 right-0 top-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden border-l border-border bg-background shadow-lg"
         onClick={e => e.stopPropagation()}
       >
         {/* Header: back + tabs + close */}

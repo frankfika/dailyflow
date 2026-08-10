@@ -183,7 +183,7 @@ export function TaskInputPanel({
         )}
 
         <div className="relative floating-card flex flex-col p-3 sm:p-4 focus-within:border-accent/40 focus-within:shadow-md transition-all duration-300 gap-3">
-          <div className="flex flex-1 items-start bg-surface/50 rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
+          <div className="flex flex-1 items-start bg-surface rounded-xl p-3 sm:p-4 focus-within:bg-surface-white transition-colors border border-transparent focus-within:border-border/50">
             <div className="text-accent/60 mr-2 sm:mr-3 hidden sm:block mt-1">
               <Plus className="w-5 h-5" />
             </div>
@@ -277,7 +277,7 @@ export function TaskInputPanel({
                     <Repeat className="w-4 h-4" />
                   </button>
                   {showRecurrenceMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-surface border border-border/80 rounded-xl shadow-xl p-3 z-50 w-56 space-y-1.5 backdrop-blur-xl">
+                    <div className="absolute bottom-full mb-2 right-0 bg-surface border border-border/80 rounded-xl shadow-md p-3 z-50 w-56 space-y-1.5 l">
                       <p className="text-[11px] font-semibold text-text-muted px-1 mb-1">{language === 'zh' ? '重复频率' : 'Repeat'}</p>
                       <button
                         onClick={() => { setRecurrence({ type: 'daily' }); setShowRecurrenceMenu(false); }}

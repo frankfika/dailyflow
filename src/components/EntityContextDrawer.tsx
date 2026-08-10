@@ -34,7 +34,7 @@ export function EntityContextDrawer({ ref, onClose }: { ref: EntityRef | null; o
     <aside
       role="dialog"
       aria-label="Entity context"
-      className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-border bg-surface-elevated shadow-2xl"
+      className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-border bg-surface-elevated shadow-lg"
     >
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">

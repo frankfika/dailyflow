@@ -363,7 +363,7 @@ export function CalendarWorkspace({
       transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
       className="flex h-full min-h-0 flex-col bg-background/30"
     >
-      <header className="shrink-0 border-b border-border/70 bg-surface/85 px-4 py-3 backdrop-blur-2xl md:px-6">
+      <header className="shrink-0 border-b border-border/70 bg-surface px-4 py-3 xl md:px-6">
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center rounded-lg border border-border/70 bg-background/50 p-0.5">
             <button
@@ -546,7 +546,7 @@ export function CalendarWorkspace({
       )}
       {notice && (
         <div
-          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-xl border px-3.5 py-3 text-xs shadow-xl backdrop-blur-xl ${
+          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-xl border px-3.5 py-3 text-xs shadow-md l ${
             notice.kind === 'success'
               ? 'border-emerald-200 bg-emerald-50/95 text-emerald-800'
               : 'border-red-200 bg-red-50/95 text-red-800'
@@ -616,7 +616,7 @@ function CreateEventDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[80] grid place-items-center bg-black/25 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[80] grid place-items-center bg-black/25 p-4 2px]"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !submitting) onClose();
@@ -624,7 +624,7 @@ function CreateEventDialog({
     >
       <form
         onSubmit={submit}
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/70 bg-surface/95 shadow-2xl backdrop-blur-2xl"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-white/70 bg-surface shadow-lg xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-event-title"
@@ -814,7 +814,7 @@ function DayView({
       <section className="min-w-0 px-5 py-5 md:px-7">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl border text-2xl font-semibold tracking-tight ${
+            <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-xl border text-2xl font-semibold tracking-tight ${
               isToday
                 ? 'border-blue-200 bg-blue-600 text-white shadow-sm'
                 : 'border-border bg-surface text-text-heading'
@@ -836,7 +836,7 @@ function DayView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
             <div className="flex items-center gap-2 text-xs font-semibold text-text-heading">
               <Clock3 className="h-3.5 w-3.5 text-text-muted" />
@@ -899,7 +899,7 @@ function DayView({
         </div>
       </section>
 
-      <aside className="border-l border-border/70 bg-surface/65 p-4 backdrop-blur-xl">
+      <aside className="border-l border-border/70 bg-surface p-4 l">
         <div className="sticky top-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -1081,7 +1081,7 @@ function WeekGrid({
   const locale = language === 'zh' ? 'zh-CN' : 'en-US';
   return (
     <div className="min-w-[680px] bg-background/20">
-      <div className="sticky top-0 z-20 grid border-b border-border bg-surface/95 backdrop-blur-xl" style={{ gridTemplateColumns: `56px repeat(${dates.length}, minmax(88px, 1fr))` }}>
+      <div className="sticky top-0 z-20 grid border-b border-border bg-surface l" style={{ gridTemplateColumns: `56px repeat(${dates.length}, minmax(88px, 1fr))` }}>
         <div className="border-r border-border/70" />
         {dates.map(day => (
           <div key={day} className={`border-r border-border/70 px-2 py-2.5 text-center ${day === today ? 'bg-blue-50/70' : ''}`}>
@@ -1101,7 +1101,7 @@ function WeekGrid({
         {dates.map(day => {
           const allDay = items.filter(item => item.allDay && itemDate(item) === day);
           return (
-            <div key={`all-${day}`} className={`min-h-[58px] border-r border-t border-border/70 p-1.5 ${day === today ? 'bg-blue-50/30' : 'bg-surface/60'}`}>
+            <div key={`all-${day}`} className={`min-h-[58px] border-r border-t border-border/70 p-1.5 ${day === today ? 'bg-blue-50/30' : 'bg-surface'}`}>
               <div className="flex flex-col gap-1">
                 {allDay.slice(0, 2).map(item => (
                   <CalendarPill key={item.id} item={item} language={language} onOpen={onOpen} compact />
@@ -1170,20 +1170,20 @@ function MonthView({
   const month = utcDate(date).getUTCMonth();
   return (
     <div className="min-w-[840px] bg-background/20 p-3">
-      <div className="grid grid-cols-7 overflow-hidden rounded-t-xl border border-border bg-surface/90">
+      <div className="grid grid-cols-7 overflow-hidden rounded-t-xl border border-border bg-surface">
         {Array.from({ length: 7 }, (_, i) => addDays(startOfWeek('2026-07-27'), i)).map(day => (
           <div key={day} className="border-r border-border/70 px-2 py-2.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] text-text-muted last:border-r-0">
             {new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(utcDate(day))}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 overflow-hidden rounded-b-xl border-x border-b border-border bg-surface/55 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <div className="grid grid-cols-7 overflow-hidden rounded-b-xl border-x border-b border-border bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
         {days.map(day => {
           const dayItems = items.filter(item => itemDate(item) === day);
           const isCurrentMonth = utcDate(day).getUTCMonth() === month;
           const isToday = day === getTodayStr();
           return (
-            <div key={day} className={`group min-h-[132px] border-b border-r border-border/70 p-2 transition-colors hover:bg-background/55 ${isCurrentMonth ? 'bg-surface/35' : 'bg-black/[0.018]'}`}>
+            <div key={day} className={`group min-h-[132px] border-b border-r border-border/70 p-2 transition-colors hover:bg-background/55 ${isCurrentMonth ? 'bg-surface' : 'bg-black/[0.018]'}`}>
               <button
                 onClick={() => onOpenDay(day)}
                 className={`mb-1.5 grid h-7 min-w-7 place-items-center rounded-full px-1 text-[11px] font-semibold transition ${

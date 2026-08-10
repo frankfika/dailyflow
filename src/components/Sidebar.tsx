@@ -296,7 +296,7 @@ export function Sidebar({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className={`fixed inset-0 z-20 ${
-              isMobile ? 'bg-black/30 backdrop-blur-sm' : 'bg-black/15'
+              isMobile ? 'bg-black/30 m' : 'bg-black/15'
             }`}
             onClick={() => setIsSidebarOpen(false)}
             aria-hidden="true"

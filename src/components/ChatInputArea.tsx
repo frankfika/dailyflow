@@ -109,7 +109,7 @@ export function ChatInputArea({
           </div>
         )}
 
-        <div className="bg-surface-white border border-border rounded-2xl shadow-sm focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10 transition-all">
+        <div className="bg-surface-white border border-border rounded-xl shadow-sm focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10 transition-all">
           <textarea
             ref={textareaRef}
             value={inputValue}

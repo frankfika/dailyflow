@@ -146,7 +146,7 @@ export function ContextPicker({
         initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.96, opacity: 0 }}
-        className="flex max-h-[85dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-background shadow-2xl"
+        className="flex max-h-[85dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-background shadow-lg"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

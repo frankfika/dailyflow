@@ -38,7 +38,7 @@ export function UpdateNotificationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 m">
       <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg border border-stone-200 bg-white p-6 shadow-lg dark:border-stone-700 dark:bg-stone-800">
         <button
           onClick={onClose}

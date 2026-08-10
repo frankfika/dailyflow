@@ -376,7 +376,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
           {!activeSession || activeSession.messages.length === 0 ? (
             <div className={`h-full flex items-center justify-center ${compact ? 'px-5' : 'px-4 md:px-6'}`}>
               <div className={`text-center w-full ${compact ? 'max-w-sm' : 'max-w-xl'}`}>
-                <div className={`${compact ? 'w-10 h-10 mb-4 rounded-xl' : 'w-16 h-16 mb-6 rounded-2xl shadow-lg'} mx-auto bg-accent text-white flex items-center justify-center`}>
+                <div className={`${compact ? 'w-10 h-10 mb-4 rounded-xl' : 'w-16 h-16 mb-6 rounded-xl shadow-lg'} mx-auto bg-accent text-white flex items-center justify-center`}>
                   <Sparkles className={compact ? 'w-5 h-5' : 'w-8 h-8'} />
                 </div>
                 <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-semibold text-text-heading mb-2`}>

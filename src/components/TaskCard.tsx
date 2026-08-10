@@ -121,8 +121,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       transition={{ layout: { type: 'spring', stiffness: 500, damping: 40 }, duration: 0.22 }}
       className={`group relative flex items-start gap-2.5 rounded-lg border p-3 transition-colors duration-200
         ${isDone
-          ? 'border-border/40 bg-surface/45 opacity-65'
-          : 'border-border/70 bg-surface-elevated/75 hover:border-border-strong hover:bg-surface-elevated'
+          ? 'border-border/40 bg-surface opacity-65'
+          : 'border-border/70 bg-surface-elevated hover:border-border-strong hover:bg-surface-elevated'
         }`}
     >
       <button
@@ -286,7 +286,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     }}
                     title={language === 'zh' ? '解除主题绑定' : 'Unlink from space'}
                     data-testid={`task-card-space-unlink-${task.id}`}
-                    className="ml-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full text-[var(--color-accent)]/70 hover:bg-white/60 hover:text-[var(--color-accent)]"
+                    className="ml-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full text-[var(--color-accent)]/70 hover:bg-white hover:text-[var(--color-accent)]"
                     aria-label={language === 'zh' ? '解除主题绑定' : 'Unlink from space'}
                   >
                     ×
@@ -457,7 +457,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {!isEditing && (
           <button
             onClick={() => setShowComment(true)}
-            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm m"
             title={language === 'zh' ? '加备注（写在任务上）' : 'Add comment (on this task)'}
             aria-label={language === 'zh' ? '添加任务备注' : 'Add task comment'}
           >
@@ -467,7 +467,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {!isEditing && onCreateLinkedNote && (
           <button
             onClick={onCreateLinkedNote}
-            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm m"
             title={language === 'zh' ? '关联一篇笔记（独立文件）' : 'Link a note (separate file)'}
             aria-label={language === 'zh' ? '关联笔记' : 'Link a note'}
           >
@@ -477,7 +477,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {!isDone && !isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-all rounded-lg active:scale-95 hover:shadow-sm m"
             aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}
           >
             <Edit2 className="w-4 h-4" />
@@ -509,7 +509,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               setConfirmingDelete(true);
               setTimeout(() => setConfirmingDelete(false), 4000);
             }}
-            className="p-1.5 text-text-muted hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-light)] transition-all rounded-lg active:scale-95 hover:shadow-sm backdrop-blur-sm"
+            className="p-1.5 text-text-muted hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-light)] transition-all rounded-lg active:scale-95 hover:shadow-sm m"
             aria-label={language === 'zh' ? '删除任务' : 'Delete task'}
           >
             <Trash2 className="w-4 h-4" />

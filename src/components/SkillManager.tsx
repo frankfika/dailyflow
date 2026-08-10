@@ -622,7 +622,7 @@ export function SkillManager({ language }: SkillManagerProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/30 1px] flex items-center justify-center p-4"
             onClick={() => { setIsAdding(false); setEditingId(null); }}
           >
             <motion.div
@@ -630,7 +630,7 @@ export function SkillManager({ language }: SkillManagerProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.15 }}
-              className="flex max-h-[80dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface-white shadow-xl"
+              className="flex max-h-[80dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface-white shadow-md"
               onClick={e => e.stopPropagation()}
             >
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
