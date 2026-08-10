@@ -96,6 +96,18 @@ describe('previewRollover', () => {
     expect(result!.tasksToMigrate.some(t => t.title === 'Task from May 3')).toBe(true);
   });
 
+  it('keeps the real task id and exposes the note that owns each preview task', async () => {
+    await writeNote('2026-05-03', '- [ ] Earlier task ^id-earlier-1\n');
+    await writeNote('2026-05-04', '- [ ] Later task ^id-later-1\n');
+
+    const result = await previewRollover('2026-05-05', TEST_CONFIG);
+
+    expect(result!.tasksToMigrate).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'earlier-1', host_date: '2026-05-03' }),
+      expect.objectContaining({ id: 'later-1', host_date: '2026-05-04' }),
+    ]));
+  });
+
   it('preserves the original source_date across multi-hop rollovers', async () => {
     await writeNote('2026-05-04', '- [ ] Long-running task ↗ migrated:2026-05-01\n');
     const result = await previewRollover('2026-05-05', TEST_CONFIG);

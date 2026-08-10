@@ -15,6 +15,7 @@ type Task = {
   time?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
   originNodeId?: string;
@@ -38,9 +39,9 @@ interface TodayBacklogProps {
   categories: string[];
   focusTaskIds: string[];
   onFocusTaskIdsChange: (ids: string[]) => void;
-  onToggleTask: (id: string) => void;
-  onEditTask: (id: string, updates: Partial<Task>) => void;
-  onDeleteTask: (id: string) => void;
+  onToggleTask: (id: string, hostDate?: string) => void;
+  onEditTask: (id: string, updates: Partial<Task>, hostDate?: string) => void;
+  onDeleteTask: (id: string, hostDate?: string) => void;
   onCreateLinkedNote: (taskId: string) => void;
   onShowLinkedNotes: (taskId: string) => void;
   linkedNotesCount: (taskId: string) => number;
@@ -99,7 +100,7 @@ export function TodayBacklog({
   }, [planningGroups]);
 
   const renderTask = (task: Task) => (
-    <li key={task.id} className="today-simple-task">
+    <li key={`${task.host_date ?? selectedDate}:${task.id}`} className="today-simple-task">
       <TaskCard
         task={task}
         spaceTitle={eventByTaskId.get(task.id)?.title}
@@ -107,9 +108,9 @@ export function TodayBacklog({
         categories={categories}
         currentFileDate={selectedDate}
         linkedNotesCount={linkedNotesCount(task.id)}
-        onToggle={() => onToggleTask(task.id)}
-        onEdit={updates => onEditTask(task.id, updates)}
-        onDelete={() => onDeleteTask(task.id)}
+        onToggle={() => onToggleTask(task.id, task.host_date)}
+        onEdit={updates => onEditTask(task.id, updates, task.host_date)}
+        onDelete={() => onDeleteTask(task.id, task.host_date)}
         onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
         onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}

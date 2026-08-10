@@ -34,6 +34,8 @@ export interface TaskInput {
   deadline?: string;
   priority?: string;
   source_date?: string;
+  /** Date of the Daily note that currently contains this task. */
+  host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
   originNodeId?: string;

@@ -54,6 +54,8 @@ type Task = {
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  /** Daily note that currently owns this task (for earlier open tasks). */
+  host_date?: string;
   // Phase 2 (Topic Spaces): the Topic Space this task is bound to.
   // The server keeps it in memory for now (no markdown marker); the
   // list view filters by it and the unlink button clears it.
@@ -91,6 +93,7 @@ export default function App() {
   const [filesMap, setFilesMap] = useState<Record<string, string>>({});
   const [markdown, setMarkdown] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [earlierOpenTasks, setEarlierOpenTasks] = useState<Task[]>([]);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   // All notes for the current context, used by AI chat/floating panel so they
   // can find and reference notes beyond just the currently selected date.
@@ -236,6 +239,28 @@ export default function App() {
   const [configTab, setConfigTab] = useState<'general' | 'sync' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
+
+  const refreshEarlierOpenTasks = useCallback(async () => {
+    const today = getTodayStr();
+    if (currentFileDate !== today) {
+      setEarlierOpenTasks([]);
+      return;
+    }
+    try {
+      const preview = await rolloverApi.preview(today, activeContext);
+      const standalone = (preview?.tasksToMigrate ?? [])
+        .filter(task => !task.originMindmapId && !task.originNodeId)
+        .map(task => task as Task);
+      setEarlierOpenTasks(standalone);
+    } catch (error) {
+      console.error('Failed to load earlier open tasks', error);
+      setEarlierOpenTasks([]);
+    }
+  }, [activeContext, currentFileDate]);
+
+  useEffect(() => {
+    void refreshEarlierOpenTasks();
+  }, [refreshEarlierOpenTasks, activeWorkspaceId]);
   // Topic Space v2 (Phase 1): load the spaces for the current context so
   // the MindMap tab can render the topic strip. The hook is global
   // (not workspace-scoped) so the same data shows up under every
@@ -950,8 +975,11 @@ export default function App() {
   };
 
   // When date changes, load tasks
-  const handleToggleTask = async (id: string) => {
-    const task = tasks.find(t => t.id === id);
+  const handleToggleTask = async (id: string, hostDate?: string) => {
+    const targetDate = hostDate ?? currentFileDate;
+    const task = hostDate
+      ? earlierOpenTasks.find(t => t.id === id && t.host_date === hostDate)
+      : tasks.find(t => t.id === id);
     if (!task) return;
     const newStatus = task.status === 'todo' ? 'done' : 'todo';
     const wasUndone = task.status !== 'done';
@@ -962,21 +990,27 @@ export default function App() {
       try {
         if (task.originMindmapId && task.originNodeId) {
           if (newStatus === 'done') {
-            await eventsApi.completeNodeTask({ taskId: id, scheduledDate: currentFileDate });
+            await eventsApi.completeNodeTask({ taskId: id, scheduledDate: targetDate });
           } else {
-            await eventsApi.undoCompleteNodeTask({ taskId: id, scheduledDate: currentFileDate });
+            await eventsApi.undoCompleteNodeTask({ taskId: id, scheduledDate: targetDate });
           }
         } else {
-          await tasksApi.updateStatus(id, currentFileDate, newStatus);
+          await tasksApi.updateStatus(id, targetDate, newStatus);
         }
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+        if (targetDate === currentFileDate) {
+          setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+        } else {
+          setEarlierOpenTasks(prev => prev.filter(t => !(t.id === id && t.host_date === targetDate)));
+        }
         // Refresh markdown after task change
-        const data = await filesApi.get(currentFileDate);
+        const data = await filesApi.get(targetDate);
         if (data) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+          if (targetDate === currentFileDate) {
+            setMarkdown(data.content);
+            setTasks(data.tasks as Task[]);
+            setLastSyncedMD(data.content);
+          }
+          setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
         // Prompt for completion comment when task is newly done and has no comment yet
         // (check both legacy single `comment` and the timestamped `comments` list).
@@ -994,12 +1028,14 @@ export default function App() {
         lastError = e;
         // 404 / 漂移：重试前先同步一次
         try {
-          const data = await filesApi.get(currentFileDate);
+          const data = await filesApi.get(targetDate);
           if (data) {
-            setMarkdown(data.content);
-            setTasks(data.tasks as Task[]);
-            setLastSyncedMD(data.content);
-            setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+            if (targetDate === currentFileDate) {
+              setMarkdown(data.content);
+              setTasks(data.tasks as Task[]);
+              setLastSyncedMD(data.content);
+            }
+            setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
           }
         } catch {}
         if (attempt < 2) {
@@ -1023,21 +1059,34 @@ export default function App() {
       deadline?: string;
       priority?: 'high' | 'medium' | 'low';
       project?: string;
-    }
+    },
+    hostDate?: string
   ) => {
+    const targetDate = hostDate ?? currentFileDate;
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
     let lastError: unknown = null;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        await tasksApi.edit(id, currentFileDate, updates);
+        await tasksApi.edit(id, targetDate, updates);
         // 成功后重新拉取最新 markdown，避免和别人的并发编辑漂移
-        const data = await filesApi.get(currentFileDate);
+        const data = await filesApi.get(targetDate);
         if (data) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+          if (targetDate === currentFileDate) {
+            setMarkdown(data.content);
+            setTasks(data.tasks as Task[]);
+            setLastSyncedMD(data.content);
+          } else {
+            const refreshed = (data.tasks as Task[]).find(task => task.id === id);
+            if (refreshed) {
+              setEarlierOpenTasks(prev => prev.map(task =>
+                task.id === id && task.host_date === targetDate
+                  ? { ...refreshed, host_date: targetDate }
+                  : task
+              ));
+            }
+          }
+          setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
         showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
         return;
@@ -1046,12 +1095,14 @@ export default function App() {
         // 404 通常意味着 task id 已失效（文件被外部重写），重试前先同步一次
         if (e?.status === 404) {
           try {
-            const data = await filesApi.get(currentFileDate);
+            const data = await filesApi.get(targetDate);
             if (data) {
-              setMarkdown(data.content);
-              setTasks(data.tasks as Task[]);
-              setLastSyncedMD(data.content);
-              setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+              if (targetDate === currentFileDate) {
+                setMarkdown(data.content);
+                setTasks(data.tasks as Task[]);
+                setLastSyncedMD(data.content);
+              }
+              setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
             }
           } catch {}
         }
@@ -1064,27 +1115,34 @@ export default function App() {
     console.error('Failed to edit task', lastError);
     // 最后再同步一次，保证 UI 不显示过期状态
     try {
-      const data = await filesApi.get(currentFileDate);
+      const data = await filesApi.get(targetDate);
       if (data) {
-        setMarkdown(data.content);
-        setTasks(data.tasks as Task[]);
-        setLastSyncedMD(data.content);
-        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        if (targetDate === currentFileDate) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+        }
+        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
       }
     } catch {}
     showToast(language === 'zh' ? '更新失败，请重试' : 'Failed to update task — please retry', 'error');
   };
 
-  const handleDeleteTask = async (id: string) => {
+  const handleDeleteTask = async (id: string, hostDate?: string) => {
+    const targetDate = hostDate ?? currentFileDate;
     try {
-      await tasksApi.delete(id, currentFileDate);
+      await tasksApi.delete(id, targetDate);
       // Refresh markdown and re-sync tasks
-      const data = await filesApi.get(currentFileDate);
+      const data = await filesApi.get(targetDate);
       if (data) {
-        setMarkdown(data.content);
-        setTasks(data.tasks as Task[]);
-        setLastSyncedMD(data.content);
-        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+        if (targetDate === currentFileDate) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+        } else {
+          setEarlierOpenTasks(prev => prev.filter(task => !(task.id === id && task.host_date === targetDate)));
+        }
+        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
       }
       showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
     } catch (e) {
@@ -1127,6 +1185,7 @@ export default function App() {
           setLastSyncedMD(data.content);
           setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
         }
+        await refreshEarlierOpenTasks();
       }
     } catch (e) {
       console.error('Rollover failed', e);
@@ -1139,7 +1198,14 @@ export default function App() {
   // Work context: show work tasks + tasks without work/life (default to work)
   // Life context: only show life tasks
   const contextFilteredTasks = filterTasksByContext(tasks, activeContext);
-  const todayTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
+  const currentVisibleTasks = contextFilteredTasks.filter(t => t.status !== 'migrated');
+  const earlierVisibleTasks = currentFileDate === getTodayStr()
+    ? filterTasksByContext(earlierOpenTasks, activeContext).filter(t => t.status === 'todo')
+    : [];
+  // Today is an execution surface, not merely a rendering of today's file.
+  // Keep unfinished standalone tasks from earlier Daily notes visible until
+  // the user completes, deletes, or explicitly rolls them into today.
+  const todayTasks = [...currentVisibleTasks, ...earlierVisibleTasks];
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {

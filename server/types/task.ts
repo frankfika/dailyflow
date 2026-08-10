@@ -10,6 +10,8 @@ export interface Task {
   deadline?: string;
   priority?: 'high' | 'medium' | 'low';
   source_date?: string;
+  /** Daily note that currently owns the task. Used by read-only backlog previews. */
+  host_date?: string;
   line?: number;
   /**
    * v2 (Topic Spaces): owning topic space. Optional — most tasks predate

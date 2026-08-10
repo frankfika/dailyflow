@@ -3,7 +3,6 @@ import { generateMarkdown, appendTaskToMarkdown, updateTaskInMarkdown } from './
 import { withDateLock } from './lock.js';
 import { taskMatchesContext } from '../utils/contextFilter.js';
 import type { Task, Config, RolloverPreview } from '../types/task.js';
-import { randomUUID } from 'crypto';
 
 /**
  * 预览任务迁移（收集所有早于目标日期的未完成任务）
@@ -45,8 +44,11 @@ export async function previewRollover(
           : (task.tags || []);
         return {
           ...task,
-          id: `t_${randomUUID()}`,
+          // Preview items keep their real identity so the Today backlog can
+          // safely operate on the source task without creating a shadow id.
+          id: task.id,
           source_date: task.source_date || fromDate,
+          host_date: fromDate,
           tags
         };
       })];

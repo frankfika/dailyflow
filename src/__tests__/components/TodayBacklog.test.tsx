@@ -9,6 +9,7 @@ function renderBacklog(tasks: Array<{
   title: string;
   status: 'todo' | 'done' | 'migrated';
   deadline?: string;
+  host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
 }>, withPlanning = false) {
@@ -81,5 +82,15 @@ describe('TodayBacklog Event-first execution flow', () => {
     expect(within(screen.getByTestId('today-execution-list')).queryByText('Reviewed notes')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Completed 1/i }));
     expect(screen.getByText('Reviewed notes')).toBeInTheDocument();
+  });
+
+  it('routes an earlier task action back to the Daily note that owns it', () => {
+    renderBacklog([
+      { id: 'earlier', title: 'Carry this forward', status: 'todo', host_date: '2026-07-26' },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as done' }));
+
+    expect(noop).toHaveBeenCalledWith('earlier', '2026-07-26');
   });
 });
