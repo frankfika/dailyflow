@@ -40,6 +40,7 @@ test.describe('DailyFlow Smoke Tests', () => {
       await expect(page.getByText(/Workspace Directory|工作区目录/i)).toBeVisible();
       return;
     }
+    await page.getByTestId('nav-more').click();
     await page.getByTestId('settings-button').click();
     await expect(page.locator('text=/Settings|Configuration|Config|设置|全局设置/i').first()).toBeVisible();
   });
