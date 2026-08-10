@@ -12,6 +12,8 @@ vi.mock('motion/react', () => ({
   motion: {
     div: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
       React.createElement('div', props, children),
+    article: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
+      React.createElement('article', props, children),
   },
 }));
 
@@ -20,10 +22,12 @@ vi.mock('lucide-react', () => ({
   Briefcase: () => React.createElement('span', { 'data-testid': 'icon-briefcase' }),
   Calendar: () => React.createElement('span', { 'data-testid': 'icon-calendar' }),
   Check: () => React.createElement('span', { 'data-testid': 'icon-check' }),
+  ChevronRight: () => React.createElement('span', { 'data-testid': 'icon-chevron-right' }),
   CornerUpRight: () => React.createElement('span', { 'data-testid': 'icon-corner' }),
   Edit2: () => React.createElement('span', { 'data-testid': 'icon-edit' }),
   FileText: () => React.createElement('span', { 'data-testid': 'icon-file' }),
   MessageSquare: () => React.createElement('span', { 'data-testid': 'icon-msg' }),
+  MoreHorizontal: () => React.createElement('span', { 'data-testid': 'icon-more' }),
   Trash2: () => React.createElement('span', { 'data-testid': 'icon-trash' }),
   X: () => React.createElement('span', { 'data-testid': 'icon-x' }),
   BellOff: () => React.createElement('span', { 'data-testid': 'icon-bell-off' }),
@@ -31,6 +35,7 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('../../utils/tagColors', () => ({
   getTagColor: () => 'bg-gray-100 text-gray-700',
+  getTodayStr: () => '2024-01-01',
 }));
 
 vi.mock('../../components/TagInput', () => ({
@@ -67,6 +72,38 @@ const createProps = (overrides: any = {}) => ({
   ...overrides,
 });
 
+describe('TaskCard progressive disclosure', () => {
+  it('keeps the default row limited to title, source, deadline, checkbox, and details', () => {
+    render(<TaskCard {...createProps({
+      task: {
+        ...baseTask,
+        deadline: '2024-01-03',
+        description: 'Hidden detail',
+        tags: ['planning'],
+        comment: 'Hidden note',
+      },
+      spaceTitle: 'Launch event',
+    })} />);
+
+    expect(screen.getByText('Test task')).toBeInTheDocument();
+    expect(screen.getByTestId('task-card-event-task-1')).toHaveTextContent('Launch event');
+    expect(screen.getByText('2024-01-03')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden detail')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hidden note')).not.toBeInTheDocument();
+    expect(screen.queryByText('#planning')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+    expect(screen.getByText('Hidden detail')).toBeInTheDocument();
+    expect(screen.getByText('Hidden note')).toBeInTheDocument();
+    expect(screen.getByText('#planning')).toBeInTheDocument();
+  });
+
+  it('labels tasks without an Event as Standalone', () => {
+    render(<TaskCard {...createProps()} />);
+    expect(screen.getByTestId('task-card-event-task-1')).toHaveTextContent('Standalone');
+  });
+});
+
 describe('TaskCard completion comment', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -98,8 +135,9 @@ describe('TaskCard completion comment', () => {
     });
     render(<TaskCard {...props} />);
 
-    // Should show existing comment display, not the textarea prompt
+    // Existing notes stay behind task details and do not trigger a new prompt.
     expect(screen.queryByPlaceholderText(/How did you resolve/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     expect(screen.getByText('Already noted')).toBeInTheDocument();
   });
 
@@ -109,6 +147,7 @@ describe('TaskCard completion comment', () => {
     });
     render(<TaskCard {...props} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     expect(screen.getByText('Resolution')).toBeInTheDocument();
     expect(screen.getByText('Fixed by upgrading lib')).toBeInTheDocument();
   });
@@ -119,6 +158,7 @@ describe('TaskCard completion comment', () => {
     });
     render(<TaskCard {...props} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     expect(screen.queryByText('Resolution')).not.toBeInTheDocument();
     expect(screen.getByText('Need to review')).toBeInTheDocument();
   });
@@ -210,7 +250,7 @@ describe('TaskCard editing', () => {
     const props = createProps({ onEdit });
     render(<TaskCard {...props} />);
 
-    // Click edit button
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     const editBtn = screen.getByTestId('icon-edit').parentElement;
     fireEvent.click(editBtn!);
 
@@ -237,6 +277,7 @@ describe('TaskCard editing', () => {
     const props = createProps({ onEdit });
     render(<TaskCard {...props} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     const editBtn = screen.getByTestId('icon-edit').parentElement;
     fireEvent.click(editBtn!);
 
@@ -256,7 +297,7 @@ describe('TaskCard delete', () => {
     const props = createProps({ onDelete });
     render(<TaskCard {...props} />);
 
-    // Click delete button — enters confirm state
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     const deleteBtn = screen.getByTestId('icon-trash').parentElement;
     fireEvent.click(deleteBtn!);
 
@@ -275,6 +316,7 @@ describe('TaskCard delete', () => {
     const props = createProps({ onDelete });
     render(<TaskCard {...props} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     const deleteBtn = screen.getByTestId('icon-trash').parentElement;
     fireEvent.click(deleteBtn!);
 

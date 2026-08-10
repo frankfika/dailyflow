@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
+import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, importModelCenter, loadProviderConfigs } from './types/models';
@@ -751,6 +751,17 @@ export default function App() {
   }, [currentFileDate, loadTasksForDate]);
 
   useEffect(() => {
+    const reloadChangedDay = (event: Event) => {
+      const changedDate = (event as CustomEvent<{ date?: string }>).detail?.date;
+      if (!changedDate || changedDate === currentFileDate) {
+        void loadTasksForDate(currentFileDate);
+      }
+    };
+    window.addEventListener(DOMAIN_EVENTS.tasksChanged, reloadChangedDay);
+    return () => window.removeEventListener(DOMAIN_EVENTS.tasksChanged, reloadChangedDay);
+  }, [currentFileDate, loadTasksForDate]);
+
+  useEffect(() => {
     if (!activeWorkspaceId || isFirstRun !== false || currentFileDate !== getTodayStr()) return;
     const key = `${activeWorkspaceId}:${currentFileDate}:${activeContext}`;
     if (initializedDaysRef.current.has(key)) return;
@@ -949,7 +960,15 @@ export default function App() {
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        await tasksApi.updateStatus(id, currentFileDate, newStatus);
+        if (task.originMindmapId && task.originNodeId) {
+          if (newStatus === 'done') {
+            await eventsApi.completeNodeTask({ taskId: id, scheduledDate: currentFileDate });
+          } else {
+            await eventsApi.undoCompleteNodeTask({ taskId: id, scheduledDate: currentFileDate });
+          }
+        } else {
+          await tasksApi.updateStatus(id, currentFileDate, newStatus);
+        }
         setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
         // Refresh markdown after task change
         const data = await filesApi.get(currentFileDate);
@@ -1660,6 +1679,7 @@ export default function App() {
                 >
                   <EventsView
                     language={language}
+                    context={activeContext}
                     sidebarOpen={isSidebarOpen}
                     onNotice={showToast}
                   />

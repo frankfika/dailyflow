@@ -94,6 +94,7 @@ export const DOMAIN_EVENTS = {
   calendarEventsChanged: 'calendar.eventsChanged',
   aiProviderChanged: 'ai.providerChanged',
   workspaceChanged: 'workspace.changed',
+  tasksChanged: 'tasks.changed',
 } as const;
 
 export type DomainEventName = typeof DOMAIN_EVENTS[keyof typeof DOMAIN_EVENTS];
@@ -363,8 +364,30 @@ export interface UndoConvertStandaloneToEventNodeTaskInput {
   taskId: string;
   scheduledDate: string;
 }
+export interface UnscheduleNodeTaskInput {
+  taskId: string;
+  scheduledDate: string;
+  mindmapId: string;
+  nodeId: string;
+}
+export interface RescheduleNodeTaskInput {
+  taskId: string;
+  fromDate: string;
+  toDate: string;
+  mindmapId: string;
+  nodeId: string;
+}
 
 export const eventsApi = {
+  async create(input: { title: string; context: EventContext }): Promise<EventDetail> {
+    const res = await fetch(`${API_BASE}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to create event');
+    return res.json();
+  },
   async list(from?: string, to?: string): Promise<{ events: EventSummary[] }> {
     const q = new URLSearchParams();
     if (from) q.set('from', from);
@@ -372,18 +395,21 @@ export const eventsApi = {
     const qs = q.toString();
     const res = await fetch(`${API_BASE}/events${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch events');
-    return res.json();
+    const payload = await res.json();
+    return { events: Array.isArray(payload) ? payload : (payload?.events ?? []) };
   },
   async getById(eventId: string): Promise<{ event: EventDetail } | { event: null }> {
     const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}`);
     if (res.status === 404) return { event: null };
     if (!res.ok) throw await httpError(res, 'Failed to fetch event');
-    return res.json();
+    const payload = await res.json();
+    return { event: payload?.event ?? payload };
   },
   async listTodayItems(date: string): Promise<{ items: TodayItem[] }> {
     const res = await fetch(`${API_BASE}/events/today-items?date=${encodeURIComponent(date)}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch today items');
-    return res.json();
+    const payload = await res.json();
+    return { items: Array.isArray(payload) ? payload : (payload?.items ?? []) };
   },
   async listStandaloneTasks(from?: string, to?: string): Promise<{ tasks: StandaloneTask[] }> {
     const q = new URLSearchParams();
@@ -392,7 +418,8 @@ export const eventsApi = {
     const qs = q.toString();
     const res = await fetch(`${API_BASE}/events/standalone-tasks${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch standalone tasks');
-    return res.json();
+    const payload = await res.json();
+    return { tasks: Array.isArray(payload) ? payload : (payload?.tasks ?? []) };
   },
   async createTaskForNode(input: CreateTaskForNodeInput): Promise<{ taskId: string; appended: boolean; alreadyPresent: boolean }> {
     const res = await fetch(`${API_BASE}/events/actions/create-task-for-node`, {
@@ -446,6 +473,20 @@ export const eventsApi = {
       body: JSON.stringify(input),
     });
     if (!res.ok) throw await httpError(res, 'Failed to undo convert standalone to event node task');
+    return res.json();
+  },
+  async unscheduleNodeTask(input: UnscheduleNodeTaskInput): Promise<{ unscheduled: boolean; alreadyUnscheduled: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/unschedule-node-task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to remove node from day');
+    return res.json();
+  },
+  async rescheduleNodeTask(input: RescheduleNodeTaskInput): Promise<{ rescheduled: boolean; alreadyScheduled: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/reschedule-node-task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to reschedule node');
     return res.json();
   },
 };

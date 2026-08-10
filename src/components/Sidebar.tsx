@@ -16,7 +16,6 @@ import {
   Briefcase,
   Heart,
   PanelLeftClose,
-  Network,
   Sparkles,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,9 +27,7 @@ import { getTodayStr } from '../utils/tagColors';
  *  - ≤ 640px (mobile):   hidden by default; full 230px overlay with backdrop
  *                        on top, click outside / Esc / nav-click closes
  *  - 641-1024px (tablet): icon-only 60px strip by default; click icon or
- *                        hover expands to 230px overlay. Mind Map keeps the
- *                        full navigation visible because it already owns a
- *                        second, map-specific sidebar.
+ *                        hover expands to 230px overlay.
  *  - > 1024px (desktop): 230px expanded or 60px icon rail when collapsed.
  *                        Primary navigation always remains visible.
  *
@@ -216,12 +213,7 @@ export function Sidebar({
 
   const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events') => {
     setActiveTab(tab);
-    if (tab === 'mindmap' && !isMobile) {
-      // DailyFlow's default desktop window can land exactly on the tablet
-      // breakpoint. Auto-collapsing here made the global navigation appear
-      // to vanish as soon as users entered Mind Map.
-      setIsSidebarOpen(true);
-    } else if (isMobile || isTablet) {
+    if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
     }
   };
@@ -236,7 +228,7 @@ export function Sidebar({
     persistToggle(true);
   };
 
-  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'mindmap';
+  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory';
   const [showMore, setShowMore] = useState(isAdvancedTab);
 
   useEffect(() => {
@@ -296,7 +288,7 @@ export function Sidebar({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className={`fixed inset-0 z-20 ${
-              isMobile ? 'bg-black/30 m' : 'bg-black/15'
+              isMobile ? 'bg-black/30' : 'bg-black/15'
             }`}
             onClick={() => setIsSidebarOpen(false)}
             aria-hidden="true"
@@ -456,8 +448,7 @@ export function Sidebar({
                   <ul className="space-y-0.5 border-l border-border/70 pl-2 text-[12px]">
                     {([
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
-                      { tab: 'memory', label: language === 'zh' ? '搜索与记忆' : 'Search & memory', icon: Search },
-                      { tab: 'mindmap', label: language === 'zh' ? '思维导图' : 'Mind maps', icon: Network },
+                      { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
                     ] as const).map(({ tab, label, icon: Icon }) => (
                       <li key={tab}>
                         <button
@@ -470,13 +461,25 @@ export function Sidebar({
                         </button>
                       </li>
                     ))}
+                    {onOpenSettings && (
+                      <li>
+                        <button
+                          onClick={onOpenSettings}
+                          data-testid="settings-button"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-text-muted transition-colors hover:bg-black/[0.03] hover:text-text-main"
+                        >
+                          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                          {language === 'zh' ? '设置' : 'Settings'}
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 </motion.div>
               )}
             </AnimatePresence>
           </nav>
 
-          {/* Bottom: Work/Life toggle + Settings — only in expanded mode. */}
+          {/* Bottom: the Work/Life context switch stays globally reachable. */}
           <AnimatePresence initial={false}>
             {!isCompact && (
               <motion.div
@@ -526,16 +529,6 @@ export function Sidebar({
                   </div>
                 )}
 
-                {onOpenSettings && (
-                  <button
-                    onClick={onOpenSettings}
-                    data-testid="settings-button"
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-text-muted hover:text-text-heading rounded-lg transition-colors hover:bg-black/[0.03] active:scale-[0.99]"
-                  >
-                    <Settings className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
-                    {language === 'zh' ? '设置' : 'Settings'}
-                  </button>
-                )}
               </motion.div>
             )}
           </AnimatePresence>

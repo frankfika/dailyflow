@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Sidebar } from '../../components/Sidebar';
 
 vi.mock('motion/react', () => ({
@@ -40,7 +40,7 @@ vi.mock('../../api/client', () => ({
   filesApi: { create: vi.fn() },
 }));
 
-function SidebarHarness() {
+function SidebarHarness({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const [open, setOpen] = useState(false);
   return (
     <Sidebar
@@ -58,6 +58,7 @@ function SidebarHarness() {
       expandedArchiveMonths={{}}
       toggleArchiveMonth={vi.fn()}
       showToast={vi.fn()}
+      onOpenSettings={onOpenSettings}
     />
   );
 }
@@ -84,5 +85,21 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByRole('button', { name: 'Today' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Ask AI' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
+  });
+
+  it('uses the Event-first primary navigation and keeps secondary destinations under More', () => {
+    render(<SidebarHarness onOpenSettings={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByText('Calendar')).toBeInTheDocument();
+    expect(screen.getByText('Memory')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.queryByText('Mind maps')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-mindmap')).not.toBeInTheDocument();
   });
 });

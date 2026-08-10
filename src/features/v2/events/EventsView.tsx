@@ -1,314 +1,158 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Check, Calendar, ChevronRight, ListTodo, Sparkles, Loader2, X } from 'lucide-react';
-import { useEvents, useTodayItems, useEventById } from '../hooks/useEvents';
-import type { EventContext, EventDetail, EventSummary, TodayItem } from '../../../api/client';
-import { getTodayStr } from '../../../utils/tagColors';
-
-const STATUS_LABEL: Record<EventContext, string> = {
-  work: '工作',
-  life: '生活',
-};
-
-function ProgressBar({ done, total }: { done: number; total: number }) {
-  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-  return (
-    <div className="w-full h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-      <div
-      className="h-full rounded-full bg-[#23877B] transition-all duration-500"
-      style={{ width: `${pct}%` }}
-    />
-    </div>
-  );
-}
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
+import {
+  useAddEventChild,
+  useCompleteNodeTask,
+  useCreateEvent,
+  useDeleteEventNode,
+  useEventById,
+  useEvents,
+  useRenameEventNode,
+  useScheduleEventNode,
+  useUnscheduleEventNode,
+  useUndoCompleteNodeTask,
+} from '../hooks/useEvents';
+import { EventCanvas } from './EventCanvas';
 
 export interface EventsViewProps {
   language?: 'zh' | 'en';
+  context?: 'work' | 'life';
   sidebarOpen?: boolean;
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
-export function EventsView({ language = 'en', sidebarOpen = true, onNotice }: EventsViewProps) {
-  const today = getTodayStr();
+const TEXT = {
+  en: {
+    title: 'Events', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.',
+  },
+  zh: {
+    title: '事件', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。',
+  },
+} as const;
+
+export function EventsView({ language = 'en', context = 'work', onNotice }: EventsViewProps) {
+  const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [dateRange] = useState({ from: undefined, to: undefined });
-  const eventsQ = useEvents({ from: dateRange.from, to: dateRange.to });
-  const todayQ = useTodayItems(today);
-  const eventDetailQ = useEventById(selectedEventId);
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const eventsQ = useEvents();
+  const createEvent = useCreateEvent();
+  const events = useMemo(
+    () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
+    [context, eventsQ.data?.events],
+  );
 
-  const todayGroups = useMemo(() => {
-    const ev: TodayItem[] = todayQ.data?.items ?? [];
-    return {
-      todo: ev.filter((i) => i.status === 'todo'),
-      done: ev.filter((i) => i.status === 'done'),
-    };
-  }, [todayQ.data?.items]);
+  async function submitNewEvent() {
+    if (!newTitle.trim()) return;
+    try {
+      const created = await createEvent.mutateAsync({ title: newTitle.trim(), context });
+      setNewTitle('');
+      setCreating(false);
+      setSelectedEventId(created.id);
+      onNotice?.(language === 'zh' ? '事件已创建' : 'Event created', 'success');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }
+
+  if (selectedEventId) {
+    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} />;
+  }
+
+  const active = events.filter((event) => event.status === 'active');
+  const completed = events.filter((event) => event.status === 'completed');
 
   return (
-    <div className="flex h-full w-full min-h-0">
-      {/* Left column: Today + Event list */}
-      <aside className={`flex flex-col border-r border-gray-200 dark:border-gray-700 transition-[width] duration-200 ${
-        selectedEventId ? 'w-[360px]' : 'w-full'
-      }`}>
-        <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-[#23877B]" />
-              Today
-            </h2>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{today}</span>
+    <section className="flex h-full min-h-0 flex-col bg-white dark:bg-[#101514]" data-testid="events-surface">
+      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-5 dark:border-gray-800">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-950 dark:text-gray-50">{t.title}</h1>
+        <button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-lg bg-[#23877B] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#1d7168]" data-testid="new-event-button"><Plus className="h-4 w-4" />{t.newEvent}</button>
+      </header>
+
+      {creating && (
+        <form onSubmit={(e) => { e.preventDefault(); void submitNewEvent(); }} className="border-b border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/40" data-testid="new-event-form">
+          <div className="mx-auto flex max-w-3xl items-center gap-2">
+            <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t.input} aria-label={t.input} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#23877B] focus:ring-2 focus:ring-[#23877B]/10 dark:border-gray-700 dark:bg-gray-900" />
+            <button disabled={!newTitle.trim() || createEvent.isPending} className="rounded-lg bg-[#23877B] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">{createEvent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t.create}</button>
+            <button type="button" onClick={() => { setCreating(false); setNewTitle(''); }} className="rounded-lg px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800">{t.cancel}</button>
           </div>
-          {todayQ.isLoading ? (
-            <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>加载中…</span>
-            </div>
-          ) : (
-            <>
-              <ul className="space-y-1.5">
-                {todayGroups.todo.length === 0 && todayGroups.done.length === 0 && (
-                  <li className="text-xs text-gray-400 dark:text-gray-500 py-4 text-center">
-                    今天还没有待办
-                  </li>
-                )}
-                {todayGroups.todo.map((item) => (
-                  <TodayItemRow
-                  key={item.id}
-                  item={item}
-                  onClick={() => {
-                    if (item.kind === 'event-node') {
-                      setSelectedEventId(item.eventId);
-                      onNotice?.(`打开事件: ${item.eventTitle}`, 'info');
-                    }
-                  }}
-                />
-                ))}
-                {todayGroups.done.length > 0 && (
-                  <li className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-800">
-                    <div className="text-xs text-gray-400 mb-1">已完成 {todayGroups.done.length}</div>
-                    <ul className="space-y-1.5 opacity-60">
-                      {todayGroups.done.map((item) => (
-                        <TodayItemRow key={item.id} item={item} onClick={() => {
-                          if (item.kind === 'event-node') setSelectedEventId(item.eventId);
-                        }} />
-                      ))}
-                    </ul>
-                  </li>
-                )}
-              </ul>
-            </>
-          )}
-        </header>
-
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-[#23877B]" />
-            全部事件
-          </h3>
-          <span className="text-xs text-gray-500">
-            {eventsQ.data?.events?.length ?? 0}
-          </span>
-        </div>
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
-          {eventsQ.isLoading ? (
-            <div className="flex items-center gap-2 text-xs text-gray-500 py-6 text-center">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>加载中…</span>
-            </div>
-          ) : eventsQ.data?.events?.length === 0 ? (
-            <div className="text-xs text-gray-400 dark:text-gray-500 py-8 text-center">
-              还没有事件。事件由 Topic Space 转换而来。
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {eventsQ.data?.events?.map((ev) => (
-                <EventSummaryRow
-                key={ev.id}
-                event={ev}
-                selected={selectedEventId === ev.id}
-                onClick={() => setSelectedEventId(ev.id)}
-              />
-            ))}
-            </ul>
-          )}
-        </div>
-      </aside>
-
-      {/* Right column: Event Detail */}
-      {selectedEventId && (
-        <section className="flex-1 flex flex-col min-w-0">
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-            <button
-            onClick={() => setSelectedEventId(null)}
-            className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
-            aria-label="关闭详情"
-            title="返回列表"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          {eventDetailQ.isLoading ? (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              加载事件…
-            </div>
-          ) : eventDetailQ.data?.event ? (
-            <EventDetailPanel event={eventDetailQ.data.event} onBack={() => setSelectedEventId(null)} />
-          ) : (
-            <EventDetailEmpty />
-          )}
-        </div>
-      </section>
+        </form>
       )}
-    </div>
-  );
-}
 
-function TodayItemRow({
-  item,
-  onClick,
-}: {
-  item: TodayItem;
-  onClick?: () => void;
-}) {
-  return (
-    <li>
-      <button
-      onClick={onClick}
-      disabled={!onClick || item.kind === 'standalone'}
-      className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
-        item.kind === 'event-node'
-          ? 'hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-[#23877B]/40 cursor-pointer border-gray-200 dark:border-gray-700'
-          : 'cursor-default border-gray-200 dark:border-gray-700'
-      } ${item.status === 'done' ? 'opacity-70 line-through decoration-gray-400 dark:decoration-gray-500' : ''}`}
-    >
-      <div className="flex items-start gap-2">
-        {item.status === 'done' ? (
-          <Check className="w-4 h-4 mt-0.5 text-[#23877B]" />
-        ) : (
-          <div className="w-4 h-4 mt-0.5 rounded-full border-2 border-gray-300 dark:border-gray-600" />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-            {item.title}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {item.kind === 'event-node' && (
-              <span className="text-[11px] text-[#23877B] font-medium">{item.eventTitle}</span>
-            )}
-            {item.kind === 'standalone' && (
-              <span className="text-[11px] text-gray-400">独立任务</span>
-            )}
-            {item.deadline && (
-              <span className="text-[11px] text-red-500">⏰ {item.deadline}</span>
-            )}
-            {item.priority === 'high' && (
-              <span className="text-[11px] text-red-500 font-semibold">高优</span>
-            )}
-          </div>
-        </div>
-        {item.kind === 'event-node' && (
-          <ChevronRight className="w-3.5 h-3.5 text-gray-400 mt-1" />
-        )}
-      </div>
-    </button>
-    </li>
-  );
-}
-
-function EventSummaryRow({
-  event,
-  selected,
-  onClick,
-}: {
-  event: EventSummary;
-  selected: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <li>
-      <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
-        selected
-          ? 'border-[#23877B] bg-[#23877B]/10 ring-1 ring-[#23877B]'
-          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300'
-      }`}
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-            {event.title}
-          </h4>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
-            event.context === 'work'
-              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-              : 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-          }`}>
-            {STATUS_LABEL[event.context]}
-          </span>
-          {event.status === 'completed' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-              已完成
-            </span>
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto max-w-3xl">
+          {eventsQ.isLoading && <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />}
+          {eventsQ.isError && <CenteredState text={t.loadError} />}
+          {!eventsQ.isLoading && !eventsQ.isError && events.length === 0 && (
+            <div className="flex min-h-80 flex-col items-center justify-center text-center">
+              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[#23877B]/10 text-[#23877B]"><CalendarDays className="h-6 w-6" /></div>
+              <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">{t.empty}</p>
+              <button onClick={() => setCreating(true)} className="rounded-lg border border-gray-300 px-3.5 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900">{t.emptyAction}</button>
+            </div>
           )}
+          {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} />}
+          {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} />}
         </div>
-        <span className="text-[11px] text-gray-500">
-          {event.progress.done}/{event.progress.total}
-        </span>
       </div>
-      <ProgressBar done={event.progress.done} total={event.progress.total} />
-      {event.effectiveTags.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {event.effectiveTags.slice(0, 4).map((t) => (
-            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-              #{t}
-            </span>
-          ))}
-        </div>
-      )}
-    </button>
-    </li>
+    </section>
   );
 }
 
-function EventDetailPanel({ event, onBack }: { event: EventDetail; onBack: () => void }) {
-  return (
-    <div className="flex items-center gap-2 flex-1 min-w-0">
-      <div className="flex-1 min-w-0">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-          {event.title}
-        </h2>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${
-            event.context === 'work'
-              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-              : 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-          }`}>
-            {STATUS_LABEL[event.context]}
-          </span>
-          <span className="text-[11px] text-gray-500">{event.progress.done}/{event.progress.total} 项</span>
-          {event.integrity.orphanTaskIds.length > 0 && (
-            <span className="text-[11px] text-amber-600">
-              ⚠ {event.integrity.orphanTaskIds.length} 孤立任务
-            </span>
-          )}
-        </div>
-      </div>
-      <button
-      onClick={onBack}
-      className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-      aria-label="关闭详情"
-    >
-      <X className="w-4 h-4" />
-    </button>
-    </div>
-  );
+function EventGroup({ title, events, language, onOpen, noActions, updated }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string }) {
+  return <div className="mb-8"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="space-y-2">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} />)}</div></div>;
 }
 
-function EventDetailEmpty() {
-  return (
-    <div className="flex-1 min-w-0 flex flex-col items-center justify-center text-gray-400 text-sm">
-      <ListTodo className="w-10 h-10 mb-2 opacity-30" />
-      <div>事件未找到或已被删除</div>
-    </div>
-  );
+function CompletedGroup(props: Parameters<typeof EventGroup>[0]) {
+  const [open, setOpen] = useState(false);
+  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="space-y-2">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} />)}</div>}</div>;
 }
+
+function EventCard({ event, language, onOpen, noActions, updated }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string }) {
+  return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left hover:border-[#23877B]/50 hover:bg-gray-50/70 dark:border-gray-800 dark:bg-gray-900/50 dark:hover:bg-gray-900" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-gray-950 dark:text-gray-50">{event.title}</h3><p className="mt-1 text-xs text-gray-400">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-gray-500">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"><div className="h-full rounded-full bg-[#23877B]" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-800">#{tag}</span>)}</div>}</button>;
+}
+
+function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice'] }) {
+  const t = TEXT[language];
+  const detailQ = useEventById(eventId);
+  const addChild = useAddEventChild();
+  const rename = useRenameEventNode();
+  const deleteNode = useDeleteEventNode();
+  const schedule = useScheduleEventNode();
+  const unschedule = useUnscheduleEventNode();
+  const complete = useCompleteNodeTask();
+  const reopen = useUndoCompleteNodeTask();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const event = detailQ.data?.event;
+  const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
+
+  async function safe(action: () => Promise<unknown>, success?: string) {
+    try { await action(); if (success) onNotice?.(success, 'success'); }
+    catch (error) { onNotice?.(error instanceof Error ? error.message : t.loadError, 'error'); }
+  }
+
+  if (detailQ.isLoading) return <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />;
+  if (!event) return <CenteredState text={t.missing} />;
+  if (event.integrity.missingMap) return <CenteredState text={t.missing} />;
+
+  return <section className="flex h-full min-h-0 flex-col" data-testid="event-detail">
+    <header className="relative z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#101514]">
+      <button onClick={onBack} aria-label={t.back} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><ArrowLeft className="h-4 w-4" /></button>
+      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-950 dark:text-gray-50">{event.title}</h1>
+      {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
+      <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
+    </header>
+    <div className="min-h-0 flex-1"><EventCanvas event={event} language={language} focusedNodeId={query && matches.length ? matches[0].id : null} onAddChild={(parentId, text) => safe(() => addChild.mutateAsync({ eventId, mindmapId: event.mindmapId, parentId, text }))} onRename={(nodeId, text) => safe(() => rename.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId, text }))} onDelete={(nodeId) => safe(() => deleteNode.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId }))} onSchedule={(node, date) => safe(() => schedule.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId: node.id, date, taskId: node.execution?.taskId, fromDate: node.execution?.scheduledDate }), language === 'zh' ? '已安排' : 'Scheduled')} onUnschedule={(node) => node.execution ? safe(() => unschedule.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId: node.id, taskId: node.execution!.taskId, scheduledDate: node.execution!.scheduledDate }), language === 'zh' ? '已移出日程' : 'Removed from day') : Promise.resolve()} onToggleDone={(node) => safe(() => toggleNode(node, complete.mutateAsync, reopen.mutateAsync))} /></div>
+  </section>;
+}
+
+async function toggleNode(node: EventNode, complete: (input: { taskId: string; scheduledDate: string }) => Promise<unknown>, reopen: (input: { taskId: string; scheduledDate: string }) => Promise<unknown>) {
+  if (!node.execution) return;
+  const input = { taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate };
+  if (node.execution.status === 'done') await reopen(input); else await complete(input);
+}
+
+function CenteredState({ icon, text }: { icon?: React.ReactNode; text: string }) { return <div className="flex h-full min-h-64 items-center justify-center gap-2 text-sm text-gray-400">{icon}{text}</div>; }
+function formatDate(value: string, language: 'en' | 'zh') { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' }).format(date); }

@@ -363,7 +363,7 @@ export function CalendarWorkspace({
       transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
       className="flex h-full min-h-0 flex-col bg-background/30"
     >
-      <header className="shrink-0 border-b border-border/70 bg-surface px-4 py-3 xl md:px-6">
+      <header className="shrink-0 border-b border-border/70 bg-surface px-4 py-3 backdrop-blur-2xl md:px-6">
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center rounded-lg border border-border/70 bg-background/50 p-0.5">
             <button
@@ -546,7 +546,7 @@ export function CalendarWorkspace({
       )}
       {notice && (
         <div
-          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-xl border px-3.5 py-3 text-xs shadow-md l ${
+          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-xl border px-3.5 py-3 text-xs shadow-md backdrop-blur-xl ${
             notice.kind === 'success'
               ? 'border-emerald-200 bg-emerald-50/95 text-emerald-800'
               : 'border-red-200 bg-red-50/95 text-red-800'
@@ -624,7 +624,7 @@ function CreateEventDialog({
     >
       <form
         onSubmit={submit}
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-white/70 bg-surface shadow-lg xl"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-white/70 bg-surface shadow-lg backdrop-blur-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-event-title"
