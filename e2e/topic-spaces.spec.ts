@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-test('legacy mind maps surface as Events without restoring the old navigation', async ({ page, request }) => {
+test('legacy mind maps surface as Events while mind notes remain directly accessible', async ({ page, request }) => {
   const workspace = mkdtempSync(join(tmpdir(), 'df-event-adapter-'));
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -39,7 +39,7 @@ test('legacy mind maps surface as Events without restoring the old navigation', 
   expect(configured.ok()).toBeTruthy();
 
   await page.goto('/', { waitUntil: 'networkidle' });
-  await expect(page.getByTestId('nav-mindmap')).toHaveCount(0);
+  await expect(page.getByTestId('nav-mindmap')).toBeVisible();
   await page.getByTestId('nav-events').click();
   await expect(page.getByTestId('event-card-legacy-map')).toContainText('Legacy launch plan');
   await page.getByTestId('event-card-legacy-map').click();

@@ -75,7 +75,7 @@ test('Event breakdown schedules into Today and completion returns to the Event',
 
   await page.getByLabel('Back to Events').click();
   await page.getByTestId('nav-more').click();
-  await expect(page.getByTestId('nav-mindmap')).toHaveCount(0);
+  await expect(page.getByTestId('nav-mindmap')).toBeVisible();
   await expect(page.getByTestId('nav-calendar')).toBeVisible();
   await expect(page.getByTestId('nav-memory')).toBeVisible();
 });
