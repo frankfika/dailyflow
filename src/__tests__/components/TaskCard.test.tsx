@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
-import { TaskCard } from '../../components/TaskCard';
+import { formatTaskDeadline, TaskCard } from '../../components/TaskCard';
 
 // Mock motion/react — strip animation props so they don't leak to DOM
 vi.mock('motion/react', () => ({
@@ -28,6 +28,7 @@ vi.mock('lucide-react', () => ({
   FileText: () => React.createElement('span', { 'data-testid': 'icon-file' }),
   MessageSquare: () => React.createElement('span', { 'data-testid': 'icon-msg' }),
   MoreHorizontal: () => React.createElement('span', { 'data-testid': 'icon-more' }),
+  Network: () => React.createElement('span', { 'data-testid': 'icon-network' }),
   Trash2: () => React.createElement('span', { 'data-testid': 'icon-trash' }),
   X: () => React.createElement('span', { 'data-testid': 'icon-x' }),
   BellOff: () => React.createElement('span', { 'data-testid': 'icon-bell-off' }),
@@ -87,7 +88,7 @@ describe('TaskCard progressive disclosure', () => {
 
     expect(screen.getByText('Test task')).toBeInTheDocument();
     expect(screen.getByTestId('task-card-event-task-1')).toHaveTextContent('Launch event');
-    expect(screen.getByText('2024-01-03')).toBeInTheDocument();
+    expect(screen.getByText('Due in 2d')).toHaveAttribute('title', '2024-01-03');
     expect(screen.queryByText('Hidden detail')).not.toBeInTheDocument();
     expect(screen.queryByText('Hidden note')).not.toBeInTheDocument();
     expect(screen.queryByText('#planning')).not.toBeInTheDocument();
@@ -327,5 +328,14 @@ describe('TaskCard delete', () => {
     await waitFor(() => {
       expect(onDelete).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('formatTaskDeadline', () => {
+  it('turns raw dates into actionable relative deadline copy', () => {
+    expect(formatTaskDeadline('2026-08-09', 'en', '2026-08-11')).toBe('2d overdue');
+    expect(formatTaskDeadline('2026-08-11', 'en', '2026-08-11')).toBe('Due today');
+    expect(formatTaskDeadline('2026-08-12', 'zh', '2026-08-11')).toBe('明天截止');
+    expect(formatTaskDeadline('2026-08-15', 'en', '2026-08-11')).toBe('Due in 4d');
   });
 });

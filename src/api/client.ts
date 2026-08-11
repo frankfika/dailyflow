@@ -28,6 +28,8 @@ export interface TaskInput {
   id: string;
   title: string;
   description?: string;
+  comment?: string;
+  comments?: { text: string; timestamp: string }[];
   status: string;
   tags?: string[];
   project?: string;
@@ -348,10 +350,12 @@ export interface EditNodeTaskInput {
   scheduledDate: string;
   updates: {
     title?: string;
-    note?: string;
+    description?: string;
+    comment?: string;
+    comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
-    priority?: 'high' | 'medium' | 'low';
+    priority?: 'high' | 'medium' | 'low' | '';
   };
 }
 export interface CompleteNodeTaskInput { taskId: string; scheduledDate: string; }

@@ -4,11 +4,11 @@ import {
   BellOff,
   Calendar,
   Check,
-  ChevronRight,
   Edit2,
   FileText,
   MessageSquare,
   MoreHorizontal,
+  Network,
   Trash2,
   X,
 } from 'lucide-react';
@@ -30,6 +30,8 @@ interface TaskCardProps {
   linkedNotesCount?: number;
   /** Event title for tasks created from an Event map. */
   spaceTitle?: string;
+  /** Opens the shared mind note that owns this task. */
+  onOpenSpace?: () => void;
   onUnlinkFromSpace?: (taskId: string) => void;
   onToggle: () => void;
   onEdit: (updates: {
@@ -55,6 +57,18 @@ function timestampNow(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
+export function formatTaskDeadline(deadline: string, language: 'en' | 'zh', today = getTodayStr()): string {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const deadlineTime = new Date(`${deadline}T00:00:00`).getTime();
+  const todayTime = new Date(`${today}T00:00:00`).getTime();
+  const difference = Math.round((deadlineTime - todayTime) / dayMs);
+  if (difference < 0) return language === 'zh' ? `逾期 ${Math.abs(difference)} 天` : `${Math.abs(difference)}d overdue`;
+  if (difference === 0) return language === 'zh' ? '今天截止' : 'Due today';
+  if (difference === 1) return language === 'zh' ? '明天截止' : 'Due tomorrow';
+  if (difference <= 7) return language === 'zh' ? `${difference} 天后截止` : `Due in ${difference}d`;
+  return deadline;
+}
+
 export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   language,
@@ -62,6 +76,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   currentFileDate,
   linkedNotesCount = 0,
   spaceTitle,
+  onOpenSpace,
   onUnlinkFromSpace,
   onToggle,
   onEdit,
@@ -133,14 +148,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     closeComment();
   };
 
-  const eventLabel = spaceTitle ?? (task.spaceId || task.originMindmapId
-    ? (language === 'zh' ? '关联事件' : 'Linked event')
+  const eventLabel = spaceTitle
+    ? (language === 'zh' ? `来自脑图 · ${spaceTitle}` : `Mind map · ${spaceTitle}`)
+    : (task.spaceId || task.originMindmapId
+    ? (language === 'zh' ? '来自脑图' : 'From mind map')
     : (language === 'zh' ? '独立任务' : 'Standalone'));
   const hasAdvancedContent = Boolean(
     task.description || task.comment || task.comments?.length || task.tags?.length || task.project ||
     task.priority || linkedNotesCount || onCreateLinkedNote || !isDone,
   );
   const isOverdue = Boolean(task.deadline && !isDone && task.deadline < getTodayStr());
+  const deadlineLabel = task.deadline ? formatTaskDeadline(task.deadline, language) : '';
 
   return (
     <motion.article
@@ -155,7 +173,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check"
+          className="mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check sm:h-7 sm:w-7"
           title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
           aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
         >
@@ -175,18 +193,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.title}
           </h3>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-text-muted">
-            <span
-              className="inline-flex min-w-0 items-center gap-1"
+            <button
+              type="button"
+              onClick={onOpenSpace}
+              disabled={!onOpenSpace}
+              className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'} ${onOpenSpace ? 'cursor-pointer hover:border-accent/30 hover:bg-accent/15' : 'cursor-default'}`}
               data-testid={`task-card-event-${task.id}`}
               title={eventLabel}
             >
-              {spaceTitle && <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />}
+              {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
               <span className="truncate">{eventLabel}</span>
-            </span>
+            </button>
             {task.deadline && (
               <span className={`inline-flex items-center gap-1 font-medium ${isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
                 <Calendar className="h-3 w-3" aria-hidden="true" />
-                {task.deadline}
+                <span title={task.deadline}>{deadlineLabel}</span>
               </span>
             )}
           </div>
@@ -195,7 +216,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           onClick={() => setShowDetails(value => !value)}
-          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/[0.04] hover:text-text-heading"
+          className="mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/[0.04] hover:text-text-heading sm:h-7 sm:w-7"
           aria-expanded={showDetails}
           aria-label={language === 'zh' ? '任务详情与操作' : 'Task details and actions'}
           data-testid={`task-details-toggle-${task.id}`}

@@ -11,6 +11,7 @@ import {
   ListTodo,
   MessageCircle,
   MoreHorizontal,
+  Network,
   Search,
   Settings,
   Briefcase,
@@ -392,6 +393,7 @@ export function Sidebar({
                 { tab: 'today', label: language === 'zh' ? '今天' : 'Today', icon: ListTodo, action: goToToday },
                 { tab: 'events', label: language === 'zh' ? '事件' : 'Events', icon: Sparkles, action: () => handleNavClick('events') },
                 { tab: 'notes', label: language === 'zh' ? '笔记' : 'Notes', icon: FileText, action: () => onOpenNotesSurface ? onOpenNotesSurface('notes') : handleNavClick('notes') },
+                { tab: 'mindmap', label: language === 'zh' ? '思维笔记' : 'Mind Notes', icon: Network, action: () => handleNavClick('mindmap') },
                 { tab: 'ai-chat', label: language === 'zh' ? '问 AI' : 'Ask AI', icon: MessageCircle, action: () => handleNavClick('ai-chat') },
               ] as const).map(({ tab, label, icon: Icon, action }) => {
                 const active = tab === 'today'
@@ -403,7 +405,7 @@ export function Sidebar({
                       onClick={action}
                       data-testid={`nav-${tab}`}
                       data-active={active}
-                      className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${active ? 'bg-accent/10 text-accent font-semibold' : 'text-text-main hover:bg-black/[0.03]'}`}
+                      className={`nav-item flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${active ? 'bg-accent/10 text-accent font-semibold' : 'text-text-main hover:bg-black/[0.03]'}`}
                       title={isCompact ? label : undefined}
                       aria-label={label}
                     >
@@ -420,7 +422,7 @@ export function Sidebar({
                   onClick={handleMoreClick}
                   data-testid="nav-more"
                   aria-expanded={showMore}
-                  className={`nav-item w-full flex items-center rounded-lg text-left transition-colors ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${isAdvancedTab ? 'text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
+                  className={`nav-item flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${isAdvancedTab ? 'text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
                   title={isCompact ? (language === 'zh' ? '更多' : 'More') : undefined}
                   aria-label={language === 'zh' ? '更多' : 'More'}
                 >
@@ -502,7 +504,7 @@ export function Sidebar({
                         aria-selected={activeContext === 'work'}
                         onClick={() => onContextChange('work')}
                         data-testid="mode-work"
-                        className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all active:scale-95 ${
+                        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-all active:scale-95 ${isMobile ? 'min-h-[44px]' : ''} ${
                           activeContext === 'work'
                             ? 'bg-surface text-accent shadow-sm'
                             : 'text-text-muted hover:text-text-heading'
@@ -516,7 +518,7 @@ export function Sidebar({
                         aria-selected={activeContext === 'life'}
                         onClick={() => onContextChange('life')}
                         data-testid="mode-life"
-                        className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all active:scale-95 ${
+                        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-all active:scale-95 ${isMobile ? 'min-h-[44px]' : ''} ${
                           activeContext === 'life'
                             ? 'bg-surface text-accent shadow-sm'
                             : 'text-text-muted hover:text-text-heading'

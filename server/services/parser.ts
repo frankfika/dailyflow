@@ -471,7 +471,7 @@ export function editTaskFullInMarkdown(
     comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
-    priority?: 'high' | 'medium' | 'low';
+    priority?: 'high' | 'medium' | 'low' | '';
     project?: string;
   },
   currentDate?: string

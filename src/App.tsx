@@ -19,7 +19,8 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
-import { TodayBacklog } from './components/TodayBacklog';
+import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks } from './components/TodayBacklog';
+import { TodayScopeTabs } from './components/TodayScopeTabs';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -146,6 +147,7 @@ export default function App() {
   // writes. Saving a captured date/content pair on a timer can overwrite a
   // different date after the user navigates.
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedMindmapFilter, setSelectedMindmapFilter] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showTaskInput, setShowTaskInput] = useState(false);
@@ -1213,6 +1215,35 @@ export default function App() {
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
+  const todayTaskIds = new Set(todayTasks.map((task) => task.id));
+  const todayMindmapOptions = todayPlanningGroups
+    .map((group) => ({ ...group, taskIds: group.taskIds.filter((taskId) => todayTaskIds.has(taskId)) }))
+    .filter((group) => group.taskIds.length > 0);
+  const hasStandaloneTodayTasks = todayTasks.some((task) =>
+    !todayPlanningGroups.some((group) => group.taskIds.includes(task.id)),
+  );
+  const selectedMindmapFilterIsAvailable = !selectedMindmapFilter
+    || (selectedMindmapFilter === STANDALONE_MINDMAP_FILTER
+      ? hasStandaloneTodayTasks
+      : todayMindmapOptions.some((group) => group.mindmapId === selectedMindmapFilter));
+  const selectedCategoryIsAvailable = !selectedCategory || categories.includes(selectedCategory);
+
+  // Scope filters belong to the currently visible workspace/context. A map or
+  // tag that disappears after switching Work/Life (or deleting a map) must not
+  // keep filtering the next surface invisibly.
+  useEffect(() => {
+    if (!selectedMindmapFilterIsAvailable) setSelectedMindmapFilter(null);
+  }, [selectedMindmapFilterIsAvailable]);
+  useEffect(() => {
+    if (!selectedCategoryIsAvailable) setSelectedCategory(null);
+  }, [selectedCategoryIsAvailable]);
+
+  const filteredTodayTasks = filterTodayTasks(
+    todayTasks,
+    selectedCategory,
+    selectedMindmapFilter,
+    todayPlanningGroups,
+  );
 
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1376,7 +1407,7 @@ export default function App() {
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="sidebar-reveal-button absolute top-3 left-3 z-20 rounded-lg border border-border bg-surface-elevated p-2 text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95"
+            className="sidebar-reveal-button absolute left-3 top-3 z-20 flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border bg-surface-elevated text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 md:h-auto md:w-auto md:p-2"
             title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
             aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
             data-testid="sidebar-reveal"
@@ -1477,23 +1508,6 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {categories.length > 0 && (
-                            <label className="sr-only" htmlFor="today-category-filter">
-                              {language === 'zh' ? '按标签筛选' : 'Filter by tag'}
-                            </label>
-                          )}
-                          {categories.length > 0 && (
-                            <select
-                              id="today-category-filter"
-                              value={selectedCategory ?? ''}
-                              onChange={event => setSelectedCategory(event.target.value || null)}
-                              className="max-w-36 rounded-lg border border-border/60 bg-surface px-2.5 py-1.5 text-[11px] font-medium text-text-muted outline-none transition-colors hover:text-text-heading focus:border-accent/30"
-                              title={language === 'zh' ? '按标签筛选' : 'Filter by tag'}
-                            >
-                              <option value="">{language === 'zh' ? '全部任务' : 'All tasks'}</option>
-                              {categories.map(category => <option key={category} value={category}>{category}</option>)}
-                            </select>
-                          )}
                           {currentFileDate === getTodayStr() ? (
                             <button
                               onClick={handleManualRollover}
@@ -1516,8 +1530,20 @@ export default function App() {
                       </div>
                     </header>
 
+                  <TodayScopeTabs
+                    groups={todayMindmapOptions}
+                    hasStandalone={hasStandaloneTodayTasks}
+                    selectedMindmapId={selectedMindmapFilter}
+                    onMindmapChange={setSelectedMindmapFilter}
+                    tags={categories}
+                    selectedTag={selectedCategory}
+                    onTagChange={setSelectedCategory}
+                    language={language}
+                    storageKey={`df_today_mindmap_tabs_${activeWorkspaceId || 'default'}`}
+                  />
+
                   <TodayBacklog
-                    tasks={todayTasks}
+                    tasks={filteredTodayTasks}
                     planningGroups={todayPlanningGroups}
                     onOpenPlanningGroup={(group) => {
                       setActiveSpaceId(group.spaceId ?? null);
@@ -1542,6 +1568,11 @@ export default function App() {
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => setShowTaskInput(true)}
+                    hasActiveFilters={Boolean(selectedCategory || selectedMindmapFilter)}
+                    onClearFilters={() => {
+                      setSelectedCategory(null);
+                      setSelectedMindmapFilter(null);
+                    }}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     completionPromptTaskIds={completionPromptTaskIds}
@@ -1722,15 +1753,38 @@ export default function App() {
                                 title: t.title,
                                 status: t.status as 'todo' | 'done' | 'migrated',
                                 date: t.source_date ?? currentFileDate,
+                                description: t.description,
+                                comment: t.comment,
+                                comments: t.comments,
+                                tags: t.tags,
+                                deadline: t.deadline,
+                                priority: t.priority,
                               })))
                             : tasks.map((t) => ({
                                 id: t.id,
                                 title: t.title,
                                 status: t.status as 'todo' | 'done' | 'migrated',
                                 date: t.source_date ?? currentFileDate,
+                                description: t.description,
+                                comment: t.comment,
+                                comments: t.comments,
+                                tags: t.tags,
+                                deadline: t.deadline,
+                                priority: t.priority,
                               }))
                         }
                         onOpenTask={handleOpenTask}
+                        onTaskDataChanged={async (date) => {
+                          const data = await filesApi.get(date);
+                          if (!data) return;
+                          if (date === currentFileDate) {
+                            setMarkdown(data.content);
+                            setTasks(data.tasks as Task[]);
+                            setLastSyncedMD(data.content);
+                          }
+                          setFilesMap((previous) => ({ ...previous, [date]: data.content }));
+                          await refreshEarlierOpenTasks();
+                        }}
                       />
                     )}
                   </div>
@@ -1757,7 +1811,7 @@ export default function App() {
                       ['notes', language === 'zh' ? '笔记' : 'Notes'],
                       ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
                     ] as const).map(([surface, label]) => (
-                      <button key={surface} onClick={() => setNotesSurface(surface)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                      <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
                         {label}
                       </button>
                     ))}

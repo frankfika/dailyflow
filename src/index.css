@@ -997,6 +997,11 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 
 @media (max-width: 768px) {
   .today-simple-section-header { align-items: center; }
+  .today-simple-add,
+  .today-backlog-empty-cta,
+  .today-simple-completed > button {
+    min-height: 44px;
+  }
 }
 
 /* ==========================================================================

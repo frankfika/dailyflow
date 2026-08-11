@@ -141,8 +141,14 @@ router.put('/:taskId', async (req, res) => {
       return task;
     });
 
-    if (editedTask.originMindmapId && editedTask.originNodeId && title !== undefined) {
-      await updateNodeInMindMap(editedTask.originMindmapId, editedTask.originNodeId, { text: title });
+    if (editedTask.originMindmapId && editedTask.originNodeId) {
+      const nodePatch: { text?: string; note?: string; tags?: string[] } = {};
+      if (title !== undefined) nodePatch.text = title;
+      if (description !== undefined) nodePatch.note = description;
+      if (tags !== undefined) nodePatch.tags = tags;
+      if (Object.keys(nodePatch).length > 0) {
+        await updateNodeInMindMap(editedTask.originMindmapId, editedTask.originNodeId, nodePatch);
+      }
     }
 
     invalidateTaskIndex();

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Plus, Sparkles } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 
-type Task = {
+export type TodayTask = {
   id: string;
   title: string;
   description?: string;
@@ -22,6 +22,27 @@ type Task = {
   planOrder?: number;
 };
 
+export const STANDALONE_MINDMAP_FILTER = '__standalone__';
+
+export function filterTodayTasks(
+  tasks: TodayTask[],
+  selectedTag: string | null,
+  selectedMindmapId: string | null,
+  planningGroups: TodayPlanningGroup[],
+): TodayTask[] {
+  const groupByTaskId = new Map<string, TodayPlanningGroup>();
+  for (const group of planningGroups) {
+    for (const taskId of group.taskIds) groupByTaskId.set(taskId, group);
+  }
+  return tasks.filter((task) => {
+    if (selectedTag && !(task.tags ?? []).includes(selectedTag)) return false;
+    if (!selectedMindmapId) return true;
+    const group = groupByTaskId.get(task.id);
+    if (selectedMindmapId === STANDALONE_MINDMAP_FILTER) return !group;
+    return group?.mindmapId === selectedMindmapId;
+  });
+}
+
 export interface TodayPlanningGroup {
   id: string;
   mindmapId: string;
@@ -32,7 +53,7 @@ export interface TodayPlanningGroup {
 }
 
 interface TodayBacklogProps {
-  tasks: Task[];
+  tasks: TodayTask[];
   planningGroups?: TodayPlanningGroup[];
   onOpenPlanningGroup?: (group: TodayPlanningGroup) => void;
   selectedDate: string;
@@ -40,12 +61,14 @@ interface TodayBacklogProps {
   focusTaskIds: string[];
   onFocusTaskIdsChange: (ids: string[]) => void;
   onToggleTask: (id: string, hostDate?: string) => void;
-  onEditTask: (id: string, updates: Partial<Task>, hostDate?: string) => void;
+  onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
   onDeleteTask: (id: string, hostDate?: string) => void;
   onCreateLinkedNote: (taskId: string) => void;
   onShowLinkedNotes: (taskId: string) => void;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
   completionPromptTaskIds?: Set<string>;
@@ -54,7 +77,7 @@ interface TodayBacklogProps {
 
 const PRIORITY_RANK: Record<'high' | 'medium' | 'low', number> = { high: 0, medium: 1, low: 2 };
 
-function compareTasks(a: Task, b: Task): number {
+function compareTasks(a: TodayTask, b: TodayTask): number {
   const aDeadline = a.deadline || '9999-12-31';
   const bDeadline = b.deadline || '9999-12-31';
   if (aDeadline !== bDeadline) return aDeadline.localeCompare(bDeadline);
@@ -67,6 +90,7 @@ function compareTasks(a: Task, b: Task): number {
 export function TodayBacklog({
   tasks,
   planningGroups = [],
+  onOpenPlanningGroup,
   selectedDate,
   categories,
   onToggleTask,
@@ -76,6 +100,8 @@ export function TodayBacklog({
   onShowLinkedNotes,
   linkedNotesCount,
   onAddTask,
+  hasActiveFilters = false,
+  onClearFilters,
   language,
   isToday,
   completionPromptTaskIds = new Set<string>(),
@@ -91,6 +117,23 @@ export function TodayBacklog({
     () => tasks.filter(task => task.status === 'done'),
     [tasks],
   );
+  const openTaskGroups = useMemo(() => {
+    const groups: Array<{ key: 'overdue' | 'today' | 'upcoming' | 'unscheduled'; label: string; tasks: TodayTask[] }> = [
+      { key: 'overdue', label: language === 'zh' ? '已逾期' : 'Overdue', tasks: [] },
+      { key: 'today', label: language === 'zh' ? '今天截止' : 'Due today', tasks: [] },
+      { key: 'upcoming', label: language === 'zh' ? '接下来' : 'Upcoming', tasks: [] },
+      { key: 'unscheduled', label: language === 'zh' ? '无截止日期' : 'No due date', tasks: [] },
+    ];
+    for (const task of openTasks) {
+      const key = !task.deadline
+        ? 'unscheduled'
+        : task.deadline < selectedDate
+          ? 'overdue'
+          : task.deadline === selectedDate ? 'today' : 'upcoming';
+      groups.find((group) => group.key === key)!.tasks.push(task);
+    }
+    return groups.filter((group) => group.tasks.length > 0);
+  }, [language, openTasks, selectedDate]);
   const eventByTaskId = useMemo(() => {
     const lookup = new Map<string, TodayPlanningGroup>();
     for (const group of planningGroups) {
@@ -99,11 +142,14 @@ export function TodayBacklog({
     return lookup;
   }, [planningGroups]);
 
-  const renderTask = (task: Task) => (
+  const renderTask = (task: TodayTask) => (
     <li key={`${task.host_date ?? selectedDate}:${task.id}`} className="today-simple-task">
       <TaskCard
         task={task}
         spaceTitle={eventByTaskId.get(task.id)?.title}
+        onOpenSpace={onOpenPlanningGroup && eventByTaskId.has(task.id)
+          ? () => onOpenPlanningGroup(eventByTaskId.get(task.id)!)
+          : undefined}
         language={language}
         categories={categories}
         currentFileDate={selectedDate}
@@ -143,16 +189,30 @@ export function TodayBacklog({
         </header>
 
         {openTasks.length > 0 ? (
-          <ul className="today-simple-list" data-testid="today-execution-list">
-            {openTasks.map(renderTask)}
-          </ul>
+          <div className="space-y-4" data-testid="today-execution-list">
+            {openTaskGroups.map((group) => (
+              <section key={group.key} aria-labelledby={`today-task-group-${group.key}`}>
+                <div className="mb-1.5 flex items-center gap-2 px-1 text-[11px] font-semibold text-text-muted">
+                  <h3 id={`today-task-group-${group.key}`}>{group.label}</h3>
+                  <span className="tabular-nums opacity-60">{group.tasks.length}</span>
+                </div>
+                <ul className="today-simple-list">{group.tasks.map(renderTask)}</ul>
+              </section>
+            ))}
+          </div>
         ) : (
           <div className="today-backlog-empty">
             <Sparkles className="h-4 w-4" />
-            <p>{isToday
+            <p>{hasActiveFilters
+              ? (language === 'zh' ? '没有符合当前筛选条件的任务。' : 'No tasks match the current filters.')
+              : isToday
               ? (language === 'zh' ? '今天还没有任务。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
               : (language === 'zh' ? '这一天没有任务。' : 'No open tasks on this day.')}</p>
-            {isToday && (
+            {hasActiveFilters && onClearFilters ? (
+              <button type="button" onClick={onClearFilters} className="today-backlog-empty-cta">
+                {language === 'zh' ? '清除筛选' : 'Clear filters'}
+              </button>
+            ) : isToday && (
               <button onClick={onAddTask} className="today-backlog-empty-cta">
                 {language === 'zh' ? '添加任务' : 'Add one thing'}
               </button>

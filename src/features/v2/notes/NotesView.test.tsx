@@ -44,9 +44,12 @@ describe('NotesView mobile navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open note' }));
 
     expect(screen.getByTestId('mock-note-editor')).toHaveTextContent('note-1');
-    expect(screen.getByRole('button', { name: 'Back to notes' })).toBeInTheDocument();
+    const backButton = screen.getByRole('button', { name: 'Back to notes' });
+    expect(backButton).toBeInTheDocument();
+    expect(backButton).not.toHaveClass('absolute');
+    expect(backButton.parentElement).toHaveClass('shrink-0');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to notes' }));
+    fireEvent.click(backButton);
     expect(screen.getByRole('button', { name: 'Open note' })).toBeInTheDocument();
   });
 

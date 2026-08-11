@@ -18,6 +18,7 @@ interface MindMapListProps {
   onDelete: (id: string) => void;
   onImport: () => void;
   onExport: (id: string) => void;
+  className?: string;
 }
 
 function formatDate(iso: string, language: 'en' | 'zh'): string {
@@ -53,9 +54,10 @@ export function MindMapList({
   onDelete,
   onImport,
   onExport,
+  className = '',
 }: MindMapListProps) {
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface/40" data-testid="mindmap-list">
+    <div className={`flex h-full w-full shrink-0 flex-col border-r border-border bg-surface/40 sm:w-60 ${className}`} data-testid="mindmap-list">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2.5">
         <div className="flex items-center gap-2 text-text-muted">
           <Network className="h-4 w-4" />
@@ -67,7 +69,7 @@ export function MindMapList({
           <button
             type="button"
             onClick={onImport}
-            className="rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-border bg-white/80 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] sm:min-h-0 sm:min-w-0 sm:p-1"
             title={language === 'zh' ? '从 JSON 导入' : 'Import from JSON'}
             data-testid="mindmap-list-import"
           >
@@ -76,7 +78,7 @@ export function MindMapList({
           <button
             type="button"
             onClick={onCreate}
-            className="flex items-center gap-1 rounded-md border border-border bg-white/80 px-2 py-1 text-xs font-medium text-text-main shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+            className="flex min-h-[44px] items-center gap-1 rounded-md border border-border bg-white/80 px-3 py-1 text-xs font-medium text-text-main shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] sm:min-h-0 sm:px-2"
             title={language === 'zh' ? '新建思维导图' : 'New mind map'}
             data-testid="mindmap-list-new"
           >
@@ -107,7 +109,7 @@ export function MindMapList({
                     type="button"
                     onClick={() => onSelect(m.id)}
                     data-active={isActive}
-                    className={`flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+                    className={`flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors ${
                       isActive
                         ? 'bg-[var(--color-accent-light)] text-text-heading'
                         : 'text-text-main hover:bg-black/[0.03]'

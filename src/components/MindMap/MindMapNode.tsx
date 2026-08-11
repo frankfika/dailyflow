@@ -124,7 +124,15 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
   }, [d, id, tagDraft]);
 
   const onTitleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+      d.onMakeTask?.(id);
+    } else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+      d.onAddChild(id);
+    } else if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       commit();
     } else if (event.key === 'Escape') {
@@ -260,7 +268,7 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
           )}
           {!d.isRoot && !isTask && d.onMakeTask && (
             <button type="button" onClick={() => d.onMakeTask?.(id)} className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light)] px-2 py-1 text-[11px] font-medium text-[var(--color-accent)] hover:brightness-95" data-testid={`mindmap-make-task-${id}`}>
-              <ListTodo className="h-3.5 w-3.5" />{language === 'zh' ? '设为任务' : 'Make task'}
+              <ListTodo className="h-3.5 w-3.5" />{language === 'zh' ? '添加到 Today' : 'Add to Today'}
             </button>
           )}
           <button type="button" onClick={() => d.onStartEdit(id)} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '编辑标题' : 'Edit title'}>

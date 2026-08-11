@@ -109,6 +109,9 @@ interface MindMapCanvasProps {
   /** Explicitly promote a non-root branch node to a persisted Task. */
   onEnsureNodeTask?: (nodeId: string) => void;
   onDeleteNodeRequest?: (nodeId: string) => void;
+  /** Selection shared with the document-style outline editor. */
+  selectedNodeId?: string | null;
+  onNodeSelect?: (nodeId: string | null) => void;
 }
 
 interface InternalNode extends Node {
@@ -210,6 +213,8 @@ function MindMapCanvasInner({
   onLinkedNodeStatusChange,
   onEnsureNodeTask,
   onDeleteNodeRequest,
+  selectedNodeId,
+  onNodeSelect,
 }: MindMapCanvasProps) {
   // The parent owns the canonical state. We mirror it locally as RF
   // nodes/edges for interaction. Whenever the map prop changes, we resync.
@@ -227,12 +232,21 @@ function MindMapCanvasInner({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewportByMapIdRef = useRef<Map<string, { x: number; y: number; zoom: number }>>(new Map());
 
+  useEffect(() => {
+    if (selectedNodeId === undefined || selectedNodeId === selectedId) return;
+    setSelectedId(selectedNodeId);
+    setRfNodes((current) => current.map((node) => ({ ...node, selected: node.id === selectedNodeId })));
+    if (!selectedNodeId) return;
+    const node = getNode(selectedNodeId);
+    if (node) void setCenter(node.position.x + 100, node.position.y + 30, { zoom: getViewport().zoom, duration: 180 });
+  }, [selectedNodeId, selectedId, getNode, getViewport, setCenter]);
+
   /**
    * Center the viewport on the tree's layout bounds. fitView can race
    * with React Flow's internal store (the new positions haven't
    * propagated yet) and ends up zooming to maxZoom on just the root.
-   * Computing zoom + pan from the layout's own bounds sidesteps that
-   * and gives a stable result on every layout pass.
+   * Computing zoom + pan from the persisted node bounds sidesteps that
+   * and gives a stable result without discarding manual positioning.
    */
   const fitToBounds = useCallback(() => {
     const container = containerRef.current;
@@ -240,7 +254,23 @@ function MindMapCanvasInner({
     const rect = container.getBoundingClientRect();
     if (rect.width < 32 || rect.height < 32) return; // not laid out yet
     const m = mapRef.current;
-    const { bounds } = layoutMindMap(m.rootId, m.nodes, m.edges);
+    if (m.nodes.length === 0) return;
+    // Fit what is actually on screen. The previous implementation fitted a
+    // freshly-computed layout instead of the user's persisted positions and
+    // ignored card width, which put the rightmost node outside the viewport.
+    const visibleIds = new Set(toRfNodes(m).map((node) => node.id));
+    const visibleNodes = m.nodes.filter((node) => visibleIds.has(node.id));
+    const minX = Math.min(...visibleNodes.map((node) => node.position.x));
+    const minY = Math.min(...visibleNodes.map((node) => node.position.y));
+    const maxX = Math.max(...visibleNodes.map((node) => node.position.x + (node.id === m.rootId ? 280 : 260)));
+    const maxY = Math.max(...visibleNodes.map((node) => node.position.y + 100));
+    const PAD = 72;
+    const bounds = {
+      x: minX - PAD,
+      y: minY - PAD,
+      width: maxX - minX + PAD * 2,
+      height: maxY - minY + PAD * 2,
+    };
     if (bounds.width <= 0 || bounds.height <= 0) return;
     // Leave some breathing room around the tree (10% on each axis).
     const FIT_PAD = 0.9;
@@ -624,16 +654,18 @@ function MindMapCanvasInner({
     else next.add(node.id);
     setRfNodes((current) => current.map((item) => ({ ...item, selected: next.has(item.id) })));
     setSelectedId(node.id);
+    onNodeSelect?.(node.id);
     setEditingId(null);
     setNoteEditingId(null);
-  }, []);
+  }, [onNodeSelect]);
 
   const handlePaneClick = useCallback(() => {
     setRfNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
     setSelectedId(null);
+    onNodeSelect?.(null);
     setEditingId(null);
     setNoteEditingId(null);
-  }, []);
+  }, [onNodeSelect]);
 
   // Keyboard shortcuts — listen at the window level (capture phase) so we
   // get the event before React Flow's own keyboard a11y layer can claim
@@ -663,10 +695,16 @@ function MindMapCanvasInner({
             onAddSibling?: (id: string) => void;
             onStartEdit?: (id: string) => void;
             onDelete?: (id: string) => void;
+            onMakeTask?: (id: string) => void;
           }
         | undefined;
       if (!data) return;
-      if (e.key === 'Tab') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'Enter') {
+        if (sid === rootIdRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        data.onMakeTask?.(sid);
+      } else if (e.key === 'Tab' || ((e.metaKey || e.ctrlKey) && e.key === 'Enter')) {
         e.preventDefault();
         e.stopPropagation();
         data.onAddChild?.(sid);
@@ -733,6 +771,12 @@ function MindMapCanvasInner({
         onPaneClick={handlePaneClick}
         onMoveEnd={() => {
           viewportByMapIdRef.current.set(mapRef.current.id, getViewport());
+        }}
+        onInit={() => {
+          // React Flow applies its default viewport during initialization;
+          // fitting once it is ready avoids the first-open view being pinned
+          // to the canvas' top edge.
+          setTimeout(fitToBounds, 80);
         }}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}

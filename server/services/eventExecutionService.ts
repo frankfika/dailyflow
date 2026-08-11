@@ -41,6 +41,7 @@ import {
 import { getMindMap, getInheritedTagsFromMap, updateMindMap } from './mindmaps.js';
 import { setOriginMarkers, stripAllOriginMarkers } from './taskMetadata.js';
 import type { Config } from '../types/task.js';
+import { invalidateTaskIndex } from './taskIndex.js';
 
 async function resolveConfig(configOverride?: Config): Promise<Config> {
   return configOverride ?? await loadConfig();
@@ -131,6 +132,8 @@ export async function createTaskForNode(params: {
     // EFP-004 allows empty spaceId path here; space linkage is covered in tests.
   }
 
+  invalidateTaskIndex();
+
   return { taskId, appended: true, alreadyPresent: false };
 }
 
@@ -148,7 +151,7 @@ export async function editNodeTask(params: {
     comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
-    priority?: 'high' | 'medium' | 'low';
+    priority?: 'high' | 'medium' | 'low' | '';
     project?: string;
   };
   config?: Config;
@@ -163,6 +166,7 @@ export async function editNodeTask(params: {
 
   const updated = editTaskFullInMarkdown(note.content, t.line, params.updates, params.scheduledDate);
   await writeDailyNote(params.scheduledDate, updated, cfg);
+  invalidateTaskIndex();
   return { updated: true, taskLine: t.line };
 }
 
@@ -381,6 +385,7 @@ export async function rescheduleNodeTask(params: {
       : item);
     const updated = await updateMindMap(map.id, { nodes });
     if (!updated) throw new Error('Mind map disappeared while rescheduling');
+    invalidateTaskIndex();
     return { rescheduled: true, alreadyScheduled: false };
   } catch (error) {
     await writeDailyNote(params.fromDate, fromBefore, cfg).catch(() => null);

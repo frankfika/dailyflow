@@ -59,6 +59,7 @@ class MockMediaRecorder {
   mimeType: string;
   ondataavailable: ((event: BlobEvent) => void) | null = null;
   onstop: (() => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
 
   constructor(public stream: MediaStream, options?: MediaRecorderOptions) {
     this.mimeType = options?.mimeType || 'audio/webm';
@@ -72,6 +73,12 @@ class MockMediaRecorder {
   stop() {
     this.state = 'inactive';
     this.ondataavailable?.({ data: new Blob(['audio'], { type: this.mimeType }) } as BlobEvent);
+    this.onstop?.();
+  }
+
+  fail() {
+    this.state = 'inactive';
+    this.onerror?.(new Event('error'));
     this.onstop?.();
   }
 }
@@ -120,6 +127,18 @@ describe('MeetingNotePanel', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('keeps technical transcription settings out of the primary recording flow', () => {
+    render(<MeetingNotePanel note={note()} />);
+
+    expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start recording' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transcription settings' }));
+    expect(screen.getByRole('combobox', { name: 'Transcription mode' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close transcription settings' }));
+    expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
+  });
+
   it('records, previews, and saves audio without a remote model', async () => {
     const audioSource = source('meeting_audio', 'src_audio_new');
     const updated = note({ sourceIds: [audioSource.id] });
@@ -158,6 +177,7 @@ describe('MeetingNotePanel', () => {
       remoteApiKey: 'secret',
       remoteBaseUrl: 'https://example.test/v1',
       remoteModel: 'whisper-1',
+      audioLanguage: 'zh',
     }));
     const transcriptSource = source('meeting_transcript', 'src_transcript');
     const result: MeetingCaptureResult = {
@@ -183,7 +203,10 @@ describe('MeetingNotePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
 
     await waitFor(() => expect(onTranscriptReady).toHaveBeenCalledWith('A complete transcript', result));
-    expect(captureNoteMeetingBinary.mock.calls[0][1].audio).toBeInstanceOf(Blob);
+    expect(captureNoteMeetingBinary.mock.calls[0][1]).toEqual(expect.objectContaining({
+      audio: expect.any(Blob),
+      language: 'zh',
+    }));
     expect(transcribeNoteMeeting).toHaveBeenCalledWith('note_01', {
       sourceId: 'src_audio_new',
       transcription: {
@@ -191,7 +214,7 @@ describe('MeetingNotePanel', () => {
         apiKey: 'secret',
         baseUrl: 'https://example.test/v1',
         model: 'whisper-1',
-        language: 'en',
+        language: 'zh',
         provider: 'openai',
         diarize: true,
         speakerCount: undefined,
@@ -262,6 +285,19 @@ describe('MeetingNotePanel', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:meeting-audio');
   });
 
+  it('recovers when the recorder or audio device fails mid-recording', async () => {
+    render(<MeetingNotePanel note={note()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+    await screen.findByRole('button', { name: 'Stop' });
+
+    act(() => MockMediaRecorder.latest?.fail());
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Recording stopped unexpectedly');
+    expect(screen.getByRole('button', { name: 'Start recording' })).toBeEnabled();
+    expect(trackStop).toHaveBeenCalled();
+  });
+
   it('keeps a failed preview saveable and explains that the audio is intact', async () => {
     render(<MeetingNotePanel note={note()} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
@@ -286,13 +322,12 @@ describe('MeetingNotePanel', () => {
 
     render(<MeetingNotePanel note={note({ sourceIds: ['src_audio', 'src_transcript'] })} />);
 
-    expect(await screen.findByText('Recording saved · 1')).toBeInTheDocument();
-    expect(screen.getByText('Transcript saved · 1')).toBeInTheDocument();
+    expect(await screen.findByText(/Saved recordings\s*·\s*1/)).toBeInTheDocument();
     expect(screen.getByLabelText('Meeting recording 1')).toHaveAttribute(
       'src',
       expect.stringContaining('/api/v2/notes/note_01/meeting/audio/src_audio'),
     );
-    const summary = screen.getByText('Latest transcript');
+    const summary = screen.getByText(/Latest transcript\s*·\s*1/);
     expect(summary.closest('details')).not.toHaveAttribute('open');
     fireEvent.click(summary);
     expect(screen.getByText('[00:01] 方辰: 发布计划已确认。')).toBeInTheDocument();
@@ -312,7 +347,7 @@ describe('MeetingNotePanel', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByText('最新转写稿'));
+    fireEvent.click(await screen.findByText(/最新转写稿\s*·\s*1/));
     fireEvent.click(screen.getByRole('button', { name: '加入笔记并编辑' }));
     expect(onInsertTranscript).toHaveBeenCalledWith('讨论完成，下一步发布。');
   });

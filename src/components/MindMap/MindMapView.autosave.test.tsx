@@ -89,6 +89,8 @@ describe('MindMapView autosave', () => {
 
   it('keeps independent pending saves when editing two maps inside one debounce window', async () => {
     render(<MindMapView workspaceId="ws" language="zh" showToast={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('mindmap-mode-canvas')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mindmap-mode-canvas'));
     await waitFor(() => expect(screen.getByTestId('edit-map-a')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('edit-map-a'));
@@ -103,8 +105,21 @@ describe('MindMapView autosave', () => {
     expect(vi.mocked(mindmapsApi.update).mock.calls.map(([id]) => id).sort()).toEqual(['map-a', 'map-b']);
   });
 
+  it('uses a mobile master-detail flow instead of squeezing list and editor together', async () => {
+    render(<MindMapView workspaceId="ws" language="zh" showToast={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('mindmap-mobile-back')).toBeInTheDocument());
+
+    expect(screen.getByTestId('mindmap-list-pane')).toHaveClass('hidden');
+    expect(screen.getByTestId('mindmap-editor-pane')).toHaveClass('block');
+    fireEvent.click(screen.getByTestId('mindmap-mobile-back'));
+    expect(screen.getByTestId('mindmap-list-pane')).toHaveClass('block');
+    expect(screen.getByTestId('mindmap-editor-pane')).toHaveClass('hidden');
+  });
+
   it('flushes a pending edit when the view unmounts before debounce fires', async () => {
     const view = render(<MindMapView workspaceId="ws" language="zh" showToast={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('mindmap-mode-canvas')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mindmap-mode-canvas'));
     await waitFor(() => expect(screen.getByTestId('edit-map-a')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('edit-map-a'));
     view.unmount();

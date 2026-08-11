@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
   mindmapsApi,
+  eventsApi,
   tasksApi,
   type MindMap,
   type MindMapEdge,
@@ -21,10 +22,13 @@ import {
 } from '../../api/client';
 import { MindMapCanvas } from './MindMapCanvas';
 import { MindMapList } from './MindMapList';
+import { MindMapOutline, type OutlineTaskOption, type OutlineTaskUpdates } from './MindMapOutline';
 import { layoutMindMap } from './layout';
 import { MINDMAP_TEMPLATES } from './templates';
-import { usePromoteNodeToTask } from '../../hooks/useMindMapActions';
+import { useLinkNodeToTask, usePromoteNodeToTask } from '../../hooks/useMindMapActions';
 import {
+  ArrowLeft,
+  ListTree,
   Network,
   Undo2,
   Redo2,
@@ -33,6 +37,8 @@ import {
   Download,
   Upload,
   CheckCircle2,
+  BellOff,
+  MessageSquare,
   ListChecks,
 } from 'lucide-react';
 
@@ -76,6 +82,12 @@ interface MindMapViewProps {
     title: string;
     status: 'todo' | 'done' | 'migrated';
     date: string;
+    description?: string;
+    comment?: string;
+    comments?: { text: string; timestamp: string }[];
+    tags?: string[];
+    deadline?: string;
+    priority?: 'high' | 'medium' | 'low';
   }>;
   /**
    * Phase 2: open a task in TodayView. The canvas forwards the click
@@ -83,9 +95,17 @@ interface MindMapViewProps {
    * date). Required to enable the "Open task" link on kind: 'task' nodes.
    */
   onOpenTask?: (taskId: string, date: string) => void;
+  /** Refresh the parent-owned Today/task state after a mind-note write. */
+  onTaskDataChanged?: (date: string) => void | Promise<void>;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
+
+function taskTimestampNow(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
 
 type MindMapPatch = {
   title?: string;
@@ -139,6 +159,7 @@ export function MindMapView({
   todayDate,
   linkableTasks = [],
   onOpenTask,
+  onTaskDataChanged,
 }: MindMapViewProps) {
   const [maps, setMaps] = useState<MindMap[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -150,6 +171,9 @@ export function MindMapView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [pendingNodeDelete, setPendingNodeDelete] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'outline' | 'mindmap'>('outline');
+  const [mobileListOpen, setMobileListOpen] = useState(false);
   const flushSaveRef = useRef<(id: string) => Promise<MindMap | null>>(async () => null);
   const rebasePendingSaveRef = useRef<(map: MindMap) => MindMap>((map) => map);
   const rollbackNodeRef = useRef<(
@@ -157,6 +181,10 @@ export function MindMapView({
     expected: Partial<MindMapNode>,
     patch: Partial<MindMapNode>,
   ) => void>(() => undefined);
+  const patchNodeRef = useRef<(nodeId: string, patch: Partial<MindMapNode>) => void>(() => undefined);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState<OutlineTaskOption | null>(null);
+  const [completionPrompt, setCompletionPrompt] = useState<{ nodeId: string; taskId: string; date: string; title: string; comments: { text: string; timestamp: string }[] } | null>(null);
+  const [completionComment, setCompletionComment] = useState('');
 
   // Phase 2: the date the active mind map was "born" on. We use it as
   // the default `source_date` when promoting a node to a task. Falls
@@ -172,6 +200,7 @@ export function MindMapView({
   }, [activeMap, todayDate]);
 
   const promoteMut = usePromoteNodeToTask();
+  const linkMut = useLinkNodeToTask();
   const ensureTaskInFlightRef = useRef<Set<string>>(new Set());
 
   const resolveNodeTaskDate = useCallback(
@@ -179,6 +208,55 @@ export function MindMapView({
       node.taskDate ?? linkableTasks.find((task) => task.id === node.taskId)?.date,
     [linkableTasks],
   );
+
+  const selectedTaskIdentity = useMemo(() => {
+    const node = activeMap?.nodes.find((item) => item.id === selectedNodeId);
+    if (!node?.taskId) return null;
+    const date = resolveNodeTaskDate(node);
+    return date ? { taskId: node.taskId, date } : null;
+  }, [activeMap?.nodes, resolveNodeTaskDate, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedTaskIdentity) {
+      setSelectedTaskDetails(null);
+      return;
+    }
+    let cancelled = false;
+    void tasksApi.getByDate(selectedTaskIdentity.date).then((tasks) => {
+      if (cancelled) return;
+      const task = tasks.find((item) => item.id === selectedTaskIdentity.taskId);
+      if (!task) {
+        setSelectedTaskDetails(null);
+        return;
+      }
+      setSelectedTaskDetails({
+        id: task.id,
+        title: task.title,
+        status: task.status as OutlineTaskOption['status'],
+        date: selectedTaskIdentity.date,
+        description: task.description,
+        comment: task.comment,
+        comments: task.comments,
+        tags: task.tags,
+        deadline: task.deadline,
+        priority: task.priority === 'high' || task.priority === 'medium' || task.priority === 'low' ? task.priority : undefined,
+      });
+    }).catch((error) => {
+      if (!cancelled) console.error('[mindmap] selected task details failed:', error);
+    });
+    return () => { cancelled = true; };
+  }, [selectedTaskIdentity?.date, selectedTaskIdentity?.taskId]);
+
+  const refreshTaskData = useCallback(async (date: string) => {
+    try {
+      await onTaskDataChanged?.(date);
+    } catch (error) {
+      // The task write has already succeeded. A refresh failure must not
+      // roll the node back to a state that now disagrees with disk.
+      console.error('[mindmap] parent task refresh failed:', error);
+      showToast(language === 'zh' ? 'Task 已保存，列表刷新失败' : 'Task saved, but list refresh failed', 'info');
+    }
+  }, [language, onTaskDataChanged, showToast]);
 
   const handleLinkedNodeTitleChange = useCallback(
     async (node: MindMapNode, title: string) => {
@@ -190,13 +268,14 @@ export function MindMapView({
       }
       try {
         await tasksApi.edit(node.taskId, date, { title });
+        await refreshTaskData(date);
       } catch (error) {
         rollbackNodeRef.current(node.id, { text: title }, { text: node.text });
         showToast(language === 'zh' ? '任务标题同步失败，已回滚节点' : 'Task title sync failed; node reverted', 'error');
         console.error('[mindmap] linked task title sync failed:', error);
       }
     },
-    [language, resolveNodeTaskDate, showToast],
+    [language, refreshTaskData, resolveNodeTaskDate, showToast],
   );
 
   const handleLinkedNodeStatusChange = useCallback(
@@ -209,13 +288,34 @@ export function MindMapView({
       }
       try {
         await tasksApi.updateStatus(node.taskId, date, status === 'done' ? 'done' : 'todo');
+        await refreshTaskData(date);
+        if (status === 'done') {
+          try {
+            const tasks = await tasksApi.getByDate(date);
+            const completed = tasks.find((task) => task.id === node.taskId);
+            const hasComment = Boolean(completed?.comment || completed?.comments?.length);
+            const suppressed = (() => {
+              try { return sessionStorage.getItem('df_suppress_completion_comments') === '1'; } catch { return false; }
+            })();
+            if (!hasComment && !suppressed) {
+              setCompletionComment('');
+              setCompletionPrompt({ nodeId: node.id, taskId: node.taskId, date, title: node.text, comments: completed?.comments ?? [] });
+            }
+          } catch (error) {
+            // Completion itself succeeded; an optional prompt lookup must not
+            // roll the node back to todo.
+            console.error('[mindmap] completion prompt lookup failed:', error);
+          }
+        } else {
+          setCompletionPrompt((current) => current?.taskId === node.taskId ? null : current);
+        }
       } catch (error) {
         rollbackNodeRef.current(node.id, { status }, { status: node.status });
         showToast(language === 'zh' ? '任务状态同步失败，已回滚节点' : 'Task status sync failed; node reverted', 'error');
         console.error('[mindmap] linked task status sync failed:', error);
       }
     },
-    [language, resolveNodeTaskDate, showToast],
+    [language, refreshTaskData, resolveNodeTaskDate, showToast],
   );
 
   const handleLinkedNodeTagsChange = useCallback(
@@ -228,14 +328,133 @@ export function MindMapView({
       }
       try {
         await tasksApi.edit(node.taskId, date, { tags });
+        await refreshTaskData(date);
       } catch (error) {
         rollbackNodeRef.current(node.id, { tags }, { tags: node.tags });
         showToast(language === 'zh' ? '标签同步失败，已回滚' : 'Tag sync failed; node reverted', 'error');
         console.error('[mindmap] linked task tags sync failed:', error);
       }
     },
-    [language, resolveNodeTaskDate, showToast],
+    [language, refreshTaskData, resolveNodeTaskDate, showToast],
   );
+
+  const handleLinkedNodeNoteChange = useCallback(
+    async (node: MindMapNode, note: string) => {
+      if (!node.taskId) return;
+      const date = resolveNodeTaskDate(node);
+      if (!date) {
+        showToast(language === 'zh' ? '找不到关联任务所在日期' : 'Linked task date is missing', 'error');
+        return;
+      }
+      try {
+        await tasksApi.edit(node.taskId, date, { description: note });
+        await refreshTaskData(date);
+      } catch (error) {
+        rollbackNodeRef.current(node.id, { note }, { note: node.note });
+        showToast(language === 'zh' ? '详情同步失败，已回滚' : 'Details sync failed; node reverted', 'error');
+        console.error('[mindmap] linked task details sync failed:', error);
+      }
+    },
+    [language, refreshTaskData, resolveNodeTaskDate, showToast],
+  );
+
+  const handleLinkedTaskFieldsChange = useCallback(
+    async (node: MindMapNode, updates: OutlineTaskUpdates, date: string) => {
+      if (!node.taskId) return;
+      try {
+        await eventsApi.editNodeTask({
+          taskId: node.taskId,
+          scheduledDate: date,
+          updates: {
+            description: updates.description,
+            tags: updates.tags,
+            deadline: updates.deadline,
+            priority: updates.priority,
+            comments: updates.comments,
+          },
+        });
+        patchNodeRef.current(node.id, { note: updates.description, tags: updates.tags, taskDate: date });
+        setSelectedTaskDetails((current) => current?.id === node.taskId
+          ? { ...current, date, description: updates.description, tags: updates.tags, deadline: updates.deadline, priority: updates.priority || undefined, comments: updates.comments }
+          : current);
+        await refreshTaskData(date);
+        showToast(language === 'zh' ? '任务已同步到 Today' : 'Task synced to Today', 'success');
+      } catch (error) {
+        showToast(language === 'zh' ? '任务保存失败' : 'Failed to save task', 'error');
+        console.error('[mindmap] task fields sync failed:', error);
+        throw error;
+      }
+    },
+    [language, refreshTaskData, showToast],
+  );
+
+  const handleLinkedTaskDateChange = useCallback(
+    async (node: MindMapNode, fromDate: string, toDate: string) => {
+      const current = activeMapRef.current;
+      if (!current || !node.taskId || fromDate === toDate) return;
+      try {
+        await flushSaveRef.current(current.id);
+        await eventsApi.rescheduleNodeTask({
+          taskId: node.taskId,
+          fromDate,
+          toDate,
+          mindmapId: current.id,
+          nodeId: node.id,
+        });
+        const updated = await mindmapsApi.get(current.id);
+        activeMapRef.current = updated;
+        setActiveMap(updated);
+        setMaps((items) => items.map((item) => item.id === updated.id ? updated : item));
+        setSelectedTaskDetails((details) => details?.id === node.taskId ? { ...details, date: toDate } : details);
+        await Promise.all([refreshTaskData(fromDate), refreshTaskData(toDate)]);
+        showToast(language === 'zh' ? `任务已移动到 ${toDate}` : `Task moved to ${toDate}`, 'success');
+      } catch (error) {
+        showToast(language === 'zh' ? '修改任务日期失败' : 'Failed to change task date', 'error');
+        console.error('[mindmap] task reschedule failed:', error);
+        throw error;
+      }
+    },
+    [language, refreshTaskData, showToast],
+  );
+
+  const closeCompletionPrompt = useCallback(() => {
+    setCompletionPrompt(null);
+    setCompletionComment('');
+  }, []);
+
+  const saveCompletionComment = useCallback(async () => {
+    if (!completionPrompt) return;
+    const text = completionComment.trim();
+    if (!text) {
+      closeCompletionPrompt();
+      return;
+    }
+    const comments = [
+      ...completionPrompt.comments,
+      { text, timestamp: taskTimestampNow() },
+    ];
+    try {
+      await eventsApi.editNodeTask({
+        taskId: completionPrompt.taskId,
+        scheduledDate: completionPrompt.date,
+        updates: { comments },
+      });
+      setSelectedTaskDetails((current) => current?.id === completionPrompt.taskId
+        ? { ...current, comments }
+        : current);
+      await refreshTaskData(completionPrompt.date);
+      showToast(language === 'zh' ? '完成备注已保存' : 'Resolution note saved', 'success');
+      closeCompletionPrompt();
+    } catch (error) {
+      showToast(language === 'zh' ? '完成备注保存失败' : 'Failed to save resolution note', 'error');
+      console.error('[mindmap] completion comment failed:', error);
+    }
+  }, [closeCompletionPrompt, completionComment, completionPrompt, language, refreshTaskData, showToast]);
+
+  const suppressCompletionPrompt = useCallback(() => {
+    try { sessionStorage.setItem('df_suppress_completion_comments', '1'); } catch { /* ignore storage errors */ }
+    closeCompletionPrompt();
+  }, [closeCompletionPrompt]);
 
   const handleEnsureNodeTask = useCallback(async (nodeId: string) => {
     const current = activeMapRef.current;
@@ -266,6 +485,8 @@ export function MindMapView({
       activeMapRef.current = rebased;
       setActiveMap(rebased);
       setMaps((cur) => cur.map((m) => (m.id === rebased.id ? rebased : m)));
+      await refreshTaskData(activeMapSourceDate);
+      showToast(language === 'zh' ? '已添加到 Today' : 'Added to Today', 'success');
     } catch (error) {
       showToast(language === 'zh' ? '节点已保存，但同步到 Today 失败' : 'Node saved, but Today sync failed', 'error');
       console.error('[mindmap] ensure node task failed:', error);
@@ -278,10 +499,44 @@ export function MindMapView({
     promoteMut,
     showToast,
     language,
+    refreshTaskData,
   ]);
+
+  const handleLinkNodeTask = useCallback(async (nodeId: string, taskId: string, date: string) => {
+    const current = activeMapRef.current;
+    if (!current || nodeId === current.rootId) return;
+    try {
+      await flushSaveRef.current(current.id);
+      const updated = await linkMut.mutateAsync({ mapId: current.id, nodeId, taskId, date });
+      const rebased = rebasePendingSaveRef.current(updated);
+      activeMapRef.current = rebased;
+      setActiveMap(rebased);
+      setMaps((mapsNow) => mapsNow.map((map) => map.id === rebased.id ? rebased : map));
+      await refreshTaskData(date);
+      showToast(language === 'zh' ? '已关联现有 Task' : 'Existing Task linked', 'success');
+    } catch (error) {
+      showToast(language === 'zh' ? '关联 Task 失败' : 'Failed to link Task', 'error');
+      console.error('[mindmap] link task failed:', error);
+    }
+  }, [language, linkMut, refreshTaskData, showToast]);
 
   const handleDeleteNode = useCallback(async () => {
     if (!activeMap || !pendingNodeDelete) return;
+    const descendants = new Set<string>([pendingNodeDelete]);
+    let foundChild = true;
+    while (foundChild) {
+      foundChild = false;
+      for (const edge of activeMap.edges) {
+        if (descendants.has(edge.source) && !descendants.has(edge.target)) {
+          descendants.add(edge.target);
+          foundChild = true;
+        }
+      }
+    }
+    const affectedDates = Array.from(new Set(activeMap.nodes
+      .filter((node) => descendants.has(node.id) && node.taskId)
+      .map((node) => resolveNodeTaskDate(node))
+      .filter((date): date is string => Boolean(date))));
     try {
       await flushSaveRef.current(activeMap.id);
       // A non-root node is the Task, so deletion has one clear meaning.
@@ -289,12 +544,13 @@ export function MindMapView({
       setActiveMap(updated);
       setMaps((current) => current.map((map) => map.id === updated.id ? updated : map));
       setPendingNodeDelete(null);
+      await Promise.all(affectedDates.map(refreshTaskData));
       showToast(language === 'zh' ? '节点已删除' : 'Node deleted', 'success');
     } catch (error) {
       showToast(language === 'zh' ? '删除节点失败' : 'Failed to delete node', 'error');
       console.error('[mindmap] delete node failed:', error);
     }
-  }, [activeMap, language, pendingNodeDelete, showToast]);
+  }, [activeMap, language, pendingNodeDelete, refreshTaskData, resolveNodeTaskDate, showToast]);
 
   // Undo / redo — we keep two stacks keyed by map id so switching maps
   // doesn't lose history. Coalesce rapid changes (typing, dragging)
@@ -506,6 +762,17 @@ export function MindMapView({
     activeMapRef.current = next;
     setActiveMap(next);
     setMaps((mapsNow) => mapsNow.map((map) => map.id === next.id ? next : map));
+    scheduleSave(next.id, { nodes: nextNodes });
+  };
+
+  patchNodeRef.current = (nodeId, patch) => {
+    const current = activeMapRef.current;
+    if (!current) return;
+    const nextNodes = current.nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node);
+    const next = { ...current, nodes: nextNodes };
+    activeMapRef.current = next;
+    setActiveMap(next);
+    setMaps((items) => items.map((item) => item.id === next.id ? next : item));
     scheduleSave(next.id, { nodes: nextNodes });
   };
 
@@ -1069,18 +1336,26 @@ export function MindMapView({
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-background" data-immersive="false">
-      <MindMapList
-        maps={visibleMaps}
-        activeId={activeId}
-        language={language}
-        isLoading={isListLoading}
-        onSelect={(id) => setActiveId(id)}
-        onCreate={handleCreate}
-        onDelete={handleDelete}
-        onImport={() => fileInputRef.current?.click()}
-        onExport={handleExport}
-      />
-      <div className="relative min-w-0 flex-1">
+      <div className={`${mobileListOpen ? 'block' : 'hidden'} h-full w-full sm:block sm:w-auto`} data-testid="mindmap-list-pane">
+        <MindMapList
+          maps={visibleMaps}
+          activeId={activeId}
+          language={language}
+          isLoading={isListLoading}
+          onSelect={(id) => {
+            setActiveId(id);
+            setMobileListOpen(false);
+          }}
+          onCreate={() => {
+            setMobileListOpen(false);
+            handleCreate();
+          }}
+          onDelete={handleDelete}
+          onImport={() => fileInputRef.current?.click()}
+          onExport={handleExport}
+        />
+      </div>
+      <div className={`${mobileListOpen ? 'hidden' : 'block'} relative min-w-0 flex-1 sm:block`} data-testid="mindmap-editor-pane">
         {loadError ? (
           <ErrorPanel
             message={loadError}
@@ -1114,7 +1389,16 @@ export function MindMapView({
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col">
-            <header className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-surface/80 px-4 py-2.5 backdrop-blur-xl">
+            <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 bg-surface/80 px-2 py-2 backdrop-blur-xl sm:flex-nowrap sm:px-4 sm:py-2.5">
+              <button
+                type="button"
+                onClick={() => setMobileListOpen(true)}
+                className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-lg border border-border bg-white/80 text-text-muted shadow-sm sm:hidden"
+                aria-label={language === 'zh' ? '返回脑图列表' : 'Back to mind maps'}
+                data-testid="mindmap-mobile-back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
               {searchOpen ? (
                 <div className="flex flex-1 items-center gap-1 rounded-md border border-[var(--color-accent)]/40 bg-white/95 px-2 py-1">
                   <Search className="h-3.5 w-3.5 text-text-muted" />
@@ -1150,18 +1434,40 @@ export function MindMapView({
                   value={activeMap.title}
                   onChange={(e) => handleChange({ title: e.target.value })}
                   placeholder={language === 'zh' ? '未命名导图' : 'Untitled mind map'}
-                  className="min-w-0 flex-1 bg-transparent text-base font-semibold text-text-heading outline-none placeholder:text-text-muted/60"
+                  className="min-w-0 flex-1 basis-40 bg-transparent text-base font-semibold text-text-heading outline-none placeholder:text-text-muted/60"
                   data-testid="mindmap-title-input"
                 />
               )}
-              <div className="flex items-center gap-1 text-[11px] text-text-muted">
+              <div className="ml-auto flex shrink-0 items-center rounded-lg border border-border/70 bg-black/[0.025] p-0.5 sm:ml-1" role="tablist" aria-label={language === 'zh' ? '思维笔记视图' : 'Mind note view'}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'outline'}
+                  onClick={() => setViewMode('outline')}
+                  className={`flex min-h-[44px] items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all sm:min-h-0 sm:px-2 ${viewMode === 'outline' ? 'bg-white text-text-heading shadow-sm' : 'text-text-muted hover:text-text-heading'}`}
+                  data-testid="mindmap-mode-outline"
+                >
+                  <ListTree className="h-3.5 w-3.5" />{language === 'zh' ? '大纲' : 'Outline'}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'mindmap'}
+                  onClick={() => setViewMode('mindmap')}
+                  className={`flex min-h-[44px] items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all sm:min-h-0 sm:px-2 ${viewMode === 'mindmap' ? 'bg-white text-text-heading shadow-sm' : 'text-text-muted hover:text-text-heading'}`}
+                  data-testid="mindmap-mode-canvas"
+                >
+                  <Network className="h-3.5 w-3.5" />{language === 'zh' ? '脑图' : 'Mind map'}
+                </button>
+              </div>
+              <div className="hidden items-center gap-1 text-[11px] text-text-muted md:flex">
                 <Network className="h-3.5 w-3.5" />
                 {activeMap.nodes.length} {language === 'zh' ? '节点' : 'nodes'} ·{' '}
                 {activeMap.edges.length} {language === 'zh' ? '连线' : 'edges'}
               </div>
               {progress.total > 0 && (
                 <div
-                  className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] ${
+                  className={`hidden items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] sm:flex ${
                     progress.done === progress.total
                       ? 'border-[var(--color-success)]/40 bg-[var(--color-success-light)] text-[var(--color-success)]'
                       : 'border-border bg-white/80 text-text-muted'
@@ -1187,7 +1493,7 @@ export function MindMapView({
                 type="button"
                 onClick={undo}
                 disabled={!canUndo}
-                className="ml-1 rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/80 disabled:hover:text-text-muted"
+                className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded-md border border-border bg-white/80 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/80 disabled:hover:text-text-muted sm:ml-1 sm:h-auto sm:w-auto sm:p-1"
                 title={language === 'zh' ? '撤销 (Ctrl+Z)' : 'Undo (Ctrl+Z)'}
                 data-testid="mindmap-undo"
               >
@@ -1197,7 +1503,7 @@ export function MindMapView({
                 type="button"
                 onClick={redo}
                 disabled={!canRedo}
-                className="rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/80 disabled:hover:text-text-muted"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-md border border-border bg-white/80 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/80 disabled:hover:text-text-muted sm:h-auto sm:w-auto sm:p-1"
                 title={language === 'zh' ? '重做 (Ctrl+Shift+Z)' : 'Redo (Ctrl+Shift+Z)'}
                 data-testid="mindmap-redo"
               >
@@ -1206,15 +1512,34 @@ export function MindMapView({
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="rounded-md border border-border bg-white/80 p-1 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)]"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-md border border-border bg-white/80 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] sm:h-auto sm:w-auto sm:p-1"
                 title={language === 'zh' ? '搜索 (Ctrl+F)' : 'Search (Ctrl+F)'}
                 data-testid="mindmap-search-open"
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
             </header>
-            <div className="min-h-0 flex-1">
-              <MindMapCanvas
+            <div className="relative min-h-0 flex-1">
+              {viewMode === 'outline' ? <MindMapOutline
+                map={activeMap}
+                language={language}
+                selectedId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                onChange={handleChange}
+                onEnsureTask={(nodeId) => void handleEnsureNodeTask(nodeId)}
+                onTaskStatusChange={handleLinkedNodeStatusChange}
+                onTaskTitleChange={handleLinkedNodeTitleChange}
+                onTaskNoteChange={handleLinkedNodeNoteChange}
+                onTaskFieldsChange={handleLinkedTaskFieldsChange}
+                onTaskDateChange={handleLinkedTaskDateChange}
+                onDelete={setPendingNodeDelete}
+                onLinkTask={(nodeId, taskId, date) => void handleLinkNodeTask(nodeId, taskId, date)}
+                onOpenTask={onOpenTask}
+                taskOptions={linkableTasks}
+                selectedTaskDetails={selectedTaskDetails}
+                layout="document"
+              /> : (
+                <MindMapCanvas
                 map={activeMap}
                 language={language}
                 onChange={handleChange}
@@ -1231,7 +1556,49 @@ export function MindMapView({
                 onLinkedNodeStatusChange={handleLinkedNodeStatusChange}
                 onEnsureNodeTask={(nodeId) => void handleEnsureNodeTask(nodeId)}
                 onDeleteNodeRequest={setPendingNodeDelete}
-              />
+                selectedNodeId={selectedNodeId}
+                onNodeSelect={setSelectedNodeId}
+                />
+              )}
+              {completionPrompt && (
+                <aside
+                  className="absolute bottom-4 right-4 z-40 w-[min(360px,calc(100%-2rem))] rounded-2xl border border-border/80 bg-white/95 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+                  role="dialog"
+                  aria-label={language === 'zh' ? '添加完成备注' : 'Add resolution note'}
+                  data-testid="mindmap-completion-prompt"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 rounded-lg bg-[var(--color-success-light)] p-2 text-[var(--color-success)]"><MessageSquare className="h-4 w-4" /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-text-heading">{language === 'zh' ? '任务已完成' : 'Task completed'}</p>
+                      <p className="mt-0.5 truncate text-xs text-text-muted">{completionPrompt.title}</p>
+                    </div>
+                    <button type="button" onClick={closeCompletionPrompt} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" aria-label={language === 'zh' ? '关闭' : 'Close'}><CloseIcon className="h-3.5 w-3.5" /></button>
+                  </div>
+                  <textarea
+                    autoFocus
+                    value={completionComment}
+                    onChange={(event) => setCompletionComment(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        event.preventDefault();
+                        void saveCompletionComment();
+                      }
+                    }}
+                    rows={3}
+                    placeholder={language === 'zh' ? '这件事是怎么解决的？（可选）' : 'How did you resolve this? (optional)'}
+                    className="mt-3 w-full resize-none rounded-xl border border-border bg-black/[0.015] px-3 py-2 text-sm leading-5 text-text-main outline-none placeholder:text-text-muted/55 focus:border-[var(--color-accent)]/35 focus:bg-white"
+                    data-testid="mindmap-completion-comment"
+                  />
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <button type="button" onClick={suppressCompletionPrompt} className="inline-flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-heading"><BellOff className="h-3.5 w-3.5" />{language === 'zh' ? '本次不再提示' : "Don't ask again"}</button>
+                    <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={closeCompletionPrompt} className="rounded-lg px-2.5 py-1.5 text-xs text-text-muted hover:bg-black/[0.035] hover:text-text-heading">{language === 'zh' ? '跳过' : 'Skip'}</button>
+                      <button type="button" onClick={() => void saveCompletionComment()} className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90" data-testid="mindmap-completion-save">{language === 'zh' ? '保存备注' : 'Save note'}</button>
+                    </div>
+                  </div>
+                </aside>
+              )}
             </div>
           </div>
         )}

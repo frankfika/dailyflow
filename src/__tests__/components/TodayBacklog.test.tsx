@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TodayBacklog } from '../../components/TodayBacklog';
+import { filterTodayTasks, STANDALONE_MINDMAP_FILTER, TodayBacklog } from '../../components/TodayBacklog';
 
 const noop = vi.fn();
 
@@ -12,7 +12,7 @@ function renderBacklog(tasks: Array<{
   host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
-}>, withPlanning = false) {
+}>, withPlanning = false, options: { hasActiveFilters?: boolean; onClearFilters?: () => void } = {}) {
   return render(
     <TodayBacklog
       tasks={tasks}
@@ -35,6 +35,8 @@ function renderBacklog(tasks: Array<{
       onShowLinkedNotes={noop}
       linkedNotesCount={() => 0}
       onAddTask={noop}
+      hasActiveFilters={options.hasActiveFilters}
+      onClearFilters={options.onClearFilters}
       language="en"
       isToday
     />,
@@ -92,5 +94,50 @@ describe('TodayBacklog Event-first execution flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as done' }));
 
     expect(noop).toHaveBeenCalledWith('earlier', '2026-07-26');
+  });
+
+  it('groups open work by urgency instead of presenting one undifferentiated wall', () => {
+    renderBacklog([
+      { id: 'late', title: 'Late', status: 'todo', deadline: '2026-07-20' },
+      { id: 'today', title: 'Today', status: 'todo', deadline: '2026-07-28' },
+      { id: 'next', title: 'Next', status: 'todo', deadline: '2026-07-29' },
+      { id: 'someday', title: 'Someday', status: 'todo' },
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Overdue' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Due today' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No due date' })).toBeInTheDocument();
+  });
+
+  it('explains a filtered empty state and clears filters instead of offering a hidden new task', () => {
+    const onClearFilters = vi.fn();
+    renderBacklog([], false, { hasActiveFilters: true, onClearFilters });
+
+    expect(screen.getByText('No tasks match the current filters.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add one thing' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Today task filters', () => {
+  const tasks = [
+    { id: 'map-work', title: '发布官网', status: 'todo' as const, tags: ['work', 'launch'], originMindmapId: 'map-1' },
+    { id: 'map-life', title: '制定旅行路线', status: 'todo' as const, tags: ['life'], originMindmapId: 'map-2' },
+    { id: 'standalone', title: '买牛奶', status: 'todo' as const, tags: ['life'] },
+  ];
+  const groups = [
+    { id: 'map-1', mindmapId: 'map-1', title: '发布计划', taskIds: ['map-work'], completedTaskIds: [] },
+    { id: 'map-2', mindmapId: 'map-2', title: '旅行计划', taskIds: ['map-life'], completedTaskIds: [] },
+  ];
+
+  it('filters by tag and mind map together', () => {
+    expect(filterTodayTasks(tasks, 'launch', 'map-1', groups).map(task => task.id)).toEqual(['map-work']);
+    expect(filterTodayTasks(tasks, 'life', 'map-1', groups)).toEqual([]);
+  });
+
+  it('can show only tasks that do not belong to a mind map', () => {
+    expect(filterTodayTasks(tasks, null, STANDALONE_MINDMAP_FILTER, groups).map(task => task.id)).toEqual(['standalone']);
   });
 });

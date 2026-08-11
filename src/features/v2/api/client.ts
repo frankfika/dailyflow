@@ -328,7 +328,9 @@ export const transcribeNoteMeeting = (noteId: string, input: {
   input.transcription.mode === 'local-managed'
     ? `/notes/${noteId}/meeting/transcribe-local`
     : `/notes/${noteId}/meeting/transcribe`,
-  input,
+  input.transcription.mode === 'local-managed'
+    ? { sourceId: input.sourceId }
+    : input,
 );
 
 export const getLocalTranscriptionConfig = () =>
