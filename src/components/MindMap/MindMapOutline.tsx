@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, CalendarDays, Check, ChevronDown, ChevronRight, Circle, CornerDownRight, ExternalLink, Flag, Link2, ListTodo, Loader2, MessageSquare, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays, Check, ChevronDown, ChevronRight, Circle, CornerDownRight, ExternalLink, Flag, Link2, ListTodo, Loader2, MessageSquare, Plus, Rows3, Save, Search, Trash2, X } from 'lucide-react';
 import { ulid } from 'ulid';
 import type { MindMap, MindMapEdge, MindMapNode, MindMapNodeStatus } from '../../api/client';
 import { layoutMindMap } from './layout';
@@ -359,9 +359,31 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
                 data-pending-focus={pendingFocusId === node.id || undefined}
               />
               <div className="mr-1 flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                <button type="button" onClick={() => { const result = addOutlineChild(map, node.id); applyWholeMap(result.map, result.nodeId); }} className="rounded p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '添加子节点（⌘Enter）' : 'Add child (⌘Enter)'}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const result = isRoot ? addOutlineNode(map, node.id) : addOutlineChild(map, node.id);
+                    applyWholeMap(result.map, result.nodeId);
+                  }}
+                  className="rounded p-1 text-text-muted hover:bg-black/5 hover:text-text-heading"
+                  title={isRoot ? (language === 'zh' ? '添加一级主题' : 'Add top-level topic') : (language === 'zh' ? '添加子节点（⌘Enter）' : 'Add child (⌘Enter)')}
+                  aria-label={isRoot ? (language === 'zh' ? '添加一级主题' : 'Add top-level topic') : (language === 'zh' ? '添加子节点' : 'Add child')}
+                  data-testid={isRoot ? 'outline-add-top-level-root' : `outline-add-child-${node.id}`}
+                >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
+                {!isRoot && (
+                  <button
+                    type="button"
+                    onClick={() => { const result = addOutlineNode(map, node.id); applyWholeMap(result.map, result.nodeId); }}
+                    className="rounded p-1 text-text-muted hover:bg-black/5 hover:text-text-heading"
+                    title={language === 'zh' ? '添加同级节点（Enter）' : 'Add sibling (Enter)'}
+                    aria-label={language === 'zh' ? '添加同级节点' : 'Add sibling'}
+                    data-testid={`outline-add-sibling-${node.id}`}
+                  >
+                    <Rows3 className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 {!isRoot && <button type="button" onClick={() => onDelete(node.id)} className="rounded p-1 text-text-muted hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)]" title={language === 'zh' ? '删除' : 'Delete'}><Trash2 className="h-3.5 w-3.5" /></button>}
               </div>
             </div>

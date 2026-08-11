@@ -87,6 +87,20 @@ describe('MindMapNode — explicit task model', () => {
     expect(screen.queryByTestId('mindmap-status-root')).not.toBeInTheDocument();
   });
 
+  it('offers visible top-level and sibling creation actions', () => {
+    const rootAdd = vi.fn();
+    const root = renderNode('root', makeData({ text: '中心', isRoot: true, isSelected: true, kind: 'root', onAddChild: rootAdd }));
+    expect(screen.getByTestId('mindmap-add-child-root')).toHaveTextContent('一级主题');
+    fireEvent.click(screen.getByTestId('mindmap-add-child-root'));
+    expect(rootAdd).toHaveBeenCalledWith('root');
+    root.unmount();
+
+    const siblingAdd = vi.fn();
+    renderNode('branch', makeData({ text: '主题 A', isSelected: true, onAddSibling: siblingAdd }));
+    fireEvent.click(screen.getByTestId('mindmap-add-sibling-branch'));
+    expect(siblingAdd).toHaveBeenCalledWith('branch');
+  });
+
   it('keeps a tag node distinct from a task node', () => {
     renderNode('tagged', makeData({ text: '起草合同', kind: 'tag', tags: ['法务', '重要'] }));
     expect(screen.getByTestId('mindmap-node-tagged')).toHaveAttribute('data-kind', 'tag');

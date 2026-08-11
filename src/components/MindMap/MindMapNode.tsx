@@ -259,11 +259,11 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
           data-testid={`mindmap-actions-${id}`}
         >
           <button type="button" onClick={() => d.onAddChild(id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-main hover:bg-black/5" data-testid={`mindmap-add-child-${id}`}>
-            <Plus className="h-3.5 w-3.5" />{language === 'zh' ? '子节点' : 'Child'}
+            <Plus className="h-3.5 w-3.5" />{d.isRoot ? (language === 'zh' ? '一级主题' : 'Top-level') : (language === 'zh' ? '子节点' : 'Child')}
           </button>
           {!d.isRoot && (
-            <button type="button" onClick={() => d.onAddSibling(id)} className="rounded-md p-1 text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '同级节点' : 'Sibling node'}>
-              <Rows3 className="h-3.5 w-3.5" />
+            <button type="button" onClick={() => d.onAddSibling(id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-black/5 hover:text-text-heading" title={language === 'zh' ? '添加同级节点' : 'Add sibling node'} data-testid={`mindmap-add-sibling-${id}`}>
+              <Rows3 className="h-3.5 w-3.5" />{language === 'zh' ? '同级' : 'Sibling'}
             </button>
           )}
           {!d.isRoot && !isTask && d.onMakeTask && (
