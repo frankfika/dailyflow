@@ -6,6 +6,7 @@ import {
 
 export interface MeetingTranscriptionSettings {
   mode: MeetingTranscriptionRequest['mode'];
+  audioLanguage: 'auto' | 'zh' | 'en';
   remoteProvider: NonNullable<MeetingTranscriptionRequest['provider']>;
   modelId: string;
   installedModels: string[];
@@ -21,6 +22,7 @@ export interface MeetingTranscriptionSettings {
 
 const DEFAULT_SETTINGS: MeetingTranscriptionSettings = {
   mode: 'save-only',
+  audioLanguage: 'auto',
   remoteProvider: 'openai',
   modelId: 'small',
   installedModels: [],

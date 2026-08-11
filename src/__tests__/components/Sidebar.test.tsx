@@ -87,12 +87,13 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
   });
 
-  it('uses the Event-first primary navigation and keeps secondary destinations under More', () => {
+  it('keeps Mind Notes directly reachable and secondary destinations under More', () => {
     render(<SidebarHarness onOpenSettings={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mind Notes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ask AI' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
@@ -100,6 +101,6 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.queryByText('Mind maps')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('nav-mindmap')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-mindmap')).toBeInTheDocument();
   });
 });

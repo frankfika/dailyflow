@@ -145,26 +145,30 @@ export function NotesView({ language = 'en', sidebarOpen = true, onNotice, reque
         data-layout="mobile"
       >
         {selectedId ? (
-          <main className="h-full min-h-0 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="absolute left-3 top-3 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-sm font-medium text-text-heading shadow-sm"
-              aria-label={language === 'zh' ? '返回笔记列表' : 'Back to notes'}
-              data-testid="notes-mobile-back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {language === 'zh' ? '笔记' : 'Notes'}
-            </button>
-            <NoteEditor
-              noteId={selectedId}
-              language={language}
-              layout="note"
-              onCreateFromTemplate={createAndOpen}
-              onSelectNote={setSelectedId}
-              onDeleted={() => setSelectedId(null)}
-              onNotice={onNotice}
-            />
+          <main className="flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center border-b border-border bg-background/95 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-sm font-medium text-text-heading shadow-sm"
+                aria-label={language === 'zh' ? '返回笔记列表' : 'Back to notes'}
+                data-testid="notes-mobile-back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {language === 'zh' ? '笔记' : 'Notes'}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <NoteEditor
+                noteId={selectedId}
+                language={language}
+                layout="note"
+                onCreateFromTemplate={createAndOpen}
+                onSelectNote={setSelectedId}
+                onDeleted={() => setSelectedId(null)}
+                onNotice={onNotice}
+              />
+            </div>
           </main>
         ) : (
           <aside className="h-full min-w-0 overflow-hidden" data-testid="notes-aside">

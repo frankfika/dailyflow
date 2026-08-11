@@ -188,7 +188,7 @@ router.post('/actions/edit-node-task', async (req, res) => {
         comments: Array.isArray(u.comments) ? u.comments : undefined,
         tags: Array.isArray(u.tags) ? u.tags.filter((x: any) => typeof x === 'string') as string[] : undefined,
         deadline: typeof u.deadline === 'string' ? u.deadline : undefined,
-        priority: (u.priority === 'high' || u.priority === 'medium' || u.priority === 'low') ? u.priority : undefined,
+        priority: (u.priority === '' || u.priority === 'high' || u.priority === 'medium' || u.priority === 'low') ? u.priority : undefined,
         project: typeof u.project === 'string' ? u.project : undefined,
       },
     });

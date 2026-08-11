@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileAudio, FileText, Loader2, Mic, Square, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileAudio, FileText, Loader2, Mic, Settings2, Square, Trash2, X } from 'lucide-react';
 import {
   captureNoteMeetingBinary,
   transcribeNoteMeeting,
@@ -13,7 +13,7 @@ import {
   type NoteDocument,
   type SourceItem,
 } from '../api/client';
-import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings } from './meetingTranscription';
+import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings, type MeetingTranscriptionSettings } from './meetingTranscription';
 
 export interface MeetingNotePanelProps {
   note: NoteDocument;
@@ -30,7 +30,7 @@ type RecordingState = 'idle' | 'requesting' | 'recording' | 'ready' | 'saving';
 const COPY = {
   zh: {
     title: '会议录音',
-    hint: '录音会保存到当前笔记。转写模型只负责把声音变成文字，会议总结请在 AI Chat 中完成。',
+    hint: '先把会议安全录下来，停止后再保存和转写。',
     start: '开始录音',
     requesting: '正在请求麦克风…',
     stop: '停止',
@@ -38,6 +38,10 @@ const COPY = {
     save: '保存录音',
     saveAndTranscribe: '保存并转写',
     mode: '转写方式',
+    audioLanguage: '录音语言',
+    languageAuto: '自动识别',
+    languageZh: '中文',
+    languageEn: '英文',
     modeLocal: '本地 whisper.cpp',
     modeLocalEndpoint: '本机转写服务',
     modeRemote: '远程模型',
@@ -61,6 +65,7 @@ const COPY = {
     noMicrophone: '当前环境不支持麦克风录音。',
     permissionDenied: '无法访问麦克风，请检查系统或浏览器权限。',
     emptyRecording: '没有录到可保存的音频，请重新录制。',
+    recorderFailed: '录音中断，请检查麦克风或音频设备后重试。',
     previewUnavailable: '当前播放器无法预览这段录音，但录音内容仍然完整，可以继续保存。',
     saveFailed: '保存录音失败',
     serviceSettings: '转写服务设置',
@@ -71,6 +76,12 @@ const COPY = {
     diarize: '区分说话人（推荐）',
     speakerCount: '预计人数（0 = 自动）',
     keyterms: '术语 / 人名（逗号分隔）',
+    settingsTitle: '转写设置',
+    configureTranscription: '配置转写',
+    closeSettings: '关闭转写设置',
+    transcriptionReady: '录音后自动转写',
+    recordingOnly: '当前仅保存录音',
+    recordingStep: '准备录音',
     consent: '我已告知参会者，并确认有权录音和处理本次会议内容',
     insertTranscript: '加入笔记并编辑',
     backgroundTranscribing: '录音已保存，本地转写正在后台运行。你可以继续编辑或离开此页面。',
@@ -85,7 +96,7 @@ const COPY = {
   },
   en: {
     title: 'Meeting recording',
-    hint: 'The recording is saved to this note. Transcription only turns audio into text; use AI Chat later for meeting summaries.',
+    hint: 'Capture the meeting safely first, then save and transcribe when you stop.',
     start: 'Start recording',
     requesting: 'Requesting microphone…',
     stop: 'Stop',
@@ -93,6 +104,10 @@ const COPY = {
     save: 'Save recording',
     saveAndTranscribe: 'Save & transcribe',
     mode: 'Transcription mode',
+    audioLanguage: 'Recording language',
+    languageAuto: 'Auto detect',
+    languageZh: 'Chinese',
+    languageEn: 'English',
     modeLocal: 'Local whisper.cpp',
     modeLocalEndpoint: 'Local transcription service',
     modeRemote: 'Remote model',
@@ -116,6 +131,7 @@ const COPY = {
     noMicrophone: 'Microphone recording is not supported in this environment.',
     permissionDenied: 'Microphone access failed. Check your system or browser permission.',
     emptyRecording: 'No audio was captured. Please record again.',
+    recorderFailed: 'Recording stopped unexpectedly. Check the microphone or audio device and try again.',
     previewUnavailable: 'This player cannot preview the recording, but the audio is intact and can still be saved.',
     saveFailed: 'Failed to save recording',
     serviceSettings: 'Transcription service settings',
@@ -126,6 +142,12 @@ const COPY = {
     diarize: 'Identify speakers (recommended)',
     speakerCount: 'Expected speakers (0 = auto)',
     keyterms: 'Names / key terms (comma-separated)',
+    settingsTitle: 'Transcription settings',
+    configureTranscription: 'Set up transcription',
+    closeSettings: 'Close transcription settings',
+    transcriptionReady: 'Transcribe automatically after recording',
+    recordingOnly: 'Recording will be saved without transcription',
+    recordingStep: 'Ready to record',
     consent: 'I have notified participants and have the right to record and process this meeting',
     insertTranscript: 'Add to note and edit',
     backgroundTranscribing: 'Recording saved. Local transcription is running in the background; you can keep editing or leave this page.',
@@ -185,6 +207,7 @@ export function MeetingNotePanel({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [recordingConsent, setRecordingConsent] = useState(false);
+  const [showTranscriptionSettings, setShowTranscriptionSettings] = useState(false);
   const [sources, setSources] = useState<SourceItem[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -221,6 +244,9 @@ export function MeetingNotePanel({
       : selectedMode === 'local-managed'
         ? localModelReady
         : false;
+  const recordingLanguage = transcriptionSettings.audioLanguage === 'auto'
+    ? undefined
+    : transcriptionSettings.audioLanguage;
 
   const stopTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -298,6 +324,22 @@ export function MeetingNotePanel({
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
+      recorder.onerror = () => {
+        // Browsers may dispatch a final dataavailable/stop pair after error.
+        // Detach those handlers so they cannot replace the actionable device
+        // error with an empty-recording message.
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        stopTimer();
+        stopTracks();
+        chunksRef.current = [];
+        recorderRef.current = null;
+        if (!mountedRef.current) return;
+        setAudioBlob(null);
+        setAudioUrl(null);
+        setState('idle');
+        setError(t.recorderFailed);
+      };
       recorder.onstop = () => {
         const resolvedMimeType = recorder.mimeType || mimeType || 'audio/webm';
         const blob = new Blob(chunksRef.current, { type: resolvedMimeType });
@@ -345,21 +387,21 @@ export function MeetingNotePanel({
   };
 
   const transcriptionRequest = () => selectedMode === 'remote' && remoteEndpoint
-    ? { mode: 'remote' as const, ...remoteEndpoint, language }
+    ? { mode: 'remote' as const, ...remoteEndpoint, language: recordingLanguage }
     : selectedMode === 'local-endpoint'
       ? {
           mode: 'local-endpoint' as const,
           provider: 'openai-compatible' as const,
           baseUrl: transcriptionSettings.localEndpointBaseUrl,
           model: transcriptionSettings.localEndpointModel,
-          language,
+          language: recordingLanguage,
           diarize: false,
         }
       : {
           mode: 'local-managed' as const,
           engine: 'whisper.cpp' as const,
           modelId: transcriptionSettings.modelId,
-          language,
+          language: recordingLanguage,
         };
 
   const runSavedTranscription = async (captureResult: MeetingCaptureResult) => {
@@ -415,7 +457,7 @@ export function MeetingNotePanel({
         audio: audioBlob,
         filename: `meeting-${note.id}.${extensionForMimeType(mimeType)}`,
         durationSeconds: Math.round(elapsedSeconds),
-        language,
+        language: recordingLanguage,
       });
       setSources((current) => [
         ...current.filter((item) => item.id !== captureResult.audioSource.id),
@@ -455,26 +497,151 @@ export function MeetingNotePanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Mic className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface-elevated">
+              <Mic className="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
+            </span>
             <h3 className="text-sm font-semibold text-text-primary">{t.title}</h3>
           </div>
-          <p className="mt-1 text-xs leading-5 text-text-muted">{t.hint}</p>
+          <p className="mt-1.5 text-xs leading-5 text-text-muted">{t.hint}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
-          {audioCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1">
-              <FileAudio className="h-3 w-3" aria-hidden="true" />
-              {t.existingAudio} · {audioCount}
-            </span>
-          )}
-          {transcriptCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1">
-              <FileText className="h-3 w-3" aria-hidden="true" />
-              {t.existingTranscript} · {transcriptCount}
-            </span>
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium ${canTranscribe ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${canTranscribe ? 'bg-green-500' : 'bg-amber-500'}`} />
+            {canTranscribe ? t.transcriptionReady : t.recordingOnly}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowTranscriptionSettings((open) => !open)}
+            aria-expanded={showTranscriptionSettings}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border px-3 py-1 font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary sm:min-h-0 sm:px-2.5"
+          >
+            <Settings2 className="h-3 w-3" aria-hidden="true" />
+            {t.settingsTitle}
+          </button>
         </div>
       </div>
+
+      <div className="mt-4 rounded-xl border border-border bg-surface-elevated/45 p-3">
+        {state === 'idle' && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex max-w-2xl cursor-pointer items-start gap-2.5 text-xs leading-5 text-text-secondary">
+              <input
+                type="checkbox"
+                checked={recordingConsent}
+                onChange={(event) => setRecordingConsent(event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-current"
+              />
+              <span>
+                <span className="block font-medium text-text-primary">{t.recordingStep}</span>
+                <span className="text-[11px] text-text-muted">{t.consent}</span>
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={!recordingConsent}
+              className="inline-flex min-h-[44px] min-w-36 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Mic className="h-4 w-4" aria-hidden="true" />
+              {t.start}
+            </button>
+          </div>
+        )}
+        {state === 'requesting' && (
+          <div className="flex min-h-11 items-center justify-center gap-2 text-sm text-text-secondary">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            {t.requesting}
+          </div>
+        )}
+        {state === 'recording' && (
+          <div className="flex items-center justify-between gap-4">
+            <span className="inline-flex items-center gap-2 font-mono text-xl font-semibold text-red-600" aria-live="polite">
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+              {formatMeetingDuration(elapsedSeconds)}
+            </span>
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
+            >
+              <Square className="h-4 w-4 fill-current" aria-hidden="true" />
+              {t.stop}
+            </button>
+          </div>
+        )}
+        {(state === 'ready' || state === 'saving') && audioUrl && (
+          <div className="flex flex-wrap items-center gap-2">
+            {audioPreviewFailed ? (
+              <p className="min-w-56 flex-1 text-xs text-amber-700" role="status">{t.previewUnavailable}</p>
+            ) : (
+              <audio
+                controls
+                src={audioUrl}
+                className="h-9 min-w-56 flex-1"
+                aria-label={t.title}
+                onError={() => setAudioPreviewFailed(true)}
+              />
+            )}
+            <span className="font-mono text-xs text-text-muted">{formatMeetingDuration(elapsedSeconds)}</span>
+            <button
+              type="button"
+              onClick={discardRecording}
+              disabled={state === 'saving'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-text-secondary hover:bg-surface disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {t.discard}
+            </button>
+            <button
+              type="button"
+              onClick={saveRecording}
+              disabled={state === 'saving'}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+            >
+              {state === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+              {state === 'saving' ? t.saving : canTranscribe ? t.saveAndTranscribe : t.save}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {notice && (
+        <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700" role="status">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {notice}
+        </p>
+      )}
+      {transcribingSourceId && (
+        <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700" role="status" aria-live="polite">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          {t.backgroundTranscribing}
+        </p>
+      )}
+      {error && (
+        <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+
+      {showTranscriptionSettings && (
+        <div className="mt-3 rounded-xl border border-border bg-surface/80 p-3 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-text-primary">{t.settingsTitle}</p>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                {canTranscribe ? t.transcriptionReady : t.recordingOnly}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTranscriptionSettings(false)}
+              aria-label={t.closeSettings}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-text-muted hover:bg-surface-elevated hover:text-text-primary sm:min-h-0 sm:min-w-0 sm:p-1.5"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         <label htmlFor={`meeting-transcription-mode-${note.id}`} className="text-text-secondary">{t.mode}</label>
@@ -495,7 +662,35 @@ export function MeetingNotePanel({
           <option value="save-only">{t.modeSaveOnly}</option>
           <option value="local-managed">{t.modeLocal}</option>
         </select>
+        <label htmlFor={`meeting-audio-language-${note.id}`} className="ml-1 text-text-secondary">
+          {t.audioLanguage}
+        </label>
+        <select
+          id={`meeting-audio-language-${note.id}`}
+          value={transcriptionSettings.audioLanguage}
+          disabled={state === 'recording' || state === 'saving'}
+          onChange={(event) => {
+            const audioLanguage = event.target.value as MeetingTranscriptionSettings['audioLanguage'];
+            const next = { ...transcriptionSettings, audioLanguage };
+            setTranscriptionSettings(next);
+            saveMeetingTranscriptionSettings(next);
+          }}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-primary disabled:opacity-60"
+        >
+          <option value="auto">{t.languageAuto}</option>
+          <option value="zh">{t.languageZh}</option>
+          <option value="en">{t.languageEn}</option>
+        </select>
       </div>
+      <p className="mt-2 text-[11px] leading-5 text-text-muted">
+        {selectedMode === 'remote'
+          ? (remoteEndpoint ? t.remoteReady : t.localOnly)
+          : selectedMode === 'local-endpoint'
+            ? t.localEndpointReady
+            : selectedMode === 'local-managed'
+              ? (localModelReady ? t.localReady : t.localMissing)
+              : t.localOnly}
+      </p>
 
       {(selectedMode === 'remote' || selectedMode === 'local-endpoint') && (
         <details className="mt-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-xs">
@@ -670,123 +865,16 @@ export function MeetingNotePanel({
           </div>
         </details>
       )}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {state === 'idle' && (
-          <div className="grid gap-2">
-            <label className="flex max-w-2xl items-start gap-2 text-[11px] leading-5 text-text-muted">
-              <input
-                type="checkbox"
-                checked={recordingConsent}
-                onChange={(event) => setRecordingConsent(event.target.checked)}
-                className="mt-1"
-              />
-              <span>{t.consent}</span>
-            </label>
-            <button
-              type="button"
-              onClick={startRecording}
-              disabled={!recordingConsent}
-              className="inline-flex w-max items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Mic className="h-3.5 w-3.5" aria-hidden="true" />
-              {t.start}
-            </button>
-          </div>
-        )}
-        {state === 'requesting' && (
-          <span className="inline-flex items-center gap-2 text-xs text-text-secondary">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-            {t.requesting}
-          </span>
-        )}
-        {state === 'recording' && (
-          <>
-            <span className="inline-flex items-center gap-2 font-mono text-sm font-semibold text-red-600" aria-live="polite">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-              {formatMeetingDuration(elapsedSeconds)}
-            </span>
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-              {t.stop}
-            </button>
-          </>
-        )}
-        {(state === 'ready' || state === 'saving') && audioUrl && (
-          <>
-            {audioPreviewFailed ? (
-              <p className="max-w-xl text-xs text-amber-700" role="status">
-                {t.previewUnavailable}
-              </p>
-            ) : (
-              <audio
-                controls
-                src={audioUrl}
-                className="h-9 max-w-full"
-                aria-label={t.title}
-                onError={() => setAudioPreviewFailed(true)}
-              />
-            )}
-            <span className="font-mono text-xs text-text-muted">{formatMeetingDuration(elapsedSeconds)}</span>
-            <button
-              type="button"
-              onClick={discardRecording}
-              disabled={state === 'saving'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-text-secondary hover:bg-surface disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {t.discard}
-            </button>
-            <button
-              type="button"
-              onClick={saveRecording}
-              disabled={state === 'saving'}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {state === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              {state === 'saving' ? t.saving : canTranscribe ? t.saveAndTranscribe : t.save}
-            </button>
-          </>
-        )}
-      </div>
-
-      <p className="mt-2 text-[11px] text-text-muted">
-        {selectedMode === 'remote'
-          ? (remoteEndpoint ? t.remoteReady : t.localOnly)
-          : selectedMode === 'local-endpoint'
-            ? t.localEndpointReady
-            : selectedMode === 'local-managed'
-              ? (localModelReady ? t.localReady : t.localMissing)
-              : t.localOnly}
-      </p>
-      {notice && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-green-700" role="status">
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-          {notice}
-        </p>
-      )}
-      {transcribingSourceId && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary" role="status" aria-live="polite">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          {t.backgroundTranscribing}
-        </p>
-      )}
-      {error && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600" role="alert">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {error}
-        </p>
+        </div>
       )}
 
       {(savedAudioSources.length > 0 || latestTranscript?.body) && (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           {savedAudioSources.length > 0 && (
             <div>
-              <p className="mb-2 text-[11px] font-medium text-text-secondary">{t.savedRecordings}</p>
+              <p className="mb-2 text-[11px] font-medium text-text-secondary">
+                {t.savedRecordings} · {audioCount}
+              </p>
               <div className="space-y-2">
                 {savedAudioSources.map((source, index) => (
                   <div key={source.id} className="flex flex-wrap items-center gap-2">
@@ -800,7 +888,7 @@ export function MeetingNotePanel({
                       className="h-8 min-w-[220px] max-w-full flex-1"
                       aria-label={source.title || `${t.recording} ${index + 1}`}
                     />
-                    {canTranscribe && (
+                    {canTranscribe ? (
                       <button
                         type="button"
                         disabled={transcribingSourceId === source.id}
@@ -809,10 +897,19 @@ export function MeetingNotePanel({
                           audioSource: source,
                           transcriptionMode: 'saved-only',
                         })}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface disabled:opacity-50"
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface disabled:opacity-50 sm:min-h-0 sm:px-2.5"
                       >
                         {transcribingSourceId === source.id && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
                         {t.transcribeLater}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowTranscriptionSettings(true)}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 sm:min-h-0 sm:px-2.5"
+                      >
+                        <Settings2 className="h-3 w-3" aria-hidden="true" />
+                        {t.configureTranscription}
                       </button>
                     )}
                   </div>
@@ -823,7 +920,7 @@ export function MeetingNotePanel({
           {latestTranscript?.body && (
             <details className="rounded-lg border border-border bg-surface/40 px-3 py-2">
               <summary className="cursor-pointer text-xs font-medium text-text-secondary">
-                {t.latestTranscript}
+                {t.latestTranscript} · {transcriptCount}
               </summary>
               {onInsertTranscript && (
                 <button

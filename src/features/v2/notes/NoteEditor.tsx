@@ -348,16 +348,16 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           actions strip. Both rows fill the editor column left-aligned
           so the body below has the same writing footprint — no
           centered max-width island surrounded by dead space. */}
-      <header className="pl-6 pr-8 pt-5 pb-2 flex flex-col gap-2 border-b border-border">
+      <header className="flex flex-col gap-2 border-b border-border px-4 pb-2 pt-4 sm:pl-6 sm:pr-8 sm:pt-5">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder={t.untitled}
-          className="w-full bg-transparent text-2xl font-semibold text-text-heading outline-none placeholder:text-text-muted"
+          className="w-full bg-transparent text-xl font-semibold text-text-heading outline-none placeholder:text-text-muted sm:text-2xl"
           data-testid="note-title"
         />
         <div className="w-full flex flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {autosave.status !== 'idle' && (
               <Badge tone={statusTone(autosave.status)}>
                 {statusCopy(autosave.status, language)}
@@ -378,7 +378,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               aria-label={language === 'zh' ? '笔记类型' : 'Note type'}
               value={note.kind}
               onChange={(e) => void saveMetadata({ kind: e.target.value as typeof note.kind })}
-              className="bg-transparent border border-border rounded px-1.5 py-0.5"
+              className="min-h-[44px] rounded border border-border bg-transparent px-2 text-base sm:min-h-0 sm:px-1.5 sm:py-0.5 sm:text-xs"
               data-testid="note-kind"
             >
               <option value="quick">quick</option>
@@ -393,7 +393,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               aria-label={language === 'zh' ? '笔记日期' : 'Note date'}
               value={note.date ?? ''}
               onChange={(e) => void saveMetadata({ date: e.target.value || null })}
-              className="bg-transparent border border-border rounded px-1.5 py-0.5"
+              className="min-h-[44px] rounded border border-border bg-transparent px-2 text-base sm:min-h-0 sm:px-1.5 sm:py-0.5 sm:text-xs"
               data-testid="note-date"
             />
           </div>
@@ -406,7 +406,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               <button
                 type="button"
                 onClick={() => setViewMode('edit')}
-                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                className={`inline-flex min-h-[44px] items-center gap-1 rounded px-3 py-1 transition-colors sm:min-h-0 sm:px-2 ${
                   viewMode === 'edit' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
                 }`}
                 data-testid="note-mode-edit"
@@ -418,7 +418,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               <button
                 type="button"
                 onClick={() => setViewMode('preview')}
-                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                className={`inline-flex min-h-[44px] items-center gap-1 rounded px-3 py-1 transition-colors sm:min-h-0 sm:px-2 ${
                   viewMode === 'preview' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
                 }`}
                 data-testid="note-mode-preview"
@@ -430,7 +430,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             </div>
             <button
               onClick={() => void saveMetadata({ pinned: !note.pinned })}
-              className={`px-1.5 py-0.5 border rounded ${
+              className={`min-h-[44px] min-w-[44px] rounded border px-2 py-0.5 sm:min-h-0 sm:min-w-0 sm:px-1.5 ${
                 note.pinned
                   ? 'border-accent text-accent'
                   : 'border-border text-text-muted'
@@ -443,7 +443,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             <button
               onClick={() => void toggleArchived()}
               disabled={autosave.status === 'saving'}
-              className="px-1.5 py-0.5 border border-border rounded text-text-muted"
+              className="min-h-[44px] rounded border border-border px-3 py-0.5 text-text-muted sm:min-h-0 sm:px-1.5"
               data-testid={note.state === 'archived' ? 'note-restore' : 'note-archive'}
               aria-label={note.state === 'archived' ? t.restore : t.archive}
               title={note.state === 'archived' ? t.restore : t.archive}
@@ -453,7 +453,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             <button
               onClick={deleteCurrentNote}
               disabled={del.isPending}
-              className="inline-flex items-center justify-center rounded border border-border p-1 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-danger disabled:opacity-40"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-border p-1 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-danger disabled:opacity-40 sm:min-h-0 sm:min-w-0"
               data-testid="note-delete"
               title={t.delete}
               aria-label={t.delete}
@@ -463,7 +463,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             {onToggleLayout && (
               <button
                 onClick={onToggleLayout}
-                className={`px-2 py-1 border rounded inline-flex items-center justify-center transition-colors ${
+                className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border px-2 py-1 transition-colors sm:min-h-0 sm:min-w-0 ${
                   layout === 'note'
                     ? 'border-accent text-accent bg-accent/5'
                     : 'border-border text-text-muted hover:text-text-heading hover:border-text-muted'
@@ -545,8 +545,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       </header>
 
       {note.kind === 'meeting' && (
-        <div className="shrink-0 border-b border-border px-6 py-3">
+        <div className="shrink-0 border-b border-border px-4 py-3 sm:px-6">
           <MeetingNotePanel
+            key={note.id}
             note={note}
             language={language}
             onNoteUpdated={(updated) => {
@@ -575,10 +576,10 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               value={body}
               onChange={(e) => onBodyChange(e.target.value)}
               placeholder={t.placeholder}
-              className="min-h-[22rem] w-full border-b border-border/70 bg-transparent pl-6 pr-8 py-6 text-lg text-text-heading placeholder:text-text-muted outline-none resize-none font-sans leading-loose xl:min-h-full xl:border-b-0 xl:border-r"
+              className="min-h-[22rem] w-full resize-none border-b border-border/70 bg-transparent px-4 py-6 text-base leading-loose text-text-heading outline-none placeholder:text-text-muted sm:pl-6 sm:pr-8 sm:text-lg xl:min-h-full xl:border-b-0 xl:border-r"
               data-testid="note-body"
             />
-            <article className="note-markdown min-h-[14rem] overflow-y-auto pl-6 pr-8 py-6 text-text-heading" data-testid="note-live-preview">
+            <article className="note-markdown min-h-[14rem] overflow-y-auto px-4 py-6 text-text-heading sm:pl-6 sm:pr-8" data-testid="note-live-preview">
               {body.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
               ) : (

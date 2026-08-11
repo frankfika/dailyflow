@@ -8,6 +8,7 @@ import {
   createNote,
   captureNoteMeeting,
   captureNoteMeetingBinary,
+  transcribeNoteMeeting,
   getNoteMeetingAudioUrl,
   listInbox,
   processSource,
@@ -103,6 +104,21 @@ describe('v2/client', () => {
     );
     expect(call[1]).toMatchObject({ method: 'POST', body: audio });
     expect(call[1].headers).toEqual({ 'content-type': 'audio/mp4' });
+  });
+
+  it('sends the workspace-local contract for managed transcription', async () => {
+    await transcribeNoteMeeting('note_01', {
+      sourceId: 'src_audio',
+      transcription: {
+        mode: 'local-managed',
+        engine: 'whisper.cpp',
+        modelId: 'small',
+        language: 'zh',
+      },
+    });
+    const call = (fetch as any).mock.calls[0];
+    expect(call[0]).toBe(`${API_BASE.api}/api/v2/notes/note_01/meeting/transcribe-local`);
+    expect(JSON.parse(call[1].body)).toEqual({ sourceId: 'src_audio' });
   });
 
   it('getNoteMeetingAudioUrl builds a restart-safe streaming URL', () => {
