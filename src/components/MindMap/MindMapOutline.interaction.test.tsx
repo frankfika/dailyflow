@@ -67,6 +67,14 @@ describe('MindMapOutline document interactions', () => {
     expect(screen.getAllByPlaceholderText('输入想法…').some((element) => (element as HTMLInputElement).value === '')).toBe(true);
   });
 
+  it('exposes direct buttons for a top-level topic and a sibling node', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('outline-add-sibling-idea-a'));
+    expect(screen.getAllByPlaceholderText('输入想法…')).toHaveLength(3);
+    fireEvent.click(screen.getByTestId('outline-add-top-level-root'));
+    expect(screen.getAllByPlaceholderText('输入想法…')).toHaveLength(4);
+  });
+
   it('indents with Tab and outdents with Shift+Tab', () => {
     render(<Harness />);
     const task = screen.getByDisplayValue('发布官网');
