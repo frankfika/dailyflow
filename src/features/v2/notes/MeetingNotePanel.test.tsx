@@ -127,14 +127,18 @@ describe('MeetingNotePanel', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('keeps technical transcription settings out of the primary recording flow', () => {
+  it('explains transcription requirements before recording and exposes the API key in one step', () => {
     render(<MeetingNotePanel note={note()} />);
 
     expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('do not require AI or an API key');
+    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('provider’s API key');
     expect(screen.getByRole('button', { name: 'Start recording' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Transcription settings' }));
+    fireEvent.click(screen.getByRole('button', { name: /Set up remote transcription/ }));
     expect(screen.getByRole('combobox', { name: 'Transcription mode' })).toBeInTheDocument();
+    expect(screen.getByText(/Add the selected provider’s API key/)).toBeInTheDocument();
+    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close transcription settings' }));
     expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
   });
@@ -269,6 +273,7 @@ describe('MeetingNotePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
 
     expect(await screen.findByText(/Recording saved, but remote transcription failed/)).toHaveTextContent('provider unavailable');
+    expect(screen.getByTestId('meeting-notice-warning')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

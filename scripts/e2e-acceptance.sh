@@ -6,6 +6,7 @@ set -e
 WORKSPACE=$(mktemp -d)
 echo "Workspace: $WORKSPACE"
 
+export DAILYFLOW_CONFIG_FILE="$WORKSPACE/config/config.json"
 export DAILYFLOW_V2_WORKSPACE_ROOT="$WORKSPACE"
 export DAILYFLOW_V2_WORKSPACE_ID="ws_test"
 export V2_AI_PROVIDER="local-deterministic"
@@ -13,9 +14,8 @@ export PORT=3030
 
 node -e "
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const cfgPath = path.join(os.homedir(), '.dailyflow', 'config.json');
+const cfgPath = process.env.DAILYFLOW_CONFIG_FILE;
 let cfg = {};
 try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch {}
 cfg.workspaceRoot = process.env.DAILYFLOW_V2_WORKSPACE_ROOT;

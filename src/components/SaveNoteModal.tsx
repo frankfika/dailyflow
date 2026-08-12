@@ -10,7 +10,7 @@
  * R3 重构 (2026-07-12): 抽重复 UI, AIChat 命中 < 700 行目标.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { notesApi } from '../api/client';
@@ -24,7 +24,7 @@ export interface SaveNoteModalProps {
   initialContent: string;
   initialLinkedTaskIds?: string[];
   initialLinkedProjectIds?: string[];
-  notes: any[];                       // 用于重复检测
+  existingNoteId?: string | null;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   onClose: () => void;
   onSaved: () => void;
@@ -42,7 +42,7 @@ export function SaveNoteModal({
   initialContent,
   initialLinkedTaskIds = [],
   initialLinkedProjectIds = [],
-  notes,
+  existingNoteId = null,
   showToast,
   onClose,
   onSaved,
@@ -51,14 +51,22 @@ export function SaveNoteModal({
   const [content, setContent] = useState(initialContent);
   const [type, setType] = useState<NoteType>('note');
   const [tags, setTags] = useState<string[]>(['ai-generated']);
-  const [savedNoteId, setSavedNoteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose, saving]);
 
   if (!isOpen) return null;
 
   const close = () => {
     setTitle(''); setContent(''); setType('note');
-    setTags(['ai-generated']); setSavedNoteId(null);
+    setTags(['ai-generated']);
     onClose();
   };
 
@@ -66,8 +74,8 @@ export function SaveNoteModal({
     if (!title.trim() || saving) return;
     setSaving(true);
     try {
-      if (savedNoteId) {
-        await notesApi.update(savedNoteId, {
+      if (existingNoteId) {
+        await notesApi.update(existingNoteId, {
           title: title.trim(),
           body: content,
           type: type as any,
@@ -104,6 +112,9 @@ export function SaveNoteModal({
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[1px]"
       onClick={close}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="save-note-title"
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -114,24 +125,26 @@ export function SaveNoteModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-bold text-text-heading">
+          <h3 id="save-note-title" className="text-sm font-bold text-text-heading">
             {language === 'zh' ? '保存为笔记' : 'Save as Note'}
           </h3>
-          <button onClick={close} className="p-1 text-text-muted hover:text-red-500 transition-colors">
+          <button onClick={close} aria-label={language === 'zh' ? '关闭' : 'Close'} className="p-1 text-text-muted hover:text-red-500 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
-          {savedNoteId && (
+          {existingNoteId && (
             <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
               {language === 'zh'
-                ? '⚠️ 这条内容已经保存过笔记，继续保存将创建重复条目。'
-                : '⚠️ This content has already been saved as a note. Continuing will create a duplicate.'}
+                ? '这条内容已经保存过；保存会更新原笔记，不会创建重复条目。'
+                : 'This content was saved before. Saving will update the existing note instead of creating a duplicate.'}
             </div>
           )}
           <div>
-            <label className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '标题' : 'Title'}</label>
+            <label htmlFor="save-note-title-input" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '标题' : 'Title'}</label>
             <input
+              id="save-note-title-input"
+              autoFocus
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -139,8 +152,9 @@ export function SaveNoteModal({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '类型' : 'Type'}</label>
+            <label htmlFor="save-note-type" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '类型' : 'Type'}</label>
             <select
+              id="save-note-type"
               value={type}
               onChange={e => setType(e.target.value as NoteType)}
               className="w-full px-3 py-1.5 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent"
@@ -163,6 +177,7 @@ export function SaveNoteModal({
               ))}
               <input
                 type="text"
+                aria-label={language === 'zh' ? '添加标签' : 'Add tag'}
                 placeholder={language === 'zh' ? '+ 添加标签' : '+ Add tag'}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -178,8 +193,9 @@ export function SaveNoteModal({
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '内容' : 'Content'}</label>
+            <label htmlFor="save-note-content" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '内容' : 'Content'}</label>
             <textarea
+              id="save-note-content"
               value={content}
               onChange={e => setContent(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-accent max-h-60 min-h-[120px] resize-y"
@@ -193,17 +209,6 @@ export function SaveNoteModal({
           >
             {language === 'zh' ? '取消' : 'Cancel'}
           </button>
-          {savedNoteId ? (
-            <button
-              onClick={() => {
-                showToast(language === 'zh' ? '请前往「笔记」页查看' : 'Go to Notes tab to view', 'info');
-                close();
-              }}
-              className="px-4 py-1.5 text-xs font-bold border border-accent text-accent rounded hover:bg-accent/10 transition-colors"
-            >
-              {language === 'zh' ? '查看笔记' : 'View Note'}
-            </button>
-          ) : null}
           <button
             onClick={handleSave}
             disabled={!title.trim() || saving}

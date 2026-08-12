@@ -30,7 +30,7 @@ type RecordingState = 'idle' | 'requesting' | 'recording' | 'ready' | 'saving';
 const COPY = {
   zh: {
     title: '会议录音',
-    hint: '先把会议安全录下来，停止后再保存和转写。',
+    hint: '录音可直接保存；自动转写需要先完成设置。',
     start: '开始录音',
     requesting: '正在请求麦克风…',
     stop: '停止',
@@ -93,10 +93,17 @@ const COPY = {
     localConfigSaved: '本地转写设置已保存。',
     localNotReady: '本地转写尚未就绪，请确认执行程序和模型文件路径。',
     saveConfig: '保存并检测',
+    setupTitle: '先选好录音后的处理方式',
+    setupBody: '只录音不需要 AI 或 API Key。自动转写可使用 OpenAI、Deepgram、ElevenLabs 等远程服务（需要对应服务的 API Key），也可使用本地 whisper.cpp（无需 API Key）。',
+    setupRemote: '设置远程转写',
+    setupRemoteHint: '需要服务商 API Key',
+    setupLocal: '设置本地转写',
+    setupLocalHint: '无需 API Key',
+    apiKeyRequired: '远程自动转写尚未启用：请填写所选服务商的 API Key。录音仍可正常保存。',
   },
   en: {
     title: 'Meeting recording',
-    hint: 'Capture the meeting safely first, then save and transcribe when you stop.',
+    hint: 'Recordings can be saved immediately; automatic transcription needs setup first.',
     start: 'Start recording',
     requesting: 'Requesting microphone…',
     stop: 'Stop',
@@ -159,6 +166,13 @@ const COPY = {
     localConfigSaved: 'Local transcription settings saved.',
     localNotReady: 'Local transcription is not ready. Check the executable and model paths.',
     saveConfig: 'Save & check',
+    setupTitle: 'Choose what happens after recording',
+    setupBody: 'Recording and saving do not require AI or an API key. Automatic transcription can use OpenAI, Deepgram, or ElevenLabs with that provider’s API key, or local whisper.cpp without an API key.',
+    setupRemote: 'Set up remote transcription',
+    setupRemoteHint: 'Provider API key required',
+    setupLocal: 'Set up local transcription',
+    setupLocalHint: 'No API key required',
+    apiKeyRequired: 'Remote transcription is not active yet. Add the selected provider’s API key; recording and saving still work.',
   },
 } as const;
 
@@ -206,6 +220,7 @@ export function MeetingNotePanel({
   const [audioPreviewFailed, setAudioPreviewFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [noticeTone, setNoticeTone] = useState<'success' | 'warning' | 'info'>('success');
   const [recordingConsent, setRecordingConsent] = useState(false);
   const [showTranscriptionSettings, setShowTranscriptionSettings] = useState(false);
   const [sources, setSources] = useState<SourceItem[]>([]);
@@ -425,6 +440,7 @@ export function MeetingNotePanel({
         transcriptionJob: response.job,
       };
       if (!transcriptSource) {
+        setNoticeTone('info');
         setNotice(t.queued);
         return;
       }
@@ -432,11 +448,13 @@ export function MeetingNotePanel({
         ...current.filter((item) => item.id !== transcriptSource!.id),
         transcriptSource!,
       ]);
+      setNoticeTone('success');
       setNotice(t.transcribed);
       onNoteUpdated?.(result.note, result);
       if (result.text) onTranscriptReady?.(result.text, result);
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
+      setNoticeTone('warning');
       setNotice(`${t.transcriptionFailed} ${detail}`);
     } finally {
       setTranscribingSourceId(null);
@@ -473,6 +491,7 @@ export function MeetingNotePanel({
       if (canTranscribe) {
         await runSavedTranscription(captureResult);
       } else {
+        setNoticeTone('info');
         setNotice(t.savedOnly);
       }
     } catch (cause) {
@@ -491,21 +510,21 @@ export function MeetingNotePanel({
   return (
     <section
       aria-label={t.title}
-      className="rounded-xl border border-border bg-surface/60 px-4 py-3 shadow-sm"
+      className="rounded-xl border border-border bg-surface/45 p-3"
       data-testid="meeting-note-panel"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface-elevated">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/30">
               <Mic className="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
             </span>
-            <h3 className="text-sm font-semibold text-text-primary">{t.title}</h3>
-          </div>
-          <p className="mt-1.5 text-xs leading-5 text-text-muted">{t.hint}</p>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-text-primary">{t.title}</h3>
+              <p className="truncate text-[11px] leading-4 text-text-muted">{t.hint}</p>
+            </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium ${canTranscribe ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-medium ${canTranscribe ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${canTranscribe ? 'bg-green-500' : 'bg-amber-500'}`} />
             {canTranscribe ? t.transcriptionReady : t.recordingOnly}
           </span>
@@ -513,7 +532,7 @@ export function MeetingNotePanel({
             type="button"
             onClick={() => setShowTranscriptionSettings((open) => !open)}
             aria-expanded={showTranscriptionSettings}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border px-3 py-1 font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary sm:min-h-0 sm:px-2.5"
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-md px-2 py-1 font-medium text-text-muted transition-colors hover:bg-surface-elevated hover:text-text-primary sm:min-h-0"
           >
             <Settings2 className="h-3 w-3" aria-hidden="true" />
             {t.settingsTitle}
@@ -521,26 +540,59 @@ export function MeetingNotePanel({
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-border bg-surface-elevated/45 p-3">
+      <div className="mt-3 border-t border-border/70 pt-3">
+        {!canTranscribe && state === 'idle' && (
+          <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="transcription-setup-callout">
+            <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{t.setupTitle}</p>
+            <p className="mt-1 text-[11px] leading-5 text-amber-800/90 dark:text-amber-300/90">{t.setupBody}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = { ...transcriptionSettings, mode: 'remote' as const };
+                  setTranscriptionSettings(next);
+                  saveMeetingTranscriptionSettings(next);
+                  setShowTranscriptionSettings(true);
+                }}
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[11px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+              >
+                <span className="block">{t.setupRemote}</span>
+                <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = { ...transcriptionSettings, mode: 'local-managed' as const };
+                  setTranscriptionSettings(next);
+                  saveMeetingTranscriptionSettings(next);
+                  setShowTranscriptionSettings(true);
+                }}
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[11px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+              >
+                <span className="block">{t.setupLocal}</span>
+                <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupLocalHint}</span>
+              </button>
+            </div>
+          </div>
+        )}
         {state === 'idle' && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex max-w-2xl cursor-pointer items-start gap-2.5 text-xs leading-5 text-text-secondary">
+            <label className="flex max-w-2xl cursor-pointer items-center gap-2.5 text-xs leading-5 text-text-secondary">
               <input
                 type="checkbox"
                 checked={recordingConsent}
                 onChange={(event) => setRecordingConsent(event.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-current"
+                className="h-4 w-4 shrink-0 accent-current"
               />
               <span>
-                <span className="block font-medium text-text-primary">{t.recordingStep}</span>
-                <span className="text-[11px] text-text-muted">{t.consent}</span>
+                <span className="block text-[11px] text-text-muted">{t.consent}</span>
               </span>
             </label>
             <button
               type="button"
               onClick={startRecording}
               disabled={!recordingConsent}
-              className="inline-flex min-h-[44px] min-w-36 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex min-h-[40px] min-w-36 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
             >
               <Mic className="h-4 w-4" aria-hidden="true" />
               {t.start}
@@ -606,8 +658,8 @@ export function MeetingNotePanel({
       </div>
 
       {notice && (
-        <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700" role="status">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <p className={`mt-2 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs ${noticeTone === 'success' ? 'border-green-200 bg-green-50 text-green-700' : noticeTone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`} role="status" data-testid={`meeting-notice-${noticeTone}`}>
+          {noticeTone === 'success' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
           {notice}
         </p>
       )}
@@ -684,7 +736,7 @@ export function MeetingNotePanel({
       </div>
       <p className="mt-2 text-[11px] leading-5 text-text-muted">
         {selectedMode === 'remote'
-          ? (remoteEndpoint ? t.remoteReady : t.localOnly)
+          ? (remoteEndpoint ? t.remoteReady : t.apiKeyRequired)
           : selectedMode === 'local-endpoint'
             ? t.localEndpointReady
             : selectedMode === 'local-managed'
@@ -693,8 +745,8 @@ export function MeetingNotePanel({
       </p>
 
       {(selectedMode === 'remote' || selectedMode === 'local-endpoint') && (
-        <details className="mt-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-xs">
-          <summary className="cursor-pointer font-medium text-text-secondary">{t.serviceSettings}</summary>
+        <div className="mt-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-xs">
+          <p className="font-medium text-text-secondary">{t.serviceSettings}</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {selectedMode === 'remote' && (
               <label className="grid gap-1 text-text-muted">
@@ -810,7 +862,7 @@ export function MeetingNotePanel({
               </>
             )}
           </div>
-        </details>
+        </div>
       )}
 
       {selectedMode === 'local-managed' && localConfig && (
@@ -851,6 +903,7 @@ export function MeetingNotePanel({
                   const result = await saveLocalTranscriptionConfig(localConfig);
                   setLocalConfig(result.config);
                   setLocalStatus(result.status);
+                  setNoticeTone(result.status.executable && result.status.model && result.status.ffmpeg ? 'success' : 'warning');
                   setNotice(result.status.executable && result.status.model && result.status.ffmpeg ? t.localConfigSaved : t.localNotReady);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : String(cause));

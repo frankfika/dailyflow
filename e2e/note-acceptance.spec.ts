@@ -21,7 +21,7 @@ async function bootstrapWorkspace(baseURL: string | undefined): Promise<void> {
   if (!baseURL) throw new Error('baseURL is required');
   const ctx = await request.newContext({ baseURL });
   const createRes = await ctx.post('/api/config/workspaces', {
-    data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+    data: { name: 'e2e-workspace', path: `${process.env.DAILYFLOW_E2E_ROOT}/notes-workspace` },
   });
   let workspaceId: string;
   if (createRes.ok()) {
@@ -38,7 +38,7 @@ async function bootstrapWorkspace(baseURL: string | undefined): Promise<void> {
     // Re-create the workspace fresh if a previous run left it in a
     // half-state (config written but workspaceRoot not bootstrapped).
     await ctx.post('/api/config/workspaces', {
-      data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+      data: { name: 'e2e-workspace', path: `${process.env.DAILYFLOW_E2E_ROOT}/notes-workspace` },
     });
     const fresh = await ctx.get('/api/config/workspaces');
     const flist = await fresh.json();

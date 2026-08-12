@@ -59,6 +59,13 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     const space = await createTopicSpace({ title: 'Launch', context: 'work' });
     const map = await createMindMap({ title: 'Launch', spaceId: space.id });
     const nodeId = 'n_new_1';
+    await updateMindMap(map.id, {
+      nodes: [
+        ...map.nodes,
+        { id: nodeId, text: 'Send press release', position: { x: 300, y: 0 }, kind: 'branch' },
+      ],
+      edges: [...map.edges, { id: 'e_new_1', source: map.rootId, target: nodeId }],
+    });
 
     const r = await createTaskForNode({
       mindmapId: map.id,
@@ -88,6 +95,8 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     expect(line).toContain('#deadline:2026-08-11');
     expect(line).toContain('#priority:high');
     expect(line).toContain('- [ ] Send press release');
+    const linkedNode = (await getMindMap(map.id))!.nodes.find(node => node.id === nodeId);
+    expect(linkedNode).toMatchObject({ kind: 'task', taskId: r.taskId, taskDate: date });
 
     // Idempotency: calling twice with same existingTaskId → alreadyPresent
     const r2 = await createTaskForNode({
@@ -170,6 +179,10 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     const space = await createTopicSpace({ title: 'Conv space', context: 'work' });
     const map = await createMindMap({ title: 'Conv plan', spaceId: space.id });
     const nodeId = 'n_conv_1';
+    await updateMindMap(map.id, {
+      nodes: [...map.nodes, { id: nodeId, text: 'Plain work', position: { x: 300, y: 0 }, kind: 'branch' }],
+      edges: [...map.edges, { id: 'e_conv_1', source: map.rootId, target: nodeId }],
+    });
 
     const r = await convertStandaloneToEventNodeTask({
       taskId,
@@ -185,8 +198,13 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     const line = (await readDailyNote(date, cfg))!.content.split('\n').find(l => l.includes(taskId));
     expect(line).toContain(`^mm:${map.id}`);
     expect(line).toContain(`^node:${nodeId}`);
-    expect(line).toContain('^space:tw_conv'); // preserved, not stripped
+    expect(line).toContain(`^space:${space.id}`);
     expect(line).toContain(`^id-${taskId}`);
+    expect((await getMindMap(map.id))!.nodes.find(node => node.id === nodeId)).toMatchObject({
+      kind: 'task',
+      taskId,
+      taskDate: date,
+    });
 
     // Idempotency
     const r2 = await convertStandaloneToEventNodeTask({ taskId, scheduledDate: date, mindmapId: map.id, nodeId, config: cfg });
@@ -199,6 +217,10 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     const taskId = 't_unco_1';
     const space = await createTopicSpace({ title: 'Undo space', context: 'work' });
     const map = await createMindMap({ title: 'Undo plan', spaceId: space.id });
+    await updateMindMap(map.id, {
+      nodes: [...map.nodes, { id: 'n_unco_1', text: 'Already converted', position: { x: 300, y: 0 }, kind: 'task', taskId, taskDate: date }],
+      edges: [...map.edges, { id: 'e_unco_1', source: map.rootId, target: 'n_unco_1' }],
+    });
     // Write pre-converted line: both markers present
     await writeDailyNote(date, `- [ ] Already converted #life #urgent ^mm:${map.id} ^node:n_unco_1 ^space:${space.id} ^id-${taskId}\n`, cfg);
     // First register in space so undo can actually remove it
@@ -213,11 +235,13 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
     // Stripped origin markers
     expect(line).not.toMatch(/\^mm:/);
     expect(line).not.toMatch(/\^node:/);
-    // Kept stable id, space id, and user hashtags
+    // Kept stable id and user hashtags; Event ownership is fully cleared.
     expect(line).toContain(`^id-${taskId}`);
-    expect(line).toContain(`^space:${space.id}`);
+    expect(line).not.toMatch(/\^space:/);
     expect(line).toContain('#life');
     expect(line).toContain('#urgent');
+    expect((await getMindMap(map.id))!.nodes.find(node => node.id === 'n_unco_1')).toMatchObject({ kind: 'branch' });
+    expect((await getMindMap(map.id))!.nodes.find(node => node.id === 'n_unco_1')?.taskId).toBeUndefined();
   });
 
   it('reschedules one stable projection and unschedules without deleting its Event node', async () => {
@@ -240,13 +264,6 @@ describe.sequential('EFP-004 EventExecutionService (6 frozen writes)', () => {
       scheduledDate: fromDate,
       config: cfg,
     });
-    const linkedMap = (await getMindMap(map.id))!;
-    await updateMindMap(map.id, {
-      nodes: linkedMap.nodes.map(node => node.id === nodeId
-        ? { ...node, kind: 'task', taskId: created.taskId, taskDate: fromDate }
-        : node),
-    });
-
     await expect(rescheduleNodeTask({
       taskId: created.taskId,
       fromDate,

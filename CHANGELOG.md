@@ -5,6 +5,20 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2](https://github.com/frankfika/dailyflow/compare/v1.6.1...v1.6.2) (2026-08-12)
+
+### Bug Fixes
+
+- prevent note, recurring-task, and event data from being overwritten or masked by empty fallback data
+- hide unavailable connector and external-write capabilities until their authorization/runtime is ready
+- make AI tool results, update failures, and save-note actions truthful and recoverable
+- improve keyboard access, mobile touch targets, language consistency, and isolated end-to-end testing
+
+### Security
+
+- restrict local API CORS to explicitly configured origins
+- keep release and E2E configuration isolated from the user's real workspace
+
 ## [1.6.1](https://github.com/frankfika/dailyflow/compare/v1.6.0...v1.6.1) (2026-08-11)
 
 

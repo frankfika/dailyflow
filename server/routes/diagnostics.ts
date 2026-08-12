@@ -58,13 +58,11 @@ router.get('/summary', async (_req, res) => {
 /**
  * POST /api/diagnostics/repair-task-link
  *
- * Body: `{ mindmapId, nodeId, action: 'unlink' | 'recreate' }`
+ * Body: `{ mindmapId, nodeId, action: 'unlink' }`
  *
  *   - `unlink` clears `kind` and `taskId` on the node, demoting it
  *     back to a plain branch. Use this when a task was deleted but
  *     the mindmap node still claims a link.
- *   - `recreate` is reserved for a future phase and currently returns
- *     501.
  */
 router.post('/repair-task-link', async (req, res) => {
   try {
@@ -75,16 +73,8 @@ router.post('/repair-task-link', async (req, res) => {
     if (typeof nodeId !== 'string' || !nodeId) {
       return res.status(400).json({ error: 'nodeId is required' });
     }
-    if (action !== 'unlink' && action !== 'recreate') {
-      return res.status(400).json({ error: "action must be 'unlink' or 'recreate'" });
-    }
-
-    if (action === 'recreate') {
-      return res.status(501).json({
-        error: 'Not implemented',
-        code: 'REPAIR_RECREATE_TODO',
-        message: 'recreate will be implemented in a later phase; use unlink for now',
-      });
+    if (action !== 'unlink') {
+      return res.status(400).json({ error: "action must be 'unlink'" });
     }
 
     // Verify the map and node exist before we touch anything. This

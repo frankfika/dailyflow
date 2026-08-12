@@ -97,6 +97,10 @@ export class V2Repository {
     this.audit = new AuditLog(this.layout, ctx.workspaceId);
   }
 
+  get workspaceId(): string {
+    return this.ctx.workspaceId;
+  }
+
   private jobPath(id: string): string {
     if (!/^job_[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) {
       throw new Error('Invalid job id.');

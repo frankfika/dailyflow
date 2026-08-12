@@ -15,7 +15,7 @@ test.describe('Notes focus mode (default layout)', () => {
     if (!baseURL) throw new Error('baseURL is required');
     const ctx = await request.newContext({ baseURL });
     const createRes = await ctx.post('/api/config/workspaces', {
-      data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+      data: { name: 'e2e-workspace', path: `${process.env.DAILYFLOW_E2E_ROOT}/notes-focus-workspace` },
     });
     let workspaceId: string;
     if (createRes.ok()) {
@@ -33,7 +33,7 @@ test.describe('Notes focus mode (default layout)', () => {
       // half-state (config written but workspaceRoot not bootstrapped).
       // Retry by re-creating it fresh.
       await ctx.post('/api/config/workspaces', {
-        data: { name: 'e2e-workspace', path: `${process.env.HOME}/dailyflow-v2` },
+        data: { name: 'e2e-workspace', path: `${process.env.DAILYFLOW_E2E_ROOT}/notes-focus-workspace` },
       });
       const fresh = await ctx.get('/api/config/workspaces');
       const flist = await fresh.json();

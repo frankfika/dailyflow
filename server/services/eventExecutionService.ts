@@ -13,8 +13,8 @@
  *      (toggle [ ] ↔ [x]) on the matching line.
  *   4. `convertStandaloneToEventNodeTask` injects ^mm + ^node markers into an
  *      existing standalone task line and records the space.taskIds linkage.
- *   5. `undoConvertStandaloneToEventNodeTask` strips ^mm + ^node (keeping
- *      ^id- + ^space if standalone wants it) and removes from space.taskIds.
+ *   5. `undoConvertStandaloneToEventNodeTask` strips ^mm + ^node + ^space,
+ *      keeps the stable ^id-, detaches the map node, and removes space.taskIds.
  *   6. All functions are idempotent. Calling them twice with identical args
  *      produces the same on-disk content as the first call.
  *
@@ -39,7 +39,8 @@ import {
   getTopicSpace,
 } from './topicSpaces.js';
 import { getMindMap, getInheritedTagsFromMap, updateMindMap } from './mindmaps.js';
-import { setOriginMarkers, stripAllOriginMarkers } from './taskMetadata.js';
+import type { MindMapNode } from '../types/mindmap.js';
+import { setOriginMarkers, setSpaceMarker, stripAllOriginMarkers } from './taskMetadata.js';
 import type { Config } from '../types/task.js';
 import { invalidateTaskIndex } from './taskIndex.js';
 
@@ -53,6 +54,43 @@ function genId(prefix: 't' | 'ev_node' = 't'): string {
 
 function findTaskByTaskId(tasks: Task[], id: string): Task | undefined {
   return tasks.find(t => t.id === id);
+}
+
+/**
+ * Older Event APIs accepted a client-generated node id before the node was
+ * persisted. Preserve that contract by materialising the missing node under
+ * the root, so a Task marker can never point at a non-existent canvas node.
+ */
+async function getOrCreateLinkableNode(mindmapId: string, nodeId: string, title: string) {
+  const map = await getMindMap(mindmapId);
+  if (!map) throw Object.assign(new Error('Mind map not found'), { status: 404 });
+  const existing = map.nodes.find(item => item.id === nodeId);
+  if (existing) return { map, node: existing };
+
+  const root = map.nodes.find(item => item.id === map.rootId);
+  const siblingCount = map.edges.filter(edge => edge.source === map.rootId).length;
+  const createdNode: MindMapNode = {
+    id: nodeId,
+    text: title,
+    position: {
+      x: (root?.position.x ?? 0) + 300,
+      y: (root?.position.y ?? 0) + siblingCount * 104,
+    },
+    kind: 'branch' as const,
+  };
+  const updated = await updateMindMap(map.id, {
+    nodes: [...map.nodes, createdNode],
+    edges: [
+      ...map.edges,
+      {
+        id: `edge_${randomUUID().replace(/-/g, '').slice(0, 16)}`,
+        source: map.rootId,
+        target: nodeId,
+      },
+    ],
+  });
+  if (!updated) throw new Error('Mind map disappeared while creating node');
+  return { map: updated, node: createdNode };
 }
 
 /**
@@ -74,23 +112,42 @@ export async function createTaskForNode(params: {
   config?: Config;
 }): Promise<{ taskId: string; appended: boolean; alreadyPresent: boolean }> {
   const cfg = await resolveConfig(params.config);
-
   const taskId = params.existingTaskId || genId('t');
+  const { map, node } = await getOrCreateLinkableNode(params.mindmapId, params.nodeId, params.title);
+  if (node.taskId && node.taskId !== taskId) {
+    throw Object.assign(new Error('Mind map node is already linked to another task'), { status: 409 });
+  }
+
   const note = await readDailyNote(params.scheduledDate, cfg);
   const md = note?.content ?? '';
 
-  // Idempotency: if the exact same ^id-XXX line is already there, do nothing.
+  const bindNodeAndSpace = async () => {
+    const updatedMap = await updateMindMap(map.id, {
+      nodes: map.nodes.map(item => item.id === params.nodeId
+        ? {
+            ...item,
+            text: params.title,
+            kind: 'task' as const,
+            taskId,
+            taskDate: params.scheduledDate,
+            status: 'todo' as const,
+          }
+        : item),
+    });
+    if (!updatedMap) throw new Error('Mind map disappeared while linking task');
+    if (map.spaceId) await addTaskIdToTopicSpace(map.spaceId, taskId);
+  };
+
+  // Idempotency also repairs either half of a partially-written association.
   const tasks = parseMarkdown(md);
   const existing = findTaskByTaskId(tasks, taskId);
   if (existing && existing.originMindmapId === params.mindmapId && existing.originNodeId === params.nodeId) {
+    await bindNodeAndSpace();
+    invalidateTaskIndex();
     return { taskId, appended: false, alreadyPresent: true };
   }
 
-  const inheritedTags: string[] = [];
-  try {
-    const map = await getMindMap(params.mindmapId);
-    if (map) inheritedTags.push(...getInheritedTagsFromMap(map, params.nodeId));
-  } catch { /* ignore — inheritance missing shouldn't block creation */ }
+  const inheritedTags = getInheritedTagsFromMap(map, params.nodeId);
 
   const manualTags = Array.from(new Set([...(params.manualTags || []), ...inheritedTags]));
 
@@ -103,33 +160,19 @@ export async function createTaskForNode(params: {
     deadline: params.deadline,
     priority: params.priority,
     project: params.project,
-    spaceId: undefined,
+    spaceId: map.spaceId,
     originMindmapId: params.mindmapId,
     originNodeId: params.nodeId,
   };
 
-  // Resolve owning space so we can attach ^space marker in-appendant as well.
-  let spaceId: string | undefined;
-  try {
-    const map = await getMindMap(params.mindmapId);
-    if (map?.spaceId) {
-      newTask.spaceId = map.spaceId;
-      spaceId = map.spaceId;
-    } else {
-      // Fallback: find topic space that references this mindmapId
-      // (scan expensive; for EFP-004 just leave spaceId unset)
-    }
-  } catch { /* ignore */ }
-
   const updated = appendTaskToMarkdown(md, newTask, params.scheduledDate, { inheritedTags });
   await writeDailyNote(params.scheduledDate, updated, cfg);
-
-  if (spaceId) {
-    // Best-effort, silent idempotent add
-    try { await addTaskIdToTopicSpace(spaceId, taskId); } catch { /* ignore */ }
-  } else {
-    // Try resolving by mindmapId via getTopicSpace (no match — silently skip)
-    // EFP-004 allows empty spaceId path here; space linkage is covered in tests.
+  try {
+    await bindNodeAndSpace();
+  } catch (error) {
+    await writeDailyNote(params.scheduledDate, md, cfg).catch(() => undefined);
+    await updateMindMap(map.id, { nodes: map.nodes }).catch(() => undefined);
+    throw error;
   }
 
   invalidateTaskIndex();
@@ -240,9 +283,31 @@ export async function convertStandaloneToEventNodeTask(params: {
   const tasks = parseMarkdown(note.content);
   const t = findTaskByTaskId(tasks, params.taskId);
   if (!t || typeof t.line !== 'number') return { converted: false, alreadyConverted: false, spaceLinked: false };
+  const { map, node } = await getOrCreateLinkableNode(params.mindmapId, params.nodeId, t.title);
+  if (node.taskId && node.taskId !== params.taskId) {
+    throw Object.assign(new Error('Mind map node is already linked to another task'), { status: 409 });
+  }
 
-  // Already converted? (both markers present)
+  const bindNode = async () => {
+    const updated = await updateMindMap(map.id, {
+      nodes: map.nodes.map(item => item.id === params.nodeId
+        ? {
+            ...item,
+            text: t.title,
+            kind: 'task' as const,
+            taskId: params.taskId,
+            taskDate: params.scheduledDate,
+            status: t.status === 'done' ? 'done' as const : 'todo' as const,
+          }
+        : item),
+    });
+    if (!updated) throw new Error('Mind map disappeared while linking task');
+  };
+
+  // Already converted? Repair the map/space side if an older write only
+  // persisted markers in the daily note.
   if (t.originMindmapId === params.mindmapId && t.originNodeId === params.nodeId) {
+    await bindNode();
     const spaceLinked = await ensureSpaceHasTaskId(params.mindmapId, params.taskId);
     return { converted: false, alreadyConverted: true, spaceLinked };
   }
@@ -250,12 +315,22 @@ export async function convertStandaloneToEventNodeTask(params: {
   // Rewrite the line by splicing markers in via setOriginMarkers on raw line.
   const lines = note.content.split('\n');
   const raw = lines[t.line] ?? '';
-  lines[t.line] = setOriginMarkers(raw, params.mindmapId, params.nodeId);
+  lines[t.line] = setSpaceMarker(
+    setOriginMarkers(raw, params.mindmapId, params.nodeId),
+    map.spaceId ?? null,
+  );
   const newContent = lines.join('\n');
   await writeDailyNote(params.scheduledDate, newContent, cfg);
-
-  const spaceLinked = await ensureSpaceHasTaskId(params.mindmapId, params.taskId);
-  return { converted: true, alreadyConverted: false, spaceLinked };
+  try {
+    await bindNode();
+    const spaceLinked = await ensureSpaceHasTaskId(params.mindmapId, params.taskId);
+    invalidateTaskIndex();
+    return { converted: true, alreadyConverted: false, spaceLinked };
+  } catch (error) {
+    await writeDailyNote(params.scheduledDate, note.content, cfg).catch(() => undefined);
+    await updateMindMap(map.id, { nodes: map.nodes }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function ensureSpaceHasTaskId(mindmapId: string, taskId: string): Promise<boolean> {
@@ -270,8 +345,8 @@ async function ensureSpaceHasTaskId(mindmapId: string, taskId: string): Promise<
 }
 
 /**
- * 6. undoConvertStandaloneToEventNodeTask — strip ^mm + ^node markers from the
- *    line, keeping ^id- and ^space. Remove from space.taskIds if present.
+ * 6. undoConvertStandaloneToEventNodeTask — strip Event ownership markers
+ *    (^mm, ^node, ^space), keep the stable ^id-, and detach the map node.
  */
 export async function undoConvertStandaloneToEventNodeTask(params: {
   taskId: string;
@@ -292,7 +367,7 @@ export async function undoConvertStandaloneToEventNodeTask(params: {
 
   const lines = note.content.split('\n');
   const raw = lines[t.line] ?? '';
-  lines[t.line] = stripAllOriginMarkers(raw);
+  lines[t.line] = setSpaceMarker(stripAllOriginMarkers(raw), null);
   const newContent = lines.join('\n');
   await writeDailyNote(params.scheduledDate, newContent, cfg);
 
@@ -305,6 +380,21 @@ export async function undoConvertStandaloneToEventNodeTask(params: {
       removed = !!r;
     }
   } catch { /* ignore */ }
+
+  if (t.originMindmapId && t.originNodeId) {
+    try {
+      const map = await getMindMap(t.originMindmapId);
+      if (map) {
+        await updateMindMap(map.id, {
+          nodes: map.nodes.map(node => node.id === t.originNodeId && node.taskId === params.taskId
+            ? { ...node, kind: 'branch' as const, taskId: undefined, taskDate: undefined, status: 'todo' as const }
+            : node),
+        });
+      }
+    } catch { /* the task is safely standalone even if a legacy map is missing */ }
+  }
+
+  invalidateTaskIndex();
 
   return { reverted: true, alreadyStandalone: false, removedFromSpace: removed };
 }

@@ -62,7 +62,7 @@ export function MindMapList({
         <div className="flex items-center gap-2 text-text-muted">
           <Network className="h-4 w-4" />
           <span className="text-xs font-semibold uppercase tracking-wider">
-            {language === 'zh' ? '思维导图' : 'Mind Maps'}
+            {language === 'zh' ? '脑图' : 'Mind Maps'}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -79,7 +79,7 @@ export function MindMapList({
             type="button"
             onClick={onCreate}
             className="flex min-h-[44px] items-center gap-1 rounded-md border border-border bg-white/80 px-3 py-1 text-xs font-medium text-text-main shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] sm:min-h-0 sm:px-2"
-            title={language === 'zh' ? '新建思维导图' : 'New mind map'}
+            title={language === 'zh' ? '新建脑图' : 'New mind map'}
             data-testid="mindmap-list-new"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -119,7 +119,7 @@ export function MindMapList({
                       <span
                         className={`truncate text-sm font-medium ${isActive ? 'text-text-heading' : ''}`}
                       >
-                        {m.title || (language === 'zh' ? '未命名导图' : 'Untitled')}
+                        {m.title || (language === 'zh' ? '未命名脑图' : 'Untitled mind map')}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-text-muted">

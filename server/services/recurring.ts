@@ -22,21 +22,37 @@ export type RecurrenceRule =
   | { type: 'weekly'; weekdays: number[] } // 0=Sun, 1=Mon, ..., 6=Sat
   | { type: 'monthly'; dayOfMonth: number };
 
-const RECURRING_FILE = path.join(os.homedir(), '.dailyflow', 'recurring_tasks.json');
+function getRecurringFile(): string {
+  if (process.env.DAILYFLOW_RECURRING_FILE) return process.env.DAILYFLOW_RECURRING_FILE;
+  if (process.env.DAILYFLOW_CONFIG_FILE) {
+    return path.join(path.dirname(process.env.DAILYFLOW_CONFIG_FILE), 'recurring_tasks.json');
+  }
+  return path.join(os.homedir(), '.dailyflow', 'recurring_tasks.json');
+}
 
 export async function loadRecurringTasks(): Promise<RecurringTask[]> {
   try {
-    const content = await fs.readFile(RECURRING_FILE, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return [];
+    const content = await fs.readFile(getRecurringFile(), 'utf-8');
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed)) throw new Error('Recurring tasks file must contain an array');
+    return parsed;
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
   }
 }
 
 export async function saveRecurringTasks(tasks: RecurringTask[]): Promise<void> {
-  const dir = path.dirname(RECURRING_FILE);
+  const recurringFile = getRecurringFile();
+  const dir = path.dirname(recurringFile);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(RECURRING_FILE, JSON.stringify(tasks, null, 2), 'utf-8');
+  const tempFile = `${recurringFile}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await fs.writeFile(tempFile, JSON.stringify(tasks, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    await fs.rename(tempFile, recurringFile);
+  } finally {
+    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+  }
 }
 
 export function shouldFireOnDate(rule: RecurrenceRule, dateStr: string): boolean {

@@ -188,7 +188,7 @@ describe('NoteList creation and selection flow', () => {
       refetch: vi.fn(),
     });
     rerender(<NoteList selectedId="note-1" onSelect={vi.fn()} language="en" />);
-    fireEvent.click(screen.getByTestId('notes-view-archived'));
+    fireEvent.change(screen.getByTestId('notes-view-more'), { target: { value: 'archived' } });
     fireEvent.click(screen.getByRole('button', { name: 'Restore Existing note' }));
     expect(hooks.setArchived).toHaveBeenLastCalledWith({
       id: 'note-1',

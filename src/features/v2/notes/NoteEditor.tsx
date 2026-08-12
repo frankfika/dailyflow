@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Maximize2, Minimize2, FileText, Lightbulb, Calendar, ArrowRight, Trash2, Pencil, BookOpen, Tag, Link2, X } from 'lucide-react';
+import { Maximize2, Minimize2, FileText, Calendar, ArrowRight, Trash2, Pencil, BookOpen, Tag, Link2, Settings2, X } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
 import { listCommitments, type Commitment, type NoteBacklinks, type NoteKind } from '../api/client';
@@ -194,11 +194,14 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     .filter((n) => n.state !== 'archived' && n.id !== noteId && (n.body?.trim() || n.title))
     .slice(0, 3);
 
-  // Local mirror of body and title. The hook drives persistence; this
-  // is what the textarea reads/writes. We seed from the server fetch
-  // and only re-seed on noteId change.
-  const [body, setBody] = useState<string>(note?.body ?? '');
-  const [title, setTitle] = useState<string>(note?.title ?? '');
+  // The autosave hook drives persistence. Live body/title drafts stay in
+  // their DOM controls and are seeded again only when the note changes.
+  // The DOM owns the live draft so typing does not re-render the complete
+  // editor, metadata, backlinks and meeting recorder on every keystroke.
+  const [renderedBody, setRenderedBody] = useState<string>(note?.body ?? '');
+  const bodyRef = useRef(note?.body ?? '');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [tagDraft, setTagDraft] = useState('');
   const seededNoteIdRef = useRef<string | null>(null);
@@ -209,8 +212,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     }
     if (seededNoteIdRef.current === note.id) return;
     seededNoteIdRef.current = note.id;
-    setBody(note.body ?? '');
-    setTitle(note.title ?? '');
+    bodyRef.current = note.body ?? '';
+    setRenderedBody(note.body ?? '');
     setViewMode('edit');
     setTagDraft('');
   }, [note, noteId]);
@@ -220,11 +223,15 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // schedule(autosave) every keystroke. The hook debounces and
   // persists via PATCH.
   const onBodyChange = (v: string) => {
-    setBody(v);
+    bodyRef.current = v;
     autosave.schedule({ body: v });
+    if (statsTimerRef.current) clearTimeout(statsTimerRef.current);
+    statsTimerRef.current = setTimeout(() => {
+      setRenderedBody(bodyRef.current);
+      statsTimerRef.current = null;
+    }, 450);
   };
   const onTitleChange = (v: string) => {
-    setTitle(v);
     autosave.schedule({ title: v === '' ? null : v });
   };
   // Flush on unmount or before navigation.
@@ -234,6 +241,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   }, [autosave.flush]);
   useEffect(() => {
     return () => {
+      if (statsTimerRef.current) clearTimeout(statsTimerRef.current);
       // Fire-and-forget; the editor is going away and we want the
       // server to receive the last keystroke.
       latestFlushRef.current().catch(() => undefined);
@@ -279,7 +287,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // any whitespace, drop empties, count. Pure string math — no
   // markdown stripping — so a 200-word doc with frontmatter shows
   // the same count the user sees in their editor.
-  const words = body.trim().split(/\s+/).filter(Boolean).length;
+  const words = renderedBody.trim().split(/\s+/).filter(Boolean).length;
   const deleteCurrentNote = async () => {
     if (!confirm(t.deleteConfirm)) return;
     const saved = await autosave.flush();
@@ -331,12 +339,15 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     const transcript = text.trim();
     if (!transcript) return;
     setViewMode('edit');
-    if (body.includes(transcript)) return;
+    const currentBody = bodyRef.current;
+    if (currentBody.includes(transcript)) return;
     const heading = language === 'zh' ? '## 录音转写' : '## Recording transcript';
-    const nextBody = body.trim()
-      ? `${body.trimEnd()}\n\n${heading}\n\n${transcript}\n`
+    const nextBody = currentBody.trim()
+      ? `${currentBody.trimEnd()}\n\n${heading}\n\n${transcript}\n`
       : `${heading}\n\n${transcript}\n`;
-    setBody(nextBody);
+    bodyRef.current = nextBody;
+    if (textareaRef.current) textareaRef.current.value = nextBody;
+    setRenderedBody(nextBody);
     autosave.schedule({ body: nextBody });
     await autosave.flush();
   };
@@ -348,15 +359,16 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           actions strip. Both rows fill the editor column left-aligned
           so the body below has the same writing footprint — no
           centered max-width island surrounded by dead space. */}
-      <header className="flex flex-col gap-2 border-b border-border px-4 pb-2 pt-4 sm:pl-6 sm:pr-8 sm:pt-5">
+      <header className="flex flex-col gap-2 border-b border-border bg-background px-5 pb-3 pt-4 sm:px-8 sm:pt-5">
         <input
-          value={title}
+          key={`${note.id}-title`}
+          defaultValue={note.title ?? ''}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder={t.untitled}
-          className="w-full bg-transparent text-xl font-semibold text-text-heading outline-none placeholder:text-text-muted sm:text-2xl"
+          className="note-document-title mx-auto w-full max-w-[760px] bg-transparent text-[26px] font-semibold tracking-[-0.02em] text-text-heading outline-none placeholder:text-text-muted sm:text-[28px]"
           data-testid="note-title"
         />
-        <div className="w-full flex flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
+        <div className="mx-auto flex w-full max-w-[760px] flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
           <div className="flex flex-wrap items-center gap-2">
             {autosave.status !== 'idle' && (
               <Badge tone={statusTone(autosave.status)}>
@@ -374,28 +386,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                   : autosave.lastError}
               </span>
             )}
-            <select
-              aria-label={language === 'zh' ? '笔记类型' : 'Note type'}
-              value={note.kind}
-              onChange={(e) => void saveMetadata({ kind: e.target.value as typeof note.kind })}
-              className="min-h-[44px] rounded border border-border bg-transparent px-2 text-base sm:min-h-0 sm:px-1.5 sm:py-0.5 sm:text-xs"
-              data-testid="note-kind"
-            >
-              <option value="quick">quick</option>
-              <option value="daily">daily</option>
-              <option value="meeting">meeting</option>
-              <option value="project">project</option>
-              <option value="reference">reference</option>
-              <option value="general">general</option>
-            </select>
-            <input
-              type="date"
-              aria-label={language === 'zh' ? '笔记日期' : 'Note date'}
-              value={note.date ?? ''}
-              onChange={(e) => void saveMetadata({ date: e.target.value || null })}
-              className="min-h-[44px] rounded border border-border bg-transparent px-2 text-base sm:min-h-0 sm:px-1.5 sm:py-0.5 sm:text-xs"
-              data-testid="note-date"
-            />
           </div>
           <div className="flex items-center gap-1">
             <div
@@ -417,7 +407,10 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('preview')}
+                onClick={() => {
+                  setRenderedBody(bodyRef.current);
+                  setViewMode('preview');
+                }}
                 className={`inline-flex min-h-[44px] items-center gap-1 rounded px-3 py-1 transition-colors sm:min-h-0 sm:px-2 ${
                   viewMode === 'preview' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
                 }`}
@@ -428,38 +421,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                 {t.preview}
               </button>
             </div>
-            <button
-              onClick={() => void saveMetadata({ pinned: !note.pinned })}
-              className={`min-h-[44px] min-w-[44px] rounded border px-2 py-0.5 sm:min-h-0 sm:min-w-0 sm:px-1.5 ${
-                note.pinned
-                  ? 'border-accent text-accent'
-                  : 'border-border text-text-muted'
-              }`}
-              data-testid="note-pin"
-              title={t.pinned}
-            >
-              ★
-            </button>
-            <button
-              onClick={() => void toggleArchived()}
-              disabled={autosave.status === 'saving'}
-              className="min-h-[44px] rounded border border-border px-3 py-0.5 text-text-muted sm:min-h-0 sm:px-1.5"
-              data-testid={note.state === 'archived' ? 'note-restore' : 'note-archive'}
-              aria-label={note.state === 'archived' ? t.restore : t.archive}
-              title={note.state === 'archived' ? t.restore : t.archive}
-            >
-              {note.state === 'archived' ? t.restore : t.archive}
-            </button>
-            <button
-              onClick={deleteCurrentNote}
-              disabled={del.isPending}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-border p-1 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-danger disabled:opacity-40 sm:min-h-0 sm:min-w-0"
-              data-testid="note-delete"
-              title={t.delete}
-              aria-label={t.delete}
-            >
-              <Trash2 size={14} />
-            </button>
             {onToggleLayout && (
               <button
                 onClick={onToggleLayout}
@@ -477,7 +438,61 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
           </div>
         </div>
-        <div className="flex flex-col gap-2 border-t border-border/70 pt-2">
+        <details className="group mx-auto w-full max-w-[760px] border-t border-border/60 pt-2 text-xs">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-[11px] font-medium text-text-muted transition-colors hover:text-text-heading">
+            <Settings2 size={12} />
+            {language === 'zh' ? '属性与关联' : 'Properties & links'}
+            <span className="ml-auto transition-transform group-open:rotate-180">⌄</span>
+          </summary>
+          <div className="mt-2 flex flex-col gap-2 rounded-lg bg-surface/45 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-2">
+            <select
+              aria-label={language === 'zh' ? '笔记类型' : 'Note type'}
+              value={note.kind}
+              onChange={(e) => void saveMetadata({ kind: e.target.value as typeof note.kind })}
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-text-heading"
+              data-testid="note-kind"
+            >
+              <option value="quick">quick</option>
+              <option value="daily">daily</option>
+              <option value="meeting">meeting</option>
+              <option value="project">project</option>
+              <option value="reference">reference</option>
+              <option value="general">general</option>
+            </select>
+            <input
+              type="date"
+              aria-label={language === 'zh' ? '笔记日期' : 'Note date'}
+              value={note.date ?? ''}
+              onChange={(e) => void saveMetadata({ date: e.target.value || null })}
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-text-heading"
+              data-testid="note-date"
+            />
+            <button
+              onClick={() => void saveMetadata({ pinned: !note.pinned })}
+              className={`rounded-md border px-2 py-1.5 text-xs ${note.pinned ? 'border-accent bg-accent/5 text-accent' : 'border-border text-text-muted'}`}
+              data-testid="note-pin"
+            >
+              {note.pinned ? `★ ${t.pinned}` : `☆ ${t.pinned}`}
+            </button>
+            <span className="flex-1" />
+            <button
+              onClick={() => void toggleArchived()}
+              disabled={autosave.status === 'saving'}
+              className="rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-background hover:text-text-heading"
+              data-testid={note.state === 'archived' ? 'note-restore' : 'note-archive'}
+            >
+              {note.state === 'archived' ? t.restore : t.archive}
+            </button>
+            <button
+              onClick={deleteCurrentNote}
+              disabled={del.isPending}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-red-50 hover:text-danger disabled:opacity-40"
+              data-testid="note-delete"
+            >
+              <Trash2 size={13} /> {t.delete}
+            </button>
+          </div>
           <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="note-tags">
             <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
               <Tag size={12} />
@@ -541,11 +556,13 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               ))}
             </select>
           </div>
-        </div>
+          </div>
+        </details>
       </header>
 
       {note.kind === 'meeting' && (
-        <div className="shrink-0 border-b border-border px-4 py-3 sm:px-6">
+        <div className="shrink-0 border-b border-border bg-background px-5 py-3 sm:px-8">
+          <div className="mx-auto w-full max-w-[760px]">
           <MeetingNotePanel
             key={note.id}
             note={note}
@@ -560,6 +577,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             }}
             onInsertTranscript={insertTranscriptIntoNote}
           />
+          </div>
         </div>
       )}
 
@@ -568,29 +586,24 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           "+ New note" appeared to do nothing and the user had to click
           a second "Just start typing" action. Templates belong to the
           no-selection state; a created note should be immediately writable. */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-background">
         {viewMode === 'edit' ? (
-          <div className="grid min-h-full grid-cols-1 gap-0 xl:grid-cols-2">
+          <div className="mx-auto min-h-full w-full max-w-[760px] px-5 sm:px-8">
             <textarea
+              key={`${note.id}-body`}
+              ref={textareaRef}
               autoFocus
-              value={body}
+              defaultValue={seededNoteIdRef.current === note.id ? bodyRef.current : (note.body ?? '')}
               onChange={(e) => onBodyChange(e.target.value)}
               placeholder={t.placeholder}
-              className="min-h-[22rem] w-full resize-none border-b border-border/70 bg-transparent px-4 py-6 text-base leading-loose text-text-heading outline-none placeholder:text-text-muted sm:pl-6 sm:pr-8 sm:text-lg xl:min-h-full xl:border-b-0 xl:border-r"
+              className="note-document-body block min-h-[60vh] w-full resize-none border-0 bg-transparent py-7 text-[16px] leading-8 text-text-heading outline-none ring-0 placeholder:text-text-muted focus:outline-none focus:ring-0 sm:py-8"
               data-testid="note-body"
             />
-            <article className="note-markdown min-h-[14rem] overflow-y-auto px-4 py-6 text-text-heading sm:pl-6 sm:pr-8" data-testid="note-live-preview">
-              {body.trim() ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
-              ) : (
-                <p className="text-sm text-text-muted">{t.emptyPreview}</p>
-              )}
-            </article>
           </div>
         ) : (
-          <article className="note-markdown min-h-full pl-6 pr-8 py-6 text-text-heading" data-testid="note-markdown-preview">
-            {body.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+          <article className="note-markdown mx-auto min-h-full w-full max-w-[760px] px-5 py-7 text-text-heading sm:px-8 sm:py-8" data-testid="note-markdown-preview">
+            {renderedBody.trim() ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedBody}</ReactMarkdown>
             ) : (
               <p className="text-sm text-text-muted">{t.emptyPreview}</p>
             )}
@@ -608,9 +621,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       >
         <span data-testid="note-editor-words">
           {words === 0 ? t.bodyEmpty : `${words} ${t.words}`}
-        </span>
-        <span data-testid="note-editor-chars">
-          {body.length} {t.chars}
         </span>
         <span data-testid="note-editor-read">
           ~{Math.max(1, Math.ceil(words / 200))} {t.minRead}
@@ -695,42 +705,50 @@ function OnboardingPanel({
 }) {
   return (
     <div
-      className="h-full flex flex-col gap-8 px-10 py-10"
+      className="mx-auto flex h-full w-full max-w-[860px] flex-col justify-center px-6 py-10 sm:px-12 lg:px-16"
       data-testid="note-onboarding"
     >
-      <div className="flex flex-col items-start gap-5 w-full">
-        <p className="text-5xl font-semibold text-text-heading leading-tight tracking-tight">
+      <div className="flex w-full flex-col items-start">
+        <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-surface-elevated text-text-muted shadow-sm">
+          <FileText size={21} strokeWidth={1.6} />
+        </span>
+        <p className="text-3xl font-semibold leading-tight tracking-[-0.03em] text-text-heading sm:text-4xl">
           {t.onboardingTitle}
         </p>
-        <p className="text-lg text-text-muted">{t.onboardingHint}</p>
+        <p className="mt-2 text-sm leading-6 text-text-muted">{t.onboardingHint}</p>
         {onCreateFromTemplate && (
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+          <div className="mt-7 flex w-full flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => onCreateFromTemplate('general', '')}
+              className="group inline-flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-text-heading transition-colors hover:bg-black/[0.035] dark:hover:bg-white/[0.06]"
+              data-testid="note-onboarding-template-blank"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background"><Pencil size={15} /></span>
+              <span className="flex-1 font-medium">{t.templateBlank}</span>
+              <span className="text-xs text-text-muted">{language === 'zh' ? '空白笔记' : 'Blank note'}</span>
+              <ArrowRight size={14} className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n## ${language === 'zh' ? '议题' : 'Agenda'}\n\n- \n\n## ${language === 'zh' ? '笔记' : 'Notes'}\n\n\n## ${language === 'zh' ? '待办' : 'Action items'}\n\n- [ ] \n`)}
+              className="group inline-flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-text-heading transition-colors hover:bg-black/[0.035] dark:hover:bg-white/[0.06]"
+              data-testid="note-onboarding-template-meeting"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-600 dark:border-red-950 dark:bg-red-950/30"><FileText size={15} /></span>
+              <span className="flex-1 font-medium">{t.templateMeeting}</span>
+              <span className="text-xs text-text-muted">{language === 'zh' ? '录音与转写' : 'Record & transcribe'}</span>
+              <ArrowRight size={14} className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
             <button
               type="button"
               onClick={() => onCreateFromTemplate('daily', `# ${t.templateDaily}\n\n- \n- \n- \n`)}
-              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
+              className="group inline-flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-text-heading transition-colors hover:bg-black/[0.035] dark:hover:bg-white/[0.06]"
               data-testid="note-onboarding-template-daily"
             >
-              <Calendar size={20} />
-              <span className="font-medium">{t.templateDaily}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onCreateFromTemplate('quick', `# ${t.templateIdea}\n\n`)}
-              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-              data-testid="note-onboarding-template-idea"
-            >
-              <Lightbulb size={20} />
-              <span className="font-medium">{t.templateIdea}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onCreateFromTemplate('meeting', `# ${t.templateMeeting}\n\n**Date:**\n**Attendees:**\n\n## Agenda\n- \n\n## Notes\n\n## Action items\n- [ ] \n`)}
-              className="inline-flex items-center gap-2.5 px-4 py-3 rounded-lg border border-border bg-surface text-base text-text-heading hover:border-accent hover:text-accent transition-colors"
-              data-testid="note-onboarding-template-meeting"
-            >
-              <FileText size={20} />
-              <span className="font-medium">{t.templateMeeting}</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background"><Calendar size={15} /></span>
+              <span className="flex-1 font-medium">{t.templateDaily}</span>
+              <ArrowRight size={14} className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           </div>
         )}
@@ -739,8 +757,8 @@ function OnboardingPanel({
       {/* Recent notes — natural height, capped at 3 items. Hidden
           when there's nothing real to show (e.g. fresh workspace). */}
       {recentItems.length > 0 && (
-        <div className="flex flex-col items-start gap-3 w-full">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+        <div className="mt-8 flex w-full flex-col items-start gap-2 border-t border-border pt-6">
+          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {t.recentSection}
           </p>
           <ul className="w-full flex flex-col gap-1">
@@ -767,25 +785,9 @@ function OnboardingPanel({
         </div>
       )}
 
-      {/* Tips row — anchored at the bottom of the pane by the
-          recent-notes flex-1 spacer above. Cards have a solid
-          surface background so they're visible. */}
-      <div className="flex flex-col items-start gap-3 w-full">
-        <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-          {t.tipsTitle}
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-          <div className="px-4 py-3 rounded-lg border border-border bg-surface text-sm text-text-muted">
-            <kbd className="font-mono text-xs px-1.5 py-0.5 rounded bg-background border border-border text-text-heading">
-              {language === 'zh' ? '⌘+\\' : 'mod+\\'}
-            </kbd>{' '}
-            {t.tipShortcut}
-          </div>
-          <div className="px-4 py-3 rounded-lg border border-border bg-surface text-sm text-text-muted">
-            {t.tipAutosave}
-          </div>
-        </div>
-      </div>
+      <p className="mt-8 text-xs text-text-muted">
+        {language === 'zh' ? '输入内容会自动保存' : 'Everything you write is saved automatically'}
+      </p>
     </div>
   );
 }

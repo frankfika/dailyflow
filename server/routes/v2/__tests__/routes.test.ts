@@ -273,16 +273,13 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       expect(history.status).toBe(200);
       expect(history.body.events.length).toBeGreaterThan(0);
 
-      // 13. Connectors list
+      // 13. Unimplemented connector APIs stay hidden while the flag is off.
       const connectors = await get('/connectors');
-      expect(connectors.status).toBe(200);
-      const blocked = connectors.body.items.find((c: { id: string }) => c.id === 'gmail');
-      expect(blocked.blockedBy).toBe('external_authorization');
+      expect(connectors.status).toBe(404);
 
-      // 14. Calendar sync is blocked
+      // 14. Sync cannot be invoked through a disabled capability.
       const sync = await post('/connectors/google-calendar/sync', {});
-      expect(sync.status).toBe(200);
-      expect(sync.body.ok).toBe(false);
+      expect(sync.status).toBe(404);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

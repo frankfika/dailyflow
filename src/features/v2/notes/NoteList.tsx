@@ -29,8 +29,8 @@ import {
 import { createPortal } from 'react-dom';
 import { useNotes, useCreateNote, useSetNoteArchived, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
-import { Card, Button, Badge, EmptyState, Spinner } from '../components/States';
-import { Minimize2 } from 'lucide-react';
+import { Button, EmptyState, Spinner } from '../components/States';
+import { Archive, ArchiveRestore, ChevronLeft, FilePlus2, Mic, Minimize2, Search, Star, Trash2 } from 'lucide-react';
 import { relativeTime } from './relativeTime';
 
 type ViewKey = 'all' | 'recent' | 'daily' | 'meeting' | 'project' | 'pinned' | 'archived';
@@ -101,6 +101,7 @@ export function NoteList({
 }: NoteListProps) {
   const [view, setView] = useState<ViewKey>('all');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const create = useCreateNote();
   const setArchived = useSetNoteArchived();
   const del = useDeleteNote();
@@ -151,12 +152,15 @@ export function NoteList({
       pinned: (n) => n.pinned,
       archived: () => true,
     };
-    return items.filter(
-      (note) =>
-        byKind[view](note) &&
-        (tagFilter === null || (note.tagIds ?? []).includes(tagFilter)),
-    );
-  }, [items, tagFilter, view]);
+    const needle = query.trim().toLocaleLowerCase(language);
+    return items.filter((note) => {
+      const searchable = `${inferTitle(note)}\n${note.body ?? ''}\n${(note.tagIds ?? []).join(' ')}`
+        .toLocaleLowerCase(language);
+      return byKind[view](note)
+        && (tagFilter === null || (note.tagIds ?? []).includes(tagFilter))
+        && (!needle || searchable.includes(needle));
+    });
+  }, [items, language, query, tagFilter, view]);
 
   // Archived and active notes come from separate queries. If switching
   // between those views removes the selected tag from the available
@@ -219,57 +223,93 @@ export function NoteList({
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 h-full overflow-hidden">
-      <header className={`flex items-center justify-between ${sidebarOpen ? '' : 'pl-10'}`}>
-        <h2 className="text-lg font-semibold text-text-heading">Notes</h2>
-        <div className="flex items-center gap-1.5">
+    <div className="flex h-full flex-col overflow-hidden bg-surface/30">
+      <header className={`flex items-center justify-between px-4 pb-3 pt-4 ${sidebarOpen ? '' : 'pl-12'}`}>
+        <div>
+          <h2 className="text-[15px] font-semibold tracking-tight text-text-heading">
+            {language === 'zh' ? '笔记' : 'Notes'}
+          </h2>
+          <p className="mt-0.5 text-[11px] text-text-muted">
+            {items.length} {language === 'zh' ? '篇' : items.length === 1 ? 'note' : 'notes'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
           {onToggleLayout && (
             <button
               onClick={onToggleLayout}
-              className="p-1.5 rounded-md text-text-muted hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading dark:hover:bg-white/10"
               title="Hide list (focus on the editor)"
               data-testid="notes-hide-list"
               aria-label="Hide list"
             >
-              ⇤
+              <ChevronLeft className="h-4 w-4" />
             </button>
           )}
-          <Button
-            variant="primary"
+          <button
+            type="button"
             disabled={create.isPending}
             onClick={() => createAndOpen('general')}
             data-testid="notes-new"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            aria-label={language === 'zh' ? '+ 新建笔记' : '+ Add note'}
+            title={language === 'zh' ? '新建笔记' : 'New note'}
           >
-            {language === 'zh' ? '+ 新建笔记' : '+ Add note'}
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={create.isPending}
-            onClick={() => void createMeetingAndOpen()}
-            data-testid="notes-new-meeting"
-          >
-            {language === 'zh' ? '录音会议' : 'Record meeting'}
-          </Button>
+            <FilePlus2 className="h-4 w-4" />
+            <span>{language === 'zh' ? '新建' : 'New'}</span>
+          </button>
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Note view">
-        {(Object.keys(VIEW_LABELS) as ViewKey[]).map((key) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={view === key}
-            onClick={() => setView(key)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-              view === key
-                ? 'bg-accent text-white border-accent'
-                : 'bg-surface text-text-muted border-border hover:text-text-heading'
-            }`}
-            data-testid={`notes-view-${key}`}
-          >
-            {VIEW_LABELS[key][language]}
+      <div className="px-3 pb-2">
+        <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background/70 px-2.5 text-text-muted shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus-within:border-border-strong focus-within:text-text-secondary">
+          <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={language === 'zh' ? '搜索笔记…' : 'Search notes…'}
+            aria-label={language === 'zh' ? '搜索笔记' : 'Search notes'}
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-text-heading outline-none placeholder:text-text-muted"
+            data-testid="notes-search"
+          />
+        </label>
+      </div>
+
+      <div className="flex items-center gap-1 px-3 pb-2" role="tablist" aria-label="Note view">
+        {(['all', 'recent', 'meeting', 'pinned'] as ViewKey[]).map((key) => (
+          <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}
+            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${view === key ? 'bg-black/[0.06] text-text-heading dark:bg-white/10' : 'text-text-muted hover:text-text-heading'}`}
+            data-testid={`notes-view-${key}`}>
+            {key === 'pinned' ? <Star className="h-3 w-3" aria-label={VIEW_LABELS[key][language]} /> : VIEW_LABELS[key][language]}
           </button>
         ))}
+        <select
+          value={['daily', 'project', 'archived'].includes(view) ? view : ''}
+          onChange={(event) => event.target.value && setView(event.target.value as ViewKey)}
+          aria-label={language === 'zh' ? '更多笔记视图' : 'More note views'}
+          className="ml-auto max-w-20 bg-transparent text-[11px] text-text-muted outline-none"
+          data-testid="notes-view-more"
+        >
+          <option value="">{language === 'zh' ? '更多' : 'More'}</option>
+          <option value="daily">{VIEW_LABELS.daily[language]}</option>
+          <option value="project">{VIEW_LABELS.project[language]}</option>
+          <option value="archived">{VIEW_LABELS.archived[language]}</option>
+        </select>
+      </div>
+
+      <div className="px-3 pb-3">
+        <button type="button" onClick={() => void createMeetingAndOpen()} disabled={create.isPending}
+          data-testid="notes-new-meeting"
+          className="flex w-full items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-2 text-left text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-heading disabled:opacity-40">
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-950/30">
+            <Mic className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block">{language === 'zh' ? '会议笔记' : 'Meeting note'}</span>
+            <span className="block truncate text-[10px] font-normal text-text-muted">
+              {language === 'zh' ? '录音无需 AI · 自动转写需先配置' : 'record without AI · set up auto-transcription first'}
+            </span>
+          </span>
+        </button>
       </div>
 
       {availableTags.length > 0 && (
@@ -318,7 +358,7 @@ export function NoteList({
         </p>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="notes-list">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border/70 px-2 py-2" data-testid="notes-list">
         {all.isLoading ? (
           <div className="flex justify-center py-8">
             <Spinner />
@@ -335,21 +375,18 @@ export function NoteList({
             }
           />
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-0.5">
             {filtered.map((n) => {
               const title = inferTitle(n);
               const preview = previewBody(n);
               const isSelected = n.id === selectedId;
               return (
                 <li key={n.id}>
-                  <Card
-                    className={`relative overflow-hidden transition-colors ${
-                      isSelected ? 'ring-1 ring-accent' : 'hover:bg-surface-elevated'
-                    }`}
-                  >
+                  <div className={`group relative overflow-hidden rounded-lg transition-colors ${isSelected ? 'bg-black/[0.055] dark:bg-white/10' : 'bg-transparent hover:bg-black/[0.03] dark:hover:bg-white/5'}`}>
+                    {isSelected && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-accent" aria-hidden="true" />}
                     <button
                       onClick={() => onSelect(n.id)}
-                      className="w-full cursor-pointer p-3 pr-20 text-left"
+                      className="w-full cursor-pointer px-3 py-2.5 pr-14 text-left"
                       data-testid={`notes-item-${n.id}`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -376,20 +413,12 @@ export function NoteList({
                           ))}
                         </div>
                       )}
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <Badge tone={n.state === 'draft' ? 'warning' : 'default'}>
-                          {n.kind}
-                        </Badge>
-                        {n.state === 'draft' && <Badge tone="info">draft</Badge>}
-                        {n.pinned && <Badge tone="success">pinned</Badge>}
-                        {n.autoSaveVersion > 0 && (
-                          <span className="text-[10px] text-text-muted">
-                            v{n.autoSaveVersion}
-                          </span>
-                        )}
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-text-muted">
+                        <span>{VIEW_LABELS[n.kind === 'meeting' ? 'meeting' : n.kind === 'daily' ? 'daily' : n.kind === 'project' ? 'project' : 'all'][language]}</span>
+                        {n.pinned && <span>· ★</span>}
                       </div>
                     </button>
-                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                    <div className={`absolute bottom-2.5 right-2 flex items-center gap-0.5 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
                       {n.state === 'archived' ? (
                         <button
                           onClick={() => setArchived.mutate({
@@ -398,11 +427,11 @@ export function NoteList({
                             expectedAutoSaveVersion: n.autoSaveVersion,
                           })}
                           disabled={setArchived.isPending}
-                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
                           title={language === 'zh' ? '恢复' : 'Restore'}
                           aria-label={`${language === 'zh' ? '恢复' : 'Restore'} ${title}`}
                         >
-                          {language === 'zh' ? '恢复' : 'restore'}
+                          <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       ) : (
                         <button
@@ -412,11 +441,11 @@ export function NoteList({
                             expectedAutoSaveVersion: n.autoSaveVersion,
                           })}
                           disabled={setArchived.isPending}
-                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading disabled:opacity-40"
                           title={language === 'zh' ? '归档' : 'Archive'}
                           aria-label={`${language === 'zh' ? '归档' : 'Archive'} ${title}`}
                         >
-                          {language === 'zh' ? '归档' : 'archive'}
+                          <Archive className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       )}
                       {!isSelected && (
@@ -426,15 +455,15 @@ export function NoteList({
                               del.mutate(n.id);
                             }
                           }}
-                          className="rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:bg-red-50 hover:text-danger"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-50 hover:text-danger"
                           title="Delete"
                           aria-label={`Delete ${title}`}
                         >
-                          delete
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       )}
                     </div>
-                  </Card>
+                  </div>
                 </li>
               );
             })}

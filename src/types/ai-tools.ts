@@ -30,17 +30,6 @@ export interface AIToolResult {
 
 export const AVAILABLE_TOOLS: AITool[] = [
   {
-    name: 'create_task',
-    description: 'Create a reviewable proposal for a new item. This does not directly create or modify user data.',
-    parameters: {
-      title: { type: 'string', description: 'Task title (required)' },
-      tags: { type: 'array', description: 'Array of tag strings, e.g. ["work", "urgent"]' },
-      deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format' },
-      description: { type: 'string', description: 'Optional task description' },
-    },
-    required: ['title'],
-  },
-  {
     name: 'search_tasks',
     description: 'Search for tasks by keyword in title or tags. Returns matching tasks.',
     parameters: {
@@ -84,18 +73,19 @@ export function buildToolInstructions(language: 'en' | 'zh'): string {
 export function parseToolCalls(text: string): { text: string; calls: AIToolCall[] } {
   const calls: AIToolCall[] = [];
   const pattern = /<tool_call>(.*?)<\/tool_call>/gs;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
+  const cleanedText = text.replace(pattern, (fullMatch, body: string) => {
     try {
-      const raw = match[1].trim();
+      const raw = body.trim();
       const parsed = JSON.parse(raw);
       if (parsed.name && typeof parsed.arguments === 'object') {
         calls.push({ name: parsed.name, arguments: parsed.arguments });
+        return '';
       }
     } catch {
-      // ignore malformed tool calls
+      // Preserve malformed content so the user never receives a mysterious
+      // blank answer when a model emits invalid tool JSON.
     }
-  }
-  const cleanedText = text.replace(/<tool_call>.*?<\/tool_call>/gs, '').trim();
+    return fullMatch;
+  }).trim();
   return { text: cleanedText, calls };
 }

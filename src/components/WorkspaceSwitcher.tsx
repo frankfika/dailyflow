@@ -178,10 +178,16 @@ export function WorkspaceSwitcher({
 
   return (
     <div ref={ref} className="relative">
+      <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-text-muted">
+        {language === 'zh' ? '工作区' : 'Workspace'}
+      </p>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md hover:bg-background border border-transparent hover:border-border transition-colors group"
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-background/55 hover:bg-background border border-border/70 hover:border-border-strong transition-colors group"
         title={active.path}
+        aria-label={`${language === 'zh' ? '切换工作区' : 'Switch workspace'}: ${active.name}`}
+        aria-expanded={open}
+        data-testid="workspace-switcher-trigger"
       >
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-6 h-6 shrink-0 rounded-md bg-accent/10 text-accent flex items-center justify-center">

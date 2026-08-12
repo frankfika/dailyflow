@@ -115,13 +115,9 @@ export async function getEventById(
 }
 
 export async function listEvents(workspaceRoot?: string): Promise<EventSummary[]> {
-  try {
-    const root = await resolveWorkspaceRoot(workspaceRoot);
-    const result = await listAllEvents(root);
-    return result || [];
-  } catch {
-    return [];
-  }
+  const root = await resolveWorkspaceRoot(workspaceRoot);
+  const result = await listAllEvents(root);
+  return result || [];
 }
 
 export async function getEventDetail(
@@ -130,13 +126,9 @@ export async function getEventDetail(
   scanFrom?: string,
   scanTo?: string,
 ): Promise<EventDetail | null> {
-  try {
-    const root = await resolveWorkspaceRoot(workspaceRoot);
-    const result = await buildEventDetail(root, spaceFilePath, scanFrom, scanTo);
-    return result || null;
-  } catch {
-    return null;
-  }
+  const root = await resolveWorkspaceRoot(workspaceRoot);
+  const result = await buildEventDetail(root, spaceFilePath, scanFrom, scanTo);
+  return result || null;
 }
 
 export async function listTodayItems(
@@ -144,14 +136,10 @@ export async function listTodayItems(
   context?: EventContext,
   workspaceRoot?: string,
 ): Promise<TodayItem[]> {
-  try {
-    const root = await resolveWorkspaceRoot(workspaceRoot);
-    const safeContext = normalizeContext(context);
-    const result = await adapterListToday(root, date, safeContext);
-    return result || [];
-  } catch {
-    return [];
-  }
+  const root = await resolveWorkspaceRoot(workspaceRoot);
+  const safeContext = normalizeContext(context);
+  const result = await adapterListToday(root, date, safeContext);
+  return result || [];
 }
 
 export async function listStandaloneTasks(
@@ -159,12 +147,8 @@ export async function listStandaloneTasks(
   context?: EventContext,
   workspaceRoot?: string,
 ): Promise<StandaloneTask[]> {
-  try {
-    const root = await resolveWorkspaceRoot(workspaceRoot);
-    const safeContext = normalizeContext(context);
-    const result = await adapterListStandalone(root, date, safeContext);
-    return result || [];
-  } catch {
-    return [];
-  }
+  const root = await resolveWorkspaceRoot(workspaceRoot);
+  const safeContext = normalizeContext(context);
+  const result = await adapterListStandalone(root, date, safeContext);
+  return result || [];
 }

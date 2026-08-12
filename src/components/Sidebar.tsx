@@ -11,7 +11,6 @@ import {
   ListTodo,
   MessageCircle,
   MoreHorizontal,
-  Network,
   Search,
   Settings,
   Briefcase,
@@ -75,8 +74,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events';
-  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events') => void;
+  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap';
+  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -212,7 +211,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events') => {
+  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -254,7 +253,10 @@ export function Sidebar({
 
   let motionAnimate: { x?: string; width?: number; marginLeft?: string };
   if (isMobile) {
-    motionAnimate = { x: isExpanded ? '0%' : '-100%' };
+    // Give the overlay an explicit box width before translating it. Without
+    // this, percentage translation can be measured against a shrink-to-fit
+    // box and leave the tail of labels (for example “WORKSPACE”) visible.
+    motionAnimate = { x: isExpanded ? '0%' : '-100%', width: FULL_WIDTH };
   } else if (isTablet) {
     motionAnimate = { width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH };
   } else {
@@ -391,9 +393,8 @@ export function Sidebar({
             <ul className="space-y-1 text-[13px]">
               {([
                 { tab: 'today', label: language === 'zh' ? '今天' : 'Today', icon: ListTodo, action: goToToday },
-                { tab: 'events', label: language === 'zh' ? '事件' : 'Events', icon: Sparkles, action: () => handleNavClick('events') },
+                { tab: 'mindmap', label: language === 'zh' ? '脑图' : 'MindMap', icon: Sparkles, action: () => handleNavClick('mindmap') },
                 { tab: 'notes', label: language === 'zh' ? '笔记' : 'Notes', icon: FileText, action: () => onOpenNotesSurface ? onOpenNotesSurface('notes') : handleNavClick('notes') },
-                { tab: 'mindmap', label: language === 'zh' ? '思维笔记' : 'Mind Notes', icon: Network, action: () => handleNavClick('mindmap') },
                 { tab: 'ai-chat', label: language === 'zh' ? '问 AI' : 'Ask AI', icon: MessageCircle, action: () => handleNavClick('ai-chat') },
               ] as const).map(({ tab, label, icon: Icon, action }) => {
                 const active = tab === 'today'

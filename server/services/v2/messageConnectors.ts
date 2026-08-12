@@ -12,7 +12,6 @@
  *     (No tool execution triggered by email body.)
  */
 import { z } from 'zod';
-import { newId } from '../../domain/v2/ulid.js';
 import { sha256 } from '../../repositories/v2/atomicWrite.js';
 import { V2Repository } from '../../repositories/v2/repository.js';
 
@@ -170,7 +169,7 @@ export async function syncMessages(
         .join('\n');
       const contentHash = sha256(body);
       // Idempotent id: include connector + externalId
-      const id = `src_msg_${newId('src').split('_')[1]}_${m.externalId}`.slice(0, 40);
+      const id = `src_${sha256(`${c.id}:${m.externalId}`).slice(0, 26)}`;
       await repo.saveSourceItem(
         {
           id,
@@ -178,7 +177,7 @@ export async function syncMessages(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdBy: 'connector',
-          workspaceId: '',
+          workspaceId: repo.workspaceId,
           kind: m.connectorId.startsWith('feishu') ? 'message' : 'email',
           title: m.subject ?? '(no subject)',
           body,

@@ -31,7 +31,6 @@ vi.mock('lucide-react', () => {
     Briefcase: Icon,
     Heart: Icon,
     PanelLeftClose: Icon,
-    Network: Icon,
     Sparkles: Icon,
   };
 });
@@ -87,13 +86,13 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
   });
 
-  it('keeps Mind Notes directly reachable and secondary destinations under More', () => {
+  it('keeps the unified MindMap workspace directly reachable and secondary destinations under More', () => {
     render(<SidebarHarness onOpenSettings={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'MindMap' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mind Notes' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mind Notes' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ask AI' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More' }));

@@ -257,7 +257,7 @@ describe.sequential('POST /api/diagnostics/repair-task-link', () => {
     }
   });
 
-  it('returns 501 for action: recreate', async () => {
+  it('does not advertise the unimplemented recreate action', async () => {
     const res = await withServer(app, (p) =>
       request(p, 'POST', '/api/diagnostics/repair-task-link', {
         mindmapId: 'mm_any',
@@ -265,7 +265,8 @@ describe.sequential('POST /api/diagnostics/repair-task-link', () => {
         action: 'recreate',
       }),
     );
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("action must be 'unlink'");
   });
 
   it('unlinks a kind: task node and demotes it back to branch', async () => {

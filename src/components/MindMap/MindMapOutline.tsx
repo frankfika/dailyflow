@@ -250,7 +250,7 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
       <div className="shrink-0 border-b border-border/60 px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-text-heading">{language === 'zh' ? '思维笔记' : 'Mind note'}</h2>
+            <h2 className="text-sm font-semibold text-text-heading">{language === 'zh' ? '脑图大纲' : 'Mind map outline'}</h2>
             <p className="mt-0.5 text-[11px] text-text-muted">{language === 'zh' ? '像写文档一样编辑，脑图实时生成' : 'Edit like a document; the map follows'}</p>
           </div>
           <span className="rounded-md bg-black/[0.035] px-2 py-1 text-[10px] text-text-muted">Enter {language === 'zh' ? '同级' : 'sibling'} · ⌘Enter {language === 'zh' ? '子节点' : 'child'}</span>

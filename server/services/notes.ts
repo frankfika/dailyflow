@@ -259,8 +259,7 @@ export async function createNote(
 ): Promise<Note> {
   const notesDir = await getNotesDir();
   const now = new Date().toISOString();
-  const slug = slugify(data.title);
-  const id = `${data.date}-${slug}`;
+  const slug = slugify(data.title) || 'untitled';
 
   const [year, month] = data.date.split('-');
   const dirPath = path.join(notesDir, year, month);
@@ -269,21 +268,26 @@ export async function createNote(
   const mentions = extractMentions(data.body);
   const allMentions = [...new Set([...mentions, ...(data.participants || [])])];
 
-  const note: Note = {
-    ...data,
-    id,
-    mentions: allMentions,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const frontmatter = generateFrontmatter(note);
-  const fileContent = `${frontmatter}\n\n${data.body}\n`;
-  const filePath = path.join(dirPath, `${id}.md`);
-
-  await fs.writeFile(filePath, fileContent, 'utf-8');
-  note.filePath = filePath;
-  return note;
+  for (let suffix = 1; suffix <= 10_000; suffix += 1) {
+    const id = `${data.date}-${slug}${suffix === 1 ? '' : `-${suffix}`}`;
+    const note: Note = {
+      ...data,
+      id,
+      mentions: allMentions,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const filePath = path.join(dirPath, `${id}.md`);
+    const fileContent = `${generateFrontmatter(note)}\n\n${data.body}\n`;
+    try {
+      await fs.writeFile(filePath, fileContent, { encoding: 'utf-8', flag: 'wx', mode: 0o600 });
+      note.filePath = filePath;
+      return note;
+    } catch (error: any) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+  }
+  throw new Error('Unable to allocate a unique note filename');
 }
 
 export async function updateNote(

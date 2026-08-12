@@ -201,6 +201,19 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 <div
                   key={session.id}
                   onClick={() => setActiveSessionId(session.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setActiveSessionId(session.id);
+                    } else if (event.key === 'F2') {
+                      event.preventDefault();
+                      startRename(session);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={activeSession?.id === session.id ? 'true' : undefined}
+                  aria-label={`${session.title}. ${language === 'zh' ? '按 F2 重命名' : 'Press F2 to rename'}`}
                   className={`group flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${
                     activeSession?.id === session.id ? 'bg-accent/10 text-accent' : 'hover:bg-surface-white text-text-heading'
                   }`}
@@ -230,7 +243,8 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); if (confirm(language === 'zh' ? '删除此对话？' : 'Delete this chat?')) deleteSession(session.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-text-muted hover:text-red-500 transition-all"
+                    aria-label={language === 'zh' ? `删除对话：${session.title}` : `Delete chat: ${session.title}`}
+                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 p-0.5 text-text-muted hover:text-red-500 transition-all"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -255,6 +269,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 onClick={() => createSession()}
                 className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center hover:bg-accent/90 transition-colors shadow-sm"
                 title={language === 'zh' ? '新对话' : 'New Chat'}
+                aria-label={language === 'zh' ? '新对话' : 'New Chat'}
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -262,6 +277,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 onClick={() => setSidebarCollapsed(false)}
                 className="p-1 text-text-muted hover:text-text-heading transition-colors"
                 title={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
+                aria-label={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
               >
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
@@ -508,7 +524,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
             initialContent={saveNoteModal.content}
             initialLinkedTaskIds={saveNoteModal.linkedTaskIds}
             initialLinkedProjectIds={saveNoteModal.linkedProjectIds}
-            notes={notes}
+            existingNoteId={saveNoteModal.savedNoteId}
             showToast={showToast}
             onClose={() => setSaveNoteModal(prev => ({ ...prev, open: false }))}
             onSaved={() => onNoteCreated?.()}
