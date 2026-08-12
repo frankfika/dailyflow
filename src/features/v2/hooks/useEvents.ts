@@ -50,10 +50,10 @@ export function useEventById(id: string | null | undefined): UseQueryResult<{ ev
   });
 }
 
-export function useTodayItems(date: string): UseQueryResult<{ items: TodayItem[] }> {
+export function useTodayItems(date: string, context?: 'work' | 'life'): UseQueryResult<{ items: TodayItem[] }> {
   return useQuery({
-    queryKey: queryKeys.todayItems(date, 'v2'),
-    queryFn: () => eventsApi.listTodayItems(date),
+    queryKey: [...queryKeys.todayItems(date, 'v2'), context ?? 'all'],
+    queryFn: () => eventsApi.listTodayItems(date, context),
     staleTime: 10_000,
     retry: 1,
   });

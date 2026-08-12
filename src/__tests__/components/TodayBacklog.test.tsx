@@ -12,6 +12,7 @@ function renderBacklog(tasks: Array<{
   host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
+  sourcePath?: string[];
 }>, withPlanning = false, options: { hasActiveFilters?: boolean; onClearFilters?: () => void } = {}) {
   return render(
     <TodayBacklog
@@ -61,11 +62,13 @@ describe('TodayBacklog Event-first execution flow', () => {
 
   it('shows an Event breadcrumb or Standalone directly on each task row', () => {
     renderBacklog([
-      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1' },
+      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', sourcePath: ['Launch', 'Marketing'] },
       { id: 'standalone', title: 'Buy groceries', status: 'todo' },
     ], true);
 
     expect(screen.getByTestId('task-card-event-planned')).toHaveTextContent('Launch event');
+    expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Launch');
+    expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Marketing');
     expect(screen.getByTestId('task-card-event-standalone')).toHaveTextContent('Standalone');
   });
 

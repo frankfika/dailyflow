@@ -458,6 +458,7 @@ export async function summarizeTopicSpaceAsEvent(
 
   return {
     id: space.id,
+    mindmapId: space.mindmapId,
     title: space.title,
     context,
     status,
@@ -715,6 +716,7 @@ export async function listAllEvents(workspaceRoot: string): Promise<EventSummary
     const progress = await computeProgressFromSpace(workspaceRoot, space, map);
     events.push({
       id: map.id,
+      mindmapId: map.id,
       title: map.title,
       context: 'work',
       status: progress.allDone ? 'completed' : 'active',

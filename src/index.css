@@ -15,21 +15,21 @@
   --font-weight-base: 400;
 
   /* Native Minimal — translucent, chill surfaces */
-  --color-background: #F8F9FA;
-  --color-surface: #FFFFFF;
+  --color-background: #F3F5F3;
+  --color-surface: rgba(250, 251, 250, 0.88);
   --color-surface-white: #FFFFFF;
-  --color-surface-elevated: #FFFFFF;
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.12);
+  --color-surface-elevated: rgba(255, 255, 255, 0.94);
+  --color-border: rgba(25, 45, 40, 0.09);
+  --color-border-strong: rgba(25, 45, 40, 0.16);
 
-  --color-text-main: #2C2C2E;
-  --color-text-heading: #1D1D1F;
-  --color-text-muted: #8E8E93;
+  --color-text-main: #34413E;
+  --color-text-heading: #17211F;
+  --color-text-muted: #78827F;
 
-  --color-accent: #007AFF;
-  --color-accent-light: rgba(0, 122, 255, 0.08);
-  --color-accent-warm: #5856D6;
-  --color-accent-highlight: rgba(0, 122, 255, 0.06);
+  --color-accent: #23786E;
+  --color-accent-light: rgba(35, 120, 110, 0.09);
+  --color-accent-warm: #3F6F68;
+  --color-accent-highlight: rgba(35, 120, 110, 0.06);
 
   /* Status palette — used for state indicators (done / warning / migrated) */
   --color-success: #34C759;
@@ -42,13 +42,13 @@
   --color-info-light: rgba(90, 200, 250, 0.10);
 
   /* Accent gradient — used for hero elements, primary buttons on hover */
-  --gradient-accent: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+  --gradient-accent: linear-gradient(135deg, #23786E 0%, #1E665E 100%);
   --gradient-warm: linear-gradient(135deg, #FF9F0A 0%, #FF3B30 100%);
   --gradient-success: linear-gradient(135deg, #34C759 0%, #30B350 100%);
   --gradient-muted: linear-gradient(135deg, #8E8E93 0%, #636366 100%);
 
   /* Glow shadows — depth and "alive" feel for interactive surfaces */
-  --shadow-accent-glow: 0 4px 16px rgba(0, 122, 255, 0.16), 0 1px 2px rgba(0, 122, 255, 0.10);
+  --shadow-accent-glow: 0 4px 14px rgba(35, 120, 110, 0.14), 0 1px 2px rgba(35, 120, 110, 0.08);
   --shadow-warm-glow: 0 4px 16px rgba(255, 159, 10, 0.16), 0 1px 2px rgba(255, 159, 10, 0.10);
   --shadow-success-glow: 0 4px 16px rgba(52, 199, 89, 0.16), 0 1px 2px rgba(52, 199, 89, 0.10);
 
@@ -107,7 +107,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.008em;
 }
 
 /* macOS-style title bar feel for draggable regions */
@@ -461,9 +461,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   z-index: -1;
   overflow: hidden;
   contain: strict;
-  background:
-    radial-gradient(65vw 65vw at 110% -10%, color-mix(in srgb, var(--color-accent) 13%, transparent), transparent 72%),
-    radial-gradient(55vw 55vw at -10% 110%, color-mix(in srgb, var(--color-accent-warm) 10%, transparent), transparent 72%);
+  background: var(--color-background);
 }
 
 :root[data-context="life"] .ambient-bg {
@@ -919,7 +917,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 /* Simplified Today surface. The older class rules above remain for release
    compatibility; these are the only structures rendered by TodayBacklog. */
 .today-simple {
-  gap: 1.35rem;
+  gap: 1.5rem;
 }
 .today-simple section,
 .today-simple details {
@@ -930,19 +928,20 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.85rem;
 }
 .today-simple-section-header h2 {
   margin: 0.1rem 0 0;
   color: var(--color-text-heading);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 650;
 }
 .today-simple-eyebrow {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.66rem;
-  font-weight: 550;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 .today-simple-header-actions {
   display: flex;
@@ -970,7 +969,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-simple-list {
   display: flex;
   flex-direction: column;
-  gap: 0.42rem;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;

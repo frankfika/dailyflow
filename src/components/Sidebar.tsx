@@ -74,8 +74,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap';
-  setActiveTab: (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => void;
+  activeTab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap';
+  setActiveTab: (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -211,7 +211,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
+  const handleNavClick = (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -228,7 +228,7 @@ export function Sidebar({
     persistToggle(true);
   };
 
-  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory';
+  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'mindmap';
   const [showMore, setShowMore] = useState(isAdvancedTab);
 
   useEffect(() => {
@@ -340,7 +340,7 @@ export function Sidebar({
                   event.stopPropagation();
                   handleExpand();
                 }}
-                className="w-7 h-7 bg-gradient-to-br from-accent to-accent-warm text-white flex items-center justify-center text-sm font-bold rounded-xl shadow-sm shrink-0 transition-transform active:scale-95"
+                className="w-7 h-7 bg-accent text-white flex items-center justify-center text-xs font-semibold rounded-lg shadow-sm shrink-0 transition-transform active:scale-95"
                 title={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
                 aria-label={language === 'zh' ? '展开侧边栏' : 'Expand sidebar'}
                 data-testid="sidebar-expand"
@@ -349,7 +349,7 @@ export function Sidebar({
               </button>
             ) : (
               <div
-                className="w-7 h-7 bg-gradient-to-br from-accent to-accent-warm text-white flex items-center justify-center text-sm font-bold rounded-xl shadow-sm shrink-0"
+                className="w-7 h-7 bg-accent text-white flex items-center justify-center text-xs font-semibold rounded-lg shadow-sm shrink-0"
                 aria-hidden="true"
               >
                 D
@@ -393,7 +393,7 @@ export function Sidebar({
             <ul className="space-y-1 text-[13px]">
               {([
                 { tab: 'today', label: language === 'zh' ? '今天' : 'Today', icon: ListTodo, action: goToToday },
-                { tab: 'mindmap', label: language === 'zh' ? '脑图' : 'MindMap', icon: Sparkles, action: () => handleNavClick('mindmap') },
+                { tab: 'events', label: language === 'zh' ? '事件' : 'Events', icon: Sparkles, action: () => handleNavClick('events') },
                 { tab: 'notes', label: language === 'zh' ? '笔记' : 'Notes', icon: FileText, action: () => onOpenNotesSurface ? onOpenNotesSurface('notes') : handleNavClick('notes') },
                 { tab: 'ai-chat', label: language === 'zh' ? '问 AI' : 'Ask AI', icon: MessageCircle, action: () => handleNavClick('ai-chat') },
               ] as const).map(({ tab, label, icon: Icon, action }) => {
@@ -452,6 +452,7 @@ export function Sidebar({
                     {([
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
                       { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
+                      { tab: 'mindmap', label: language === 'zh' ? '脑图（兼容）' : 'Mind maps', icon: Sparkles },
                     ] as const).map(({ tab, label, icon: Icon }) => (
                       <li key={tab}>
                         <button

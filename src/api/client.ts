@@ -86,7 +86,7 @@ export type ConfigPatch = Partial<Omit<ConfigData, 'version'>> & {
   export type ExecutionStatus = 'todo' | 'done';
   export type TagSuggestionState = 'suggested' | 'accepted' | 'rejected';
   export interface SuggestedTag { value: string; source: 'ai'; confidence: number; state: TagSuggestionState; }
-  export interface EventSummary { id: string; title: string; context: EventContext; status: EventStatus; progress: { done: number; total: number }; effectiveTags: string[]; createdAt: string; updatedAt: string; }
+  export interface EventSummary { id: string; mindmapId?: string; title: string; context: EventContext; status: EventStatus; progress: { done: number; total: number }; effectiveTags: string[]; createdAt: string; updatedAt: string; }
   export interface EventExecution { taskId: string; status: ExecutionStatus; scheduledDate: string; deadline?: string; priority?: 'high' | 'medium' | 'low'; completedAt?: string; }
   export interface EventNode { id: string; eventId: string; parentId?: string; text: string; note?: string; position: { x: number; y: number }; collapsed?: boolean; manualTags: string[]; aiTags: SuggestedTag[]; execution?: EventExecution; }
   export interface EventDetail extends EventSummary { mindmapId: string; rootNodeId: string; nodes: EventNode[]; edges: Array<{ id: string; source: string; target: string }>; manualTags: string[]; aiTags: SuggestedTag[]; integrity: { missingMap: boolean; sourceContextWasUnclassified: boolean; orphanTaskIds: string[]; duplicateNodeTaskIds: string[] }; }
@@ -411,8 +411,10 @@ export const eventsApi = {
     const payload = await res.json();
     return { event: payload?.event ?? payload };
   },
-  async listTodayItems(date: string): Promise<{ items: TodayItem[] }> {
-    const res = await fetch(`${API_BASE}/events/today-items?date=${encodeURIComponent(date)}`);
+  async listTodayItems(date: string, context?: EventContext): Promise<{ items: TodayItem[] }> {
+    const query = new URLSearchParams({ date });
+    if (context) query.set('context', context);
+    const res = await fetch(`${API_BASE}/events/today-items?${query.toString()}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch today items');
     const payload = await res.json();
     return { items: Array.isArray(payload) ? payload : (payload?.items ?? []) };
