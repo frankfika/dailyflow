@@ -11,10 +11,18 @@ describe('MINDMAP_TEMPLATES', () => {
     for (const t of MINDMAP_TEMPLATES) {
       expect(t.id).toBeTruthy();
       expect(t.title).toBeTruthy();
+      expect(t.titleEn).toBeTruthy();
       expect(t.hint).toBeTruthy();
+      expect(t.hintEn).toBeTruthy();
       expect(ids.has(t.id)).toBe(false);
       ids.add(t.id);
     }
+  });
+
+  it('builds localized English template content', () => {
+    const map = getTemplate('decision-tree')!.build('en');
+    expect(map.title).toBe('Decision Tree');
+    expect(map.nodes.some(node => node.text === 'Option A')).toBe(true);
   });
 
   it('getTemplate returns the right template or undefined', () => {

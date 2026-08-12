@@ -99,6 +99,17 @@ describe('NoteEditor Markdown and metadata', () => {
     expect(screen.queryByTestId('note-body')).not.toBeInTheDocument();
   });
 
+  it('keeps typing responsive while previewing the latest unsaved draft', () => {
+    renderEditor();
+    const editor = screen.getByTestId('note-body');
+
+    fireEvent.change(editor, { target: { value: 'A newly typed **draft**' } });
+    expect(mocks.schedule).toHaveBeenLastCalledWith({ body: 'A newly typed **draft**' });
+
+    fireEvent.click(screen.getByTestId('note-mode-preview'));
+    expect(screen.getByTestId('note-markdown-preview')).toHaveTextContent('A newly typed draft');
+  });
+
   it('saves tags and linked tasks through the versioned autosave queue', async () => {
     renderEditor();
 

@@ -10,7 +10,7 @@
  * shape with appropriate HTTP status codes. Empty / loading / success
  * payloads are explicit so the UI can render every state.
  */
-import { Router, raw, type Request, type Response } from 'express';
+import { Router, raw, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { newId } from '../../domain/v2/ulid.js';
 import { bootstrapV2 } from '../../services/v2/workspaceContext.js';
@@ -144,6 +144,20 @@ v2Router.use(async (_req, res, next) => {
 
 function getV2(res: Response): { repo: import('../../repositories/v2/repository.js').V2Repository; workspaceId: string; ctx: import('../../repositories/v2/repository.js').WorkspaceContext } {
   return res.locals.v2;
+}
+
+async function requireConnectorsV2(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const flags = await getV2Flags();
+    if (!flags.connectorsV2) {
+      return res.status(404).json({
+        error: { code: 'not_found', message: 'Connector APIs are not enabled for this workspace.' },
+      });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 // Durable background jobs. The UI can resume these by ID after navigation or
@@ -1249,7 +1263,7 @@ v2Router.post('/legacy/tasks/:dateLine/migrate', async (req, res) => {
 // Connectors (Phase 5/6 — stub for the spec; default blocked_by_external_authorization)
 // ---------------------------------------------------------------------------
 
-v2Router.get('/connectors', async (_req, res) => {
+v2Router.get('/connectors', requireConnectorsV2, async (_req, res) => {
   try {
     const items = await listConnectors();
     res.json({ items });
@@ -1258,7 +1272,7 @@ v2Router.get('/connectors', async (_req, res) => {
   }
 });
 
-v2Router.get('/connectors/:id', async (req, res) => {
+v2Router.get('/connectors/:id', requireConnectorsV2, async (req, res) => {
   try {
     const c = await getConnector(req.params.id);
     if (!c) return res.status(404).json({ error: { code: 'not_found', message: 'Connector not found' } });
@@ -1268,7 +1282,7 @@ v2Router.get('/connectors/:id', async (req, res) => {
   }
 });
 
-v2Router.post('/connectors/:id/sync', async (req, res) => {
+v2Router.post('/connectors/:id/sync', requireConnectorsV2, async (req, res) => {
   try {
     const result = await syncConnector(req.params.id);
     res.json(result);
@@ -1277,7 +1291,7 @@ v2Router.post('/connectors/:id/sync', async (req, res) => {
   }
 });
 
-v2Router.post('/connectors/:id/pause', async (req, res) => {
+v2Router.post('/connectors/:id/pause', requireConnectorsV2, async (req, res) => {
   try {
     const c = await pauseConnector(req.params.id);
     res.json({ connector: c });
@@ -1286,7 +1300,7 @@ v2Router.post('/connectors/:id/pause', async (req, res) => {
   }
 });
 
-v2Router.delete('/connectors/:id', async (req, res) => {
+v2Router.delete('/connectors/:id', requireConnectorsV2, async (req, res) => {
   try {
     const ok = await deleteConnector(req.params.id);
     res.json({ ok });
@@ -1299,7 +1313,7 @@ v2Router.delete('/connectors/:id', async (req, res) => {
 // configured local connector. The Calendar/Email connectors return a
 // blocked_by_external_authorization error until the user has actually granted
 // credentials (Phase 5+).
-v2Router.post('/connectors/sync-once', async (req, res) => {
+v2Router.post('/connectors/sync-once', requireConnectorsV2, async (req, res) => {
   try {
     const result = await runConnectorSyncOnce(req.body?.type ?? 'local-markdown');
     res.json(result);
@@ -1440,11 +1454,11 @@ v2Router.post('/review/triage', async (_req, res) => {
 // Calendar (Phase 5)
 // ---------------------------------------------------------------------------
 
-v2Router.get('/calendar/connectors', async (_req, res) => {
+v2Router.get('/calendar/connectors', requireConnectorsV2, async (_req, res) => {
   res.json({ items: listCalendarConnectors() });
 });
 
-v2Router.post('/calendar/sync', async (req, res) => {
+v2Router.post('/calendar/sync', requireConnectorsV2, async (req, res) => {
   let activeJob: Awaited<ReturnType<import('../../repositories/v2/repository.js').V2Repository['getJob']>> = null;
   try {
     const { repo, ctx } = getV2(res);
@@ -1476,13 +1490,22 @@ v2Router.post('/calendar/sync', async (req, res) => {
     activeJob = claim.job;
     const { idempotencyKey: _idempotencyKey, ...syncInput } = input;
     const r = await syncCalendar(repo, syncInput);
-    activeJob = activeJob && await repo.updateJob(activeJob.id, {
+    activeJob = activeJob && await repo.updateJob(activeJob.id, r.ok ? {
       status: 'succeeded',
       progress: 100,
       resultRef: { type: 'connector', id: input.connectorId },
       finishedAt: new Date().toISOString(),
+    } : {
+      status: 'failed',
+      progress: 0,
+      error: {
+        code: r.blockedBy ?? 'calendar_sync_failed',
+        message: r.errors.join('; ') || 'Calendar sync failed',
+        retryable: r.blockedBy !== 'external_authorization',
+      },
+      finishedAt: new Date().toISOString(),
     });
-    res.json({ ...r, job: activeJob });
+    res.status(r.ok ? 200 : 424).json({ ...r, job: activeJob });
   } catch (err) {
     if (activeJob?.status === 'running') {
       const { repo } = getV2(res);
@@ -1500,11 +1523,11 @@ v2Router.post('/calendar/sync', async (req, res) => {
 // Messages (Phase 6)
 // ---------------------------------------------------------------------------
 
-v2Router.get('/messages/connectors', async (_req, res) => {
+v2Router.get('/messages/connectors', requireConnectorsV2, async (_req, res) => {
   res.json({ items: listMessageConnectors() });
 });
 
-v2Router.post('/messages/sync', async (req, res) => {
+v2Router.post('/messages/sync', requireConnectorsV2, async (req, res) => {
   try {
     const { repo } = getV2(res);
     const schema = z.object({
@@ -1530,7 +1553,7 @@ v2Router.post('/messages/sync', async (req, res) => {
 // External write (Phase 8)
 // ---------------------------------------------------------------------------
 
-v2Router.post('/external-writes/draft', async (req, res) => {
+v2Router.post('/external-writes/draft', requireConnectorsV2, async (req, res) => {
   try {
     const { repo } = getV2(res);
     const schema = z.object({
@@ -1558,7 +1581,7 @@ v2Router.post('/external-writes/draft', async (req, res) => {
   }
 });
 
-v2Router.post('/external-writes/:id/confirm', async (req, res) => {
+v2Router.post('/external-writes/:id/confirm', requireConnectorsV2, async (req, res) => {
   try {
     const { repo } = getV2(res);
     // The default transport is blocked. Real implementations replace

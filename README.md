@@ -16,7 +16,7 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/frankfika/dailyflow/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
-**当前稳定版：v1.6.1** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
+**当前稳定版：v1.6.2** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
 
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [开发](#-开发) · [文档](#-文档)
 
@@ -85,8 +85,8 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 
 - 支持日、周、月视图。
 - 聚合本地任务、定时笔记和外部日历事件。
-- Feishu Calendar 支持授权、查看、同步和创建日程。
-- Google Calendar 连接器代码已接入，但需要配置正式 OAuth Client ID 后才适合开箱使用。
+- 本地任务、定时笔记和已配置的外部日历事件统一显示在时间线上。
+- 外部日历连接器仅在完成正式授权和配置后开放；未配置时不会显示为可用能力。
 
 ### Memory 与 Review：让工作有上下文
 
@@ -119,7 +119,7 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 |:---:|:---:|
 | ![Notes](./docs/assets/notes.png) | ![Settings](./docs/assets/settings.png) |
 
-截图来自真实运行的本地应用；如界面发生变化，可运行 `node scripts/capture-screenshots.mjs` 更新素材。
+截图来自真实运行的本地应用；如界面发生变化，可运行 `node scripts/capture-screenshots.mjs` 更新素材。文档中的外部连接能力以当前授权状态为准，不会用演示数据填充列表。
 
 ## 🚀 快速开始
 

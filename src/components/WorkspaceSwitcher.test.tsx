@@ -33,6 +33,21 @@ describe.sequential('WorkspaceSwitcher', () => {
     vi.spyOn(workspacesApi, 'discover').mockResolvedValue({ candidates: [] });
   });
 
+  it('makes workspace switching explicit in the collapsed shell chrome', () => {
+    render(
+      <WorkspaceSwitcher
+        language="en"
+        workspaces={workspaces}
+        activeWorkspaceId="ws_a"
+        onActivate={vi.fn()}
+        showToast={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch workspace: Alpha' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('saves rename on blur', async () => {
     vi.spyOn(workspacesApi, 'rename').mockResolvedValue(undefined);
 

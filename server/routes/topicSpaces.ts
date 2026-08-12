@@ -143,7 +143,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.post('/:id/reorder', async (req, res) => {
+router.post('/reorder', async (req, res) => {
   try {
     const { context, orderedIds } = req.body ?? {};
     if (!isContext(context)) {

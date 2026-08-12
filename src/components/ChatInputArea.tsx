@@ -77,7 +77,11 @@ export function ChatInputArea({
                 {item.type === 'project' && <Folder className="w-3 h-3" />}
                 {item.type === 'custom-text' && <FileText className="w-3 h-3" />}
                 <span className="max-w-[160px] truncate font-medium">{item.label}</span>
-                <button onClick={() => onRemoveContext(item.id)} className="text-accent/70 hover:text-red-500 transition-colors ml-0.5">
+                <button
+                  onClick={() => onRemoveContext(item.id)}
+                  aria-label={language === 'zh' ? `移除上下文：${item.label}` : `Remove context: ${item.label}`}
+                  className="ml-0.5 inline-flex min-h-6 min-w-6 items-center justify-center text-accent/70 transition-colors hover:text-red-500"
+                >
                   <X className="w-2.5 h-2.5" />
                 </button>
               </span>
@@ -260,6 +264,9 @@ export function ChatInputArea({
             <button
               onClick={isStreaming ? onStop : onSend}
               disabled={!isStreaming && !inputValue.trim()}
+              aria-label={isStreaming
+                ? (language === 'zh' ? '停止生成' : 'Stop generating')
+                : (language === 'zh' ? '发送消息' : 'Send message')}
               className={`${compact ? 'ml-auto' : ''} p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 isStreaming ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-accent text-white hover:bg-accent/90'
               }`}

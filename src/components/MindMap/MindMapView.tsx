@@ -680,7 +680,7 @@ export function MindMapView({
       .catch((err) => {
         if (!cancelled) {
           showToast(
-            language === 'zh' ? '加载思维导图失败' : 'Failed to load mind map',
+            language === 'zh' ? '加载脑图失败' : 'Failed to load mind map',
             'error',
           );
           console.error('[mindmap] load error:', err);
@@ -1186,7 +1186,7 @@ export function MindMapView({
       setMaps((current) => [created, ...current]);
       setActiveId(created.id);
       showToast(
-        language === 'zh' ? '已新建导图' : 'Mind map created',
+        language === 'zh' ? '已新建脑图' : 'Mind map created',
         'success',
       );
     } catch (err: any) {
@@ -1202,7 +1202,7 @@ export function MindMapView({
     async (templateId: string) => {
       const template = MINDMAP_TEMPLATES.find((t) => t.id === templateId);
       if (!template) return;
-      const built = template.build();
+      const built = template.build(language);
       try {
         // The server will assign a fresh id and timestamp; we just pass
         // the template's topology (with `tpl-` ids) and the server will
@@ -1216,7 +1216,7 @@ export function MindMapView({
         setMaps((current) => [created, ...current]);
         setActiveId(created.id);
         showToast(
-          language === 'zh' ? `已从「${template.title}」创建` : `Created from ${template.title}`,
+          language === 'zh' ? `已从「${template.title}」创建` : `Created from ${template.titleEn}`,
           'success',
         );
       } catch (err: any) {
@@ -1433,12 +1433,12 @@ export function MindMapView({
                 <input
                   value={activeMap.title}
                   onChange={(e) => handleChange({ title: e.target.value })}
-                  placeholder={language === 'zh' ? '未命名导图' : 'Untitled mind map'}
+                  placeholder={language === 'zh' ? '未命名脑图' : 'Untitled mind map'}
                   className="min-w-0 flex-1 basis-40 bg-transparent text-base font-semibold text-text-heading outline-none placeholder:text-text-muted/60"
                   data-testid="mindmap-title-input"
                 />
               )}
-              <div className="ml-auto flex shrink-0 items-center rounded-lg border border-border/70 bg-black/[0.025] p-0.5 sm:ml-1" role="tablist" aria-label={language === 'zh' ? '思维笔记视图' : 'Mind note view'}>
+              <div className="ml-auto flex shrink-0 items-center rounded-lg border border-border/70 bg-black/[0.025] p-0.5 sm:ml-1" role="tablist" aria-label={language === 'zh' ? '脑图视图' : 'Mind map view'}>
                 <button
                   type="button"
                   role="tab"
@@ -1605,7 +1605,7 @@ export function MindMapView({
       </div>
       <ConfirmDialog
         show={!!pendingDelete}
-        title={language === 'zh' ? '删除思维导图' : 'Delete mind map'}
+        title={language === 'zh' ? '删除脑图' : 'Delete mind map'}
         message={
           language === 'zh'
             ? `确定要删除「${pendingDelete?.title || '未命名'}」吗？此操作不可撤销。`
@@ -1655,7 +1655,7 @@ function EmptyState({
           <Network className="h-7 w-7" />
         </div>
         <h2 className="text-lg font-semibold text-text-heading">
-          {language === 'zh' ? '还没有思维导图' : 'No mind maps yet'}
+          {language === 'zh' ? '还没有脑图' : 'No mind maps yet'}
         </h2>
         <p className="max-w-md text-sm text-text-muted">
           {language === 'zh'
@@ -1696,10 +1696,10 @@ function EmptyState({
               data-testid={`mindmap-template-${t.id}`}
             >
               <div className="text-sm font-semibold text-text-heading">
-                {t.title}
+                {language === 'zh' ? t.title : t.titleEn}
               </div>
               <div className="mt-0.5 text-[11px] text-text-muted">
-                {t.hint}
+                {language === 'zh' ? t.hint : t.hintEn}
               </div>
             </button>
           ))}

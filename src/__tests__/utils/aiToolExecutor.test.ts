@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../features/v2/api/client', () => ({
-  createProposalDraft: vi.fn().mockResolvedValue({ proposal: { id: 'proposal-1' } }),
-}));
-
-import { createProposalDraft } from '../../features/v2/api/client';
 import { executeToolCall, type ToolContext } from '../../utils/aiToolExecutor';
 
 const context: ToolContext = {
@@ -18,22 +13,14 @@ const context: ToolContext = {
 describe('executeToolCall mutation safety', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('turns create_task into a pending Proposal instead of a direct write', async () => {
+  it('blocks create_task until AI Chat has a visible review flow', async () => {
     const result = await executeToolCall({
       name: 'create_task',
       arguments: { title: 'Prepare review', deadline: '2026-07-30' },
     }, context);
 
-    expect(result.success).toBe(true);
-    expect(result.message).toContain('not been written');
-    expect(createProposalDraft).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'extract_commitments',
-      changes: [expect.objectContaining({
-        op: 'create',
-        entity: 'commitment',
-        draft: expect.objectContaining({ title: 'Prepare review', state: 'inbox' }),
-      })],
-    }));
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('no data was written');
   });
 
   it.each(['create_note', 'mark_task_done'])(
@@ -42,7 +29,15 @@ describe('executeToolCall mutation safety', () => {
       const result = await executeToolCall({ name, arguments: {} }, context);
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/no (data was written|item was changed)/);
-      expect(createProposalDraft).not.toHaveBeenCalled();
     }
   );
+
+  it('includes matching tasks in search output', async () => {
+    const result = await executeToolCall({ name: 'search_tasks', arguments: { query: 'review' } }, {
+      ...context,
+      tasks: [{ title: 'Prepare review', status: 'todo', tags: ['work'] }],
+    });
+    expect(result.success).toBe(true);
+    expect(result.message).toContain('- [ ] Prepare review (work)');
+  });
 });

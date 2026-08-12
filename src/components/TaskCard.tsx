@@ -283,7 +283,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading"
                     data-testid={`task-card-space-unlink-${task.id}`}
                   >
-                    {language === 'zh' ? '移出事件' : 'Unlink event'}
+                    {language === 'zh' ? '移出脑图' : 'Unlink mind map'}
                   </button>
                 )}
               </div>

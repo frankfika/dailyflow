@@ -20,7 +20,6 @@
  *   - Timezone is preserved verbatim.
  */
 import { z } from 'zod';
-import { newId } from '../../domain/v2/ulid.js';
 import { sha256 } from '../../repositories/v2/atomicWrite.js';
 import { V2Repository } from '../../repositories/v2/repository.js';
 
@@ -201,7 +200,7 @@ export async function syncCalendar(
       const contentHash = sha256(body);
       // Use a deterministic id derived from the external id so re-syncs
       // are idempotent (spec §17.3).
-      const id = `src_${newId('src').split('_')[1]}_${ev.externalId}`.slice(0, 40);
+      const id = `src_${sha256(`${c.id}:${ev.externalId}`).slice(0, 26)}`;
       await repo.saveSourceItem(
         {
           id,
@@ -209,7 +208,7 @@ export async function syncCalendar(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdBy: 'connector',
-          workspaceId: repo.layout.root ? '' : '', // computed at save time
+          workspaceId: repo.workspaceId,
           kind: 'calendar_event',
           title: ev.title,
           body,

@@ -59,7 +59,7 @@ const LANG = {
   zh: {
     title: (s: string) => `${s} · 任务列表`,
     empty: '该主题下还没有任务',
-    emptyHint: '右键导图里的节点选「转为待办」即可添加。',
+    emptyHint: '在脑图中把节点转为待办，即可添加到这里。',
     bound: (s: string) => `已绑定到 ${s}`,
     unlink: '解除绑定',
     unlinkConfirm: '确定要解除这个任务的主题绑定吗？',
@@ -75,7 +75,7 @@ const LANG = {
   en: {
     title: (s: string) => `${s} · Tasks`,
     empty: 'No tasks in this space yet',
-    emptyHint: 'Right-click a mind map node and pick "Convert to Task".',
+    emptyHint: 'Convert a node in the event structure to a task to add it here.',
     bound: (s: string) => `Linked to ${s}`,
     unlink: 'Unlink',
     unlinkConfirm: 'Unlink this task from the space?',

@@ -38,10 +38,9 @@ const ALLOWED_ORIGINS = [
   'http://tauri.localhost',
   'https://tauri.localhost',
 ];
-const LOCALHOST_ORIGIN_RE = /^https?:\/\/localhost(:\d+)?$/;
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin) || LOCALHOST_ORIGIN_RE.test(origin)) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));

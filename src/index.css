@@ -416,6 +416,13 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   outline-offset: 2px;
 }
 
+/* The note body is the document canvas itself, so outlining its entire
+   viewport reads as a selected panel rather than a text caret. */
+.note-document-body:focus-visible,
+.note-document-title:focus-visible {
+  outline: none;
+}
+
 @media (hover: none), (pointer: coarse) {
   .task-card-actions {
     opacity: 1;

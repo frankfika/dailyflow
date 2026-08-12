@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download } from 'lucide-react';
+import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download, FolderOpen } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
@@ -28,7 +28,6 @@ import { MindMapView } from './components/MindMap';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
-import { EventsView } from './features/v2/events/EventsView';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -106,7 +105,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap' | 'events'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -185,6 +184,10 @@ export default function App() {
       return 'en';
     }
   });
+
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  }, [language]);
   const openMeetingNote = useCallback(async () => {
     if (meetingCreateInFlightRef.current) return;
     meetingCreateInFlightRef.current = true;
@@ -435,7 +438,7 @@ export default function App() {
         id: mindmapId,
         mindmapId,
         spaceId: undefined,
-        title: language === 'zh' ? `思维导图 ${mindmapId.slice(-6)}` : `Mind map ${mindmapId.slice(-6)}`,
+        title: language === 'zh' ? `脑图 ${mindmapId.slice(-6)}` : `Mind map ${mindmapId.slice(-6)}`,
         taskIds: mapTasks.map((task) => task.id),
         completedTaskIds: mapTasks.filter((task) => task.status === 'done').map((task) => task.id),
       });
@@ -1393,7 +1396,18 @@ export default function App() {
               }}
               showToast={showToast}
             />
-          ) : null
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowWorkspaceSetup(true)}
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background/70 px-2.5 py-2 text-left text-xs font-medium text-text-heading transition-colors hover:border-border-strong hover:bg-background"
+              aria-label={language === 'zh' ? '选择工作区' : 'Choose workspace'}
+              data-testid="workspace-choose"
+            >
+              <FolderOpen className="h-4 w-4 text-text-muted" aria-hidden="true" />
+              <span>{language === 'zh' ? '选择工作区' : 'Choose workspace'}</span>
+            </button>
+          )
         }
         activeContext={activeContext}
         onContextChange={setActiveContext}
@@ -1421,7 +1435,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' || activeTab === 'events' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
@@ -1670,6 +1684,14 @@ export default function App() {
                     activeSpaceId={activeSpaceId}
                     onSelect={setActiveSpaceId}
                     onCreate={handleCreateTopic}
+                    labels={language === 'zh' ? undefined : {
+                      all: 'All',
+                      unclassified: 'Unclassified',
+                      more: 'More',
+                      newTopic: 'New topic',
+                      newTopicPlaceholder: 'Name this topic…',
+                      legacy: '(Legacy)',
+                    }}
                     isLoading={topicSpacesQuery.isLoading}
                   />
                   {/* Phase 2: view switcher (mindmap / list). Hidden for
@@ -1680,8 +1702,8 @@ export default function App() {
                       data-testid="topic-space-view-switcher"
                     >
                       {([
-                        ['mindmap', language === 'zh' ? '导图' : 'Mindmap'],
-                        ['list', language === 'zh' ? '列表' : 'List'],
+                        ['mindmap', language === 'zh' ? '结构' : 'Structure'],
+                        ['list', language === 'zh' ? '任务' : 'Tasks'],
                       ] as const).map(([v, label]) => (
                         <button
                           key={v}
@@ -1789,21 +1811,6 @@ export default function App() {
                     )}
                   </div>
                 </motion.div>
-              ) : activeTab === 'events' ? (
-                <motion.div
-                  key="events"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="flex h-full min-h-0 flex-col overflow-hidden"
-                >
-                  <EventsView
-                    language={language}
-                    context={activeContext}
-                    sidebarOpen={isSidebarOpen}
-                    onNotice={showToast}
-                  />
-                </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">
                   <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
@@ -1900,6 +1907,7 @@ export default function App() {
       {/* Update Notification Modal */}
       {showUpdateModal && updateInfo && (
         <UpdateNotificationModal
+          language={language}
           updateInfo={updateInfo}
           onClose={handleCloseUpdateModal}
           onUpdate={handleUpdate}
