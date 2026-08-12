@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GripVertical, Network, Tags, X } from 'lucide-react';
+import { GripVertical, Orbit, Tags, X } from 'lucide-react';
 import { STANDALONE_MINDMAP_FILTER, type TodayPlanningGroup } from './TodayBacklog';
 
 export function reconcileMindmapOrder(
@@ -73,8 +73,8 @@ export function TodayScopeTabs({
   return (
     <section className="mb-5 rounded-xl border border-border/60 bg-white/55 px-3 py-2.5" aria-label={language === 'zh' ? 'Today 任务筛选' : 'Today task filters'} data-testid="today-scope-tabs">
       <div className="flex min-w-0 items-center gap-2">
-        <Network className="h-3.5 w-3.5 shrink-0 text-text-muted/70" aria-hidden="true" />
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5" role="tablist" aria-label={language === 'zh' ? '按脑图查看' : 'Filter by mind map'}>
+        <Orbit className="h-3.5 w-3.5 shrink-0 text-text-muted/70" aria-hidden="true" />
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5" role="tablist" aria-label={language === 'zh' ? '按事件查看' : 'Filter by event'}>
           <button type="button" role="tab" aria-selected={!selectedMindmapId} onClick={() => onMindmapChange(null)} className={tabClass(!selectedMindmapId)}>
             {language === 'zh' ? '全部任务' : 'All tasks'}
           </button>

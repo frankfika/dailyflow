@@ -12,6 +12,8 @@ export interface SuggestedTag {
 
 export interface EventSummary {
   id: string;
+  /** Internal compatibility join key. Never render this identifier. */
+  mindmapId?: string;
   title: string;
   context: EventContext;
   status: EventStatus;

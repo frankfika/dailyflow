@@ -20,6 +20,7 @@ export type TodayTask = {
   originMindmapId?: string;
   originNodeId?: string;
   planOrder?: number;
+  sourcePath?: string[];
 };
 
 export const STANDALONE_MINDMAP_FILTER = '__standalone__';

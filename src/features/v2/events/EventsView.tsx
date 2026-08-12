@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, Plus, Search, X } from 'lucide-react';
 import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
 import {
@@ -20,18 +20,20 @@ export interface EventsViewProps {
   context?: 'work' | 'life';
   sidebarOpen?: boolean;
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
+  requestedEventId?: string | null;
+  onRequestedEventHandled?: () => void;
 }
 
 const TEXT = {
   en: {
-    title: 'Events', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.',
   },
   zh: {
-    title: '事件', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。',
   },
 } as const;
 
-export function EventsView({ language = 'en', context = 'work', onNotice }: EventsViewProps) {
+export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -42,6 +44,12 @@ export function EventsView({ language = 'en', context = 'work', onNotice }: Even
     () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
     [context, eventsQ.data?.events],
   );
+
+  useEffect(() => {
+    if (!requestedEventId) return;
+    setSelectedEventId(requestedEventId);
+    onRequestedEventHandled?.();
+  }, [onRequestedEventHandled, requestedEventId]);
 
   async function submitNewEvent() {
     if (!newTitle.trim()) return;
@@ -64,15 +72,17 @@ export function EventsView({ language = 'en', context = 'work', onNotice }: Even
   const completed = events.filter((event) => event.status === 'completed');
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-white dark:bg-[#101514]" data-testid="events-surface">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-5 dark:border-gray-800">
-        <h1 className="text-xl font-semibold tracking-tight text-gray-950 dark:text-gray-50">{t.title}</h1>
-        <button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-lg bg-[#23877B] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#1d7168]" data-testid="new-event-button"><Plus className="h-4 w-4" />{t.newEvent}</button>
+    <section className="flex h-full min-h-0 flex-col bg-[var(--color-background)]" data-testid="events-surface">
+      <header className="shrink-0 border-b border-border/70 bg-surface/70 px-6 py-5 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-6">
+          <div><h1 className="text-xl font-semibold tracking-tight text-text-heading">{t.title}</h1><p className="mt-1 text-xs text-text-muted">{t.subtitle}</p></div>
+          <button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]" data-testid="new-event-button"><Plus className="h-4 w-4" />{t.newEvent}</button>
+        </div>
       </header>
 
       {creating && (
         <form onSubmit={(e) => { e.preventDefault(); void submitNewEvent(); }} className="border-b border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/40" data-testid="new-event-form">
-          <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <div className="mx-auto flex max-w-4xl items-center gap-2">
             <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t.input} aria-label={t.input} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#23877B] focus:ring-2 focus:ring-[#23877B]/10 dark:border-gray-700 dark:bg-gray-900" />
             <button disabled={!newTitle.trim() || createEvent.isPending} className="rounded-lg bg-[#23877B] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">{createEvent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t.create}</button>
             <button type="button" onClick={() => { setCreating(false); setNewTitle(''); }} className="rounded-lg px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800">{t.cancel}</button>
@@ -81,7 +91,7 @@ export function EventsView({ language = 'en', context = 'work', onNotice }: Even
       )}
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-4xl">
           {eventsQ.isLoading && <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />}
           {eventsQ.isError && <CenteredState text={t.loadError} />}
           {!eventsQ.isLoading && !eventsQ.isError && events.length === 0 && (
@@ -109,7 +119,7 @@ function CompletedGroup(props: Parameters<typeof EventGroup>[0]) {
 }
 
 function EventCard({ event, language, onOpen, noActions, updated }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string }) {
-  return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left hover:border-[#23877B]/50 hover:bg-gray-50/70 dark:border-gray-800 dark:bg-gray-900/50 dark:hover:bg-gray-900" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-gray-950 dark:text-gray-50">{event.title}</h3><p className="mt-1 text-xs text-gray-400">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-gray-500">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"><div className="h-full rounded-full bg-[#23877B]" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-800">#{tag}</span>)}</div>}</button>;
+  return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)]" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3><p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}</button>;
 }
 
 function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice'] }) {

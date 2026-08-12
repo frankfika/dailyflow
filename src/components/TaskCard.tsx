@@ -4,6 +4,7 @@ import {
   BellOff,
   Calendar,
   Check,
+  ChevronRight,
   Edit2,
   FileText,
   MessageSquare,
@@ -149,9 +150,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const eventLabel = spaceTitle
-    ? (language === 'zh' ? `来自脑图 · ${spaceTitle}` : `Mind map · ${spaceTitle}`)
+    ? (language === 'zh' ? `事件 · ${spaceTitle}` : `Event · ${spaceTitle}`)
     : (task.spaceId || task.originMindmapId
-    ? (language === 'zh' ? '来自脑图' : 'From mind map')
+    ? (language === 'zh' ? '来自事件' : 'From event')
     : (language === 'zh' ? '独立任务' : 'Standalone'));
   const hasAdvancedContent = Boolean(
     task.description || task.comment || task.comments?.length || task.tags?.length || task.project ||
@@ -166,7 +167,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ layout: { type: 'spring', stiffness: 500, damping: 40 }, duration: 0.18 }}
-      className={`group rounded-xl border transition-colors ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/70 bg-surface-elevated hover:border-border-strong'}`}
+      className={`group rounded-xl border shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/80 bg-surface-elevated hover:border-border-strong hover:shadow-[0_4px_16px_rgba(20,45,38,0.055)]'}`}
       data-testid={`task-card-${task.id}`}
     >
       <div className="flex min-h-[54px] items-start gap-2.5 px-3 py-2.5">
@@ -204,6 +205,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
               <span className="truncate">{eventLabel}</span>
             </button>
+            {task.sourcePath && task.sourcePath.length > 0 && (
+              <span className="inline-flex min-w-0 items-center gap-0.5 text-text-muted/80" data-testid={`task-card-path-${task.id}`}>
+                {task.sourcePath.map((segment, index) => (
+                  <React.Fragment key={`${segment}-${index}`}>
+                    {index > 0 && <ChevronRight className="h-2.5 w-2.5 shrink-0 opacity-45" aria-hidden="true" />}
+                    <span className="max-w-28 truncate">{segment}</span>
+                  </React.Fragment>
+                ))}
+              </span>
+            )}
             {task.deadline && (
               <span className={`inline-flex items-center gap-1 font-medium ${isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
                 <Calendar className="h-3 w-3" aria-hidden="true" />
@@ -283,7 +294,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading"
                     data-testid={`task-card-space-unlink-${task.id}`}
                   >
-                    {language === 'zh' ? '移出脑图' : 'Unlink mind map'}
+                    {language === 'zh' ? '移出事件' : 'Remove from event'}
                   </button>
                 )}
               </div>

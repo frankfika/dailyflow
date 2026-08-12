@@ -19,6 +19,8 @@ export type Task = {
   originMindmapId?: string;
   /** Origin mind map node this task was promoted from, if any. */
   originNodeId?: string;
+  /** Human-readable hierarchy inherited from the owning Event. */
+  sourcePath?: string[];
 };
 
 export type DailyNoteData = {

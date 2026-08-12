@@ -19,11 +19,11 @@ describe('TodayScopeTabs', () => {
     });
   });
 
-  it('keeps mind maps as primary tabs and tags as flat secondary chips', () => {
+  it('keeps Events as primary tabs and categories as flat secondary chips', () => {
     const onMindmapChange = vi.fn();
     const onTagChange = vi.fn();
     render(<TodayScopeTabs groups={groups} hasStandalone selectedMindmapId={null} onMindmapChange={onMindmapChange} tags={['launch', 'website']} selectedTag={null} onTagChange={onTagChange} language="zh" storageKey="scope-test" />);
-    expect(screen.getByRole('tablist', { name: '按脑图查看' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: '按事件查看' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /产品发布/ }));
     expect(onMindmapChange).toHaveBeenCalledWith('map-a');
     fireEvent.click(screen.getByRole('button', { name: '#launch' }));

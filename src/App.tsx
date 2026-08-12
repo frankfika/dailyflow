@@ -19,7 +19,7 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
-import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks } from './components/TodayBacklog';
+import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from './components/TodayBacklog';
 import { TodayScopeTabs } from './components/TodayScopeTabs';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
@@ -28,6 +28,8 @@ import { MindMapView } from './components/MindMap';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
+import { EventsView } from './features/v2/events/EventsView';
+import { useEvents, useTodayItems } from './features/v2/hooks/useEvents';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -64,6 +66,7 @@ type Task = {
   originNodeId?: string;
   parentTaskId?: string;
   planOrder?: number;
+  sourcePath?: string[];
 };
 
 async function verifyGithubConnection(repoUrl: string, token: string): Promise<boolean> {
@@ -105,7 +108,8 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap'>('today');
+  const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
@@ -244,6 +248,8 @@ export default function App() {
   const [configTab, setConfigTab] = useState<'general' | 'sync' | 'about'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
+  const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
+  const eventsQuery = useEvents();
 
   const refreshEarlierOpenTasks = useCallback(async () => {
     const today = getTodayStr();
@@ -253,10 +259,10 @@ export default function App() {
     }
     try {
       const preview = await rolloverApi.preview(today, activeContext);
-      const standalone = (preview?.tasksToMigrate ?? [])
-        .filter(task => !task.originMindmapId && !task.originNodeId)
-        .map(task => task as Task);
-      setEarlierOpenTasks(standalone);
+      // Today is the execution inbox for every unfinished action. Event
+      // tasks used to be removed here, which made scheduled mind-map nodes
+      // disappear as soon as their original day passed.
+      setEarlierOpenTasks((preview?.tasksToMigrate ?? []).map(task => task as Task));
     } catch (error) {
       console.error('Failed to load earlier open tasks', error);
       setEarlierOpenTasks([]);
@@ -409,7 +415,66 @@ export default function App() {
     return Array.from(pool).sort();
   }, [tasksInActiveSpace, activeSpace]);
 
-  const todayPlanningGroups = useMemo(() => {
+  const projectedTodayTasks = useMemo<Task[] | null>(() => {
+    if (!todayItemsQuery.data) return null;
+    return todayItemsQuery.data.items.map((item) => ({
+      id: item.taskId,
+      title: item.title,
+      status: item.status,
+      tags: item.effectiveTags,
+      deadline: item.deadline,
+      priority: item.priority,
+      source_date: item.scheduledDate,
+      ...(item.kind === 'event-node' ? {
+        spaceId: item.eventId,
+        originMindmapId: item.eventId,
+        originNodeId: item.nodeId,
+        sourcePath: item.path.map((segment) => segment.text).filter(Boolean),
+      } : {}),
+    }));
+  }, [todayItemsQuery.data]);
+
+  const todayPlanningGroups = useMemo<TodayPlanningGroup[]>(() => {
+    if (todayItemsQuery.data) {
+      const byEvent = new Map<string, TodayPlanningGroup>();
+      for (const item of todayItemsQuery.data.items) {
+        if (item.kind !== 'event-node') continue;
+        const group = byEvent.get(item.eventId) ?? {
+          id: item.eventId,
+          mindmapId: item.eventId,
+          spaceId: item.eventId,
+          title: item.eventTitle,
+          taskIds: [],
+          completedTaskIds: [],
+        };
+        group.taskIds.push(item.taskId);
+        if (item.status === 'done') group.completedTaskIds.push(item.taskId);
+        byEvent.set(item.eventId, group);
+      }
+
+      for (const task of earlierOpenTasks) {
+        if (!task.originMindmapId && !task.spaceId) continue;
+        const space = topicSpaces.find((candidate) =>
+          candidate.id === task.spaceId || candidate.mindmapId === task.originMindmapId,
+        );
+        const eventSummary = eventsQuery.data?.events.find((candidate) =>
+          candidate.id === task.spaceId || candidate.mindmapId === task.originMindmapId || candidate.id === task.originMindmapId,
+        );
+        const eventId = eventSummary?.id ?? space?.id ?? task.spaceId ?? task.originMindmapId!;
+        const group = byEvent.get(eventId) ?? {
+          id: eventId,
+          mindmapId: eventId,
+          spaceId: space?.id ?? task.spaceId,
+          title: eventSummary?.title ?? space?.title ?? (language === 'zh' ? '未命名事件' : 'Untitled event'),
+          taskIds: [],
+          completedTaskIds: [],
+        };
+        if (!group.taskIds.includes(task.id)) group.taskIds.push(task.id);
+        byEvent.set(eventId, group);
+      }
+      return [...byEvent.values()];
+    }
+
     const claimedTaskIds = new Set<string>();
     const groups = topicSpaces.map((space) => {
       const groupTasks = tasks
@@ -444,7 +509,7 @@ export default function App() {
       });
     }
     return groups;
-  }, [tasks, topicSpaces, language]);
+  }, [earlierOpenTasks, eventsQuery.data, tasks, todayItemsQuery.data, topicSpaces, language]);
 
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -982,9 +1047,9 @@ export default function App() {
   // When date changes, load tasks
   const handleToggleTask = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
-    const task = hostDate
+    const task = hostDate && hostDate !== currentFileDate
       ? earlierOpenTasks.find(t => t.id === id && t.host_date === hostDate)
-      : tasks.find(t => t.id === id);
+      : projectedTodayTasks?.find(t => t.id === id) ?? tasks.find(t => t.id === id);
     if (!task) return;
     const newStatus = task.status === 'todo' ? 'done' : 'todo';
     const wasUndone = task.status !== 'done';
@@ -1017,6 +1082,7 @@ export default function App() {
           }
           setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
+        await todayItemsQuery.refetch();
         // Prompt for completion comment when task is newly done and has no comment yet
         // (check both legacy single `comment` and the timestamped `comments` list).
         const hasAnyComment = !!task.comment || !!(task.comments && task.comments.length > 0);
@@ -1094,6 +1160,7 @@ export default function App() {
           setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
         showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
+        await todayItemsQuery.refetch();
         return;
       } catch (e: any) {
         lastError = e;
@@ -1150,6 +1217,7 @@ export default function App() {
         setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
       }
       showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
+      await todayItemsQuery.refetch();
     } catch (e) {
       console.error('Failed to delete task', e);
       showToast(language === 'zh' ? '删除失败' : 'Failed to delete task', 'error');
@@ -1210,7 +1278,10 @@ export default function App() {
   // Today is an execution surface, not merely a rendering of today's file.
   // Keep unfinished standalone tasks from earlier Daily notes visible until
   // the user completes, deletes, or explicitly rolls them into today.
-  const todayTasks = [...currentVisibleTasks, ...earlierVisibleTasks];
+  // The Event adapter is the canonical Today projection. It preserves the
+  // source Event, node breadcrumb and inherited category tags even after a
+  // reload. Keep the legacy task parse only as a resilient loading fallback.
+  const todayTasks = [...(projectedTodayTasks ?? currentVisibleTasks), ...earlierVisibleTasks];
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
@@ -1416,7 +1487,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col h-dvh bg-background/90 relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}>
+      <main className={`flex-1 flex flex-col h-dvh bg-[var(--color-background)] relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}>
         {/* Floating toggle button — show sidebar when hidden (Codex style) */}
         {!isSidebarOpen && (
           <button
@@ -1435,7 +1506,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'events' || activeTab === 'mindmap' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
           <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
@@ -1469,7 +1540,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25 }}
-                    className="mx-auto max-w-5xl space-y-6"
+                    className="mx-auto max-w-4xl space-y-6"
                   >
                     <header className="space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1560,9 +1631,8 @@ export default function App() {
                     tasks={filteredTodayTasks}
                     planningGroups={todayPlanningGroups}
                     onOpenPlanningGroup={(group) => {
-                      setActiveSpaceId(group.spaceId ?? null);
-                      setViewOverride('mindmap');
-                      setActiveTab('mindmap');
+                      setRequestedEventId(group.spaceId ?? group.id);
+                      setActiveTab('events');
                     }}
                     selectedDate={currentFileDate}
                     categories={categories}
@@ -1600,6 +1670,22 @@ export default function App() {
                   />
                   </motion.div>
                 </div>
+              ) : activeTab === 'events' ? (
+                <motion.div
+                  key="events"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="h-full min-h-0 overflow-hidden"
+                >
+                  <EventsView
+                    language={language}
+                    context={activeContext}
+                    onNotice={showToast}
+                    requestedEventId={requestedEventId}
+                    onRequestedEventHandled={() => setRequestedEventId(null)}
+                  />
+                </motion.div>
               ) : activeTab === 'calendar' ? (
                 <motion.div
                   key="calendar"
