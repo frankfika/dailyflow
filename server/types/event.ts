@@ -77,6 +77,8 @@ export type TodayItem =
       kind: 'event-node';
       id: string; // `event-node:${eventId}:${nodeId}`
       eventId: string;
+      mindmapId: string;
+      spaceId?: string;
       nodeId: string;
       taskId: string;
       title: string;

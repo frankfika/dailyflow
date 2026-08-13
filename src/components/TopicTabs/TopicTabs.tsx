@@ -164,10 +164,10 @@ export function TopicTabs({
         onClick={() => onSelect(id)}
         data-testid={`topic-tab-${dataKey}`}
         data-active={isActive}
-        className={`group inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+        className={`group inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${
           isActive
-            ? 'bg-[var(--color-accent)] text-white shadow-sm'
-            : 'text-text-muted hover:bg-black/[0.04] hover:text-text-heading'
+            ? 'bg-[var(--color-accent)] text-white shadow-[0_1px_3px_rgba(15,23,42,0.14)]'
+            : 'text-text-muted hover:bg-black/[0.045] hover:text-text-heading'
         }`}
       >
         <span className="truncate">{label}</span>
@@ -210,7 +210,7 @@ export function TopicTabs({
 
   return (
     <div
-      className="flex min-h-0 w-full items-center gap-1 overflow-x-auto border-b border-border/60 bg-surface/40 px-2 py-1.5"
+      className="flex min-h-11 w-full shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border/80 bg-white px-3 py-1.5 shadow-[0_1px_0_rgba(15,23,42,0.025)]"
       data-testid="topic-tabs"
       data-context={context}
       aria-label="Topic Tabs"
@@ -329,7 +329,7 @@ export function TopicTabs({
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[12px] font-medium text-text-muted transition-colors hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)]"
+              className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border-strong/70 px-2.5 py-1 text-[12px] font-medium text-text-muted transition-colors hover:border-[var(--color-accent)]/45 hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent)]"
               data-testid="topic-tab-create"
             >
               <Plus className="h-3.5 w-3.5" />

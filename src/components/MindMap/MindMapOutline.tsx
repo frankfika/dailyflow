@@ -246,8 +246,8 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
   };
 
   return (
-    <section className={`flex h-full min-h-0 flex-col bg-white/75 backdrop-blur-xl ${layout === 'split' ? 'w-[420px] shrink-0 border-r border-border/70' : 'w-full'}`} data-testid="mindmap-outline" data-layout={layout}>
-      <div className="shrink-0 border-b border-border/60 px-4 py-3">
+    <section className={`flex h-full min-h-0 flex-col bg-[#fafbfa] ${layout === 'split' ? 'w-[420px] shrink-0 border-r border-border/70' : 'w-full'}`} data-testid="mindmap-outline" data-layout={layout}>
+      <div className="shrink-0 border-b border-border/70 bg-white px-5 py-3.5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-text-heading">{language === 'zh' ? '脑图大纲' : 'Mind map outline'}</h2>
@@ -257,7 +257,7 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className={`px-3 py-5 ${layout === 'document' ? 'mx-auto w-full max-w-[860px]' : ''}`}>
+        <div className={`px-4 py-6 ${layout === 'document' ? 'mx-auto w-full max-w-[900px]' : ''}`}>
         {rows.map(({ node, depth }) => {
           const isRoot = node.id === map.rootId;
           const isTask = node.kind === 'task' && !!node.taskId;
@@ -265,7 +265,7 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
           return (
             <div
               key={node.id}
-              className={`group mb-0.5 flex min-h-9 items-center rounded-lg border transition-colors ${selectedId === node.id ? 'border-[var(--color-accent)]/20 bg-[var(--color-accent-light)]' : 'border-transparent hover:bg-black/[0.025]'}`}
+              className={`group mb-1 flex min-h-11 items-center rounded-xl border transition-all ${selectedId === node.id ? 'border-[var(--color-accent)]/25 bg-white shadow-[0_1px_5px_rgba(15,23,42,0.07)]' : 'border-transparent hover:border-border/60 hover:bg-white/80'}`}
               style={{ paddingLeft: 6 + Math.min(depth, 8) * 20 }}
               data-testid={`outline-row-${node.id}`}
             >
@@ -292,7 +292,7 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
                       onTaskStatusChange(node, status);
                     }
                   }}
-                  className={`mr-1.5 shrink-0 rounded p-0.5 transition-colors ${isTask ? (node.status === 'done' ? 'text-[var(--color-success)]' : 'text-[var(--color-accent)]') : 'text-text-muted/30 hover:text-[var(--color-accent)]'}`}
+                  className={`mr-1.5 shrink-0 rounded p-0.5 transition-colors ${isTask ? (node.status === 'done' ? 'text-[var(--color-success)]' : 'text-[var(--color-accent)]') : 'text-text-muted/55 hover:text-[var(--color-accent)]'}`}
                   title={isTask ? (language === 'zh' ? '已在 Today，点击切换完成状态' : 'In Today; click to toggle') : (language === 'zh' ? '添加到 Today（⌘⇧Enter）' : 'Add to Today (⌘⇧Enter)')}
                   data-testid={`outline-task-${node.id}`}
                 >
@@ -392,7 +392,7 @@ export function MindMapOutline({ map, language, selectedId, onSelect, onChange, 
         <button
           type="button"
           onClick={() => { const result = addOutlineNode(map, map.rootId); applyWholeMap(result.map, result.nodeId); }}
-          className="ml-7 mt-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
+          className="ml-7 mt-3 flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-xs font-medium text-text-muted hover:border-border/60 hover:bg-white hover:text-text-heading"
         >
           <CornerDownRight className="h-3.5 w-3.5" />
           {language === 'zh' ? '添加一级主题' : 'Add top-level topic'}

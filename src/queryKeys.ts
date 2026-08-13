@@ -19,7 +19,8 @@ export const queryKeys = {
   eventsRoot: () => ['events'] as const,
   events: (filters: object = {}) => [...queryKeys.eventsRoot(), 'list', filters] as const,
   event: (id: string) => ['events', 'detail', id] as const,
-  todayItems: (date: string, context: string) => ['today-items', date, context] as const,
+  todayItemsRoot: () => ['today-items'] as const,
+  todayItems: (date: string, context: string) => [...queryKeys.todayItemsRoot(), date, context] as const,
   standaloneTasks: (filters: object = {}) => ['standalone-tasks', filters] as const,
   // Topic Space v2 (Phase 1). Not workspace-scoped: a topic space is
   // global to a context (work / life / unclassified), and the same

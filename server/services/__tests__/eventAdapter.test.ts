@@ -310,6 +310,8 @@ describe.sequential('EFP-002 event adapter (read-only)', () => {
       expect(today[0]).toMatchObject({
         kind: 'event-node',
         eventId: 'mm_independent',
+        mindmapId: 'mm_independent',
+        spaceId: undefined,
         nodeId: 'n_independent_task',
         taskId: 't_independent',
         status: 'done',

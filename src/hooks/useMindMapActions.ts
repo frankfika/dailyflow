@@ -58,6 +58,8 @@ export function usePromoteNodeToTask(): UseMutationResult<
       // the cross-date task source for any topic space so the list
       // view and the mindmap mirror see the new task.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
@@ -86,7 +88,10 @@ export function useLinkNodeToTask(): UseMutationResult<
     onSuccess: (updated) => {
       qc.setQueryData(queryKeys.mindmap(updated.id), updated);
       // The linked task may now appear in a different space's
-      // cross-date list — invalidate so the cache refetches.
+      // cross-date list and changes from a standalone Today item into an
+      // Event-backed item. Refresh both projections immediately.
+      qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
@@ -148,6 +153,8 @@ export function useUpdateTaskSpace(): UseMutationResult<
       // drop the cross-date source for every space — the task may
       // have moved between spaces or been detached entirely.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });

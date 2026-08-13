@@ -57,8 +57,8 @@ export function MindMapList({
   className = '',
 }: MindMapListProps) {
   return (
-    <div className={`flex h-full w-full shrink-0 flex-col border-r border-border bg-surface/40 sm:w-60 ${className}`} data-testid="mindmap-list">
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2.5">
+    <div className={`flex h-full w-full shrink-0 flex-col border-r border-border/80 bg-[#f7f8f7] sm:w-64 ${className}`} data-testid="mindmap-list">
+      <div className="flex min-h-[52px] items-center justify-between gap-2 border-b border-border/80 bg-white/80 px-3 py-2.5">
         <div className="flex items-center gap-2 text-text-muted">
           <Network className="h-4 w-4" />
           <span className="text-xs font-semibold uppercase tracking-wider">
@@ -100,7 +100,7 @@ export function MindMapList({
             </p>
           </div>
         ) : (
-          <ul className="space-y-0.5 px-1.5">
+          <ul className="space-y-1 px-2 py-1">
             {maps.map((m) => {
               const isActive = m.id === activeId;
               return (
@@ -109,10 +109,10 @@ export function MindMapList({
                     type="button"
                     onClick={() => onSelect(m.id)}
                     data-active={isActive}
-                    className={`flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+                    className={`flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-lg border px-3 py-2 text-left transition-all ${
                       isActive
-                        ? 'bg-[var(--color-accent-light)] text-text-heading'
-                        : 'text-text-main hover:bg-black/[0.03]'
+                        ? 'border-[var(--color-accent)]/20 bg-white text-text-heading shadow-[0_1px_4px_rgba(15,23,42,0.08)]'
+                        : 'border-transparent text-text-main hover:border-border/70 hover:bg-white/75'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">

@@ -426,8 +426,8 @@ export default function App() {
       priority: item.priority,
       source_date: item.scheduledDate,
       ...(item.kind === 'event-node' ? {
-        spaceId: item.eventId,
-        originMindmapId: item.eventId,
+        spaceId: item.spaceId,
+        originMindmapId: item.mindmapId,
         originNodeId: item.nodeId,
         sourcePath: item.path.map((segment) => segment.text).filter(Boolean),
       } : {}),
@@ -441,8 +441,8 @@ export default function App() {
         if (item.kind !== 'event-node') continue;
         const group = byEvent.get(item.eventId) ?? {
           id: item.eventId,
-          mindmapId: item.eventId,
-          spaceId: item.eventId,
+          mindmapId: item.mindmapId,
+          spaceId: item.spaceId,
           title: item.eventTitle,
           taskIds: [],
           completedTaskIds: [],
@@ -1845,7 +1845,7 @@ export default function App() {
                         activeSpaceId={activeSpaceId}
                         topicSpaces={topicSpaces}
                         activeContext={activeContext}
-                        todayDate={currentFileDate}
+                        todayDate={getTodayStr()}
                         linkableTasks={
                           // Phase 3: source from the cross-date list so
                           // the mindmap mirror can resolve task status /
@@ -1884,14 +1884,23 @@ export default function App() {
                         onOpenTask={handleOpenTask}
                         onTaskDataChanged={async (date) => {
                           const data = await filesApi.get(date);
-                          if (!data) return;
-                          if (date === currentFileDate) {
+                          if (data && date === currentFileDate) {
                             setMarkdown(data.content);
                             setTasks(data.tasks as Task[]);
                             setLastSyncedMD(data.content);
                           }
-                          setFilesMap((previous) => ({ ...previous, [date]: data.content }));
-                          await refreshEarlierOpenTasks();
+                          if (data) {
+                            setFilesMap((previous) => ({ ...previous, [date]: data.content }));
+                          }
+                          // Today renders the Event adapter's projection when
+                          // it has loaded, even if that projection is an empty
+                          // array. Refresh it after every Mindmap task write so
+                          // the new/linked task cannot be hidden by stale data.
+                          await Promise.all([
+                            todayItemsQuery.refetch(),
+                            eventsQuery.refetch(),
+                            refreshEarlierOpenTasks(),
+                          ]);
                         }}
                       />
                     )}
