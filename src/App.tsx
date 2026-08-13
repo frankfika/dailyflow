@@ -1884,14 +1884,23 @@ export default function App() {
                         onOpenTask={handleOpenTask}
                         onTaskDataChanged={async (date) => {
                           const data = await filesApi.get(date);
-                          if (!data) return;
-                          if (date === currentFileDate) {
+                          if (data && date === currentFileDate) {
                             setMarkdown(data.content);
                             setTasks(data.tasks as Task[]);
                             setLastSyncedMD(data.content);
                           }
-                          setFilesMap((previous) => ({ ...previous, [date]: data.content }));
-                          await refreshEarlierOpenTasks();
+                          if (data) {
+                            setFilesMap((previous) => ({ ...previous, [date]: data.content }));
+                          }
+                          // Today renders the Event adapter's projection when
+                          // it has loaded, even if that projection is an empty
+                          // array. Refresh it after every Mindmap task write so
+                          // the new/linked task cannot be hidden by stale data.
+                          await Promise.all([
+                            todayItemsQuery.refetch(),
+                            eventsQuery.refetch(),
+                            refreshEarlierOpenTasks(),
+                          ]);
                         }}
                       />
                     )}

@@ -71,9 +71,10 @@ afterEach(() => {
 });
 
 describe('useMindMapActions', () => {
-  it('usePromoteNodeToTask caches the returned map under queryKeys.mindmap(id)', async () => {
+  it('usePromoteNodeToTask caches the map and invalidates Today projections', async () => {
     (mindmapsApi.promoteNodeToTask as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(SAMPLE_MAP);
     const { wrapper, qc } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
     const { result } = renderHook(() => usePromoteNodeToTask(), { wrapper });
 
     act(() => {
@@ -81,14 +82,16 @@ describe('useMindMapActions', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(qc.getQueryData(queryKeys.mindmap('mm_1'))).toEqual(SAMPLE_MAP);
-    // Tasks query should be invalidated so a TodayView refetch picks up
-    // the new task.
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
+    );
     expect(qc.isMutating()).toBe(0);
   });
 
-  it('useLinkNodeToTask caches the returned map and does NOT touch the tasks cache', async () => {
+  it('useLinkNodeToTask caches the returned map and refreshes Today grouping', async () => {
     (mindmapsApi.linkNodeToTask as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(SAMPLE_MAP);
     const { wrapper, qc } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
     const { result } = renderHook(() => useLinkNodeToTask(), { wrapper });
 
     act(() => {
@@ -96,6 +99,9 @@ describe('useMindMapActions', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(qc.getQueryData(queryKeys.mindmap('mm_1'))).toEqual(SAMPLE_MAP);
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
+    );
   });
 
   it('useUpdateNodeKind caches the new state and passes the tag extra', async () => {
@@ -130,6 +136,9 @@ describe('useMindMapActions', () => {
     expect(tasksApi.updateSpace).toHaveBeenCalledWith('t_1', 'sp_1', '2026-08-07');
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.tasksRoot() }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
     );
   });
 });
