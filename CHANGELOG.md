@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1](https://github.com/frankfika/dailyflow/compare/v1.7.0...v1.7.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* make Mindmap and Today a reliable shared task flow ([#41](https://github.com/frankfika/dailyflow/issues/41)) ([7d7b759](https://github.com/frankfika/dailyflow/commit/7d7b7599f0f0002ed1fde3173e542be2b49f0656))
+
 ## [1.7.0](https://github.com/frankfika/dailyflow/compare/v1.6.2...v1.7.0) (2026-08-12)
 
 
