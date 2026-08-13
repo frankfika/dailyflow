@@ -869,6 +869,8 @@ export async function listTodayItems(
         kind: 'event-node',
         id: `event-node:${eventId}:${nodeId}`,
         eventId,
+        mindmapId: mmId,
+        spaceId: space?.id,
         nodeId,
         taskId,
         title: resolved.title || (map?.nodes.find(n => n.id === nodeId)?.text || ''),

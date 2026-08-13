@@ -59,6 +59,7 @@ export function usePromoteNodeToTask(): UseMutationResult<
       // view and the mindmap mirror see the new task.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
@@ -90,6 +91,7 @@ export function useLinkNodeToTask(): UseMutationResult<
       // cross-date list and changes from a standalone Today item into an
       // Event-backed item. Refresh both projections immediately.
       qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });
@@ -152,6 +154,7 @@ export function useUpdateTaskSpace(): UseMutationResult<
       // have moved between spaces or been detached entirely.
       qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
       qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
     },
   });

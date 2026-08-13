@@ -426,8 +426,8 @@ export default function App() {
       priority: item.priority,
       source_date: item.scheduledDate,
       ...(item.kind === 'event-node' ? {
-        spaceId: item.eventId,
-        originMindmapId: item.eventId,
+        spaceId: item.spaceId,
+        originMindmapId: item.mindmapId,
         originNodeId: item.nodeId,
         sourcePath: item.path.map((segment) => segment.text).filter(Boolean),
       } : {}),
@@ -441,8 +441,8 @@ export default function App() {
         if (item.kind !== 'event-node') continue;
         const group = byEvent.get(item.eventId) ?? {
           id: item.eventId,
-          mindmapId: item.eventId,
-          spaceId: item.eventId,
+          mindmapId: item.mindmapId,
+          spaceId: item.spaceId,
           title: item.eventTitle,
           taskIds: [],
           completedTaskIds: [],
@@ -1845,7 +1845,7 @@ export default function App() {
                         activeSpaceId={activeSpaceId}
                         topicSpaces={topicSpaces}
                         activeContext={activeContext}
-                        todayDate={currentFileDate}
+                        todayDate={getTodayStr()}
                         linkableTasks={
                           // Phase 3: source from the cross-date list so
                           // the mindmap mirror can resolve task status /

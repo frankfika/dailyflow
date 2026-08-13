@@ -64,6 +64,12 @@ export default defineConfig({
     timeout: 120000,
     env: {
       ...process.env,
+      // Never fall back to the packaged DailyFlow server on 47832. A user may
+      // have the desktop app open while the suite runs; sharing that port can
+      // overwrite their real ~/.dailyflow/config.json and produce false-green
+      // tests against production state.
+      PORT: '47842',
+      VITE_API_PROXY_TARGET: 'http://127.0.0.1:47842',
       DAILYFLOW_CONFIG_FILE: join(e2eRoot, 'config.json'),
       DAILYFLOW_RECURRING_FILE: join(e2eRoot, 'recurring_tasks.json'),
     },

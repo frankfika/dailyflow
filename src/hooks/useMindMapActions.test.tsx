@@ -85,6 +85,9 @@ describe('useMindMapActions', () => {
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
     );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.eventsRoot() }),
+    );
     expect(qc.isMutating()).toBe(0);
   });
 
@@ -101,6 +104,9 @@ describe('useMindMapActions', () => {
     expect(qc.getQueryData(queryKeys.mindmap('mm_1'))).toEqual(SAMPLE_MAP);
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.eventsRoot() }),
     );
   });
 
@@ -139,6 +145,9 @@ describe('useMindMapActions', () => {
     );
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.todayItemsRoot() }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.eventsRoot() }),
     );
   });
 });
