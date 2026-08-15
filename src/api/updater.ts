@@ -3,8 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { check } from '@tauri-apps/plugin-updater';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+
+// Cache the Update handle and the in-flight download so the app can
+// download silently in the background and never download twice.
+let cachedUpdate: Update | null = null;
+let downloadPromise: Promise<void> | null = null;
+let updateDownloaded = false;
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -73,6 +79,7 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
 
   try {
     const update = await check();
+    cachedUpdate = update;
 
     if (!update) {
       return {
@@ -104,36 +111,65 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
 }
 
 /**
- * 下载并安装更新（不自动重启）
+ * 下载并安装更新（不自动重启）。
+ * 并发或重复调用会复用同一个后台下载任务，已下载完成则立即返回。
  */
 export async function downloadUpdate(
   onProgress?: (downloaded: number, total: number) => void
 ): Promise<void> {
-  const update = await check();
-
-  if (!update) {
-    throw new Error('No update available');
+  if (updateDownloaded) {
+    return;
+  }
+  if (downloadPromise) {
+    return downloadPromise;
   }
 
-  let totalBytes = 0;
-  let downloadedBytes = 0;
-
-  await update.downloadAndInstall((event) => {
-    switch (event.event) {
-      case 'Started':
-        totalBytes = event.data.contentLength ?? 0;
-        downloadedBytes = 0;
-        onProgress?.(0, totalBytes);
-        break;
-      case 'Progress':
-        downloadedBytes += event.data.chunkLength;
-        onProgress?.(downloadedBytes, totalBytes);
-        break;
-      case 'Finished':
-        onProgress?.(downloadedBytes, totalBytes);
-        break;
+  // Assign synchronously so concurrent callers share one task even
+  // while the initial check() is still in flight.
+  downloadPromise = (async () => {
+    if (!cachedUpdate) {
+      cachedUpdate = await check();
     }
+    const update = cachedUpdate;
+
+    if (!update) {
+      throw new Error('No update available');
+    }
+
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+
+    await update.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started':
+          totalBytes = event.data.contentLength ?? 0;
+          downloadedBytes = 0;
+          onProgress?.(0, totalBytes);
+          break;
+        case 'Progress':
+          downloadedBytes += event.data.chunkLength;
+          onProgress?.(downloadedBytes, totalBytes);
+          break;
+        case 'Finished':
+          onProgress?.(downloadedBytes, totalBytes);
+          break;
+      }
+    });
+    updateDownloaded = true;
+  })().catch((error) => {
+    // Allow retry on failure
+    downloadPromise = null;
+    throw error;
   });
+
+  return downloadPromise;
+}
+
+/**
+ * 更新包是否已在后台下载完成
+ */
+export function isUpdateDownloaded(): boolean {
+  return updateDownloaded;
 }
 
 /**

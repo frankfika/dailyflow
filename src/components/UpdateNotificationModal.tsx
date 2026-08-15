@@ -8,6 +8,7 @@ interface UpdateNotificationModalProps {
   onClose: () => void;
   onUpdate: (onProgress: (downloaded: number, total: number) => void) => Promise<void>;
   onSkipVersion: () => void;
+  alreadyDownloaded?: boolean;
 }
 
 export function UpdateNotificationModal({
@@ -16,9 +17,10 @@ export function UpdateNotificationModal({
   onClose,
   onUpdate,
   onSkipVersion,
+  alreadyDownloaded = false,
 }: UpdateNotificationModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadProgress, setDownloadProgress] = useState(alreadyDownloaded ? 100 : 0);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleUpdate = async () => {
@@ -76,7 +78,15 @@ export function UpdateNotificationModal({
           </div>
         )}
 
-        {isDownloading && (
+        {alreadyDownloaded && !isDownloading && (
+          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400">
+            {language === 'zh'
+              ? '更新包已在后台下载完成，点击「重启更新」即可生效。'
+              : 'The update has been downloaded in the background. Click "Restart & Update" to apply.'}
+          </div>
+        )}
+
+        {isDownloading && !alreadyDownloaded && (
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="text-stone-600 dark:text-stone-400">{language === 'zh' ? '正在下载…' : 'Downloading...'}</span>
@@ -108,7 +118,11 @@ export function UpdateNotificationModal({
             className="flex-1 rounded bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
             disabled={isDownloading}
           >
-            {isDownloading ? (language === 'zh' ? '正在下载…' : 'Downloading...') : (language === 'zh' ? '立即更新' : 'Update Now')}
+            {isDownloading
+              ? (language === 'zh' ? '正在处理…' : 'Processing...')
+              : alreadyDownloaded
+                ? (language === 'zh' ? '重启更新' : 'Restart & Update')
+                : (language === 'zh' ? '立即更新' : 'Update Now')}
           </button>
         </div>
 

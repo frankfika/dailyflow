@@ -514,6 +514,9 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [bgDownloadProgress, setBgDownloadProgress] = useState(0);
+  const [bgDownloadDone, setBgDownloadDone] = useState(false);
+  const [bgDownloadError, setBgDownloadError] = useState(false);
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [ipfsApiKey, setIpfsApiKey] = useState<string>('');
   const [ipfsGateway, setIpfsGateway] = useState<string>('');
@@ -703,7 +706,8 @@ export default function App() {
     return () => window.removeEventListener(DOMAIN_EVENTS.aiProviderChanged, sync);
   }, []);
 
-  // Auto-check for updates on app start (silently, only for Settings badge)
+  // Auto-check for updates on app start. Downloads silently in the
+  // background; the user is only asked to restart once it is ready.
   useEffect(() => {
     const autoCheckUpdate = async () => {
       try {
@@ -714,8 +718,17 @@ export default function App() {
           // Check if this version was skipped
           const skippedVersion = localStorage.getItem('dailyflow_skipped_version');
           if (skippedVersion !== info.latestVersion) {
-            // Show modal only if not skipped
-            setShowUpdateModal(true);
+            // Start silent background download; progress shows in a
+            // non-blocking floating card instead of a blocking modal.
+            try {
+              await downloadUpdate((downloaded, total) => {
+                setBgDownloadProgress(total > 0 ? Math.round((downloaded / total) * 100) : 0);
+              });
+              setBgDownloadDone(true);
+            } catch (error) {
+              console.error('Background update download failed:', error);
+              setBgDownloadError(true);
+            }
           }
         }
       } catch (error) {
@@ -1373,6 +1386,15 @@ export default function App() {
     }
   };
 
+  const handleRestartNow = async () => {
+    try {
+      await relaunchApp();
+    } catch (error) {
+      console.error('Failed to relaunch:', error);
+      showToast(language === 'zh' ? '重启失败，请手动重启应用' : 'Relaunch failed. Please restart the app manually.', 'error');
+    }
+  };
+
   const handleSkipVersion = () => {
     if (updateInfo?.latestVersion) {
       localStorage.setItem('dailyflow_skipped_version', updateInfo.latestVersion);
@@ -2007,7 +2029,44 @@ export default function App() {
           onClose={handleCloseUpdateModal}
           onUpdate={handleUpdate}
           onSkipVersion={handleSkipVersion}
+          alreadyDownloaded={bgDownloadDone}
         />
+      )}
+
+      {/* Non-blocking background update pill */}
+      {updateInfo && !showUpdateModal && !bgDownloadDone && !bgDownloadError && bgDownloadProgress > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 flex w-64 flex-col gap-2 rounded-lg border border-stone-200 bg-white p-3 shadow-lg dark:border-stone-700 dark:bg-stone-800">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-stone-600 dark:text-stone-400">
+              {language === 'zh' ? `正在后台下载 v${updateInfo.latestVersion}` : `Downloading v${updateInfo.latestVersion}`}
+            </span>
+            <span className="font-medium text-stone-900 dark:text-stone-100">{bgDownloadProgress}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
+            <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${bgDownloadProgress}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Update ready pill */}
+      {updateInfo && !showUpdateModal && bgDownloadDone && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-lg dark:border-stone-700 dark:bg-stone-800">
+          <span className="text-sm text-stone-700 dark:text-stone-300">
+            {language === 'zh' ? `v${updateInfo.latestVersion} 已下载完成` : `v${updateInfo.latestVersion} ready`}
+          </span>
+          <button
+            onClick={handleRestartNow}
+            className="rounded bg-blue-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-600"
+          >
+            {language === 'zh' ? '立即重启' : 'Restart Now'}
+          </button>
+          <button
+            onClick={() => setShowUpdateModal(true)}
+            className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+          >
+            {language === 'zh' ? '详情' : 'Details'}
+          </button>
+        </div>
       )}
 
        {/* Quick Note Editor */}
