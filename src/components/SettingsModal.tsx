@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { ModelLibrary } from './ModelLibrary';
+import { persistProviderConfigsToBackend } from '../types/models';
 import { open } from '@tauri-apps/plugin-shell';
 import {
   configApi,
@@ -27,8 +29,8 @@ interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'sync' | 'about';
-  setConfigTab: (tab: 'general' | 'sync' | 'about') => void;
+  configTab: 'general' | 'ai' | 'sync' | 'about';
+  setConfigTab: (tab: 'general' | 'ai' | 'sync' | 'about') => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
@@ -179,6 +181,17 @@ export function SettingsModal({
     ipfsApi.list()
       .then(({ records }) => setIpfsBackups(records))
       .catch(() => setIpfsBackups([]));
+  }, [showSettings, configTab]);
+
+  // Best-effort: persist Model Center edits made from the AI tab when the
+  // user leaves the tab or closes the modal (mirrors AIChat behavior).
+  const prevAiTabRef = useRef(false);
+  useEffect(() => {
+    const wasAi = prevAiTabRef.current;
+    prevAiTabRef.current = showSettings && configTab === 'ai';
+    if (wasAi && prevAiTabRef.current === false) {
+      persistProviderConfigsToBackend().catch(err => console.error('Model center backend sync failed:', err));
+    }
   }, [showSettings, configTab]);
 
   const handleGoogleConnect = async () => {
@@ -851,6 +864,17 @@ export function SettingsModal({
             {language === 'zh' ? '通用' : 'General'}
           </button>
           <button
+            onClick={() => setConfigTab('ai')}
+            className={`flex items-center gap-1.5 py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
+              configTab === 'ai'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            {language === 'zh' ? 'AI 模型' : 'AI Models'}
+          </button>
+          <button
             onClick={() => setConfigTab('sync')}
             className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'sync'
@@ -874,6 +898,11 @@ export function SettingsModal({
 
         {/* Scrollable Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-5" data-testid="settings-scroll-region">
+          {configTab === 'ai' && (
+            <div className="h-[65dvh] min-h-0 -m-2">
+              <ModelLibrary language={language} />
+            </div>
+          )}
           {configTab === 'general' && (
             <div className="space-y-5">
               {/* Workspace Path (read-only — manage via sidebar switcher) */}

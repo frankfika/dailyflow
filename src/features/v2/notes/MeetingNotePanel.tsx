@@ -235,6 +235,7 @@ export function MeetingNotePanel({
   const [localStatus, setLocalStatus] = useState<LocalTranscriptionStatus | null>(null);
   const [localConfigSaving, setLocalConfigSaving] = useState(false);
   const [transcribingSourceId, setTranscribingSourceId] = useState<string | null>(null);
+  const [audioTranscriptMap, setAudioTranscriptMap] = useState<Record<string, SourceItem>>({});
   const selectedMode = transcriptionSettings.mode;
   const remoteEndpoint = transcriptionSettings.remoteApiKey
     && transcriptionSettings.remoteBaseUrl
@@ -448,6 +449,10 @@ export function MeetingNotePanel({
         ...current.filter((item) => item.id !== transcriptSource!.id),
         transcriptSource!,
       ]);
+      setAudioTranscriptMap((current) => ({
+        ...current,
+        [captureResult.audioSource.id]: transcriptSource!,
+      }));
       setNoticeTone('success');
       setNotice(t.transcribed);
       onNoteUpdated?.(result.note, result);
@@ -510,7 +515,7 @@ export function MeetingNotePanel({
   return (
     <section
       aria-label={t.title}
-      className="rounded-xl border border-border bg-surface/45 p-3"
+      className="max-h-[min(560px,calc(100vh-180px))] overflow-y-auto rounded-xl border border-border bg-surface/45 p-3"
       data-testid="meeting-note-panel"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -541,7 +546,7 @@ export function MeetingNotePanel({
       </div>
 
       <div className="mt-3 border-t border-border/70 pt-3">
-        {!canTranscribe && state === 'idle' && (
+        {!canTranscribe && state === 'idle' && savedAudioSources.length === 0 && (
           <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="transcription-setup-callout">
             <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{t.setupTitle}</p>
             <p className="mt-1 text-[11px] leading-5 text-amber-800/90 dark:text-amber-300/90">{t.setupBody}</p>
@@ -922,56 +927,91 @@ export function MeetingNotePanel({
       )}
 
       {(savedAudioSources.length > 0 || latestTranscript?.body) && (
-        <div className="mt-3 space-y-2 border-t border-border pt-3">
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
           {savedAudioSources.length > 0 && (
             <div>
               <p className="mb-2 text-[11px] font-medium text-text-secondary">
                 {t.savedRecordings} · {audioCount}
               </p>
-              <div className="space-y-2">
-                {savedAudioSources.map((source, index) => (
-                  <div key={source.id} className="flex flex-wrap items-center gap-2">
-                    <span className="min-w-0 truncate text-[11px] text-text-muted">
-                      {source.title || `${t.recording} ${index + 1}`}
-                    </span>
-                    <audio
-                      controls
-                      preload="metadata"
-                      src={getNoteMeetingAudioUrl(note.id, source.id)}
-                      className="h-8 min-w-[220px] max-w-full flex-1"
-                      aria-label={source.title || `${t.recording} ${index + 1}`}
-                    />
-                    {canTranscribe ? (
-                      <button
-                        type="button"
-                        disabled={transcribingSourceId === source.id}
-                        onClick={() => void runSavedTranscription({
-                          note,
-                          audioSource: source,
-                          transcriptionMode: 'saved-only',
-                        })}
-                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface disabled:opacity-50 sm:min-h-0 sm:px-2.5"
-                      >
-                        {transcribingSourceId === source.id && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
-                        {t.transcribeLater}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setShowTranscriptionSettings(true)}
-                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 sm:min-h-0 sm:px-2.5"
-                      >
-                        <Settings2 className="h-3 w-3" aria-hidden="true" />
-                        {t.configureTranscription}
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {savedAudioSources.map((source, index) => {
+                  const transcript = audioTranscriptMap[source.id];
+                  const isTranscribing = transcribingSourceId === source.id;
+                  return (
+                    <div key={source.id} className="rounded-lg border border-border bg-surface/40 p-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-950/30">
+                          <FileAudio className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[11px] text-text-muted">
+                          {source.title || `${t.recording} ${index + 1}`}
+                        </span>
+                        {isTranscribing ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600">
+                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                            {t.backgroundTranscribing}
+                          </span>
+                        ) : transcript?.body ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700">
+                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                            {t.transcribed}
+                          </span>
+                        ) : canTranscribe ? (
+                          <button
+                            type="button"
+                            onClick={() => void runSavedTranscription({
+                              note,
+                              audioSource: source,
+                              transcriptionMode: 'saved-only',
+                            })}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface"
+                          >
+                            {t.transcribeLater}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowTranscriptionSettings(true)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                          >
+                            <Settings2 className="h-3 w-3" aria-hidden="true" />
+                            {t.configureTranscription}
+                          </button>
+                        )}
+                      </div>
+                      <audio
+                        controls
+                        preload="metadata"
+                        src={getNoteMeetingAudioUrl(note.id, source.id)}
+                        className="mt-2 h-8 w-full"
+                        aria-label={source.title || `${t.recording} ${index + 1}`}
+                      />
+                      {transcript?.body && (
+                        <div className="mt-2 rounded-md border border-border/60 bg-background/60 p-2">
+                          <p className="text-[11px] font-medium text-text-secondary">{t.latestTranscript}</p>
+                          {onInsertTranscript && (
+                            <button
+                              type="button"
+                              onClick={() => void onInsertTranscript(transcript.body!)}
+                              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-accent/25 bg-accent/5 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+                            >
+                              <FileText className="h-3 w-3" aria-hidden="true" />
+                              {t.insertTranscript}
+                            </button>
+                          )}
+                          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-text-secondary">
+                            {transcript.body}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
-          {latestTranscript?.body && (
-            <details className="rounded-lg border border-border bg-surface/40 px-3 py-2">
+          {latestTranscript?.body && !audioTranscriptMap[savedAudioSources[0]?.id] && (
+            <details className="rounded-lg border border-border bg-surface/40 px-3 py-2" open>
               <summary className="cursor-pointer text-xs font-medium text-text-secondary">
                 {t.latestTranscript} · {transcriptCount}
               </summary>

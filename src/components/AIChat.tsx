@@ -499,7 +499,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
             onClose={() => {
               setShowSettings(false);
               reloadProvidersAndSkills();
-              persistProviderConfigsToBackend();
+              persistProviderConfigsToBackend().catch(err => console.error('Model center backend sync failed:', err));
             }}
           />
         )}

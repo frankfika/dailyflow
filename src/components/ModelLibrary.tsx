@@ -16,7 +16,7 @@ import {
   type ProviderConfigStore,
   type ProviderTemplate,
 } from '../types/models';
-import { aiApi } from '../api/client';
+import { aiApi, DOMAIN_EVENTS } from '../api/client';
 import { ProviderIcon } from './ProviderIcon';
 
 interface ModelLibraryProps {
@@ -40,6 +40,28 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
   const [testResult, setTestResult] = useState<{ id: string; status: 'success' | 'error'; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Backend persistence is the source of truth for server-side AI. Surface
+  // sync failures instead of letting users believe a save reached the server.
+  useEffect(() => {
+    const onFailed = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { message?: string } | undefined;
+      setSyncError(detail?.message || 'sync failed');
+    };
+    const onSynced = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { source?: string } | undefined;
+      if (detail?.source === 'backend-sync' || detail?.source === 'backend-hydration') {
+        setSyncError(null);
+      }
+    };
+    window.addEventListener(DOMAIN_EVENTS.aiProviderSyncFailed, onFailed);
+    window.addEventListener(DOMAIN_EVENTS.aiProviderChanged, onSynced);
+    return () => {
+      window.removeEventListener(DOMAIN_EVENTS.aiProviderSyncFailed, onFailed);
+      window.removeEventListener(DOMAIN_EVENTS.aiProviderChanged, onSynced);
+    };
+  }, []);
 
   useEffect(() => {
     const store = loadProviderConfigs();
@@ -226,6 +248,16 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-surface">
+      {syncError && (
+        <div className="mx-5 mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          <span>
+            {language === 'zh'
+              ? `配置已保存在本机，但同步到后端失败（${syncError}）。会议纪要、Inbox 智能提取等服务端 AI 功能可能仍显示"AI 未配置"，请检查后端服务后重试。`
+              : `Saved locally, but syncing to the backend failed (${syncError}). Server-side AI features may still report "AI not configured".`}
+          </span>
+        </div>
+      )}
       {!drawerOpen && (
         <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
           <p className="text-sm text-text-muted">

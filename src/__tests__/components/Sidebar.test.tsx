@@ -86,7 +86,7 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
   });
 
-  it('keeps Events directly reachable and legacy Mind maps under More', () => {
+  it('keeps Events directly reachable and does not show legacy Mind maps', () => {
     render(<SidebarHarness onOpenSettings={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
@@ -99,8 +99,8 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
-    expect(screen.getByText('Mind maps')).toBeInTheDocument();
+    expect(screen.queryByText('Mind maps')).not.toBeInTheDocument();
     expect(screen.getByTestId('nav-events')).toBeInTheDocument();
-    expect(screen.getByTestId('nav-mindmap')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-mindmap')).not.toBeInTheDocument();
   });
 });

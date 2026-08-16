@@ -240,6 +240,13 @@ export function loadProviderConfigs(): ProviderConfigStore {
   return normalizeStore(null);
 }
 
+/** Write the normalized store into the localStorage cache without touching the backend. */
+function writeLocalCache(store: ProviderConfigStore): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  localStorage.removeItem(LEGACY_PROVIDER_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
+}
+
 export function saveProviderConfigs(store: ProviderConfigStore): void {
   const current = loadProviderConfigs();
   const normalized = normalizeStore({
@@ -248,12 +255,28 @@ export function saveProviderConfigs(store: ProviderConfigStore): void {
     roles: { ...current.roles, ...store.roles },
     meetingTranscription: store.meetingTranscription ?? current.meetingTranscription,
   });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-  localStorage.removeItem(LEGACY_PROVIDER_STORAGE_KEY);
-  localStorage.removeItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
+  writeLocalCache(normalized);
   try {
     dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'model-center' });
   } catch { /* ignore */ }
+  // The backend config file is the source of truth that server-side AI
+  // features (inbox extraction, meeting summaries) read. Persist on every
+  // save — not only when a modal closes — and make failures visible instead
+  // of silently leaving the server without credentials. Skip under tests:
+  // Node fetch cannot resolve the dev server's relative `/api` URL.
+  if (import.meta.env.MODE === 'test') return;
+  persistProviderConfigsToBackend().then(() => {
+    try {
+      dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'backend-sync' });
+    } catch { /* ignore */ }
+  }).catch(err => {
+    console.error('Failed to persist model center to backend:', err);
+    try {
+      dispatchDomainEvent(DOMAIN_EVENTS.aiProviderSyncFailed, {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } catch { /* ignore */ }
+  });
 }
 
 export function importModelCenter(serialized: string): ProviderConfigStore {
@@ -273,16 +296,53 @@ export function saveMeetingTranscriptionModelSettings(settings: object): void {
 }
 
 /**
- * Persist provider configs to the backend config file so they survive app updates.
- * Best-effort: if the backend call fails, localStorage still holds the data.
+ * Persist provider configs to the backend config file. The backend copy is
+ * the source of truth: server-side AI features read it, and app startup
+ * re-hydrates the local cache from it. Throws on failure so callers can
+ * surface the error; retries once on a version conflict.
  */
 export async function persistProviderConfigsToBackend(): Promise<void> {
+  const store = loadProviderConfigs();
+  const serialized = JSON.stringify(store);
   try {
-    const store = loadProviderConfigs();
     const config = await configApi.get();
-    await configApi.update({ modelCenter: JSON.stringify(store), providerConfigs: null }, config.version);
-  } catch {
-    // Best-effort persistence to backend
+    await configApi.update({ modelCenter: serialized, providerConfigs: null }, config.version);
+  } catch (firstError) {
+    // Version conflicts happen when another part of the app patched the
+    // config between our read and write — retry once against a fresh version.
+    try {
+      const fresh = await configApi.get();
+      await configApi.update({ modelCenter: serialized, providerConfigs: null }, fresh.version);
+    } catch {
+      throw firstError instanceof Error ? firstError : new Error(String(firstError));
+    }
+  }
+}
+
+/**
+ * Backend-first hydration, run once at app startup. The durable config file
+ * wins over the localStorage cache so the UI and server-side AI always see
+ * the same provider registry. When the backend has no model center yet but
+ * this client does (upgraded installs), push the local copy up.
+ */
+export async function hydrateModelCenterFromBackend(): Promise<void> {
+  const config = await configApi.get();
+  const durable = config.modelCenter || config.providerConfigs;
+  if (durable) {
+    const parsed = normalizeStore(JSON.parse(durable) as Partial<ProviderConfigStore>);
+    writeLocalCache(parsed);
+    try {
+      dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'backend-hydration' });
+    } catch { /* ignore */ }
+    if (!config.modelCenter && config.providerConfigs) {
+      // Migrate the legacy field name to `modelCenter`.
+      await persistProviderConfigsToBackend();
+    }
+    return;
+  }
+  const local = loadProviderConfigs();
+  if (local.configs.length > 0 || local.meetingTranscription) {
+    await persistProviderConfigsToBackend();
   }
 }
 

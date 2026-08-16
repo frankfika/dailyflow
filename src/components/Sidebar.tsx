@@ -74,8 +74,8 @@ interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap';
-  setActiveTab: (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => void;
+  activeTab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory';
+  setActiveTab: (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -211,7 +211,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'mindmap') => {
+  const handleNavClick = (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -228,7 +228,7 @@ export function Sidebar({
     persistToggle(true);
   };
 
-  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'mindmap';
+  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory';
   const [showMore, setShowMore] = useState(isAdvancedTab);
 
   useEffect(() => {
@@ -452,7 +452,6 @@ export function Sidebar({
                     {([
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
                       { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
-                      { tab: 'mindmap', label: language === 'zh' ? '脑图（兼容）' : 'Mind maps', icon: Sparkles },
                     ] as const).map(({ tab, label, icon: Icon }) => (
                       <li key={tab}>
                         <button

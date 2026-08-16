@@ -333,8 +333,7 @@ describe('MeetingNotePanel', () => {
       expect.stringContaining('/api/v2/notes/note_01/meeting/audio/src_audio'),
     );
     const summary = screen.getByText(/Latest transcript\s*·\s*1/);
-    expect(summary.closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(summary);
+    expect(summary.closest('details')).toHaveAttribute('open');
     expect(screen.getByText('[00:01] 方辰: 发布计划已确认。')).toBeInTheDocument();
   });
 
@@ -352,8 +351,7 @@ describe('MeetingNotePanel', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByText(/最新转写稿\s*·\s*1/));
-    fireEvent.click(screen.getByRole('button', { name: '加入笔记并编辑' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入笔记并编辑' }));
     expect(onInsertTranscript).toHaveBeenCalledWith('讨论完成，下一步发布。');
   });
 });

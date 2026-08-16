@@ -97,6 +97,7 @@ export const DOMAIN_EVENTS = {
   calendarConnectionChanged: 'calendar.connectionChanged',
   calendarEventsChanged: 'calendar.eventsChanged',
   aiProviderChanged: 'ai.providerChanged',
+  aiProviderSyncFailed: 'ai.providerSyncFailed',
   workspaceChanged: 'workspace.changed',
   tasksChanged: 'tasks.changed',
 } as const;
