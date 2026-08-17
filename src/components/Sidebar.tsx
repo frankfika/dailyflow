@@ -22,6 +22,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
+declare const __APP_VERSION__: string;
+
 /**
  * Mobile sidebar UX (audit #11):
  *  - ≤ 640px (mobile):   hidden by default; full 230px overlay with backdrop
@@ -532,6 +534,10 @@ export function Sidebar({
                   </div>
                 )}
 
+                <div className="flex items-center justify-between px-1 text-[10px] text-text-muted/80">
+                  <span className="font-mono">v{__APP_VERSION__}</span>
+                  <span>{language === 'zh' ? 'DailyFlow' : 'DailyFlow'}</span>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
