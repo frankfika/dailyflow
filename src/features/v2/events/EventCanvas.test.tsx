@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { EventDetail } from '../../../api/client';
 import { EventCanvas } from './EventCanvas';
@@ -16,7 +16,19 @@ const EVENT: EventDetail = {
 
 function renderCanvas(overrides: Partial<React.ComponentProps<typeof EventCanvas>> = {}) {
   const props: React.ComponentProps<typeof EventCanvas> = {
-    event: EVENT, language: 'en', onAddChild: vi.fn(async () => ''), onAddSibling: vi.fn(async () => ''), onRename: vi.fn(), onSchedule: vi.fn(), onUnschedule: vi.fn(), onToggleDone: vi.fn(), onDelete: vi.fn(), ...overrides,
+    event: EVENT,
+    language: 'en',
+    activeNodeId: 'root',
+    onActivate: vi.fn(),
+    onCommit: vi.fn(),
+    onAddChild: vi.fn(async () => ''),
+    onAddSibling: vi.fn(async () => ''),
+    onRename: vi.fn(),
+    onSchedule: vi.fn(),
+    onUnschedule: vi.fn(),
+    onToggleDone: vi.fn(),
+    onDelete: vi.fn(),
+    ...overrides,
   };
   render(<EventCanvas {...props} />);
   return props;
@@ -25,20 +37,22 @@ function renderCanvas(overrides: Partial<React.ComponentProps<typeof EventCanvas
 describe('EventCanvas node actions', () => {
   it('keeps the root toolbar limited to Add child and More', () => {
     renderCanvas();
-    expect(screen.getByRole('button', { name: /Add child/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /More/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Today/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Date/ })).not.toBeInTheDocument();
+    const toolbar = screen.getByTestId('event-node-toolbar');
+    expect(within(toolbar).getByRole('button', { name: /Add child/ })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /More/ })).toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: /Today/ })).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: /^Date/ })).not.toBeInTheDocument();
   });
 
-  it('shows Add child, Add sibling, Today, Date, More for a selected action node and wires scheduling', () => {
+  it('shows Add child, Add sibling, Today, Date, More for an active action node and wires scheduling', () => {
     const onSchedule = vi.fn(async () => undefined);
-    renderCanvas({ onSchedule });
-    fireEvent.click(screen.getByTestId('event-node-step').querySelector('button')!);
-    expect(screen.getByRole('button', { name: /Add child/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Today/ }));
+    renderCanvas({ activeNodeId: 'step', onSchedule });
+    const toolbar = screen.getByTestId('event-node-toolbar');
+    expect(within(toolbar).getByRole('button', { name: /Add child/ })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /Add sibling/ })).toBeInTheDocument();
+    fireEvent.click(within(toolbar).getByRole('button', { name: /Today/ }));
     expect(onSchedule).toHaveBeenCalledWith(EVENT.nodes[1], expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
-    fireEvent.click(screen.getByRole('button', { name: /More/ }));
+    fireEvent.click(within(toolbar).getByRole('button', { name: /More/ }));
     expect(screen.getByRole('button', { name: 'Remove from day' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete node' })).toBeInTheDocument();
   });
@@ -46,9 +60,17 @@ describe('EventCanvas node actions', () => {
   it('adds a child from the focused inline input', () => {
     const onAddChild = vi.fn(async () => '');
     renderCanvas({ onAddChild });
-    fireEvent.click(screen.getByRole('button', { name: /Add child/ }));
+    const toolbar = screen.getByTestId('event-node-toolbar');
+    fireEvent.click(within(toolbar).getByRole('button', { name: /Add child/ }));
     fireEvent.change(screen.getByLabelText('Add step'), { target: { value: 'Prepare notes' } });
     fireEvent.submit(screen.getByLabelText('Add step').closest('form')!);
     expect(onAddChild).toHaveBeenCalledWith('root', 'Prepare notes');
+  });
+
+  it('activates a node on click', () => {
+    const onActivate = vi.fn();
+    renderCanvas({ onActivate });
+    fireEvent.click(screen.getByTestId('event-node-step').querySelector('button')!);
+    expect(onActivate).toHaveBeenCalledWith('step');
   });
 });

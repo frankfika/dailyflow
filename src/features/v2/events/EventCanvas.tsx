@@ -35,7 +35,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     removeDay: 'Remove from day',
     deleteNode: 'Delete node',
     empty: 'Start by adding the first step.',
-    hint: 'Tab child · Enter edit · ↑↓ navigate',
+    hint: 'Tab child · Enter sibling · ↑↓←→ navigate',
   },
   zh: {
     child: '子节点',
@@ -51,14 +51,17 @@ const COPY: Record<'en' | 'zh', Copy> = {
     removeDay: '移出日程',
     deleteNode: '删除节点',
     empty: '从添加第一个步骤开始。',
-    hint: 'Tab 子节点 · Enter 编辑 · ↑↓ 移动',
+    hint: 'Tab 子节点 · Enter 同级 · ↑↓←→ 移动',
   },
 };
 
 interface EventCanvasProps {
   event: EventDetail;
   language: 'en' | 'zh';
+  activeNodeId: string | null;
   focusedNodeId?: string | null;
+  onActivate: (id: string) => void;
+  onCommit: () => void;
   onAddChild: (parentId: string, text: string) => Promise<string>;
   onAddSibling: (referenceId: string, text: string) => Promise<string>;
   onRename: (nodeId: string, text: string) => Promise<void>;
@@ -75,7 +78,10 @@ const GAP_Y = 104;
 export function EventCanvas({
   event,
   language,
+  activeNodeId,
   focusedNodeId,
+  onActivate,
+  onCommit,
   onAddChild,
   onAddSibling,
   onRename,
@@ -85,17 +91,14 @@ export function EventCanvas({
   onDelete,
 }: EventCanvasProps) {
   const copy = COPY[language];
-  const [selectedId, setSelectedId] = useState<string | null>(event.rootNodeId);
   const [addingChild, setAddingChild] = useState(false);
   const [childText, setChildText] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [pendingEditNodeId, setPendingEditNodeId] = useState<string | null>(null);
-  const editInputRef = useRef<HTMLInputElement | null>(null);
+  const [draftText, setDraftText] = useState<Record<string, string>>({});
+  const inputRefs = useRef(new Map<string, HTMLInputElement>());
 
   async function run<T>(action: () => Promise<T>): Promise<T | undefined> {
     if (busy) return undefined;
@@ -106,38 +109,6 @@ export function EventCanvas({
       setBusy(false);
     }
   }
-
-  // Keep selection valid when the underlying event changes.
-  useEffect(() => {
-    if (focusedNodeId && event.nodes.some((node) => node.id === focusedNodeId)) {
-      setSelectedId(focusedNodeId);
-    }
-  }, [event.nodes, focusedNodeId]);
-
-  useEffect(() => {
-    if (selectedId && !event.nodes.some((node) => node.id === selectedId)) {
-      setSelectedId(event.rootNodeId);
-    }
-  }, [event.nodes, event.rootNodeId, selectedId]);
-
-  // When a newly created node lands in the fetched event, select it and start editing.
-  useEffect(() => {
-    if (!pendingEditNodeId) return;
-    const node = event.nodes.find((n) => n.id === pendingEditNodeId);
-    if (!node) return;
-    setSelectedId(node.id);
-    setEditingId(node.id);
-    setEditText(node.text);
-    setPendingEditNodeId(null);
-  }, [event.nodes, pendingEditNodeId]);
-
-  // Focus the edit input whenever we enter edit mode.
-  useEffect(() => {
-    if (editingId && editInputRef.current) {
-      editInputRef.current.focus();
-      editInputRef.current.select();
-    }
-  }, [editingId]);
 
   const normalized = useMemo(() => {
     if (!event.nodes.length) return { nodes: [], width: 900, height: 560 };
@@ -173,121 +144,178 @@ export function EventCanvas({
     return map;
   }, [event.edges]);
 
-  const selected = event.nodes.find((node) => node.id === selectedId) ?? null;
-  const isRoot = selected?.id === event.rootNodeId;
+  const activeNode = event.nodes.find((node) => node.id === activeNodeId) ?? null;
+  const isRootActive = activeNode?.id === event.rootNodeId;
   const today = getTodayStr();
   const hasOnlyRoot = event.nodes.length <= 1;
 
-  async function submitChild() {
-    if (!selected || !childText.trim()) return;
-    const nodeId = await run(() => onAddChild(selected.id, childText.trim()));
-    if (nodeId) {
-      setChildText('');
-      setAddingChild(false);
-      setPendingEditNodeId(nodeId);
+  useEffect(() => {
+    if (focusedNodeId && event.nodes.some((node) => node.id === focusedNodeId)) {
+      onActivate(focusedNodeId);
+    }
+  }, [event.nodes, focusedNodeId, onActivate]);
+
+  useEffect(() => {
+    if (activeNodeId && inputRefs.current.has(activeNodeId)) {
+      const input = inputRefs.current.get(activeNodeId);
+      input?.focus();
+      input?.select();
+    }
+  }, [activeNodeId, event.nodes]);
+
+  function textFor(nodeId: string) {
+    return draftText[nodeId] ?? event.nodes.find((n) => n.id === nodeId)?.text ?? '';
+  }
+
+  async function commit(nodeId: string) {
+    const text = draftText[nodeId];
+    if (text === undefined) return;
+    const node = event.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    setDraftText((prev) => {
+      const next = { ...prev };
+      delete next[nodeId];
+      return next;
+    });
+    if (text.trim() && text !== node.text) {
+      await onRename(nodeId, text.trim());
     }
   }
 
-  async function submitRename(node: EventNode, then?: 'sibling' | 'child') {
-    const trimmed = editText.trim();
-    if (!trimmed || trimmed === node.text) {
-      setEditingId(null);
-      return;
-    }
-    await run(() => onRename(node.id, trimmed));
-    setEditingId(null);
-    if (!then) return;
-    if (then === 'sibling' && !isRoot) {
-      const nodeId = await run(() => onAddSibling(node.id, ''));
-      if (nodeId) setPendingEditNodeId(nodeId);
-    } else if (then === 'child') {
-      const nodeId = await run(() => onAddChild(node.id, ''));
-      if (nodeId) setPendingEditNodeId(nodeId);
+  async function submitChild() {
+    if (!activeNode || !childText.trim()) return;
+    const nodeId = await run(() => onAddChild(activeNode.id, childText.trim()));
+    if (nodeId) {
+      setChildText('');
+      setAddingChild(false);
+      onActivate(nodeId);
     }
   }
 
   async function addSiblingAfter(node: EventNode) {
     const nodeId = await run(() => onAddSibling(node.id, ''));
-    if (nodeId) setPendingEditNodeId(nodeId);
+    if (nodeId) onActivate(nodeId);
   }
 
   async function addChildTo(node: EventNode) {
     const nodeId = await run(() => onAddChild(node.id, ''));
-    if (nodeId) setPendingEditNodeId(nodeId);
+    if (nodeId) onActivate(nodeId);
   }
 
   async function removeNode(nodeId: string) {
     await run(() => onDelete(nodeId));
   }
 
+  function activeIndex(): number {
+    if (!activeNodeId) return -1;
+    return event.nodes.findIndex((n) => n.id === activeNodeId);
+  }
+
   function selectNextSibling(direction: 1 | -1) {
-    if (!selected) return;
-    const parentId = parentByChild.get(selected.id) ?? '';
+    if (!activeNode) return;
+    const parentId = parentByChild.get(activeNode.id) ?? '';
     const siblings = childrenByParent.get(parentId) ?? [];
-    const idx = siblings.findIndex((n) => n.id === selected.id);
+    const idx = siblings.findIndex((n) => n.id === activeNode.id);
     if (idx === -1) return;
     const next = siblings[idx + direction];
-    if (next) setSelectedId(next.id);
+    if (next) onActivate(next.id);
   }
 
   function selectParent() {
-    if (!selected) return;
-    const parentId = parentByChild.get(selected.id);
-    if (parentId) setSelectedId(parentId);
+    if (!activeNode) return;
+    const parentId = parentByChild.get(activeNode.id);
+    if (parentId) onActivate(parentId);
   }
 
   function selectFirstChild() {
-    if (!selected) return;
-    const children = childrenByParent.get(selected.id);
-    if (children?.length) setSelectedId(children[0].id);
+    if (!activeNode) return;
+    const children = childrenByParent.get(activeNode.id);
+    if (children?.length) onActivate(children[0].id);
   }
 
-  function handleEditKeyDown(e: React.KeyboardEvent<HTMLInputElement>, node: EventNode) {
+  async function handleNodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>, node: EventNode) {
+    const isRoot = node.id === event.rootNodeId;
+    const text = draftText[node.id] ?? node.text;
+
     if (e.key === 'Escape') {
       e.preventDefault();
-      setEditingId(null);
+      setDraftText((prev) => {
+        const next = { ...prev };
+        delete next[node.id];
+        return next;
+      });
+      onCommit();
       return;
     }
+
     if (e.key === 'Enter') {
       e.preventDefault();
-      const trimmed = editText.trim();
-      if (!trimmed) {
-        setEditingId(null);
-        return;
-      }
-      if (e.metaKey || e.ctrlKey) {
-        void submitRename(node, 'child');
+      await commit(node.id);
+      if (isRoot) {
+        const nodeId = await run(() => onAddChild(node.id, ''));
+        if (nodeId) onActivate(nodeId);
       } else {
-        void submitRename(node, isRoot ? 'child' : 'sibling');
+        const nodeId = await run(() => onAddSibling(node.id, ''));
+        if (nodeId) onActivate(nodeId);
       }
       return;
     }
+
     if (e.key === 'Tab') {
       e.preventDefault();
-      void submitRename(node, 'child');
+      await commit(node.id);
+      const nodeId = await run(() => onAddChild(node.id, ''));
+      if (nodeId) onActivate(nodeId);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectNextSibling(-1);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectNextSibling(1);
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      selectParent();
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      selectFirstChild();
+      return;
+    }
+
+    if (e.key === 'Backspace' && text === '' && !isRoot) {
+      e.preventDefault();
+      const parentId = parentByChild.get(node.id) ?? '';
+      const siblings = childrenByParent.get(parentId) ?? [];
+      const idx = siblings.findIndex((n) => n.id === node.id);
+      const prevId = idx > 0 ? siblings[idx - 1].id : parentId;
+      await removeNode(node.id);
+      if (prevId) onActivate(prevId);
     }
   }
 
-  function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  async function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, button')) return;
-    if (!selected) return;
+    if (!activeNode) return;
 
     if (event.key === 'Tab') {
       event.preventDefault();
-      void addChildTo(selected);
+      await commit(activeNode.id);
+      const nodeId = await run(() => onAddChild(activeNode.id, ''));
+      if (nodeId) onActivate(nodeId);
       return;
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      setEditingId(selected.id);
-      setEditText(selected.text);
-      return;
-    }
-    if (event.key === ' ' || event.key === 'Spacebar') {
-      event.preventDefault();
-      setEditingId(selected.id);
-      setEditText(selected.text);
+      onActivate(activeNode.id);
       return;
     }
     if (event.key === 'ArrowUp') {
@@ -310,15 +338,20 @@ export function EventCanvas({
       selectFirstChild();
       return;
     }
-    if ((event.key === 'Delete' || event.key === 'Backspace') && !isRoot) {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !isRootActive) {
       event.preventDefault();
-      void removeNode(selected.id);
+      const parentId = parentByChild.get(activeNode.id) ?? '';
+      const siblings = childrenByParent.get(parentId) ?? [];
+      const idx = siblings.findIndex((n) => n.id === activeNode.id);
+      const prevId = idx > 0 ? siblings[idx - 1].id : parentId;
+      await removeNode(activeNode.id);
+      if (prevId) onActivate(prevId);
     }
   }
 
   async function submitFirstStep(text: string) {
     const nodeId = await run(() => onAddChild(event.rootNodeId, text));
-    if (nodeId) setPendingEditNodeId(nodeId);
+    if (nodeId) onActivate(nodeId);
   }
 
   return (
@@ -350,18 +383,17 @@ export function EventCanvas({
         </svg>
 
         {normalized.nodes.map((node) => {
-          const isSelected = selectedId === node.id;
+          const isActive = activeNodeId === node.id;
           const isDone = node.execution?.status === 'done';
           const isEventRoot = node.id === event.rootNodeId;
           return (
             <div key={node.id} className="absolute" style={{ left: node.canvasX, top: node.canvasY, width: NODE_W }} data-testid={`event-node-${node.id}`}>
-              <div className="group relative">
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedId(node.id); setAddingChild(false); setDateOpen(false); setMoreOpen(false); }}
-                  onDoubleClick={() => { setEditingId(node.id); setEditText(node.text); }}
-                  className={`flex min-h-[58px] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${isSelected ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isSelected ? 'shadow-sm' : 'shadow-none'}`}
-                  aria-pressed={isSelected}
+                  onClick={(e) => { e.stopPropagation(); onActivate(node.id); }}
+                  className={`flex min-h-[58px] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${isActive ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
+                  aria-pressed={isActive}
                 >
                   {node.execution && (
                     <span
@@ -372,14 +404,17 @@ export function EventCanvas({
                       className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isDone ? 'border-[#23877B] bg-[#23877B] text-white' : 'border-gray-300 dark:border-gray-600'}`}
                     >{isDone && <Check className="h-3 w-3" />}</span>
                   )}
-                  {editingId === node.id ? (
+                  {isActive ? (
                     <input
-                      ref={editInputRef}
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
+                      ref={(el) => {
+                        if (el) inputRefs.current.set(node.id, el);
+                        else inputRefs.current.delete(node.id);
+                      }}
+                      value={textFor(node.id)}
+                      onChange={(e) => setDraftText((prev) => ({ ...prev, [node.id]: e.target.value }))}
                       onClick={(e) => e.stopPropagation()}
-                      onBlur={() => void submitRename(node)}
-                      onKeyDown={(e) => handleEditKeyDown(e, node)}
+                      onBlur={() => { void commit(node.id); onCommit(); }}
+                      onKeyDown={(e) => void handleNodeKeyDown(e, node)}
                       className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                       aria-label="Node title"
                     />
@@ -389,30 +424,27 @@ export function EventCanvas({
                   {node.execution && <span className="shrink-0 text-[10px] text-gray-400">{node.execution.scheduledDate.slice(5)}</span>}
                 </button>
 
-                {/* Inline add buttons — visible on hover / focus. */}
-                {!editingId && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); void addChildTo(node); }}
-                      className="absolute -right-3 top-1/2 z-20 hidden h-6 w-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] shadow-sm hover:bg-[#23877B] hover:text-white group-hover:flex dark:border-[#23877B] dark:bg-gray-900"
-                      aria-label={copy.child}
-                      title={copy.child}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    {!isEventRoot && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); void addSiblingAfter(node); }}
-                        className="absolute bottom-0 left-1/2 z-20 hidden h-6 w-6 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 shadow-sm hover:border-[#23877B] hover:text-[#23877B] group-hover:flex dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
-                        aria-label={copy.sibling}
-                        title={copy.sibling}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </>
+                {/* Always-visible inline add buttons. */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); void addChildTo(node); }}
+                  className="absolute -right-2 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] shadow-sm hover:bg-[#23877B] hover:text-white dark:border-[#23877B] dark:bg-gray-900"
+                  aria-label={copy.addChild}
+                  title={copy.addChild}
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+
+                {!isEventRoot && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); void addSiblingAfter(node); }}
+                    className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                    aria-label={copy.addSibling}
+                    title={copy.addSibling}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
                 )}
               </div>
             </div>
@@ -445,7 +477,7 @@ export function EventCanvas({
         </div>
       )}
 
-      {selected && !hasOnlyRoot && (
+      {activeNode && !hasOnlyRoot && (
         <div className="sticky bottom-5 z-10 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-node-toolbar" onClick={(e) => e.stopPropagation()}>
           {addingChild ? (
             <form onSubmit={(e) => { e.preventDefault(); void submitChild(); }} className="flex items-center gap-1">
@@ -456,10 +488,10 @@ export function EventCanvas({
           ) : (
             <>
               <ToolbarButton icon={<Plus className="h-4 w-4" />} label={copy.addChild} onClick={() => setAddingChild(true)} />
-              {!isRoot && <ToolbarButton icon={<Plus className="h-4 w-4" />} label={copy.addSibling} onClick={() => selected && void addSiblingAfter(selected)} />}
-              {!isRoot && <ToolbarButton icon={<Check className="h-4 w-4" />} label={copy.today} onClick={() => void run(() => onSchedule(selected, today))} />}
-              {!isRoot && <div className="relative"><ToolbarButton icon={<CalendarDays className="h-4 w-4" />} label={copy.date} onClick={() => setDateOpen((open) => !open)} />{dateOpen && <div className="absolute bottom-12 left-0 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900"><input type="date" defaultValue={selected.execution?.scheduledDate ?? today} onChange={(e) => { if (e.target.value) void run(() => onSchedule(selected, e.target.value)); setDateOpen(false); }} aria-label="Schedule date" className="rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-sm dark:border-gray-700" /></div>}</div>}
-              <div className="relative"><ToolbarButton icon={<MoreHorizontal className="h-4 w-4" />} label={copy.more} onClick={() => setMoreOpen((open) => !open)} trailing={<ChevronDown className="h-3 w-3" />} />{moreOpen && <div className="absolute bottom-12 right-0 min-w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900">{selected.execution && <button onClick={() => void run(() => onUnschedule(selected))} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><CalendarDays className="h-4 w-4" />{copy.removeDay}</button>}{!isRoot && <button onClick={() => void run(() => onDelete(selected.id))} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" />{copy.deleteNode}</button>}</div>}</div>
+              {!isRootActive && <ToolbarButton icon={<Plus className="h-4 w-4" />} label={copy.addSibling} onClick={() => activeNode && void addSiblingAfter(activeNode)} />}
+              {!isRootActive && <ToolbarButton icon={<Check className="h-4 w-4" />} label={copy.today} onClick={() => void run(() => onSchedule(activeNode, today))} />}
+              {!isRootActive && <div className="relative"><ToolbarButton icon={<CalendarDays className="h-4 w-4" />} label={copy.date} onClick={() => setDateOpen((open) => !open)} />{dateOpen && <div className="absolute bottom-12 left-0 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900"><input type="date" defaultValue={activeNode.execution?.scheduledDate ?? today} onChange={(e) => { if (e.target.value) void run(() => onSchedule(activeNode, e.target.value)); setDateOpen(false); }} aria-label="Schedule date" className="rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-sm dark:border-gray-700" /></div>}</div>}
+              <div className="relative"><ToolbarButton icon={<MoreHorizontal className="h-4 w-4" />} label={copy.more} onClick={() => setMoreOpen((open) => !open)} trailing={<ChevronDown className="h-3 w-3" />} />{moreOpen && <div className="absolute bottom-12 right-0 min-w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900">{activeNode.execution && <button onClick={() => void run(() => onUnschedule(activeNode))} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><CalendarDays className="h-4 w-4" />{copy.removeDay}</button>}{!isRootActive && <button onClick={() => void run(() => onDelete(activeNode.id))} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" />{copy.deleteNode}</button>}</div>}</div>
               <span className="ml-1 hidden text-[10px] text-gray-400 md:inline">{copy.hint}</span>
             </>
           )}

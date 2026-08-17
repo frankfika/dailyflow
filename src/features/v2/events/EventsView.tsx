@@ -15,6 +15,7 @@ import {
   useUndoCompleteNodeTask,
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
+import { EventOutline } from './EventOutline';
 
 export interface EventsViewProps {
   language?: 'zh' | 'en';
@@ -137,8 +138,25 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const event = detailQ.data?.event;
   const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
+
+  // Default active node to root once event loads.
+  useEffect(() => {
+    if (event && !activeNodeId) {
+      setActiveNodeId(event.rootNodeId);
+    }
+  }, [event, activeNodeId]);
+
+  // If the active node disappears (deleted), fall back to root.
+  useEffect(() => {
+    if (event && activeNodeId && !event.nodes.some((n) => n.id === activeNodeId)) {
+      setActiveNodeId(event.rootNodeId);
+    }
+  }, [event, activeNodeId]);
+
+  const activateNode = (id: string) => setActiveNodeId(id);
 
   async function safe<T>(action: () => Promise<T>, success?: string): Promise<T | undefined> {
     try {
@@ -149,9 +167,46 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
     catch (error) { onNotice?.(error instanceof Error ? error.message : t.loadError, 'error'); return undefined; }
   }
 
+  async function handleAddChild(parentId: string, text: string) {
+    const result = await safe(() => addChild.mutateAsync({ eventId, mindmapId: event!.mindmapId, parentId, text }));
+    const nodeId = result?.nodeId;
+    if (nodeId) setActiveNodeId(nodeId);
+    return nodeId ?? '';
+  }
+
+  async function handleAddSibling(referenceId: string, text: string) {
+    const result = await safe(() => addSibling.mutateAsync({ eventId, mindmapId: event!.mindmapId, referenceId, text }));
+    const nodeId = result?.nodeId;
+    if (nodeId) setActiveNodeId(nodeId);
+    return nodeId ?? '';
+  }
+
+  async function handleRename(nodeId: string, text: string) {
+    await safe(() => rename.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, text }));
+  }
+
+  async function handleDelete(nodeId: string) {
+    await safe(() => deleteNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId }));
+  }
+
+  async function handleSchedule(node: EventNode, date: string) {
+    await safe(() => schedule.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId: node.id, date, taskId: node.execution?.taskId, fromDate: node.execution?.scheduledDate }), language === 'zh' ? '已安排' : 'Scheduled');
+  }
+
+  async function handleUnschedule(node: EventNode) {
+    if (!node.execution) return;
+    await safe(() => unschedule.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId: node.id, taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate }), language === 'zh' ? '已移出日程' : 'Removed from day');
+  }
+
+  async function handleToggleDone(node: EventNode) {
+    await safe(() => toggleNode(node, complete.mutateAsync, reopen.mutateAsync));
+  }
+
   if (detailQ.isLoading) return <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />;
   if (!event) return <CenteredState text={t.missing} />;
   if (event.integrity.missingMap) return <CenteredState text={t.missing} />;
+
+  const focusedNodeId = query && matches.length ? matches[0].id : null;
 
   return <section className="flex h-full min-h-0 flex-col" data-testid="event-detail">
     <header className="relative z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#101514]">
@@ -160,28 +215,39 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
       {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
       <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
     </header>
-    <div className="min-h-0 flex-1">
-      <EventCanvas
-        event={event}
-        language={language}
-        focusedNodeId={query && matches.length ? matches[0].id : null}
-        onAddChild={async (parentId, text) => {
-          const result = await safe(() => addChild.mutateAsync({ eventId, mindmapId: event.mindmapId, parentId, text }));
-          return result?.nodeId ?? '';
-        }}
-        onAddSibling={async (referenceId, text) => {
-          const result = await safe(() => addSibling.mutateAsync({ eventId, mindmapId: event.mindmapId, referenceId, text }));
-          return result?.nodeId ?? '';
-        }}
-        onRename={async (nodeId, text) => { await safe(() => rename.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId, text })); }}
-        onDelete={async (nodeId) => { await safe(() => deleteNode.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId })); }}
-        onSchedule={async (node, date) => { await safe(() => schedule.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId: node.id, date, taskId: node.execution?.taskId, fromDate: node.execution?.scheduledDate }), language === 'zh' ? '已安排' : 'Scheduled'); }}
-        onUnschedule={async (node) => {
-          if (!node.execution) return;
-          await safe(() => unschedule.mutateAsync({ eventId, mindmapId: event.mindmapId, nodeId: node.id, taskId: node.execution!.taskId, scheduledDate: node.execution!.scheduledDate }), language === 'zh' ? '已移出日程' : 'Removed from day');
-        }}
-        onToggleDone={async (node) => { await safe(() => toggleNode(node, complete.mutateAsync, reopen.mutateAsync)); }}
-      />
+    <div className="min-h-0 flex-1 flex">
+      <div className="hidden w-80 shrink-0 md:block">
+        <EventOutline
+          event={event}
+          language={language}
+          selectedId={activeNodeId}
+          editingId={activeNodeId}
+          onSelect={activateNode}
+          onStartEdit={activateNode}
+          onCommitEdit={() => {}}
+          onRename={handleRename}
+          onAddChild={handleAddChild}
+          onAddSibling={handleAddSibling}
+          onDelete={handleDelete}
+        />
+      </div>
+      <div className="min-h-0 flex-1">
+        <EventCanvas
+          event={event}
+          language={language}
+          activeNodeId={activeNodeId}
+          focusedNodeId={focusedNodeId}
+          onActivate={activateNode}
+          onCommit={() => {}}
+          onAddChild={handleAddChild}
+          onAddSibling={handleAddSibling}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onSchedule={handleSchedule}
+          onUnschedule={handleUnschedule}
+          onToggleDone={handleToggleDone}
+        />
+      </div>
     </div>
   </section>;
 }
