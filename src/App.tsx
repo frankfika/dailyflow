@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Check, CornerUpRight, Briefcase, Calendar, AlignLeft, Trash2, Edit2, Settings, Sparkles, Loader2, ChevronDown, ChevronRight, ChevronLeft, X, Plus, Menu, AlertCircle, Eye, EyeOff, RefreshCw, Search, Download, FolderOpen } from 'lucide-react';
+import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw } from 'lucide-react';
 import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
@@ -108,13 +108,6 @@ export default function App() {
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
-  // Topic Space v2 (Phase 1): the active tab in the MindMap header.
-  //   - null → 全部
-  //   - '__unclassified__' → 未分类
-  //   - any other id → that specific space
-  // We default to null on first render so the user starts on "全部",
-  // matching the pre-Phase-1 behavior. The active space resets when
-  // the workspace changes (see the effect below).
   // Meeting capture has one canonical owner: a v2 NoteDocument. Every entry
   // point creates and opens a meeting note instead of mounting the retired
   // standalone meeting modal, which used a different API and storage tree.
@@ -255,9 +248,10 @@ export default function App() {
   useEffect(() => {
     void refreshEarlierOpenTasks();
   }, [refreshEarlierOpenTasks, activeWorkspaceId]);
-  // Topic Spaces are still loaded here because the Today tab groups its
-  // tasks by space (see `todayMindmapOptions` below). The standalone
-  // MindMap tab has been retired.
+
+  // Topic Spaces are loaded here because the Today tab groups its tasks by
+  // space (see `todayMindmapOptions` below). The standalone mindmap tab has
+  // been retired — EventsView is the only entry point that browses them.
   const topicSpacesQuery = useTopicSpaces({ context: activeContext });
   const topicSpaces = topicSpacesQuery.data ?? [];
 
@@ -349,7 +343,7 @@ export default function App() {
         id: mindmapId,
         mindmapId,
         spaceId: undefined,
-        title: language === 'zh' ? `脑图 ${mindmapId.slice(-6)}` : `Mind map ${mindmapId.slice(-6)}`,
+        title: language === 'zh' ? `未命名事件` : 'Untitled event',
         taskIds: mapTasks.map((task) => task.id),
         completedTaskIds: mapTasks.filter((task) => task.status === 'done').map((task) => task.id),
       });

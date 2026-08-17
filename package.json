@@ -24,12 +24,10 @@
     "migrate:event-first": "tsx server/scripts/migrate-event-first.ts"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.101.2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.2.0",
     "@tauri-apps/plugin-updater": "^2.10.1",
-    "@vitejs/plugin-react": "^5.0.4",
     "@xyflow/react": "^12.11.2",
     "cors": "^2.8.6",
     "express": "^4.21.2",
@@ -45,6 +43,7 @@
   "devDependencies": {
     "@larksuite/cli": "1.0.78",
     "@playwright/test": "^1.59.1",
+    "@tailwindcss/vite": "^4.1.14",
     "@tauri-apps/cli": "^2.11.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -54,6 +53,7 @@
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
     "@vitest/coverage-v8": "^4.1.5",
     "concurrently": "^9.2.1",
     "esbuild": "^0.28.0",
