@@ -3,8 +3,8 @@ name = "dailyflow"
 version = "1.7.2"
 description = "DailyFlow - Daily notes and task management"
 authors = ["DailyFlow"]
-license = ""
-repository = ""
+license = "Apache-2.0"
+repository = "https://github.com/frankfika/dailyflow"
 edition = "2021"
 rust-version = "1.77"
 
