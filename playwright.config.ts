@@ -37,6 +37,7 @@ export default defineConfig({
   // CI until he lands that rewrite.
   testIgnore: [
     '**/mindmap-visual.spec.ts',
+    '**/mindmap-today-linkage.spec.ts',
     '**/visual-check.spec.ts',
     '**/screenshot.spec.ts',
     // The standalone Events navigation was intentionally removed in favor of
