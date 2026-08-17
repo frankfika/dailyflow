@@ -70,6 +70,14 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 - 4 个内置模板（SWOT、5W1H、决策树、任务分解），JSON 导入/导出。
 - 自动保存到 `<workspaceRoot>/.dailyflow/mindmaps/<id>.json`（600ms 防抖）。
 
+### Events：像飞书脑图笔记一样拆解项目
+
+- 左侧大纲 + 右侧画布的双 pane 布局，项目和行动一目了然。
+- 大纲支持单击直接编辑，`Enter` 创建同级、`Tab` 创建子级、`↑↓` 移动、`Backspace` 删除空节点。
+- 画布节点常驻 `+` 按钮，一键添加子节点或同级节点。
+- 新建事件后画布中央直接输入第一个步骤，零门槛开始拆解。
+- 节点可一键安排到 Today，或直接标记完成。
+
 ![Mind Map](./visual-mindmap-2-populated.png)
 
 ### Topic Spaces：跨工作区的语义分组
