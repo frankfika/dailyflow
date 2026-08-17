@@ -13,6 +13,7 @@ vi.mock('../hooks/useEvents', () => ({
   useEventById: () => ({ data: { event: mocks.detail }, isLoading: false }),
   useCreateEvent: () => ({ mutateAsync: mocks.create, isPending: false }),
   useAddEventChild: () => ({ mutateAsync: vi.fn() }),
+  useAddEventSibling: () => ({ mutateAsync: vi.fn() }),
   useRenameEventNode: () => ({ mutateAsync: vi.fn() }),
   useDeleteEventNode: () => ({ mutateAsync: vi.fn() }),
   useScheduleEventNode: () => ({ mutateAsync: vi.fn() }),

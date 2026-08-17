@@ -217,6 +217,21 @@ function invalidateEventMap(qc: ReturnType<typeof useQueryClient>, eventId: stri
   qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
 }
 
+function getSubtreeIds(edges: { id: string; source: string; target: string }[], rootId: string): Set<string> {
+  const ids = new Set<string>([rootId]);
+  const queue = [rootId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const edge of edges) {
+      if (edge.source === current && !ids.has(edge.target)) {
+        ids.add(edge.target);
+        queue.push(edge.target);
+      }
+    }
+  }
+  return ids;
+}
+
 /** Add a plain child node without exposing legacy node kinds in Event UI. */
 export function useAddEventChild(): UseMutationResult<
   { nodeId: string },
@@ -247,6 +262,63 @@ export function useAddEventChild(): UseMutationResult<
       };
       await mindmapsApi.update(mindmapId, {
         nodes: [...map.nodes, node],
+        edges: [...map.edges, { id: `edge_${ulid()}`, source: parentId, target: nodeId }],
+      });
+      return { nodeId };
+    },
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+  });
+}
+
+/** Add a sibling node right after the reference node, shifting later siblings down. */
+export function useAddEventSibling(): UseMutationResult<
+  { nodeId: string },
+  Error,
+  EventMapMutationContext & { referenceId: string; text: string }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ mindmapId, referenceId, text }) => {
+      const map = await mindmapsApi.get(mindmapId);
+      const refNode = map.nodes.find((node) => node.id === referenceId);
+      if (!refNode) throw new Error('Reference node no longer exists');
+      const parentEdge = map.edges.find((edge) => edge.target === referenceId);
+      if (!parentEdge) throw new Error('Cannot add a sibling to the root node');
+      const parentId = parentEdge.source;
+
+      const childEdges = map.edges.filter((edge) => edge.source === parentId);
+      const children = childEdges
+        .map((edge) => map.nodes.find((node) => node.id === edge.target))
+        .filter((node): node is NonNullable<typeof node> => Boolean(node))
+        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+
+      const refIndex = children.findIndex((node) => node.id === referenceId);
+      const nodeId = `node_${ulid()}`;
+      const newNode = {
+        id: nodeId,
+        text: text.trim() || 'New step',
+        position: {
+          x: refNode.position.x,
+          y: refNode.position.y + 104,
+        },
+        kind: 'branch' as const,
+      };
+
+      const shiftedNodes = new Map<string, { x: number; y: number }>();
+      for (const laterChild of children.slice(refIndex + 1)) {
+        for (const id of getSubtreeIds(map.edges, laterChild.id)) {
+          shiftedNodes.set(id, { x: map.nodes.find((n) => n.id === id)!.position.x, y: map.nodes.find((n) => n.id === id)!.position.y + 104 });
+        }
+      }
+
+      const nextNodes = map.nodes.map((node) => {
+        const shift = shiftedNodes.get(node.id);
+        return shift ? { ...node, position: shift } : node;
+      });
+      nextNodes.push(newNode);
+
+      await mindmapsApi.update(mindmapId, {
+        nodes: nextNodes,
         edges: [...map.edges, { id: `edge_${ulid()}`, source: parentId, target: nodeId }],
       });
       return { nodeId };
