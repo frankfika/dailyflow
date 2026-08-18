@@ -16,7 +16,7 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/frankfika/dailyflow/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
-**当前稳定版：v1.8.0** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
+**当前稳定版：v1.9.0** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
 
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [开发](#-开发) · [文档](#-文档)
 
