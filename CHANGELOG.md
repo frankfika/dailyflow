@@ -5,6 +5,17 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0](https://github.com/frankfika/dailyflow/compare/v1.8.0...v1.9.0) (2026-08-18)
+
+
+### Features
+
+* add github-readme-pro skill and refresh Events section in README ([3eec616](https://github.com/frankfika/dailyflow/commit/3eec616708b0e07d9c65decfaec8687a7b45ed7a))
+* **events:** inline add buttons, keyboard navigation, and empty-state input for event canvas ([39cc363](https://github.com/frankfika/dailyflow/commit/39cc363e821d2e54042f3e7a4724d4d297a0f2d8))
+* **events:** split outline-canvas layout with click-to-edit and always-visible add buttons ([c144646](https://github.com/frankfika/dailyflow/commit/c144646d0c8961f06609bc36fc80cb534887fc2b))
+* show app version in sidebar footer ([6c71ed3](https://github.com/frankfika/dailyflow/commit/6c71ed3bb6731777c2883f1d2d0527209ac61770))
+* **team:** team collaboration with leader read-only view and git timeline ([a6b0012](https://github.com/frankfika/dailyflow/commit/a6b00127b2b1ba7e85b35a3112fa896b77ddf495))
+
 ## [1.8.0](https://github.com/frankfika/dailyflow/compare/v1.7.2...v1.8.0) (2026-08-17)
 
 
