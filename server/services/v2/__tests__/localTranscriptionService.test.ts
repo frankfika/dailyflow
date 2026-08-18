@@ -14,7 +14,7 @@ describe('local transcription service', () => {
   afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });
 
   it('persists local whisper.cpp config without API credentials', async () => {
-    const config = await saveLocalTranscriptionConfig(repo, { executablePath: '/usr/local/bin/whisper-cli', modelPath: '/models/ggml-small.bin', language: 'zh', extraArgs: [] });
+    const config = await saveLocalTranscriptionConfig(repo, { executablePath: '/usr/local/bin/whisper-cli', modelPath: '/models/ggml-small.bin', ffmpegPath: 'ffmpeg', language: 'zh', extraArgs: [] as string[] });
     expect(await getLocalTranscriptionConfig(repo)).toEqual(config);
     expect(JSON.parse(await fs.readFile(path.join(root, '.dailyflow/transcription.json'), 'utf8'))).toEqual(config);
   });
@@ -23,7 +23,7 @@ describe('local transcription service', () => {
     const note = await new NoteService(repo).create({ kind: 'meeting', body: '' });
     const capture = await captureNoteMeeting(repo, note.id, { audio: { data: Buffer.from('wav').toString('base64'), mimeType: 'audio/wav', filename: 'meeting.wav' } });
     const runner = vi.fn(async () => ({ text: '本地转写结果' }));
-    const result = await transcribeMeetingAudio(repo, note.id, capture.audioSource.id, { executablePath: 'whisper-cli', modelPath: '/models/small.bin', language: 'zh', extraArgs: [] }, runner);
+    const result = await transcribeMeetingAudio(repo, note.id, capture.audioSource.id, { executablePath: 'whisper-cli', modelPath: '/models/small.bin', ffmpegPath: 'ffmpeg', language: 'zh', extraArgs: [] as string[] }, runner);
     expect(runner).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('/audio/'));
     expect(result.source.kind).toBe('meeting_transcript');
     expect(result.source.processingStatus).toBe('processed');

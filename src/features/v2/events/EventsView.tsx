@@ -194,8 +194,9 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
   }
 
   async function handleUnschedule(node: EventNode) {
-    if (!node.execution) return;
-    await safe(() => unschedule.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId: node.id, taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate }), language === 'zh' ? '已移出日程' : 'Removed from day');
+    const execution = node.execution;
+    if (!execution) return;
+    await safe(() => unschedule.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId: node.id, taskId: execution.taskId, scheduledDate: execution.scheduledDate }), language === 'zh' ? '已移出日程' : 'Removed from day');
   }
 
   async function handleToggleDone(node: EventNode) {

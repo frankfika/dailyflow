@@ -879,6 +879,7 @@ v2Router.post('/proposals/draft', async (req, res) => {
       kind: req.body?.kind ?? 'extract_commitments',
       sourceIds: Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [],
       changes: Array.isArray(req.body?.changes) ? req.body.changes : [],
+      modelRunId: typeof req.body?.modelRunId === 'string' ? req.body.modelRunId : undefined,
     };
     const proposal = await createProposal(repo, workspaceId, input);
     res.status(201).json({ proposal });

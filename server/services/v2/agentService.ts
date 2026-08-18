@@ -25,7 +25,7 @@ export const AgentInvocationInputSchema = z.object({
   noteId: z.string().min(1),
   sourceIds: z.array(z.string()).optional(),
 });
-export type AgentInvocationInput = z.infer<typeof AgentInvocationInputSchema>;
+export type AgentInvocationInput = z.input<typeof AgentInvocationInputSchema>;
 
 export function listAgentDefinitions(): AgentDefinition[] {
   return [MEETING_NOTES_AGENT];

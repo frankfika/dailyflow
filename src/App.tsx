@@ -28,6 +28,7 @@ import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
 import { EventsView } from './features/v2/events/EventsView';
+import { TeamView } from './components/TeamView';
 import { useEvents, useTodayItems } from './features/v2/hooks/useEvents';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
@@ -103,7 +104,7 @@ export default function App() {
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
   const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'team'>('today');
   const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
@@ -221,7 +222,7 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'sync' | 'about'>('general');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'sync' | 'about' | 'team'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
@@ -316,7 +317,7 @@ export default function App() {
     }
 
     const claimedTaskIds = new Set<string>();
-    const groups = topicSpaces.map((space) => {
+    const groups: TodayPlanningGroup[] = topicSpaces.map((space) => {
       const groupTasks = tasks
         .filter((task) => task.originMindmapId === space.mindmapId || task.spaceId === space.id)
         .sort((a, b) => (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER));
@@ -1604,6 +1605,16 @@ export default function App() {
                   className="h-full min-h-0 overflow-hidden"
                 >
                   <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
+                </motion.div>
+              ) : activeTab === 'team' ? (
+                <motion.div
+                  key="team"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="h-full min-h-0 overflow-hidden"
+                >
+                  <TeamView language={language} showToast={showToast} />
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-0 flex-col">

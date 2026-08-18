@@ -17,6 +17,7 @@ import mindmapsRouter from './routes/mindmaps.js';
 import topicSpacesRouter from './routes/topicSpaces.js';
 import diagnosticsRouter from './routes/diagnostics.js';
 import eventsRouter from './routes/events.js';
+import teamRouter from './routes/team.js';
 import { v2Router } from './routes/v2/index.js';
 
 const app = express();
@@ -82,6 +83,7 @@ app.use('/api/mindmaps', mindmapsRouter);
 app.use('/api/topic-spaces', topicSpacesRouter);
 app.use('/api/diagnostics', diagnosticsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/team', teamRouter);
 app.use('/api/v2', v2Router);
 
 // 健康检查

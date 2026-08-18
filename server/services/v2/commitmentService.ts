@@ -58,7 +58,7 @@ export const CreateCommitmentInputSchema = z.object({
   legacyTaskId: z.string().optional(),
   createdBy: z.enum(['user', 'ai', 'connector', 'migration']).default('user'),
 });
-export type CreateCommitmentInput = z.infer<typeof CreateCommitmentInputSchema>;
+export type CreateCommitmentInput = z.input<typeof CreateCommitmentInputSchema>;
 
 export interface CommitmentServiceError {
   code: string;

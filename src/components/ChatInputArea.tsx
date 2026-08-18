@@ -46,7 +46,7 @@ export interface ChatInputAreaProps {
   draftSourceTitle: string | null;
   onClearDraftSource: () => void;
 
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   compact?: boolean;
 }
 

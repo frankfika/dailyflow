@@ -374,9 +374,10 @@ export function MindMapView({
           },
         });
         patchNodeRef.current(node.id, { note: updates.description, tags: updates.tags, taskDate: date });
-        setSelectedTaskDetails((current) => current?.id === node.taskId
-          ? { ...current, date, description: updates.description, tags: updates.tags, deadline: updates.deadline, priority: updates.priority || undefined, comments: updates.comments }
-          : current);
+        setSelectedTaskDetails((current) => {
+          if (!current || current.id !== node.taskId) return current;
+          return { ...current, date, description: updates.description, tags: updates.tags, deadline: updates.deadline, priority: updates.priority || undefined, comments: updates.comments };
+        });
         await refreshTaskData(date);
         showToast(language === 'zh' ? '任务已同步到 Today' : 'Task synced to Today', 'success');
       } catch (error) {
@@ -405,7 +406,10 @@ export function MindMapView({
         activeMapRef.current = updated;
         setActiveMap(updated);
         setMaps((items) => items.map((item) => item.id === updated.id ? updated : item));
-        setSelectedTaskDetails((details) => details?.id === node.taskId ? { ...details, date: toDate } : details);
+        setSelectedTaskDetails((details) => {
+          if (!details || details.id !== node.taskId) return details;
+          return { ...details, date: toDate };
+        });
         await Promise.all([refreshTaskData(fromDate), refreshTaskData(toDate)]);
         showToast(language === 'zh' ? `任务已移动到 ${toDate}` : `Task moved to ${toDate}`, 'success');
       } catch (error) {
@@ -439,9 +443,10 @@ export function MindMapView({
         scheduledDate: completionPrompt.date,
         updates: { comments },
       });
-      setSelectedTaskDetails((current) => current?.id === completionPrompt.taskId
-        ? { ...current, comments }
-        : current);
+      setSelectedTaskDetails((current) => {
+        if (!current || current.id !== completionPrompt.taskId) return current;
+        return { ...current, comments };
+      });
       await refreshTaskData(completionPrompt.date);
       showToast(language === 'zh' ? '完成备注已保存' : 'Resolution note saved', 'success');
       closeCompletionPrompt();

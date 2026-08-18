@@ -131,7 +131,7 @@ export function MessageBubble({
                 {language === 'zh' ? '保存为笔记' : 'Save as note'}
               </button>
               <button
-                onClick={() => createTaskProposalsFromMessage(message.content, { activeContext, language, showToast })}
+                onClick={() => createTaskProposalsFromMessage(message.content, { activeContext: activeContext ?? 'work', language, showToast })}
                 className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <PlusCircle className="w-3 h-3" />

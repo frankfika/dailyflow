@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Sidebar } from '../../components/Sidebar';
 
+// eslint-disable-next-line no-var
+declare var __APP_VERSION__: string;
+(globalThis as any).__APP_VERSION__ = '0.0.0-test';
+
 vi.mock('motion/react', () => ({
   motion: {
     aside: ({ children, animate, initial, transition, ...props }: any) =>
@@ -32,6 +36,7 @@ vi.mock('lucide-react', () => {
     Heart: Icon,
     PanelLeftClose: Icon,
     Sparkles: Icon,
+    Users: Icon,
   };
 });
 
