@@ -225,10 +225,10 @@ export async function createPrompt(
   const id = data.name.toLowerCase().replace(/[^\w一-龥]/g, '-').replace(/-+/g, '-').slice(0, 40);
 
   const template: PromptTemplate = {
-    description: '',
     tags: [],
     ...data,
     id,
+    description: data.description ?? '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

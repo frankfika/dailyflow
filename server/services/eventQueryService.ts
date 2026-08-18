@@ -88,7 +88,8 @@ export async function resolveEventIdToSpaceFile(
   // via listTopicSpaces lookup.
   const map = await (async () => { try { return await getMindMap(eventId); } catch { return null; } })();
   if (map?.spaceId) {
-    const space = await (async () => { try { return await getTopicSpace(map.spaceId); } catch { return null; } })();
+    const spaceId = map.spaceId;
+    const space = await (async () => { try { return await getTopicSpace(spaceId); } catch { return null; } })();
     if (space?.filePath) return space.filePath;
   }
 

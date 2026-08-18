@@ -203,14 +203,14 @@ function SourceCard({ source, onChanged, language }: { source: SourceItem; onCha
   useEffect(() => {
     if (proposal) return;
     const saved = persistedProposals.data?.items.find(item => item.sourceIds.includes(source.id));
-    if (saved) setProposal(saved);
+    if (saved) setProposal(saved ?? null);
   }, [persistedProposals.data, proposal, source.id]);
 
   const process = useMutation({
     mutationFn: () => processSource(source.id),
     onSuccess: r => {
-      setProposal(r.proposal);
-      setEvidence(r.evidence);
+      setProposal(r.proposal ?? null);
+      setEvidence(r.evidence ?? []);
       setFallback(r.fallback ? { reason: r.fallbackReason } : null);
       qc.invalidateQueries({ queryKey: queryKeys.jobsRoot(workspaceId) });
       qc.invalidateQueries({ queryKey: queryKeys.proposalsRoot(workspaceId) });

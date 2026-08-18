@@ -109,7 +109,7 @@ function generateFrontmatter(note: Omit<Note, 'body' | 'filePath'>): string {
   return lines.join('\n');
 }
 
-function parseNoteFile(content: string, filePath: string): Note {
+export function parseNoteFile(content: string, filePath: string): Note {
   const { meta, body } = parseFrontmatter(content);
   const fileName = path.basename(filePath, '.md');
 
@@ -143,7 +143,7 @@ function parseNoteFile(content: string, filePath: string): Note {
   };
 }
 
-async function scanNotesRecursive(dir: string): Promise<string[]> {
+export async function scanNotesRecursive(dir: string): Promise<string[]> {
   const results: string[] = [];
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });

@@ -17,6 +17,7 @@ import {
   Heart,
   PanelLeftClose,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
@@ -72,12 +73,14 @@ function writeStoredCollapse(collapsed: boolean): void {
   }
 }
 
+type AppTab = 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'team';
+
 interface SidebarProps {
   language: 'en' | 'zh';
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
-  activeTab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory';
-  setActiveTab: (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   currentFileDate: string;
   setCurrentFileDate: (date: string) => void;
   filesMap: Record<string, string>;
@@ -213,7 +216,7 @@ export function Sidebar({
     }
   };
 
-  const handleNavClick = (tab: 'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory') => {
+  const handleNavClick = (tab: AppTab) => {
     setActiveTab(tab);
     if (isMobile || isTablet) {
       setIsSidebarOpen(false); // collapse on mobile, fall back to 60px on tablet
@@ -454,6 +457,7 @@ export function Sidebar({
                     {([
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
                       { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
+                      { tab: 'team', label: language === 'zh' ? '团队' : 'Team', icon: Users },
                     ] as const).map(({ tab, label, icon: Icon }) => (
                       <li key={tab}>
                         <button

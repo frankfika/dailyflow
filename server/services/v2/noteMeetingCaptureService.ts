@@ -318,7 +318,7 @@ function normalizeSegments(value: unknown): TranscriptSegment[] {
 function normalizeDeepgram(payload: any): { text: string; segments: TranscriptSegment[] } {
   const alternative = payload?.results?.channels?.[0]?.alternatives?.[0];
   const utterances = Array.isArray(payload?.results?.utterances) ? payload.results.utterances : [];
-  const segments = utterances.flatMap((entry: any): TranscriptSegment[] => {
+  const segments: TranscriptSegment[] = utterances.flatMap((entry: any): TranscriptSegment[] => {
     const text = typeof entry?.transcript === 'string' ? entry.transcript.trim() : '';
     if (!text) return [];
     return [{

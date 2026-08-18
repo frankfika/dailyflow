@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ModelLibrary } from './ModelLibrary';
+import { TeamSettings } from './TeamSettings';
 import { persistProviderConfigsToBackend } from '../types/models';
 import { open } from '@tauri-apps/plugin-shell';
 import {
@@ -25,12 +26,14 @@ import { getTodayStr } from '../utils/tagColors';
 
 declare const __APP_VERSION__: string;
 
+type SettingsTab = 'general' | 'ai' | 'sync' | 'about' | 'team';
+
 interface SettingsModalProps {
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   language: 'en' | 'zh';
-  configTab: 'general' | 'ai' | 'sync' | 'about';
-  setConfigTab: (tab: 'general' | 'ai' | 'sync' | 'about') => void;
+  configTab: SettingsTab;
+  setConfigTab: (tab: SettingsTab) => void;
   workspaceRoot: string;
   setWorkspaceRoot: (v: string) => void;
   setLanguage: (v: 'en' | 'zh') => void;
@@ -166,6 +169,9 @@ export function SettingsModal({
   });
   const [dataStatus, setDataStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Team collaboration state (managed by extracted TeamSettings component)
+  const [teamConfig, setTeamConfig] = useState<{ enabled: boolean; config: { role: 'leader' | 'member'; memberId: string; members: { id: string; name: string; path: string }[] } | null }>({ enabled: false, config: null });
 
   useEffect(() => {
     if (!showSettings || configTab !== 'sync') return;
@@ -893,6 +899,16 @@ export function SettingsModal({
             }`}
           >
             {language === 'zh' ? '关于' : 'About'}
+          </button>
+          <button
+            onClick={() => setConfigTab('team')}
+            className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
+              configTab === 'team'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            {language === 'zh' ? '团队' : 'Team'}
           </button>
         </div>
 
@@ -2126,6 +2142,15 @@ export function SettingsModal({
               </div>
             </div>
           )}
+          {configTab === 'team' && (
+            <TeamSettings
+              language={language}
+              showSettings={showSettings}
+              configTab={configTab}
+              onChange={(enabled, config) => setTeamConfig({ enabled, config })}
+            />
+          )}
+
         </div>
 
         {/* Footer with Save Button */}
@@ -2151,6 +2176,7 @@ export function SettingsModal({
                   ipfsProvider: 'pinata',
                   ipfsApiKey: ipfsApiKey.trim() || null,
                   ipfsGateway: ipfsGateway.trim() || null,
+                  team: teamConfig.enabled ? teamConfig.config : null,
                 }, config.version);
                 setGithubRepo(githubRepoInput.trim() || null);
                 // Auto-verify connection on save instead of relying on manual Test Connection click

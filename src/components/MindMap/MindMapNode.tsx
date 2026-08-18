@@ -228,7 +228,7 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
 
           {isTask && (d.tags ?? []).length > 0 && (
             <div className="mt-1.5 flex max-w-[220px] flex-wrap gap-1" data-testid={`mindmap-tags-${id}`}>
-              {d.tags.map((tag) => (
+              {(d.tags ?? []).map((tag) => (
                 <span key={tag} className="rounded bg-black/[0.045] px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
                   #{tag}
                 </span>

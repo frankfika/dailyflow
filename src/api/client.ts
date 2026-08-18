@@ -75,9 +75,10 @@ export interface ConfigData {
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
   v2?: { enabled?: boolean; inboxV2?: boolean; todayV2?: boolean; memoryV2?: boolean; connectorsV2?: boolean; eventFirst?: boolean; aiEnabled?: boolean; contextBudgetBytes?: number; };
+  team?: { role: 'leader' | 'member'; memberId: string; members: { id: string; name: string; path: string }[] } | null;
 }
 
-export type ConfigPatch = Partial<Omit<ConfigData, 'version'>> & {
+export type ConfigPatch = {
   [K in keyof Omit<ConfigData, 'version'>]?: Omit<ConfigData, 'version'>[K] | null;
 };
 
@@ -125,6 +126,26 @@ export interface RolloverPreviewData {
   toDate: string;
   tasksToMigrate: TaskInput[];
   targetContent: string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  path: string;
+}
+
+export interface TeamConfig {
+  enabled: boolean;
+  role?: 'leader' | 'member';
+  members: TeamMember[];
+}
+
+export interface GitStatus {
+  ahead: number;
+  behind: number;
+  current?: string;
+  tracking?: string;
+  dirty: boolean;
 }
 
 /**
@@ -1558,6 +1579,56 @@ export const ipfsApi = {
   async list(): Promise<{ records: IpfsBackupRecord[] }> {
     const res = await fetch(`${API_BASE}/ipfs/backups`);
     if (!res.ok) throw await httpError(res, 'Failed to list IPFS backups');
+    return res.json();
+  },
+};
+
+export const teamApi = {
+  async getConfig(): Promise<TeamConfig> {
+    const res = await fetch(`${API_BASE}/team/members`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch team config');
+    return res.json();
+  },
+
+  async getStatus(): Promise<{ enabled: boolean; status?: GitStatus }> {
+    const res = await fetch(`${API_BASE}/team/status`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch team status');
+    return res.json();
+  },
+
+  async sync(): Promise<{ ok: boolean; status?: GitStatus }> {
+    const res = await fetch(`${API_BASE}/team/sync`, { method: 'POST' });
+    if (!res.ok) throw await httpError(res, 'Failed to sync team repo');
+    return res.json();
+  },
+
+  async getMemberDates(memberId: string): Promise<{ dates: string[] }> {
+    const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/dates`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch member dates');
+    return res.json();
+  },
+
+  async getMemberTasks(memberId: string, date: string): Promise<{ date: string; tasks: TaskInput[]; note: DailyNoteData | null }> {
+    const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/tasks/${date}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch member tasks');
+    return res.json();
+  },
+
+  async getMemberNotes(memberId: string): Promise<{ notes: NoteData[] }> {
+    const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/notes`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch member notes');
+    return res.json();
+  },
+
+  async getMemberNote(memberId: string, noteId: string): Promise<{ note: NoteData }> {
+    const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/notes/${encodeURIComponent(noteId)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch member note');
+    return res.json();
+  },
+
+  async getTaskTimeline(memberId: string, date: string, taskId: string): Promise<{ timeline: Array<{ date: string; author: string; message: string; change: string }> }> {
+    const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/tasks/${date}/timeline?taskId=${encodeURIComponent(taskId)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to fetch task timeline');
     return res.json();
   },
 };

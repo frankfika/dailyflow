@@ -280,6 +280,8 @@ describe('note meeting capture service', () => {
         baseUrl: 'http://127.0.0.1:8080/v1',
         model: 'whisper',
         language: 'zh',
+        provider: 'openai-compatible',
+        diarize: false,
       },
     }, fetchMock as unknown as typeof fetch);
 
@@ -308,6 +310,8 @@ describe('note meeting capture service', () => {
         mode: 'local-endpoint',
         baseUrl: 'http://127.0.0.1:8080/v1',
         model: 'whisper',
+        provider: 'openai-compatible',
+        diarize: false,
       },
       language: 'en',
     }, fetchMock as unknown as typeof fetch);
@@ -328,6 +332,8 @@ describe('note meeting capture service', () => {
         mode: 'local-endpoint',
         baseUrl: 'http://192.168.1.20:8080/v1',
         model: 'whisper',
+        provider: 'openai-compatible',
+        diarize: false,
       },
     }, fetchMock as unknown as typeof fetch);
 

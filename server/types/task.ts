@@ -74,6 +74,12 @@ export interface Config {
   feishuTaskSyncEnabled?: boolean;
   feishuCalendarSyncEnabled?: boolean;
   googleCalendarClientId?: string;
+  /** Team collaboration config. Members share a git repo; leader has read-only view. */
+  team?: {
+    role: 'leader' | 'member';
+    memberId: string;
+    members: { id: string; name: string; path: string }[];
+  };
   /** v2 (AI-Native) feature flags. Independent of the v1 config. */
   v2?: {
     enabled?: boolean;
