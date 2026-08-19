@@ -701,6 +701,49 @@ export function useMoveEventNode(): UseMutationResult<
 }
 
 /**
+ * Free-position a single node on the canvas. Used by the drag-to-move gesture
+ * in EventCanvas; persisted positions are the source of truth so the canvas
+ * can be panned / zoomed without losing the layout the user arranged.
+ */
+export function useUpdateNodePosition(): UseMutationResult<
+  { moved: boolean },
+  Error,
+  EventMapMutationContext & { nodeId: string; x: number; y: number }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ mindmapId, nodeId, x, y }) => {
+      const map = await mindmapsApi.get(mindmapId);
+      const exists = map.nodes.some((n) => n.id === nodeId);
+      if (!exists) return { moved: false };
+      const nextNodes = map.nodes.map((n) =>
+        n.id === nodeId ? { ...n, position: { x, y } } : n,
+      );
+      await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: map.edges });
+      return { moved: true };
+    },
+    onMutate: async (vars) => {
+      const key = queryKeys.event(vars.eventId);
+      const prev = qc.getQueryData<{ event: EventDetail | null }>(key);
+      if (!prev?.event) return undefined;
+      qc.setQueryData<{ event: EventDetail | null }>(key, {
+        event: {
+          ...prev.event,
+          nodes: prev.event.nodes.map((n) =>
+            n.id === vars.nodeId ? { ...n, position: { x: vars.x, y: vars.y } } : n,
+          ),
+        },
+      });
+      return { prev };
+    },
+    onError: (_err, vars, context) => {
+      if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+    },
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+  });
+}
+
+/**
  * Reorder `nodeId` among its siblings — swap y-positions with the adjacent
  * sibling in the given direction. The entire subtree moves with the node.
  */

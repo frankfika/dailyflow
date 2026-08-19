@@ -19,6 +19,7 @@ vi.mock('../hooks/useEvents', () => ({
   useOutdentEventNode: () => ({ mutateAsync: vi.fn() }),
   useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
   useReorderEventNode: () => ({ mutateAsync: vi.fn() }),
+  useUpdateNodePosition: () => ({ mutateAsync: vi.fn() }),
   useScheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useUnscheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useCompleteNodeTask: () => ({ mutateAsync: vi.fn() }),

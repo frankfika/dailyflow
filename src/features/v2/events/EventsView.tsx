@@ -17,6 +17,7 @@ import {
   useScheduleEventNode,
   useUnscheduleEventNode,
   useUndoCompleteNodeTask,
+  useUpdateNodePosition,
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
@@ -140,6 +141,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const outdent = useOutdentEventNode();
   const moveNode = useMoveEventNode();
   const reorderNode = useReorderEventNode();
+  const updateNodePosition = useUpdateNodePosition();
   const schedule = useScheduleEventNode();
   const unschedule = useUnscheduleEventNode();
   const complete = useCompleteNodeTask();
@@ -244,6 +246,10 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     await safe(() => moveNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, newParentId }));
   }
 
+  async function handleMoveNodePosition(nodeId: string, x: number, y: number) {
+    await safe(() => updateNodePosition.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, x, y }));
+  }
+
   async function handleReorderNode(nodeId: string, direction: 'up' | 'down') {
     await safe(() => reorderNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, direction }));
   }
@@ -335,6 +341,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onSchedule={handleSchedule}
           onUnschedule={handleUnschedule}
           onToggleDone={handleToggleDone}
+          onMoveNodePosition={handleMoveNodePosition}
         />
       </div>
     </div>

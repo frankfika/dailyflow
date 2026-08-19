@@ -30,6 +30,7 @@ function renderCanvas(overrides: Partial<React.ComponentProps<typeof EventCanvas
     onUnschedule: vi.fn(),
     onToggleDone: vi.fn(),
     onDelete: vi.fn(),
+    onMoveNodePosition: vi.fn(),
     ...overrides,
   };
   render(<EventCanvas {...props} />);
@@ -73,6 +74,7 @@ describe('EventCanvas node actions', () => {
       onUnschedule: vi.fn(),
       onToggleDone: vi.fn(),
       onDelete: vi.fn(),
+      onMoveNodePosition: vi.fn(),
     }} />);
     const addTask = screen.getByTestId('event-node-add-task-branch');
     expect(addTask).toBeInTheDocument();
@@ -168,5 +170,40 @@ describe('EventCanvas node actions', () => {
     renderCanvas({ onActivate });
     fireEvent.click(screen.getByTestId('event-node-step').querySelector('button')!);
     expect(onActivate).toHaveBeenCalledWith('step');
+  });
+
+  it('drags a node and persists the new position', () => {
+    // The 'step' node in EVENT has stored position { x: 300, y: 0 }. A drag
+    // of (+50, +30) should call onMoveNodePosition with the stored position
+    // translated by the same delta (zoom is 1 in tests).
+    const onMoveNodePosition = vi.fn(async () => undefined);
+    renderCanvas({ activeNodeId: 'root', onMoveNodePosition });
+    const step = screen.getByTestId('event-node-step');
+    const canvas = screen.getByTestId('event-canvas');
+    const pid = 7;
+    fireEvent.pointerDown(step, { clientX: 10, clientY: 10, button: 0, pointerId: pid });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: pid });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 40, pointerId: pid });
+    expect(onMoveNodePosition).toHaveBeenCalledWith('step', 350, 30);
+  });
+
+  it('does not start a drag from the Add to Task chip, collapse button, or inline add buttons', () => {
+    // Make 'step' a non-task node for this test.
+    const onMoveNodePosition = vi.fn();
+    const localEvent: EventDetail = {
+      ...EVENT,
+      nodes: EVENT.nodes.map((n) =>
+        n.id === 'step' ? { ...n, execution: undefined } : n,
+      ),
+    };
+    renderCanvas({ event: localEvent, activeNodeId: 'root', onMoveNodePosition });
+    const step = screen.getByTestId('event-node-step');
+    const canvas = screen.getByTestId('event-canvas');
+    // Click the "Add to Task" chip and drag — should NOT commit a move.
+    const chip = screen.getByTestId('event-node-add-task-step');
+    fireEvent.pointerDown(chip, { clientX: 10, clientY: 10, button: 0, pointerId: 9 });
+    fireEvent.pointerMove(canvas, { clientX: 200, clientY: 200, pointerId: 9 });
+    fireEvent.pointerUp(canvas, { clientX: 200, clientY: 200, pointerId: 9 });
+    expect(onMoveNodePosition).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ChevronDown, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
-import type { EventDetail, EventNode, MindMapEdge, MindMapNode } from '../../../api/client';
-import { layoutMindMap } from '../../../components/MindMap/layout';
+import type { EventDetail, EventNode } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
+import { collectHiddenDescendants } from '../../../components/MindMap/layout';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
 
 type Copy = {
@@ -91,6 +91,7 @@ interface EventCanvasProps {
   onUnschedule: (node: EventNode) => Promise<void>;
   onToggleDone: (node: EventNode) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
+  onMoveNodePosition: (nodeId: string, x: number, y: number) => Promise<void>;
 }
 
 const NODE_W = 196;
@@ -113,6 +114,7 @@ export function EventCanvas({
   onUnschedule,
   onToggleDone,
   onDelete,
+  onMoveNodePosition,
 }: EventCanvasProps) {
   const copy = COPY[language];
   const [addingChild, setAddingChild] = useState(false);
@@ -127,48 +129,50 @@ export function EventCanvas({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
   const [panning, setPanning] = useState(false);
+  // Free-position drag state. `draggingId` is the node being dragged; `dragOffset`
+  // is the (dx, dy) translate applied on top of the stored position. The drag
+  // only commits to the server when it actually moved (≥4px); otherwise a quick
+  // press/release should just activate the node.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const dragOriginRef = useRef<{ nodeId: string; origX: number; origY: number; pointerId: number; startX: number; startY: number } | null>(null);
+  // Ref mirrors dragOffset so handlePointerUp can read the latest delta without
+  // waiting for React's re-render — otherwise the closure still holds the
+  // value from the render where pointermove fired and we commit (0, 0).
+  const dragOffsetRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const didDragRef = useRef(false);
 
   const normalized = useMemo(() => {
-    if (!event.nodes.length) return { nodes: [] as Array<EventNode & { canvasX: number; canvasY: number }>, width: 900, height: 560 };
-    // Compute a clean horizontal tree layout every render so the canvas
-    // mirrors Feishu mind notes regardless of stored positions.
-    const layoutNodes: MindMapNode[] = event.nodes.map((n) => ({
-      id: n.id,
-      text: n.text,
-      position: n.position,
-      collapsed: collapsedIds.has(n.id) ? true : n.collapsed,
-    }));
-    const layoutEdges: MindMapEdge[] = event.edges;
-    const { positions } = layoutMindMap(event.rootNodeId, layoutNodes, layoutEdges);
-    // layoutMindMap centers the tree on the root, so siblings above the root
-    // get NEGATIVE y values — which clip outside the scroll container and can
-    // never be scrolled into view. Shift the whole tree so the top-left of the
-    // bounding box starts at (PAD, PAD).
+    // Stored positions are the source of truth — new events seed them in a
+    // tidy horizontal line, and the user can drag to rearrange freely. We
+    // still hide descendants of collapsed nodes and shift the whole visible
+    // tree so its top-left starts at (PAD, PAD) (legacy data may have nodes
+    // at negative coordinates).
     const PAD = 120;
-    let rawMinX = Infinity, rawMinY = Infinity;
-    for (const n of event.nodes) {
-      const p = positions[n.id];
-      if (!p) continue;
-      if (p.x < rawMinX) rawMinX = p.x;
-      if (p.y < rawMinY) rawMinY = p.y;
+    const hidden = collectHiddenDescendants(event.nodes, event.edges);
+    // Drop edges whose endpoints are hidden so the SVG doesn't draw ghosts.
+    const visibleEdges = event.edges.filter(
+      (e) => !hidden.has(e.source) && !hidden.has(e.target),
+    );
+    const visibleNodes = event.nodes.filter((n) => !hidden.has(n.id));
+    let rawMinX = Infinity, rawMinY = Infinity, rawMaxX = -Infinity, rawMaxY = -Infinity;
+    for (const n of visibleNodes) {
+      if (n.position.x < rawMinX) rawMinX = n.position.x;
+      if (n.position.y < rawMinY) rawMinY = n.position.y;
+      if (n.position.x > rawMaxX) rawMaxX = n.position.x;
+      if (n.position.y > rawMaxY) rawMaxY = n.position.y;
     }
     if (!Number.isFinite(rawMinX)) rawMinX = 0;
     if (!Number.isFinite(rawMinY)) rawMinY = 0;
-    let maxX = -Infinity, maxY = -Infinity;
-    const laid = event.nodes
-      .filter((n) => positions[n.id]) // drop nodes hidden by collapse
-      .map((n) => {
-        const p = positions[n.id];
-        const canvasX = p.x - rawMinX + PAD;
-        const canvasY = p.y - rawMinY + PAD;
-        if (canvasX > maxX) maxX = canvasX;
-        if (canvasY > maxY) maxY = canvasY;
-        return { ...n, canvasX, canvasY };
-      });
-    const width = Math.max(900, (Number.isFinite(maxX) ? maxX : 0) + NODE_W + PAD);
-    const height = Math.max(560, (Number.isFinite(maxY) ? maxY : 0) + NODE_H + PAD);
-    return { nodes: laid, width, height };
-  }, [event.nodes, event.edges, event.rootNodeId, collapsedIds]);
+    const laid = visibleNodes.map((n) => ({
+      ...n,
+      canvasX: n.position.x - rawMinX + PAD,
+      canvasY: n.position.y - rawMinY + PAD,
+    }));
+    const width = Math.max(900, (Number.isFinite(rawMaxX) ? rawMaxX - rawMinX : 0) + NODE_W + PAD * 2);
+    const height = Math.max(560, (Number.isFinite(rawMaxY) ? rawMaxY - rawMinY : 0) + NODE_H + PAD * 2);
+    return { nodes: laid, width, height, visibleEdges };
+  }, [event.nodes, event.edges, collapsedIds]);
 
   const byId = useMemo(() => new Map(normalized.nodes.map((node) => [node.id, node])), [normalized.nodes]);
   const childrenByParent = useMemo(() => {
@@ -408,6 +412,87 @@ export function EventCanvas({
     if (nodeId) onActivate(nodeId);
   }
 
+  // Drag-to-move a single node. The translate is applied on top of the
+  // stored position so the node follows the cursor; on release we commit the
+  // new (origX + dx, origY + dy) to the server (divided by zoom so the stored
+  // coordinates are in canvas units regardless of zoom level).
+  function handleNodePointerDown(e: React.PointerEvent<HTMLDivElement>, node: EventNode) {
+    if (e.button !== 0) return;
+    if (activeNodeId === node.id) return; // editing the input — don't drag
+    const target = e.target as HTMLElement;
+    // Sub-controls (chip, collapse, add-child, add-sibling) opt out via
+    // data-no-drag; otherwise the whole node body (main button or label)
+    // initiates a drag.
+    if (target.closest('[data-no-drag="true"]')) return;
+    dragOriginRef.current = {
+      nodeId: node.id,
+      origX: node.position.x,
+      origY: node.position.y,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+    didDragRef.current = false;
+    setDraggingId(node.id);
+    setDragOffset({ dx: 0, dy: 0 });
+    dragOffsetRef.current = { dx: 0, dy: 0 };
+    // setPointerCapture throws DOMException when the event was synthesized
+    // (no active pointer); swallow it because dragOriginRef is already armed
+    // and pointer events still bubble to the canvas-level handlers.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    // Drag-to-pan (when no node is being dragged) and drag-to-move share this
+    // handler; bail to the right one based on what's active.
+    if (dragOriginRef.current) {
+      const d = dragOriginRef.current;
+      if (e.pointerId !== d.pointerId) return;
+      const dx = (e.clientX - d.startX) / zoom;
+      const dy = (e.clientY - d.startY) / zoom;
+      // Below the threshold this is just a click — don't visually drag yet so
+      // a tap still activates the node cleanly.
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      didDragRef.current = true;
+      dragOffsetRef.current = { dx, dy };
+      setDragOffset({ dx, dy });
+      return;
+    }
+    const pan = panRef.current;
+    if (pan && scrollRef.current && e.pointerId === pan.pointerId) {
+      scrollRef.current.scrollLeft = pan.scrollLeft - (e.clientX - pan.startX);
+      scrollRef.current.scrollTop = pan.scrollTop - (e.clientY - pan.startY);
+    }
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (dragOriginRef.current && e.pointerId === dragOriginRef.current.pointerId) {
+      const d = dragOriginRef.current;
+      if (didDragRef.current) {
+        const finalOffset = dragOffsetRef.current;
+        const nextX = d.origX + finalOffset.dx;
+        const nextY = d.origY + finalOffset.dy;
+        void onMoveNodePosition(d.nodeId, nextX, nextY);
+        // Clear the didDrag latch after the click that bubbles after pointerup
+        // has fired, otherwise activating via a later click would be suppressed.
+        setTimeout(() => { didDragRef.current = false; }, 0);
+      }
+      setDraggingId(null);
+      setDragOffset({ dx: 0, dy: 0 });
+      dragOffsetRef.current = { dx: 0, dy: 0 };
+      dragOriginRef.current = null;
+      return;
+    }
+    if (panRef.current && e.pointerId === panRef.current.pointerId) {
+      panRef.current = null;
+      setPanning(false);
+    }
+  }
+
   // Drag-to-pan on empty canvas space (Feishu-style). Pressing on a node,
   // button, input or form does NOT start a pan — only the bare background does.
   function handlePanStart(e: React.PointerEvent<HTMLDivElement>) {
@@ -417,23 +502,17 @@ export function EventCanvas({
     const scroller = scrollRef.current;
     if (!scroller) return;
     panRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, scrollLeft: scroller.scrollLeft, scrollTop: scroller.scrollTop };
-    scroller.setPointerCapture(e.pointerId);
+    try {
+      scroller.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore — synthesized events can't be captured; panRef still drives the gesture
+    }
     setPanning(true);
   }
 
-  function handlePanMove(e: React.PointerEvent<HTMLDivElement>) {
-    const pan = panRef.current;
-    const scroller = scrollRef.current;
-    if (!pan || !scroller || e.pointerId !== pan.pointerId) return;
-    scroller.scrollLeft = pan.scrollLeft - (e.clientX - pan.startX);
-    scroller.scrollTop = pan.scrollTop - (e.clientY - pan.startY);
-  }
-
-  function handlePanEnd(e: React.PointerEvent<HTMLDivElement>) {
-    if (panRef.current?.pointerId !== e.pointerId) return;
-    panRef.current = null;
-    setPanning(false);
-  }
+  // The pointer-move and pointer-up handlers above handle BOTH drag-to-move
+  // and drag-to-pan; pan starts only when pointerdown lands on bare canvas
+  // (see handlePanStart), so a node drag never accidentally scrolls the view.
 
   return (
     <div
@@ -443,10 +522,10 @@ export function EventCanvas({
       tabIndex={0}
       onKeyDown={handleCanvasKeyDown}
       onPointerDown={handlePanStart}
-      onPointerMove={handlePanMove}
-      onPointerUp={handlePanEnd}
-      onPointerCancel={handlePanEnd}
-      onPointerLeave={handlePanEnd}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerUp}
       onClick={() => { setMoreOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -461,7 +540,7 @@ export function EventCanvas({
       <div className="relative" style={{ width: normalized.width * zoom, height: normalized.height * zoom }}>
         <div className="relative origin-top-left" style={{ width: normalized.width, height: normalized.height, transform: `scale(${zoom})` }}>
         <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-          {event.edges.map((edge) => {
+          {normalized.visibleEdges.map((edge) => {
             const source = byId.get(edge.source);
             const target = byId.get(edge.target);
             if (!source || !target) return null;
@@ -480,12 +559,20 @@ export function EventCanvas({
           const hasChildren = event.edges.some((edge) => edge.source === node.id);
           const isCollapsed = collapsedIds.has(node.id);
           const isTaskNode = Boolean(node.execution);
+          const isDragging = draggingId === node.id;
+          const dragTransform = isDragging ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined;
           return (
-            <div key={node.id} className="absolute" style={{ left: node.canvasX, top: node.canvasY, width: NODE_W }} data-testid={`event-node-${node.id}`}>
+            <div
+              key={node.id}
+              className="absolute"
+              style={{ left: node.canvasX, top: node.canvasY, width: NODE_W, transform: dragTransform, zIndex: isDragging ? 30 : undefined }}
+              data-testid={`event-node-${node.id}`}
+              onPointerDown={(e) => { handleNodePointerDown(e, node); }}
+            >
               <div className="relative">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onActivate(node.id); }}
+                  onClick={(e) => { if (didDragRef.current) { e.preventDefault(); return; } e.stopPropagation(); onActivate(node.id); }}
                   className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${isActive ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : isTaskNode ? 'border-[#23877B]/40 bg-[#23877B]/[0.04] hover:border-[#23877B]/60 dark:bg-[#23877B]/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
                   aria-pressed={isActive}
                   data-task-node={isTaskNode || undefined}
@@ -502,6 +589,7 @@ export function EventCanvas({
                       aria-checked={isDone}
                       aria-label={isDone ? 'Reopen' : 'Complete'}
                       onClick={(e) => { e.stopPropagation(); void onToggleDone(node); }}
+                      data-no-drag="true"
                       className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isDone ? 'border-[#23877B] bg-[#23877B] text-white' : 'border-gray-300 dark:border-gray-600'}`}
                     >{isDone && <Check className="h-3 w-3" />}</span>
                   )}
@@ -518,6 +606,7 @@ export function EventCanvas({
                       onKeyDown={(e) => void handleNodeKeyDown(e, node)}
                       className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                       aria-label="Node title"
+                      data-no-drag="true"
                     />
                   ) : (
                     <span className={`min-w-0 flex-1 text-sm leading-5 text-gray-900 dark:text-gray-100 ${isDone ? 'line-through opacity-60' : ''}`}>
@@ -544,6 +633,7 @@ export function EventCanvas({
                     className="absolute -right-3 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={isCollapsed ? 'Expand' : 'Collapse'}
                     title={isCollapsed ? 'Expand' : 'Collapse'}
+                    data-no-drag="true"
                   >
                     <ChevronDown className={`h-3 w-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                   </button>
@@ -557,6 +647,7 @@ export function EventCanvas({
                   className="absolute -right-2 top-1/2 z-20 flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] shadow-sm hover:bg-[#23877B] hover:text-white dark:border-[#23877B] dark:bg-gray-900"
                   aria-label={copy.addChild}
                   title={copy.addChild}
+                  data-no-drag="true"
                   style={{ marginTop: hasChildren ? 14 : -2 }}
                 >
                   <Plus className="h-3 w-3" />
@@ -579,6 +670,7 @@ export function EventCanvas({
                       title={copy.addToTask}
                       aria-expanded={schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node'}
                       data-testid={`event-node-add-task-${node.id}`}
+                      data-no-drag="true"
                     >
                       <ListTodo className="h-3.5 w-3.5" />
                       {copy.addToTask}
@@ -609,6 +701,7 @@ export function EventCanvas({
                     className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={copy.addSibling}
                     title={copy.addSibling}
+                    data-no-drag="true"
                   >
                     <Plus className="h-3 w-3" />
                   </button>
