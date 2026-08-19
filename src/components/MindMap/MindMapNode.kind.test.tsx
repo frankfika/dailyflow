@@ -130,4 +130,48 @@ describe('MindMapNode — explicit task model', () => {
     fireEvent.click(screen.getByTestId('mindmap-make-task-branch'));
     expect(onMakeTask).toHaveBeenCalledWith('branch');
   });
+
+  // ---------------------------------------------------------------------
+  // Sprint 1 / Gap 1 — Phase-2 label-only kinds.
+  //
+  // The three kinds share storage semantics with `tag` (no task link,
+  // no status, no tags UI) but get a colored left border + an iconified
+  // metadata badge to make them legible at a glance.
+  // ---------------------------------------------------------------------
+
+  it('renders a question node with a "疑问" badge and a blue left border', () => {
+    renderNode('q', makeData({ text: '客户预算到底是多少？', kind: 'question' }));
+    const root = screen.getByTestId('mindmap-node-q');
+    // The data-kind attribute reflects the discriminator.
+    expect(root).toHaveAttribute('data-kind', 'question');
+    // The metadata badge container is rendered with the kind-specific
+    // testid prefix and shows the localized label.
+    const meta = screen.getByTestId('mindmap-question-meta-q');
+    expect(meta).toBeInTheDocument();
+    expect(meta).toHaveTextContent('疑问');
+    // No status cycle button (only `kind: 'task'` exposes it).
+    expect(screen.queryByTestId('mindmap-status-q')).not.toBeInTheDocument();
+    // No "Open in Today" pill — questions are not linked to tasks.
+    expect(screen.queryByTestId('mindmap-open-task-q')).not.toBeInTheDocument();
+  });
+
+  it('renders a resource node with a "资料" badge and a neutral left border', () => {
+    renderNode('r', makeData({ text: '竞品分析报告', kind: 'resource' }));
+    const root = screen.getByTestId('mindmap-node-r');
+    expect(root).toHaveAttribute('data-kind', 'resource');
+    const meta = screen.getByTestId('mindmap-resource-meta-r');
+    expect(meta).toBeInTheDocument();
+    expect(meta).toHaveTextContent('资料');
+    expect(screen.queryByTestId('mindmap-status-r')).not.toBeInTheDocument();
+  });
+
+  it('renders a risk node with a "风险" badge and an orange left border', () => {
+    renderNode('k', makeData({ text: '关键路径依赖', kind: 'risk' }));
+    const root = screen.getByTestId('mindmap-node-k');
+    expect(root).toHaveAttribute('data-kind', 'risk');
+    const meta = screen.getByTestId('mindmap-risk-meta-k');
+    expect(meta).toBeInTheDocument();
+    expect(meta).toHaveTextContent('风险');
+    expect(screen.queryByTestId('mindmap-status-k')).not.toBeInTheDocument();
+  });
 });

@@ -29,6 +29,7 @@ function renderMenu(
   const onLink = vi.fn();
   const onSetTag = vi.fn();
   const onUnclassify = vi.fn();
+  const onChangeKind = vi.fn();
   const onClose = vi.fn();
   const props: React.ComponentProps<typeof NodeContextMenu> = {
     open: true,
@@ -40,11 +41,20 @@ function renderMenu(
     onLink,
     onSetTag,
     onUnclassify,
+    onChangeKind,
     onClose,
     ...overrides,
   };
   const result = render(<NodeContextMenu {...props} />);
-  return { ...result, onPromote, onLink, onSetTag, onUnclassify, onClose };
+  return {
+    ...result,
+    onPromote,
+    onLink,
+    onSetTag,
+    onUnclassify,
+    onChangeKind,
+    onClose,
+  };
 }
 
 describe('NodeContextMenu', () => {
@@ -155,5 +165,25 @@ describe('NodeContextMenu', () => {
     renderMenu({ kind: 'branch', language: 'en' });
     const promoteBtn = screen.getByTestId('node-context-menu-promote');
     expect(promoteBtn.textContent).toContain('Convert to Task');
+  });
+
+  it('renders the Change-Type group for a branch node (Gap 1 — Question/Resource/Risk)', () => {
+    const { onChangeKind } = renderMenu({ kind: 'branch' });
+    // The group container is rendered.
+    expect(screen.getByTestId('node-context-menu-change-type')).toBeInTheDocument();
+    // All three entries exist and are interactive.
+    const q = screen.getByTestId('node-context-menu-change-question');
+    const r = screen.getByTestId('node-context-menu-change-resource');
+    const k = screen.getByTestId('node-context-menu-change-risk');
+    expect(q).toBeInTheDocument();
+    expect(r).toBeInTheDocument();
+    expect(k).toBeInTheDocument();
+    // None of them should be disabled when the node is still `branch`.
+    expect((q as HTMLButtonElement).disabled).toBe(false);
+    expect((r as HTMLButtonElement).disabled).toBe(false);
+    expect((k as HTMLButtonElement).disabled).toBe(false);
+    // Clicking Question forwards the literal 'question' to onChangeKind.
+    fireEvent.click(q);
+    expect(onChangeKind).toHaveBeenCalledWith('question');
   });
 });

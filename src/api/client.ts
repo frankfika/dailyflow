@@ -1221,8 +1221,23 @@ export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warn
  * Topic Space v2 (Phase 1): semantic kind for a mind map node. The
  * default for legacy nodes is `'branch'` — anything older is treated as
  * a regular branch node until Phase 2 lets the user re-classify it.
+ *
+ * Sprint 1 / Gap 1: extends the discriminator with three Phase-2
+ * semantic kinds — `'question'` (待澄清的问题), `'resource'` (资料 /
+ * 参考链接) and `'risk'` (风险 / 注意事项) — so the right-click
+ * "Change Type" menu can re-classify nodes beyond just tag/branch.
+ * All four Phase-2 kinds (tag, task, question, resource, risk) are
+ * `mindmapsApi.updateNodeKind`-writable; `'root'` and `'branch'` are
+ * not (the menu hides those entries, see NodeContextMenu).
  */
-export type MindMapNodeKind = 'root' | 'branch' | 'tag' | 'task';
+export type MindMapNodeKind =
+  | 'root'
+  | 'branch'
+  | 'tag'
+  | 'task'
+  | 'question'
+  | 'resource'
+  | 'risk';
 
 export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
   'default',
