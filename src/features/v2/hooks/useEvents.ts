@@ -321,7 +321,7 @@ export function useAddEventChild(): UseMutationResult<
       if (!parent) return undefined;
       const siblings = prev.event.edges
         .filter((edge) => edge.source === vars.parentId)
-        .map((edge) => prev.event.nodes.find((n) => n.id === edge.target))
+        .map((edge) => prev.event!.nodes.find((n) => n.id === edge.target))
         .filter((n): n is EventNode => Boolean(n));
       const newNode: EventNode = {
         id: nodeId,
@@ -417,7 +417,7 @@ export function useAddEventSibling(): UseMutationResult<
 
       const childEdges = prev.event.edges.filter((edge) => edge.source === parentId);
       const children = childEdges
-        .map((edge) => prev.event.nodes.find((n) => n.id === edge.target))
+        .map((edge) => prev.event!.nodes.find((n) => n.id === edge.target))
         .filter((n): n is EventNode => Boolean(n))
         .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
       const refIndex = children.findIndex((n) => n.id === vars.referenceId);
@@ -672,7 +672,7 @@ export function useMoveEventNode(): UseMutationResult<
 
       const siblings = prev.event.edges
         .filter((e) => e.source === vars.newParentId)
-        .map((e) => prev.event.nodes.find((n) => n.id === e.target))
+        .map((e) => prev.event!.nodes.find((n) => n.id === e.target))
         .filter((n): n is EventNode => Boolean(n));
       const newY = siblings.length
         ? Math.max(...siblings.map((s) => s.position.y)) + 104
@@ -754,7 +754,7 @@ export function useReorderEventNode(): UseMutationResult<
 
       const children = prev.event.edges
         .filter((e) => e.source === parentId)
-        .map((e) => prev.event.nodes.find((n) => n.id === e.target))
+        .map((e) => prev.event!.nodes.find((n) => n.id === e.target))
         .filter((n): n is EventNode => Boolean(n))
         .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
 

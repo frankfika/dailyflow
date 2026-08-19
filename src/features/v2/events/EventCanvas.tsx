@@ -124,6 +124,9 @@ export function EventCanvas({
   // bottom toolbar ('toolbar' anchor); only one popover is visible at a time.
   const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string; anchor: 'node' | 'toolbar' } | null>(null);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const [panning, setPanning] = useState(false);
 
   const normalized = useMemo(() => {
     if (!event.nodes.length) return { nodes: [] as Array<EventNode & { canvasX: number; canvasY: number }>, width: 900, height: 560 };
@@ -137,16 +140,27 @@ export function EventCanvas({
     }));
     const layoutEdges: MindMapEdge[] = event.edges;
     const { positions } = layoutMindMap(event.rootNodeId, layoutNodes, layoutEdges);
+    // layoutMindMap centers the tree on the root, so siblings above the root
+    // get NEGATIVE y values — which clip outside the scroll container and can
+    // never be scrolled into view. Shift the whole tree so the top-left of the
+    // bounding box starts at (PAD, PAD).
     const PAD = 120;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let rawMinX = Infinity, rawMinY = Infinity;
+    for (const n of event.nodes) {
+      const p = positions[n.id];
+      if (!p) continue;
+      if (p.x < rawMinX) rawMinX = p.x;
+      if (p.y < rawMinY) rawMinY = p.y;
+    }
+    if (!Number.isFinite(rawMinX)) rawMinX = 0;
+    if (!Number.isFinite(rawMinY)) rawMinY = 0;
+    let maxX = -Infinity, maxY = -Infinity;
     const laid = event.nodes
       .filter((n) => positions[n.id]) // drop nodes hidden by collapse
       .map((n) => {
         const p = positions[n.id];
-        const canvasX = p.x + PAD;
-        const canvasY = p.y + PAD;
-        if (canvasX < minX) minX = canvasX;
-        if (canvasY < minY) minY = canvasY;
+        const canvasX = p.x - rawMinX + PAD;
+        const canvasY = p.y - rawMinY + PAD;
         if (canvasX > maxX) maxX = canvasX;
         if (canvasY > maxY) maxY = canvasY;
         return { ...n, canvasX, canvasY };
@@ -394,12 +408,45 @@ export function EventCanvas({
     if (nodeId) onActivate(nodeId);
   }
 
+  // Drag-to-pan on empty canvas space (Feishu-style). Pressing on a node,
+  // button, input or form does NOT start a pan — only the bare background does.
+  function handlePanStart(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, form, a, [data-testid^="event-node-"]')) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    panRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, scrollLeft: scroller.scrollLeft, scrollTop: scroller.scrollTop };
+    scroller.setPointerCapture(e.pointerId);
+    setPanning(true);
+  }
+
+  function handlePanMove(e: React.PointerEvent<HTMLDivElement>) {
+    const pan = panRef.current;
+    const scroller = scrollRef.current;
+    if (!pan || !scroller || e.pointerId !== pan.pointerId) return;
+    scroller.scrollLeft = pan.scrollLeft - (e.clientX - pan.startX);
+    scroller.scrollTop = pan.scrollTop - (e.clientY - pan.startY);
+  }
+
+  function handlePanEnd(e: React.PointerEvent<HTMLDivElement>) {
+    if (panRef.current?.pointerId !== e.pointerId) return;
+    panRef.current = null;
+    setPanning(false);
+  }
+
   return (
     <div
-      className="relative h-full min-h-0 overflow-auto bg-[#f8faf9] outline-none dark:bg-[#111716]"
+      ref={scrollRef}
+      className={`relative h-full min-h-0 overflow-auto bg-[#f8faf9] outline-none dark:bg-[#111716] ${panning ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
       data-testid="event-canvas"
       tabIndex={0}
       onKeyDown={handleCanvasKeyDown}
+      onPointerDown={handlePanStart}
+      onPointerMove={handlePanMove}
+      onPointerUp={handlePanEnd}
+      onPointerCancel={handlePanEnd}
+      onPointerLeave={handlePanEnd}
       onClick={() => { setMoreOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -408,7 +455,11 @@ export function EventCanvas({
         <button type="button" onClick={() => setZoom((value) => Math.min(1.4, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Zoom in"><Plus className="h-4 w-4" /></button>
       </div>
 
-      <div className="relative origin-top-left" style={{ width: normalized.width, height: normalized.height, transform: `scale(${zoom})` }}>
+      {/* Sizer keeps the scrollable area proportional to the zoomed content —
+          without it, scale() only visually grows the map and the far edges stay
+          out of reach of the scrollbars. */}
+      <div className="relative" style={{ width: normalized.width * zoom, height: normalized.height * zoom }}>
+        <div className="relative origin-top-left" style={{ width: normalized.width, height: normalized.height, transform: `scale(${zoom})` }}>
         <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
           {event.edges.map((edge) => {
             const source = byId.get(edge.source);
@@ -566,6 +617,7 @@ export function EventCanvas({
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Empty-state direct input for brand-new events. */}
