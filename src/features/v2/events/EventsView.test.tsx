@@ -16,6 +16,9 @@ vi.mock('../hooks/useEvents', () => ({
   useAddEventSibling: () => ({ mutateAsync: vi.fn() }),
   useRenameEventNode: () => ({ mutateAsync: vi.fn() }),
   useDeleteEventNode: () => ({ mutateAsync: vi.fn() }),
+  useOutdentEventNode: () => ({ mutateAsync: vi.fn() }),
+  useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
+  useReorderEventNode: () => ({ mutateAsync: vi.fn() }),
   useScheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useUnscheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useCompleteNodeTask: () => ({ mutateAsync: vi.fn() }),
@@ -58,5 +61,31 @@ describe('EventsView Event-first surface', () => {
     expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
     expect(screen.getAllByTestId('event-canvas')).toHaveLength(1);
     expect(screen.queryByText('Active')).not.toBeInTheDocument();
+  });
+
+  it('toggles the outline pane when the header button is clicked', async () => {
+    const detail = {
+      id: 'event-1', title: 'Toggle me', context: 'work', status: 'active', progress: { done: 0, total: 0 },
+      effectiveTags: [], createdAt: '2026-08-01', updatedAt: '2026-08-10',
+      mindmapId: 'map-1', rootNodeId: 'root', manualTags: [], aiTags: [],
+      nodes: [{ id: 'root', eventId: 'event-1', text: 'Toggle me', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] }],
+      edges: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    mocks.events = [detail];
+    mocks.detail = detail;
+    window.localStorage.removeItem('dailyflow:events:outlineVisible');
+    render(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+    expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
+    const pane = screen.getByTestId('event-outline-pane');
+    expect(pane).toHaveAttribute('data-visible', 'true');
+
+    fireEvent.click(screen.getByTestId('event-outline-toggle'));
+    expect(pane).toHaveAttribute('data-visible', 'false');
+    expect(window.localStorage.getItem('dailyflow:events:outlineVisible')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('event-outline-toggle'));
+    expect(pane).toHaveAttribute('data-visible', 'true');
+    expect(window.localStorage.getItem('dailyflow:events:outlineVisible')).toBe('true');
   });
 });

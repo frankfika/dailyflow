@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronRight, ListTodo, Plus } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
+import { ScheduleDatePopover, type ScheduleDateCopy } from './ScheduleDatePopover';
+import { getTodayStr } from '../../../utils/tagColors';
 
 type Copy = {
   addChild: string;
@@ -8,6 +10,13 @@ type Copy = {
   empty: string;
   rootPlaceholder: string;
   untitled: string;
+  addToTask: string;
+  today: string;
+  tomorrow: string;
+  nextWeek: string;
+  pickDate: string;
+  confirm: string;
+  cancel: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -17,6 +26,13 @@ const COPY: Record<'en' | 'zh', Copy> = {
     empty: 'No steps yet.',
     rootPlaceholder: 'Type the first step…',
     untitled: 'Untitled',
+    addToTask: 'Add to Task',
+    today: 'Today',
+    tomorrow: 'Tomorrow',
+    nextWeek: 'Next week',
+    pickDate: 'Pick date',
+    confirm: 'Schedule',
+    cancel: 'Cancel',
   },
   zh: {
     addChild: '添加子节点',
@@ -24,8 +40,19 @@ const COPY: Record<'en' | 'zh', Copy> = {
     empty: '还没有步骤。',
     rootPlaceholder: '输入第一个步骤…',
     untitled: '无标题',
+    addToTask: '添加为任务',
+    today: '今天',
+    tomorrow: '明天',
+    nextWeek: '下周',
+    pickDate: '选择日期',
+    confirm: '安排',
+    cancel: '取消',
   },
 };
+
+function pickDateCopy(copy: Copy): ScheduleDateCopy {
+  return { pickDate: copy.pickDate, today: copy.today, tomorrow: copy.tomorrow, nextWeek: copy.nextWeek, cancel: copy.cancel, confirm: copy.confirm };
+}
 
 interface OutlineRow {
   node: EventNode;
@@ -40,16 +67,22 @@ interface EventOutlineProps {
   language: 'en' | 'zh';
   selectedId: string | null;
   editingId: string | null;
+  collapsedIds: Set<string>;
+  onToggleCollapse: (nodeId: string) => void;
   onSelect: (id: string) => void;
   onStartEdit: (id: string) => void;
   onCommitEdit: () => void;
   onRename: (nodeId: string, text: string) => Promise<void>;
   onAddChild: (parentId: string, text: string) => Promise<string>;
   onAddSibling: (referenceId: string, text: string) => Promise<string>;
+  onOutdent?: (nodeId: string) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
+  onMoveNode?: (nodeId: string, newParentId: string) => Promise<void>;
+  onReorderNode?: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
+  onScheduleTask?: (node: EventNode, date: string) => Promise<void>;
 }
 
-function buildRows(event: EventDetail): OutlineRow[] {
+function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
   const nodeMap = new Map(event.nodes.map((n) => [n.id, n]));
   const childrenByParent = new Map<string, EventNode[]>();
   for (const node of event.nodes) {
@@ -75,6 +108,8 @@ function buildRows(event: EventDetail): OutlineRow[] {
       parentId: node.parentId,
       hasChildren: children.length > 0,
     });
+    // Skip children when this node is collapsed.
+    if (collapsed.has(node.id)) return;
     for (const child of children) {
       walk(child, depth + 1);
     }
@@ -89,18 +124,35 @@ export function EventOutline({
   language,
   selectedId,
   editingId,
+  collapsedIds,
+  onToggleCollapse,
   onSelect,
   onStartEdit,
   onCommitEdit,
   onRename,
   onAddChild,
   onAddSibling,
+  onOutdent,
   onDelete,
+  onMoveNode,
+  onReorderNode,
+  onScheduleTask,
 }: EventOutlineProps) {
   const copy = COPY[language];
-  const rows = useMemo(() => buildRows(event), [event]);
+  const rows = useMemo(() => buildRows(event, collapsedIds), [event, collapsedIds]);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
   const [draftText, setDraftText] = useState<Record<string, string>>({});
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string } | null>(null);
+  const today = getTodayStr();
+
+  function shiftDate(base: string, days: number): string {
+    const d = new Date(`${base}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
 
   const selectedRow = rows.find((r) => r.node.id === selectedId);
   const editingRow = rows.find((r) => r.node.id === editingId);
@@ -155,7 +207,7 @@ export function EventOutline({
       return;
     }
 
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await commit(row);
       if (isRoot) {
@@ -168,11 +220,18 @@ export function EventOutline({
       return;
     }
 
-    if (e.key === 'Tab') {
+    if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       await commit(row);
       const nodeId = await onAddChild(row.node.id, '');
       onStartEdit(nodeId);
+      return;
+    }
+
+    if (e.key === 'Tab' && e.shiftKey && !isRoot && onOutdent) {
+      e.preventDefault();
+      await commit(row);
+      await onOutdent(row.node.id);
       return;
     }
 
@@ -187,6 +246,34 @@ export function EventOutline({
       e.preventDefault();
       const nextId = nextRowId(row);
       if (nextId) onSelect(nextId);
+      return;
+    }
+
+    // ArrowRight on a collapsed node expands it (Feishu behavior).
+    if (e.key === 'ArrowRight' && row.hasChildren && collapsedIds.has(row.node.id)) {
+      e.preventDefault();
+      onToggleCollapse(row.node.id);
+      return;
+    }
+
+    // ArrowLeft on an expanded node with children collapses it.
+    if (e.key === 'ArrowLeft' && row.hasChildren && !collapsedIds.has(row.node.id)) {
+      e.preventDefault();
+      onToggleCollapse(row.node.id);
+      return;
+    }
+
+    // Alt+ArrowUp / Alt+ArrowDown — swap with adjacent sibling (Feishu behavior).
+    if (e.altKey && e.key === 'ArrowUp' && onReorderNode) {
+      e.preventDefault();
+      await commit(row);
+      await onReorderNode(row.node.id, 'up');
+      return;
+    }
+    if (e.altKey && e.key === 'ArrowDown' && onReorderNode) {
+      e.preventDefault();
+      await commit(row);
+      await onReorderNode(row.node.id, 'down');
       return;
     }
 
@@ -209,7 +296,7 @@ export function EventOutline({
 
   const root = rows[0];
   const childRows = rows.slice(1);
-  const hasOnlyRoot = childRows.length === 0;
+  const hasOnlyRoot = event.nodes.length <= 1;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-[#101514]" data-testid="event-outline">
@@ -224,9 +311,13 @@ export function EventOutline({
             copy={copy}
             isSelected={selectedId === root.node.id}
             isEditing={editingId === root.node.id}
+            isCollapsed={collapsedIds.has(root.node.id)}
             text={textFor(root)}
+            isDragging={dragNodeId === root.node.id}
+            isDropTarget={dropTargetId === root.node.id && dragNodeId !== null && dragNodeId !== root.node.id}
             onSelect={() => onSelect(root.node.id)}
             onStartEdit={() => onStartEdit(root.node.id)}
+            onToggleCollapse={() => onToggleCollapse(root.node.id)}
             onChange={(value) => handleChange(root, value)}
             onKeyDown={(e) => void handleKeyDown(e, root)}
             onBlur={() => void handleBlur(root)}
@@ -235,6 +326,30 @@ export function EventOutline({
               else inputRefs.current.delete(root.node.id);
             }}
             onAddChild={() => void onAddChild(root.node.id, '').then(onStartEdit)}
+            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === root.node.id ? null : { nodeId: root.node.id, date: today })) : undefined}
+            schedulePickerOpen={schedulePicker?.nodeId === root.node.id}
+            schedulePicker={schedulePicker?.nodeId === root.node.id ? (
+              <ScheduleDatePopover
+                copy={pickDateCopy(copy)}
+                date={schedulePicker.date}
+                onChange={(d) => setSchedulePicker({ nodeId: root.node.id, date: d })}
+                onConfirm={async () => { await onScheduleTask!(root.node, schedulePicker.date); setSchedulePicker(null); }}
+                onCancel={() => setSchedulePicker(null)}
+                onClickAway={() => setSchedulePicker(null)}
+                today={today}
+                shiftDate={shiftDate}
+                testId="outline-schedule-popover"
+              />
+            ) : undefined}
+            onDragStart={() => setDragNodeId(root.node.id)}
+            onDragEnd={() => { setDragNodeId(null); setDropTargetId(null); }}
+            onDragOver={() => setDropTargetId(root.node.id)}
+            onDragLeave={() => setDropTargetId(null)}
+            onDrop={() => {
+              if (dragNodeId && dragNodeId !== root.node.id) void onMoveNode?.(dragNodeId, root.node.id);
+              setDragNodeId(null);
+              setDropTargetId(null);
+            }}
           />
         )}
 
@@ -245,9 +360,13 @@ export function EventOutline({
             copy={copy}
             isSelected={selectedId === row.node.id}
             isEditing={editingId === row.node.id}
+            isCollapsed={collapsedIds.has(row.node.id)}
             text={textFor(row)}
+            isDragging={dragNodeId === row.node.id}
+            isDropTarget={dropTargetId === row.node.id && dragNodeId !== null && dragNodeId !== row.node.id}
             onSelect={() => onSelect(row.node.id)}
             onStartEdit={() => onStartEdit(row.node.id)}
+            onToggleCollapse={() => onToggleCollapse(row.node.id)}
             onChange={(value) => handleChange(row, value)}
             onKeyDown={(e) => void handleKeyDown(e, row)}
             onBlur={() => void handleBlur(row)}
@@ -257,6 +376,30 @@ export function EventOutline({
             }}
             onAddChild={() => void onAddChild(row.node.id, '').then(onStartEdit)}
             onAddSibling={() => void onAddSibling(row.node.id, '').then(onStartEdit)}
+            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === row.node.id ? null : { nodeId: row.node.id, date: today })) : undefined}
+            schedulePickerOpen={schedulePicker?.nodeId === row.node.id}
+            schedulePicker={schedulePicker?.nodeId === row.node.id ? (
+              <ScheduleDatePopover
+                copy={pickDateCopy(copy)}
+                date={schedulePicker.date}
+                onChange={(d) => setSchedulePicker({ nodeId: row.node.id, date: d })}
+                onConfirm={async () => { await onScheduleTask!(row.node, schedulePicker.date); setSchedulePicker(null); }}
+                onCancel={() => setSchedulePicker(null)}
+                onClickAway={() => setSchedulePicker(null)}
+                today={today}
+                shiftDate={shiftDate}
+                testId="outline-schedule-popover"
+              />
+            ) : undefined}
+            onDragStart={() => setDragNodeId(row.node.id)}
+            onDragEnd={() => { setDragNodeId(null); setDropTargetId(null); }}
+            onDragOver={() => setDropTargetId(row.node.id)}
+            onDragLeave={() => setDropTargetId(null)}
+            onDrop={() => {
+              if (dragNodeId && dragNodeId !== row.node.id) void onMoveNode?.(dragNodeId, row.node.id);
+              setDragNodeId(null);
+              setDropTargetId(null);
+            }}
           />
         ))}
 
@@ -295,15 +438,27 @@ interface OutlineItemProps {
   copy: Copy;
   isSelected: boolean;
   isEditing: boolean;
+  isCollapsed: boolean;
   text: string;
+  isDragging: boolean;
+  isDropTarget: boolean;
   onSelect: () => void;
   onStartEdit: () => void;
+  onToggleCollapse: () => void;
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onBlur: () => void;
   inputRef: (el: HTMLInputElement | null) => void;
   onAddChild: () => void;
   onAddSibling?: () => void;
+  onOpenSchedulePicker?: () => void;
+  schedulePickerOpen?: boolean;
+  schedulePicker?: React.ReactNode;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: () => void;
 }
 
 function OutlineItem({
@@ -311,32 +466,60 @@ function OutlineItem({
   copy,
   isSelected,
   isEditing,
+  isCollapsed,
   text,
+  isDragging,
+  isDropTarget,
   onSelect,
   onStartEdit,
+  onToggleCollapse,
   onChange,
   onKeyDown,
   onBlur,
   inputRef,
   onAddChild,
   onAddSibling,
+  onOpenSchedulePicker,
+  schedulePickerOpen,
+  schedulePicker,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: OutlineItemProps) {
   const isRoot = row.parentId === undefined;
   const isDone = row.node.execution?.status === 'done';
+  const isTaskRow = Boolean(row.node.execution);
 
   return (
     <div
-      className={`group flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-[#23877B]/8' : 'hover:bg-black/[0.02]'}`}
+      className={`group relative flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-[#23877B]/8' : isTaskRow ? 'bg-[#23877B]/[0.04] hover:bg-[#23877B]/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-[#23877B] ring-inset' : ''}`}
       style={{ paddingLeft: `${12 + row.depth * 18}px` }}
       data-testid={`outline-row-${row.node.id}`}
+      data-task-row={isTaskRow || undefined}
+      draggable={!isRoot}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver(); }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
         onStartEdit();
       }}
     >
+      {isTaskRow && <span className="absolute inset-y-0 left-0 w-0.5 bg-[#23877B]" aria-hidden="true" />}
       {row.hasChildren ? (
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
+          className="grid h-4 w-4 shrink-0 place-items-center rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+        >
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+        </button>
       ) : (
         <span className="h-3.5 w-3.5 shrink-0" />
       )}
@@ -348,6 +531,24 @@ function OutlineItem({
         >
           {isDone && <Check className="h-2.5 w-2.5" />}
         </span>
+      )}
+
+      {!isRoot && !row.node.execution && onOpenSchedulePicker && (
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
+            className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[10px] font-medium text-[#23877B] opacity-0 transition-opacity hover:bg-[#23877B]/20 group-hover:opacity-100"
+            title={copy.addToTask}
+            aria-label={copy.addToTask}
+            aria-expanded={schedulePickerOpen}
+            data-testid={`outline-add-task-${row.node.id}`}
+          >
+            <ListTodo className="h-3 w-3" />
+            {copy.addToTask}
+          </button>
+          {schedulePickerOpen && schedulePicker}
+        </div>
       )}
 
       {isEditing ? (

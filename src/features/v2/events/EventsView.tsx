@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react';
+import { ulid } from 'ulid';
 import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
 import {
   useAddEventChild,
@@ -9,6 +10,9 @@ import {
   useDeleteEventNode,
   useEventById,
   useEvents,
+  useMoveEventNode,
+  useOutdentEventNode,
+  useReorderEventNode,
   useRenameEventNode,
   useScheduleEventNode,
   useUnscheduleEventNode,
@@ -28,12 +32,14 @@ export interface EventsViewProps {
 
 const TEXT = {
   en: {
-    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline',
   },
   zh: {
-    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲',
   },
 } as const;
+
+const OUTLINE_VISIBILITY_KEY = 'dailyflow:events:outlineVisible';
 
 export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
   const t = TEXT[language];
@@ -67,7 +73,7 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   }
 
   if (selectedEventId) {
-    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} />;
+    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} />;
   }
 
   const active = events.filter((event) => event.status === 'active');
@@ -124,13 +130,16 @@ function EventCard({ event, language, onOpen, noActions, updated }: { event: Eve
   return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)]" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3><p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}</button>;
 }
 
-function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice'] }) {
+function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void }) {
   const t = TEXT[language];
   const detailQ = useEventById(eventId);
   const addChild = useAddEventChild();
   const addSibling = useAddEventSibling();
   const rename = useRenameEventNode();
   const deleteNode = useDeleteEventNode();
+  const outdent = useOutdentEventNode();
+  const moveNode = useMoveEventNode();
+  const reorderNode = useReorderEventNode();
   const schedule = useScheduleEventNode();
   const unschedule = useUnscheduleEventNode();
   const complete = useCompleteNodeTask();
@@ -139,8 +148,46 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const [outlineVisible, setOutlineVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const raw = window.localStorage.getItem(OUTLINE_VISIBILITY_KEY);
+    return raw === null ? true : raw === 'true';
+  });
   const event = detailQ.data?.event;
   const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
+
+  const toggleOutline = useCallback(() => {
+    setOutlineVisible((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') window.localStorage.setItem(OUTLINE_VISIBILITY_KEY, String(next));
+      return next;
+    });
+  }, []);
+
+  // Cmd/Ctrl+B — toggle the outline (common mind-notes / notepad shortcut).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== 'b') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.matches('input, textarea, [contenteditable="true"]') || target.closest('input, textarea, [contenteditable="true"]'))) return;
+      e.preventDefault();
+      toggleOutline();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleOutline]);
+
+  const toggleCollapse = useCallback((nodeId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }, []);
 
   // Default active node to root once event loads.
   useEffect(() => {
@@ -168,17 +215,17 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
   }
 
   async function handleAddChild(parentId: string, text: string) {
-    const result = await safe(() => addChild.mutateAsync({ eventId, mindmapId: event!.mindmapId, parentId, text }));
-    const nodeId = result?.nodeId;
-    if (nodeId) setActiveNodeId(nodeId);
-    return nodeId ?? '';
+    const nodeId = `node_${ulid()}`;
+    setActiveNodeId(nodeId);
+    await safe(() => addChild.mutateAsync({ eventId, mindmapId: event!.mindmapId, parentId, text, nodeId }));
+    return nodeId;
   }
 
   async function handleAddSibling(referenceId: string, text: string) {
-    const result = await safe(() => addSibling.mutateAsync({ eventId, mindmapId: event!.mindmapId, referenceId, text }));
-    const nodeId = result?.nodeId;
-    if (nodeId) setActiveNodeId(nodeId);
-    return nodeId ?? '';
+    const nodeId = `node_${ulid()}`;
+    setActiveNodeId(nodeId);
+    await safe(() => addSibling.mutateAsync({ eventId, mindmapId: event!.mindmapId, referenceId, text, nodeId }));
+    return nodeId;
   }
 
   async function handleRename(nodeId: string, text: string) {
@@ -187,6 +234,18 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
 
   async function handleDelete(nodeId: string) {
     await safe(() => deleteNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId }));
+  }
+
+  async function handleOutdent(nodeId: string) {
+    await safe(() => outdent.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId }));
+  }
+
+  async function handleMoveNode(nodeId: string, newParentId: string) {
+    await safe(() => moveNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, newParentId }));
+  }
+
+  async function handleReorderNode(nodeId: string, direction: 'up' | 'down') {
+    await safe(() => reorderNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId, direction }));
   }
 
   async function handleSchedule(node: EventNode, date: string) {
@@ -200,7 +259,13 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
   }
 
   async function handleToggleDone(node: EventNode) {
-    await safe(() => toggleNode(node, complete.mutateAsync, reopen.mutateAsync));
+    if (!node.execution) return;
+    const input = { taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate, eventId, nodeId: node.id };
+    if (node.execution.status === 'done') {
+      await safe(() => reopen.mutateAsync(input));
+    } else {
+      await safe(() => complete.mutateAsync(input));
+    }
   }
 
   if (detailQ.isLoading) return <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />;
@@ -213,23 +278,44 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
     <header className="relative z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#101514]">
       <button onClick={onBack} aria-label={t.back} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><ArrowLeft className="h-4 w-4" /></button>
       <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-950 dark:text-gray-50">{event.title}</h1>
+      <button
+        type="button"
+        onClick={toggleOutline}
+        title={outlineVisible ? t.hideOutline : t.showOutline}
+        aria-label={outlineVisible ? t.hideOutline : t.showOutline}
+        aria-pressed={outlineVisible}
+        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+        data-testid="event-outline-toggle"
+      >
+        {outlineVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+      </button>
       {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
       <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
     </header>
     <div className="min-h-0 flex-1 flex">
-      <div className="hidden w-80 shrink-0 md:block">
+      <div
+        className={`shrink-0 transition-[width] duration-200 ${outlineVisible ? 'w-96' : 'w-0 overflow-hidden border-r-0'}`}
+        data-testid="event-outline-pane"
+        data-visible={outlineVisible}
+      >
         <EventOutline
           event={event}
           language={language}
           selectedId={activeNodeId}
           editingId={activeNodeId}
+          collapsedIds={collapsedIds}
+          onToggleCollapse={toggleCollapse}
           onSelect={activateNode}
           onStartEdit={activateNode}
           onCommitEdit={() => {}}
           onRename={handleRename}
           onAddChild={handleAddChild}
           onAddSibling={handleAddSibling}
+          onOutdent={handleOutdent}
           onDelete={handleDelete}
+          onMoveNode={handleMoveNode}
+          onReorderNode={handleReorderNode}
+          onScheduleTask={handleSchedule}
         />
       </div>
       <div className="min-h-0 flex-1">
@@ -238,6 +324,8 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
           language={language}
           activeNodeId={activeNodeId}
           focusedNodeId={focusedNodeId}
+          collapsedIds={collapsedIds}
+          onToggleCollapse={toggleCollapse}
           onActivate={activateNode}
           onCommit={() => {}}
           onAddChild={handleAddChild}
@@ -251,12 +339,6 @@ function EventDetailView({ eventId, language, onBack, onNotice }: { eventId: str
       </div>
     </div>
   </section>;
-}
-
-async function toggleNode(node: EventNode, complete: (input: { taskId: string; scheduledDate: string }) => Promise<unknown>, reopen: (input: { taskId: string; scheduledDate: string }) => Promise<unknown>) {
-  if (!node.execution) return;
-  const input = { taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate };
-  if (node.execution.status === 'done') await reopen(input); else await complete(input);
 }
 
 function CenteredState({ icon, text }: { icon?: React.ReactNode; text: string }) { return <div className="flex h-full min-h-64 items-center justify-center gap-2 text-sm text-gray-400">{icon}{text}</div>; }

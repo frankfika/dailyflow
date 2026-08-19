@@ -24,6 +24,8 @@ function renderOutline(overrides: Partial<React.ComponentProps<typeof EventOutli
     language: 'en',
     selectedId: 'root',
     editingId: 'root',
+    collapsedIds: new Set<string>(),
+    onToggleCollapse: vi.fn(),
     onSelect: vi.fn(),
     onStartEdit: vi.fn(),
     onCommitEdit: vi.fn(),
