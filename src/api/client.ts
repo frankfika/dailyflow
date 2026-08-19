@@ -1647,3 +1647,81 @@ export const teamApi = {
     return res.json();
   },
 };
+
+// ---------------------------------------------------------------------------
+// Proactive Proposal (Gap 3 — Sprint 1)
+//
+// Same note as features/v2/api/client.ts: the *v1* client.ts is the only
+// file the UI should be editing. The proactive endpoints live under
+// /api/v2 (handled by the v2 router) so we prepend the v2 prefix here.
+// ---------------------------------------------------------------------------
+
+export type ProactiveChannel = 'today_load' | 'ai_chat_open' | 'app_start';
+
+export interface ProactiveConfig {
+  enabled: boolean;
+  quietHours: { start: number; end: number };
+  maxPerWeek: number;
+  overdueTaskDays: number;
+}
+
+export const DEFAULT_PROACTIVE_CONFIG: ProactiveConfig = {
+  enabled: true,
+  quietHours: { start: 22, end: 8 },
+  maxPerWeek: 3,
+  overdueTaskDays: 5,
+};
+
+export type ProactiveSuggestionAction = 'move_to_today' | 'regroup' | 'mark_done' | 'dismiss';
+
+export interface ProactiveSuggestion {
+  label: string;
+  action: ProactiveSuggestionAction;
+  payload?: Record<string, unknown>;
+}
+
+export interface ProactiveProposal {
+  id: string;
+  kind: 'overdue_task' | 'stale_commitment' | 'unreviewed_outcome';
+  title: string;
+  body: string;
+  entityId: string;
+  entityType: string;
+  severity: 'info' | 'warning' | 'urgent';
+  createdAt: string;
+  cooldown: { channel: ProactiveChannel; lastFiredAt?: string };
+  suggestions: ProactiveSuggestion[];
+}
+
+export const proactiveApi = {
+  async getConfig(): Promise<ProactiveConfig> {
+    const res = await fetch(`${API_BASE}/v2/proactive/config`);
+    if (!res.ok) throw await httpError(res, 'Failed to load proactive config');
+    const body = await res.json();
+    return body.config as ProactiveConfig;
+  },
+  async setConfig(cfg: ProactiveConfig): Promise<ProactiveConfig> {
+    const res = await fetch(`${API_BASE}/v2/proactive/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save proactive config');
+    const body = await res.json();
+    return body.config as ProactiveConfig;
+  },
+  async scan(channel: ProactiveChannel = 'today_load'): Promise<ProactiveProposal[]> {
+    const res = await fetch(`${API_BASE}/v2/proactive/scan?channel=${encodeURIComponent(channel)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to scan proactive proposals');
+    const body = await res.json();
+    return (body.proposals ?? []) as ProactiveProposal[];
+  },
+  async recordAction(id: string, action: 'accepted' | 'dismissed'): Promise<void> {
+    const res = await fetch(`${API_BASE}/v2/proactive/${encodeURIComponent(id)}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to record proactive action');
+  },
+};

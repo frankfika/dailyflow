@@ -21,6 +21,7 @@ import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from './components/TodayBacklog';
 import { TodayScopeTabs } from './components/TodayScopeTabs';
+import { TodayProactiveBanner } from './components/TodayProactiveBanner';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -1470,6 +1471,13 @@ export default function App() {
                         </div>
                       </div>
                     </header>
+
+                  <TodayProactiveBanner
+                    language={language}
+                    activeTab={activeTab}
+                    currentFileDate={currentFileDate}
+                    isToday={currentFileDate === getTodayStr()}
+                  />
 
                   <TodayScopeTabs
                     groups={todayMindmapOptions}

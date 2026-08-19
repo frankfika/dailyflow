@@ -23,6 +23,7 @@ import {
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 import { getTodayStr } from '../utils/tagColors';
+import { ProactiveSettingsSection } from './ProactiveSettingsSection';
 
 declare const __APP_VERSION__: string;
 
@@ -1082,6 +1083,14 @@ export function SettingsModal({
                   </div>
                 </div>
               </div>
+
+              <hr className="border-border" />
+
+              {/* Proactive proposals (Gap 3 — Sprint 1) */}
+              <ProactiveSettingsSection
+                language={language}
+                showToast={showToast}
+              />
 
               <hr className="border-border" />
 

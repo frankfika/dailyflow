@@ -57,6 +57,16 @@ import {
   buildTriageProposal,
 } from '../../services/v2/reviewerService.js';
 import {
+  loadProactiveConfig,
+  saveProactiveConfig,
+  scanProactiveProposals,
+  recordProposalAction,
+  loadProactiveState,
+  saveProactiveState,
+  type ProactiveConfig,
+  type ProactiveChannel,
+} from '../../services/v2/proactiveProposal.js';
+import {
   syncCalendar,
   listCalendarConnectors,
 } from '../../services/v2/calendarConnectors.js';
@@ -1772,6 +1782,96 @@ v2Router.post('/reset', async (req, res) => {
       workspaceId: ctx.workspaceId,
     });
     res.status(200).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Proactive Proposal (Gap 3 — Sprint 1)
+//
+//   GET    /api/v2/proactive/config   → load user config
+//   PUT    /api/v2/proactive/config   → save user config
+//   GET    /api/v2/proactive/scan?channel=today_load  → generate proposals
+//   POST   /api/v2/proactive/:id/action  → record user accept/dismiss
+//
+// All four endpoints are read or write of lightweight user-state under
+// ~/.dailyflow/. They never block the server startup and never touch
+// v1 data.
+// ---------------------------------------------------------------------------
+
+v2Router.get('/proactive/config', async (_req, res) => {
+  try {
+    const cfg = await loadProactiveConfig();
+    res.json({ config: cfg });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.put('/proactive/config', async (req, res) => {
+  try {
+    const schema = z.object({
+      enabled: z.boolean(),
+      quietHours: z.object({
+        start: z.number().min(0).max(24),
+        end: z.number().min(0).max(24),
+      }),
+      maxPerWeek: z.number().min(0).max(100),
+      overdueTaskDays: z.number().min(1).max(60),
+    });
+    const parsed = schema.parse(req.body) as ProactiveConfig;
+    const saved = await saveProactiveConfig(parsed);
+    res.json({ config: saved });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/proactive/scan', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const channel = (req.query.channel as ProactiveChannel) || 'today_load';
+    const cfg = await loadProactiveConfig();
+    const state = await loadProactiveState();
+    const proposals = await scanProactiveProposals(repo, cfg, state, channel);
+    // Fire-and-forget history update — the user has now seen these.
+    if (proposals.length > 0) {
+      let next = state;
+      for (const p of proposals) {
+        // Skip if already counted this week.
+        const already = next.entries.find(e => e.proposalId === p.id);
+        if (already) continue;
+        next = {
+          entries: [
+            ...next.entries,
+            {
+              proposalId: p.id,
+              kind: p.kind,
+              entityId: p.entityId,
+              channel: p.cooldown.channel,
+              firedAt: p.createdAt,
+            },
+          ],
+        };
+      }
+      if (next !== state) {
+        await saveProactiveState(next);
+      }
+    }
+    res.json({ proposals });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/proactive/:id/action', async (req, res) => {
+  try {
+    const body = z.object({
+      action: z.enum(['accepted', 'dismissed']),
+    }).parse(req.body);
+    const next = await recordProposalAction(req.params.id, body.action);
+    res.json({ ok: true, state: next });
   } catch (err) {
     handleError(err, res);
   }
