@@ -1725,3 +1725,174 @@ export const proactiveApi = {
     if (!res.ok) throw await httpError(res, 'Failed to record proactive action');
   },
 };
+
+
+// ---------------------------------------------------------------------------
+// Meeting Transcription (Sprint 1 — Gap 5, Local Whisper)
+//
+// Server routes already exist under /api/v2:
+//   GET  /transcription/local-config
+//   PUT  /transcription/local-config
+//   POST /notes/:id/meeting/transcribe-local
+//
+// There is no dedicated "test connection" endpoint; the server's PUT response
+// carries a `status` field with executable/model/ffmpeg booleans, so
+// "Test Connection" reuses that surface.
+// ---------------------------------------------------------------------------
+
+export interface LocalTranscriptionConfigInput {
+  executablePath: string;
+  modelPath: string;
+  ffmpegPath?: string;
+  language?: string;
+  extraArgs?: string[];
+}
+
+export interface LocalTranscriptionConfigStatus {
+  executable: boolean;
+  model: boolean;
+  ffmpeg: boolean;
+}
+
+export interface LocalTranscriptionJob {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  resultRef?: { type: 'source'; id: string };
+  error?: { code: string; message: string; retryable?: boolean };
+}
+
+export interface LocalTranscriptionDefaults {
+  executablePath: string;
+  modelPath: string;
+  ffmpegPath: string;
+  language: string;
+  extraArgs: string[];
+}
+
+export const transcriptionApi = {
+  async getLocalConfig(): Promise<{
+    config: LocalTranscriptionConfigInput | null;
+    status?: LocalTranscriptionConfigStatus;
+    defaults?: LocalTranscriptionDefaults;
+  }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/local-config`);
+    if (!res.ok) throw await httpError(res, 'Failed to load local transcription config');
+    return res.json();
+  },
+
+  async setLocalConfig(
+    config: LocalTranscriptionConfigInput,
+  ): Promise<{ config: LocalTranscriptionConfigInput; status: LocalTranscriptionConfigStatus }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/local-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save local transcription config');
+    return res.json();
+  },
+
+  /**
+   * The server has no dedicated test endpoint — `setLocalConfig` returns a
+   * `status` payload that we surface here so the UI can render a "test
+   * connection" badge without a special route.
+   */
+  async testLocalConfig(
+    config: LocalTranscriptionConfigInput,
+  ): Promise<LocalTranscriptionConfigStatus> {
+    const result = await this.setLocalConfig(config);
+    return result.status;
+  },
+
+  async transcribeLocal(
+    noteId: string,
+    sourceId: string,
+    config?: LocalTranscriptionConfigInput,
+  ): Promise<{
+    job?: LocalTranscriptionJob;
+    source?: { id: string; body: string };
+    note?: { id: string };
+  }> {
+    const res = await fetch(
+      `${API_BASE}/v2/notes/${encodeURIComponent(noteId)}/meeting/transcribe-local`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId, config }),
+      },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to start local transcription');
+    return res.json();
+  },
+};
+
+
+// ---------------------------------------------------------------------------
+// Daily Report + Reflection (Sprint 1 Gap 5 — Daily 闭环)
+//
+// Endpoints under /api/v2/reports/daily that write a Markdown file into
+// the workspace's `Journal/` directory. The report is plain text — it
+// lives next to the user's other notes so it shows up in `git diff`.
+// ---------------------------------------------------------------------------
+
+export interface DailyReportTaskSnapshot {
+  id: string;
+  title: string;
+  tags?: string[];
+  progress?: string;
+  reason?: string;
+}
+
+export interface DailyReportSnapshot {
+  completedTasks: DailyReportTaskSnapshot[];
+  inProgressTasks: DailyReportTaskSnapshot[];
+  postponedTasks: DailyReportTaskSnapshot[];
+}
+
+export interface DailyReportSummary {
+  date: string;
+  filePath: string;
+  byteSize: number;
+}
+
+export interface DailyReportRecord {
+  date: string;
+  filePath: string;
+  byteSize: number;
+}
+
+export const reportsApi = {
+  /**
+   * Persist a daily report for the given date. The server writes a single
+   * Markdown file to `Journal/YYYY-MM-DD.md` and returns the file path.
+   */
+  async generateDaily(
+    date: string,
+    reflection: string,
+    snapshot?: DailyReportSnapshot,
+  ): Promise<DailyReportSummary> {
+    const res = await fetch(`${API_BASE}/v2/reports/daily`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, reflection, snapshot }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save daily report');
+    const body = await res.json();
+    return body.report as DailyReportSummary;
+  },
+  /** Read an existing daily journal entry; returns `null` when missing. */
+  async readDaily(date: string): Promise<{ markdown: string | null; exists: boolean }> {
+    const res = await fetch(`${API_BASE}/v2/reports/daily?date=${encodeURIComponent(date)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to read daily report');
+    return res.json() as Promise<{ markdown: string | null; exists: boolean }>;
+  },
+  /** List saved daily reports for a given year (and optionally month). */
+  async listDaily(year: number, month?: number): Promise<DailyReportRecord[]> {
+    const params = new URLSearchParams({ year: String(year) });
+    if (month !== undefined) params.set('month', String(month));
+    const res = await fetch(`${API_BASE}/v2/reports/daily/list?${params.toString()}`);
+    if (!res.ok) throw await httpError(res, 'Failed to list daily reports');
+    const body = await res.json();
+    return (body.reports ?? []) as DailyReportRecord[];
+  },
+};
