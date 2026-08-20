@@ -11,6 +11,8 @@ import type { OrganizeSuggestion } from '../../api/client';
 afterEach(() => cleanup());
 
 const SAMPLE: OrganizeSuggestion = {
+  strategy: 'by_topic',
+  rationale: '将 3 个节点按类型分为 2 组',
   groups: [
     { parentText: '任务', parentKind: 'branch', nodeIds: ['n1', 'n2'] },
     { parentText: '疑问', parentKind: 'question', nodeIds: ['n3'] },
@@ -19,7 +21,10 @@ const SAMPLE: OrganizeSuggestion = {
     { source: 'root', target: '__proposed_by_topic_0' },
     { source: 'root', target: '__proposed_by_topic_1' },
   ],
-  rationale: '将 3 个节点按类型分为 2 组',
+  groupRationale: {
+    '任务': 'n1 + n2 都是 task kind',
+  },
+  stats: { looseNodes: 0, organizedNodes: 3, groupCount: 2 },
 };
 
 describe('OrganizeSuggestionModal', () => {
@@ -35,8 +40,23 @@ describe('OrganizeSuggestionModal', () => {
       />,
     );
     expect(screen.getByTestId('organize-suggestion-modal')).toBeInTheDocument();
-    expect(screen.getByTestId("organize-rationale")).toHaveTextContent(SAMPLE.rationale);
+    expect(screen.getByTestId('organize-rationale')).toHaveTextContent(SAMPLE.rationale);
     expect(screen.getByTestId('organize-groups').children.length).toBe(2);
+  });
+
+  it('renders stats', () => {
+    render(
+      <OrganizeSuggestionModal
+        open
+        strategy="by_topic"
+        suggestion={SAMPLE}
+        language="zh"
+        onApply={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('organize-stats')).toHaveTextContent('2'); // groupCount
+    expect(screen.getByTestId('organize-stats')).toHaveTextContent('3'); // organizedNodes
   });
 
   it('calls onApply when apply clicked', () => {

@@ -59,7 +59,7 @@ const STRINGS = {
     saving: 'Saving...',
     saved: 'Saved.',
     testOk: 'Executable, model and ffmpeg are reachable.',
-    testFail: (detail) => `Test failed: ${detail}`,
+    testFail: (detail: string) => `Test failed: ${detail}`,
     testHelp: `Run "brew install whisper-cpp ffmpeg" to install the runtime. Place ggml model files under ~/Library/Application Support/DailyFlow/models/whisper/.`,
     backendNote: 'Settings are stored locally and synced to the workspace config.',
   },
@@ -87,7 +87,7 @@ const STRINGS = {
     saving: '保存中...',
     saved: '已保存',
     testOk: '可执行文件、模型与 ffmpeg 都可用。',
-    testFail: (detail) => `测试失败：${detail}`,
+    testFail: (detail: string) => `测试失败：${detail}`,
     testHelp: `执行 brew install whisper-cpp ffmpeg 安装运行环境；将 ggml 模型放到 ~/Library/Application Support/DailyFlow/models/whisper/。`,
     backendNote: '设置同时写入本地存储与工作区配置。',
   },
@@ -175,7 +175,7 @@ export function TranscriptionSettingsSection({
     setSavedAt(null);
   };
 
-  const handleFieldChange = (key, value) => {
+  const handleFieldChange = (key: string, value: string) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
     setSavedAt(null);
   };

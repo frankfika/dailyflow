@@ -16,11 +16,16 @@ import {
   mindmapsApi,
   eventsApi,
   tasksApi,
+  organizeApi,
   type MindMap,
   type MindMapEdge,
   type MindMapNode,
+  type OrganizeStrategy,
+  type OrganizeSuggestion,
 } from '../../api/client';
-import { MindMapCanvas } from './MindMapCanvas';
+import { MindMapCanvas, nextChildPosition } from './MindMapCanvas';
+import { OrganizeSuggestionModal } from './OrganizeSuggestionModal';
+import { ulid } from 'ulid';
 import { MindMapList } from './MindMapList';
 import { MindMapOutline, type OutlineTaskOption, type OutlineTaskUpdates } from './MindMapOutline';
 import { layoutMindMap } from './layout';
@@ -28,8 +33,10 @@ import { MINDMAP_TEMPLATES } from './templates';
 import { useLinkNodeToTask, usePromoteNodeToTask } from '../../hooks/useMindMapActions';
 import {
   ArrowLeft,
+  ChevronDown,
   ListTree,
   Network,
+  Sparkles,
   Undo2,
   Redo2,
   Search,
@@ -174,6 +181,17 @@ export function MindMapView({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'outline' | 'mindmap'>('outline');
   const [mobileListOpen, setMobileListOpen] = useState(false);
+  // Sprint 1 / Gap 2 — "AI 整理" toolbar dropdown + suggestion modal.
+  // The dropdown lives inline in the header; the suggestion preview goes
+  // through OrganizeSuggestionModal. Nothing is persisted until the user
+  // presses "应用" — see docs/MINDMAP_AI_ORGANIZE.md for the workflow.
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  const [organizeStrategy, setOrganizeStrategy] = useState<OrganizeStrategy | null>(null);
+  const [organizeSuggestion, setOrganizeSuggestion] = useState<OrganizeSuggestion | null>(null);
+  const [organizeLoading, setOrganizeLoading] = useState(false);
+  const [organizeDropdownOpen, setOrganizeDropdownOpen] = useState(false);
+  const organizeDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [organizeError, setOrganizeError] = useState<string | null>(null);
   const flushSaveRef = useRef<(id: string) => Promise<MindMap | null>>(async () => null);
   const rebasePendingSaveRef = useRef<(map: MindMap) => MindMap>((map) => map);
   const rollbackNodeRef = useRef<(
@@ -941,6 +959,101 @@ export function MindMapView({
     [activeMap, applyMapState],
   );
 
+  // Sprint 1 / Gap 2 — organize handlers.
+  //
+  // runOrganize fetches a suggestion from the server (no writes) and
+  // opens the modal. The dropdown strategy click only sets the choice;
+  // we then call runOrganize.
+  const runOrganize = useCallback(
+    async (strategy: OrganizeStrategy) => {
+      if (!activeMap) return;
+      setOrganizeError(null);
+      setOrganizeLoading(true);
+      try {
+        const suggestion = await organizeApi.organize(activeMap.id, strategy);
+        setOrganizeStrategy(strategy);
+        setOrganizeSuggestion(suggestion);
+        setOrganizeOpen(true);
+        setOrganizeDropdownOpen(false);
+      } catch (error: any) {
+        const msg = error && error.message ? error.message : 'unknown error';
+        setOrganizeError(
+          language === 'zh'
+            ? 'AI 整理失败: ' + msg
+            : 'AI organize failed: ' + msg,
+        );
+        setOrganizeDropdownOpen(false);
+      } finally {
+        setOrganizeLoading(false);
+      }
+    },
+    [activeMap, language],
+  );
+
+  // applyOrganizeSuggestion materializes the suggestion into the live
+  // mind map: create one new parent branch per group (positioned beside
+  // root), add edges root → new_parent and new_parent → each loose
+  // node, then route through handleChange so the whole batch lands in
+  // the undo history as one entry (永远给撤销按钮).
+  const applyOrganizeSuggestion = useCallback(
+    async (suggestion: OrganizeSuggestion) => {
+      if (!activeMap) return;
+      if (!suggestion.groups.length) {
+        setOrganizeOpen(false);
+        return;
+      }
+      const rootId = activeMap.rootId;
+      const existingIds = new Set(activeMap.nodes.map((node) => node.id));
+      const newNodes: MindMapNode[] = [];
+      const newEdges: MindMapEdge[] = [];
+      for (const group of suggestion.groups) {
+        const parentId = ulid();
+        const draftMap: MindMap = { ...activeMap, nodes: [...activeMap.nodes, ...newNodes] };
+        const basePosition = nextChildPosition(draftMap, rootId);
+        const newParent: MindMapNode = {
+          id: parentId,
+          text: group.parentText,
+          position: basePosition,
+          tags: [],
+          status: 'todo',
+          kind: group.parentKind === 'tag' ? 'tag' : 'branch',
+          collapsed: false,
+        };
+        newNodes.push(newParent);
+        newEdges.push({ id: ulid(), source: rootId, target: parentId });
+        for (const nodeId of group.nodeIds) {
+          if (!existingIds.has(nodeId)) continue;
+          newEdges.push({ id: ulid(), source: parentId, target: nodeId });
+        }
+        existingIds.add(parentId);
+      }
+      const nextNodes = [...activeMap.nodes, ...newNodes];
+      const nextEdges = [...activeMap.edges, ...newEdges];
+      handleChange({ nodes: nextNodes, edges: nextEdges });
+      setOrganizeOpen(false);
+      setOrganizeSuggestion(null);
+      setOrganizeStrategy(null);
+      const msg = language === 'zh'
+        ? 'AI 整理完成: ' + suggestion.stats.organizedNodes + ' 个节点 → ' + suggestion.stats.groupCount + ' 组'
+        : 'AI organize applied: ' + suggestion.stats.organizedNodes + ' nodes → ' + suggestion.stats.groupCount + ' groups';
+      showToast(msg, 'success');
+    },
+    [activeMap, handleChange, language, showToast],
+  );
+
+  // Close the suggestion dropdown on outside click.
+  useEffect(() => {
+    if (!organizeDropdownOpen) return;
+    const handler = (event: MouseEvent) => {
+      if (!organizeDropdownRef.current) return;
+      if (event.target instanceof Node && !organizeDropdownRef.current.contains(event.target)) {
+        setOrganizeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [organizeDropdownOpen]);
+
   // Position-only changes from drag are NOT a user "edit" — we don't
   // want to flood history with one entry per drag tick. The canvas
   // already coalesces drag commits into a single onChange call, so we
@@ -1514,6 +1627,52 @@ export function MindMapView({
               >
                 <Redo2 className="h-3.5 w-3.5" />
               </button>
+              <div ref={organizeDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOrganizeDropdownOpen((v) => !v)}
+                  disabled={!activeMap || organizeLoading}
+                  className="flex h-[44px] items-center gap-1 rounded-md border border-border bg-white/80 px-2 text-text-muted shadow-sm transition-colors hover:bg-white hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:px-1.5"
+                  title={language === 'zh' ? 'AI 整理节点成结构' : 'AI-organize loose nodes into structure'}
+                  data-testid="mindmap-organize-trigger"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="hidden text-[12px] font-medium sm:inline">
+                    {language === 'zh' ? 'AI 整理' : 'AI organize'}
+                  </span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+                {organizeDropdownOpen && (
+                  <div
+                    className="absolute right-0 top-[calc(100%+4px)] z-30 w-56 rounded-lg border border-border bg-white py-1 shadow-xl"
+                    data-testid="mindmap-organize-menu"
+                    role="menu"
+                  >
+                    {([
+                      { id: 'by_topic', zh: '按主题分类', en: 'Group by topic', hint: { zh: 'Task/Question/Resource/Risk 各成一组', en: 'Task/Question/Resource/Risk buckets' } },
+                      { id: 'by_priority', zh: '按执行状态分类', en: 'Group by execution status', hint: { zh: '进行中 / 待办 / 已完成', en: 'In-progress / Todo / Done' } },
+                      { id: 'by_time', zh: '按时间标签分类', en: 'Group by time tag', hint: { zh: '从 tag 里提取 YYYY-MM-DD / 月份', en: 'Extract YYYY-MM-DD / month from tags' } },
+                    ]).map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void runOrganize(option.id as OrganizeStrategy)}
+                        className="flex w-full flex-col items-start gap-0.5 px-3 py-1.5 text-left hover:bg-black/[0.04]"
+                        data-testid={`mindmap-organize-option-${option.id}`}
+                      >
+                        <span className="text-[12px] font-medium text-text-heading">{language === 'zh' ? option.zh : option.en}</span>
+                        <span className="text-[10px] text-text-muted">{language === 'zh' ? option.hint.zh : option.hint.en}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {organizeError && (
+                <span className="hidden text-[10px] text-[var(--color-danger)] sm:inline" data-testid="mindmap-organize-error">
+                  {organizeError}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
@@ -1638,6 +1797,18 @@ export function MindMapView({
           </div>
         </div>
       )}
+      <OrganizeSuggestionModal
+        open={organizeOpen}
+        strategy={organizeStrategy}
+        suggestion={organizeSuggestion}
+        language={language}
+        onApply={(suggestion) => void applyOrganizeSuggestion(suggestion)}
+        onClose={() => {
+          setOrganizeOpen(false);
+          setOrganizeSuggestion(null);
+          setOrganizeStrategy(null);
+        }}
+      />
     </div>
   );
 }

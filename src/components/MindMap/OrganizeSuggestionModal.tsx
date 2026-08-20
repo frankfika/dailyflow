@@ -2,6 +2,8 @@
  * OrganizeSuggestionModal — shows the result of `organizeMindmap()` as
  * a reviewable "proposal card". The user can apply (writes back the
  * proposed groups + suggested edges) or reject (dismisses).
+ *
+ * Shape conforms to OrganizeSuggestion in src/api/client.ts.
  */
 import { useState } from 'react';
 import { Sparkles, X, Check } from 'lucide-react';
@@ -24,7 +26,11 @@ const LANG = {
     groups: '建议分组',
     edges: '建议连接',
     rationale: '理由',
+    stats: '统计',
     noSuggestion: 'AI 没有给出建议（节点可能都已经在合理位置）',
+    looseNodes: '未分组',
+    organizedNodes: '已覆盖',
+    groupCount: '分组数',
   },
   en: {
     title: 'AI Organize Suggestion',
@@ -33,7 +39,11 @@ const LANG = {
     groups: 'Suggested groups',
     edges: 'Suggested connections',
     rationale: 'Rationale',
+    stats: 'Stats',
     noSuggestion: 'No suggestions (nodes may already be well-organised)',
+    looseNodes: 'Loose',
+    organizedNodes: 'Organized',
+    groupCount: 'Groups',
   },
 };
 
@@ -97,6 +107,23 @@ export function OrganizeSuggestionModal({
                 <p className="text-sm text-text-main">{suggestion.rationale}</p>
               </section>
 
+              {suggestion.stats && (
+                <section className="mb-4 grid grid-cols-3 gap-2 text-center" data-testid="organize-stats">
+                  <div className="rounded-lg bg-black/[0.03] p-2">
+                    <div className="text-[10px] uppercase text-text-muted">{L.groupCount}</div>
+                    <div className="text-base font-semibold text-text-heading">{suggestion.stats.groupCount}</div>
+                  </div>
+                  <div className="rounded-lg bg-black/[0.03] p-2">
+                    <div className="text-[10px] uppercase text-text-muted">{L.organizedNodes}</div>
+                    <div className="text-base font-semibold text-text-heading">{suggestion.stats.organizedNodes}</div>
+                  </div>
+                  <div className="rounded-lg bg-black/[0.03] p-2">
+                    <div className="text-[10px] uppercase text-text-muted">{L.looseNodes}</div>
+                    <div className="text-base font-semibold text-text-heading">{suggestion.stats.looseNodes}</div>
+                  </div>
+                </section>
+              )}
+
               {hasGroups && (
                 <section className="mb-4">
                   <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-muted">{L.groups}</h3>
@@ -109,7 +136,14 @@ export function OrganizeSuggestionModal({
                             {g.parentKind}
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] text-text-muted">{g.nodeIds.length} 个节点</p>
+                        <p className="mt-1 text-[11px] text-text-muted">
+                          {g.nodeIds.length} {language === 'zh' ? '个节点' : 'nodes'}
+                        </p>
+                        {suggestion.groupRationale?.[g.parentText] && (
+                          <p className="mt-1 text-[11px] text-text-muted/80 italic">
+                            {suggestion.groupRationale[g.parentText]}
+                          </p>
+                        )}
                       </li>
                     ))}
                   </ul>

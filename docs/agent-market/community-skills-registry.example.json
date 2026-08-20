@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-20T00:00:00Z",
+  "skills": [
+    {
+      "id": "okr-alignment",
+      "name": "OKR 对齐助手",
+      "author": "community",
+      "description": "把团队 OKR 拆解到个人本周任务",
+      "tags": ["okr", "planning", "leadership"],
+      "source": "github",
+      "url": "https://raw.githubusercontent.com/dailyflow/dailyflow-skills/main/skills/okr-alignment.md",
+      "checksum": "sha256:REPLACE_WITH_ACTUAL_SHA256"
+    },
+    {
+      "id": "standup-recap",
+      "name": "站会回顾",
+      "author": "community",
+      "description": "把每日站会内容整理成 3 段：昨日完成 / 今日计划 / 阻塞",
+      "tags": ["meeting", "team", "recap"],
+      "source": "github",
+      "url": "https://raw.githubusercontent.com/dailyflow/dailyflow-skills/main/skills/standup-recap.md",
+      "checksum": "sha256:REPLACE_WITH_ACTUAL_SHA256"
+    }
+  ]
+}

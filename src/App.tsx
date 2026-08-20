@@ -231,7 +231,7 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
-  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'sync' | 'about' | 'team'>('general');
+  const [configTab, setConfigTab] = useState<'general' | 'ai' | 'transcription' | 'sync' | 'privacy' | 'about' | 'team'>('general');
   const [rolloverTrigger, setRolloverTrigger] = useState<'manual' | 'on_app_open'>('manual');
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
