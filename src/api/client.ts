@@ -1896,3 +1896,43 @@ export const reportsApi = {
     return (body.reports ?? []) as DailyReportRecord[];
   },
 };
+
+
+// ---------------------------------------------------------------------------
+// Task-Completion → MindMap mirror (Sprint 1 Gap 7)
+// ---------------------------------------------------------------------------
+// Mirrors a completed Task's status / outcome back to the linked
+// mindmap node (kind='task'). The node is never deleted — the
+// completion is appended to its `note` and `status` flips to 'done'.
+// See docs/TASK_MIRROR_TO_MINDMAP.md.
+// ---------------------------------------------------------------------------
+
+export interface MirrorTaskCompletionInput {
+  taskId: string;
+  taskDate: string;
+  completedAt: string;
+  outcomeSummary?: string;
+}
+
+export interface MirrorTaskCompletionResult {
+  mirrored: boolean;
+  mirroredNodeIds: string[];
+  mindmapIds: string[];
+}
+
+export const mirrorApi = {
+  /**
+   * Trigger an explicit mirror. Use this when the caller has no
+   * automatic hook into the v2 `completeWithOutcome` flow (e.g. a
+   * recovery script after a partial failure).
+   */
+  async taskCompletion(input: MirrorTaskCompletionInput): Promise<MirrorTaskCompletionResult> {
+    const res = await fetch(`${API_BASE}/v2/mirror/task-completion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to mirror task completion');
+    return res.json() as Promise<MirrorTaskCompletionResult>;
+  },
+};

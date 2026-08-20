@@ -102,7 +102,9 @@ import {
 import { ConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
 import {
   AgentInvocationInputSchema,
+  OrganizeInputSchema,
   listAgentDefinitions,
+  organizeMindmap,
   startAgentRun,
 } from '../../services/v2/agentService.js';
 import { JobKindSchema, JobStatusSchema } from '../../domain/v2/jobs.js';
@@ -129,6 +131,11 @@ import {
   readDailyReport,
   assertIsoDate,
 } from '../../services/v2/dailyReport.js';
+import {
+  mirrorTaskCompletionToMindmap,
+  type CompletionMirrorInput,
+  type MirrorResult,
+} from '../../services/v2/taskCompletionMirror.js';
 
 export const v2Router = Router();
 
@@ -863,12 +870,60 @@ v2Router.post('/commitments/:id/complete', async (req, res) => {
       followUpCommitmentIds: input.followUpCommitmentIds,
       suggestFollowUp: input.suggestFollowUp,
     });
+
+    // Sprint 1 Gap 7: mirror the completion back to the linked mindmap
+    // node (status='done' + note appended). A migrated v1 task carries
+    // `legacyTaskId`; only that path can resolve to a mindmap node today.
+    // Wrapped in try/catch so a mirror failure NEVER blocks the response.
+    let mirrorResult: MirrorResult = { mirroredNodeIds: [], mindmapIds: [] };
+    if (r.commitment.legacyTaskId) {
+      const taskDate = (r.commitment.completedAt ?? new Date().toISOString()).slice(0, 10);
+      const mirrorInput: CompletionMirrorInput = {
+        taskId: r.commitment.legacyTaskId,
+        taskDate,
+        completedAt: r.commitment.completedAt ?? new Date().toISOString(),
+        outcomeSummary: r.outcome.summary,
+      };
+      try {
+        mirrorResult = await mirrorTaskCompletionToMindmap(repo, mirrorInput);
+      } catch (err) {
+        console.warn('[v2/commitments/complete] mindmap mirror failed (non-blocking):', err);
+      }
+    }
+
     res.json({
       commitment: r.commitment,
       outcome: r.outcome,
       followUpProposal: r.followUpProposal,
       followUpCandidates: r.followUpCandidates,
+      mirror: mirrorResult,
     });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 1 Gap 7: explicit mindmap mirror trigger
+// ---------------------------------------------------------------------------
+// Used when the caller has no automatic hook into completeWithOutcome
+// (e.g. legacy v1 paths, the desktop-app migration script, or
+// recovery after a partial failure). The route performs the same
+// persistence as the implicit hook on /commitments/:id/complete, so
+// re-running it is safe and idempotent.
+// ---------------------------------------------------------------------------
+v2Router.post('/mirror/task-completion', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const schema = z.object({
+      taskId: z.string().min(1),
+      taskDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      completedAt: z.string().min(1),
+      outcomeSummary: z.string().optional(),
+    });
+    const input = schema.parse(req.body);
+    const result = await mirrorTaskCompletionToMindmap(repo, input);
+    res.json({ mirrored: result.mirroredNodeIds.length > 0, ...result });
   } catch (err) {
     handleError(err, res);
   }
