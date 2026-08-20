@@ -57,6 +57,16 @@ import {
   buildTriageProposal,
 } from '../../services/v2/reviewerService.js';
 import {
+  loadProactiveConfig,
+  saveProactiveConfig,
+  scanProactiveProposals,
+  recordProposalAction,
+  loadProactiveState,
+  saveProactiveState,
+  type ProactiveConfig,
+  type ProactiveChannel,
+} from '../../services/v2/proactiveProposal.js';
+import {
   syncCalendar,
   listCalendarConnectors,
 } from '../../services/v2/calendarConnectors.js';
@@ -92,7 +102,9 @@ import {
 import { ConcurrentModificationError } from '../../repositories/v2/atomicWrite.js';
 import {
   AgentInvocationInputSchema,
+  OrganizeInputSchema,
   listAgentDefinitions,
+  organizeMindmap,
   startAgentRun,
 } from '../../services/v2/agentService.js';
 import { JobKindSchema, JobStatusSchema } from '../../domain/v2/jobs.js';
@@ -113,6 +125,17 @@ import {
   localTranscriptionDefaults,
   localTranscriptionStatus,
 } from '../../services/v2/localTranscriptionService.js';
+import {
+  generateAndSaveDailyReport,
+  listDailyReports,
+  readDailyReport,
+  assertIsoDate,
+} from '../../services/v2/dailyReport.js';
+import {
+  mirrorTaskCompletionToMindmap,
+  type CompletionMirrorInput,
+  type MirrorResult,
+} from '../../services/v2/taskCompletionMirror.js';
 
 export const v2Router = Router();
 
@@ -724,6 +747,40 @@ v2Router.post('/notes/:id/agents/run', async (req, res) => {
     handleError(err, res);
   }
 });
+// ---------------------------------------------------------------------------
+// Mind-map "AI organize" — Sprint 1 / Gap 2
+//
+//   POST /api/v2/mindmaps/:id/organize
+//     body  : { strategy: 'by_topic' | 'by_priority' | 'by_time',
+//               nodes:   [{ id, text, kind?, status?, tags? }, …],
+//               edges:   [{ id, source, target }, …] }
+//     200   : { suggestion: OrganizeSuggestion }
+//     4xx   : validation / not-found (Zod)
+//
+// The handler is deliberately *read-only*. It returns a suggestion the
+// client previews in the modal; the user must explicitly press "应用" before
+// anything is persisted via the legacy PUT /api/mindmaps/:id. This keeps
+// the "永远给撤销按钮 / 第一次仅给推荐" rule from Gap 2 (see
+// docs/MINDMAP_AI_ORGANIZE.md).
+// ---------------------------------------------------------------------------
+
+v2Router.post('/mindmaps/:id/organize', async (req, res) => {
+  try {
+    // v2 bootstrap is not strictly needed for the read-only organizer —
+    // it doesn't touch v2 storage — but we still respect the same error
+    // envelope and feature flags for consistency with neighbouring routes.
+    getV2(res);
+    const parsed = OrganizeInputSchema.parse({
+      ...(req.body ?? {}),
+      mindmapId: req.params.id,
+    });
+    const suggestion = organizeMindmap(null, parsed);
+    res.status(200).json({ suggestion });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
 
 // ---------------------------------------------------------------------------
 // Commitment (DF2-007)
@@ -847,12 +904,60 @@ v2Router.post('/commitments/:id/complete', async (req, res) => {
       followUpCommitmentIds: input.followUpCommitmentIds,
       suggestFollowUp: input.suggestFollowUp,
     });
+
+    // Sprint 1 Gap 7: mirror the completion back to the linked mindmap
+    // node (status='done' + note appended). A migrated v1 task carries
+    // `legacyTaskId`; only that path can resolve to a mindmap node today.
+    // Wrapped in try/catch so a mirror failure NEVER blocks the response.
+    let mirrorResult: MirrorResult = { mirroredNodeIds: [], mindmapIds: [] };
+    if (r.commitment.legacyTaskId) {
+      const taskDate = (r.commitment.completedAt ?? new Date().toISOString()).slice(0, 10);
+      const mirrorInput: CompletionMirrorInput = {
+        taskId: r.commitment.legacyTaskId,
+        taskDate,
+        completedAt: r.commitment.completedAt ?? new Date().toISOString(),
+        outcomeSummary: r.outcome.summary,
+      };
+      try {
+        mirrorResult = await mirrorTaskCompletionToMindmap(repo, mirrorInput);
+      } catch (err) {
+        console.warn('[v2/commitments/complete] mindmap mirror failed (non-blocking):', err);
+      }
+    }
+
     res.json({
       commitment: r.commitment,
       outcome: r.outcome,
       followUpProposal: r.followUpProposal,
       followUpCandidates: r.followUpCandidates,
+      mirror: mirrorResult,
     });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 1 Gap 7: explicit mindmap mirror trigger
+// ---------------------------------------------------------------------------
+// Used when the caller has no automatic hook into completeWithOutcome
+// (e.g. legacy v1 paths, the desktop-app migration script, or
+// recovery after a partial failure). The route performs the same
+// persistence as the implicit hook on /commitments/:id/complete, so
+// re-running it is safe and idempotent.
+// ---------------------------------------------------------------------------
+v2Router.post('/mirror/task-completion', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const schema = z.object({
+      taskId: z.string().min(1),
+      taskDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      completedAt: z.string().min(1),
+      outcomeSummary: z.string().optional(),
+    });
+    const input = schema.parse(req.body);
+    const result = await mirrorTaskCompletionToMindmap(repo, input);
+    res.json({ mirrored: result.mirroredNodeIds.length > 0, ...result });
   } catch (err) {
     handleError(err, res);
   }
@@ -1776,3 +1881,230 @@ v2Router.post('/reset', async (req, res) => {
     handleError(err, res);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Proactive Proposal (Gap 3 — Sprint 1)
+//
+//   GET    /api/v2/proactive/config   → load user config
+//   PUT    /api/v2/proactive/config   → save user config
+//   GET    /api/v2/proactive/scan?channel=today_load  → generate proposals
+//   POST   /api/v2/proactive/:id/action  → record user accept/dismiss
+//
+// All four endpoints are read or write of lightweight user-state under
+// ~/.dailyflow/. They never block the server startup and never touch
+// v1 data.
+// ---------------------------------------------------------------------------
+
+v2Router.get('/proactive/config', async (_req, res) => {
+  try {
+    const cfg = await loadProactiveConfig();
+    res.json({ config: cfg });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.put('/proactive/config', async (req, res) => {
+  try {
+    const schema = z.object({
+      enabled: z.boolean(),
+      quietHours: z.object({
+        start: z.number().min(0).max(24),
+        end: z.number().min(0).max(24),
+      }),
+      maxPerWeek: z.number().min(0).max(100),
+      overdueTaskDays: z.number().min(1).max(60),
+    });
+    const parsed = schema.parse(req.body) as ProactiveConfig;
+    const saved = await saveProactiveConfig(parsed);
+    res.json({ config: saved });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/proactive/scan', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const channel = (req.query.channel as ProactiveChannel) || 'today_load';
+    const cfg = await loadProactiveConfig();
+    const state = await loadProactiveState();
+    const proposals = await scanProactiveProposals(repo, cfg, state, channel);
+    // Fire-and-forget history update — the user has now seen these.
+    if (proposals.length > 0) {
+      let next = state;
+      for (const p of proposals) {
+        // Skip if already counted this week.
+        const already = next.entries.find(e => e.proposalId === p.id);
+        if (already) continue;
+        next = {
+          entries: [
+            ...next.entries,
+            {
+              proposalId: p.id,
+              kind: p.kind,
+              entityId: p.entityId,
+              channel: p.cooldown.channel,
+              firedAt: p.createdAt,
+            },
+          ],
+        };
+      }
+      if (next !== state) {
+        await saveProactiveState(next);
+      }
+    }
+    res.json({ proposals });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/proactive/:id/action', async (req, res) => {
+  try {
+    const body = z.object({
+      action: z.enum(['accepted', 'dismissed']),
+    }).parse(req.body);
+    const next = await recordProposalAction(req.params.id, body.action);
+    res.json({ ok: true, state: next });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// Daily Report + Reflection (Sprint 1 Gap 5 — Daily 闭环)
+//
+//   POST /api/v2/reports/daily              body: { date, reflection, snapshot? }
+//   GET  /api/v2/reports/daily?date=YYYY-MM-DD
+//   GET  /api/v2/reports/daily/list?year=YYYY&month=MM
+//
+// The routes write a single Markdown file under `Journal/YYYY-MM-DD.md`
+// at the active workspace root. The file is plain text, lives alongside
+// the user's other notes, and shows up in `git diff` — there is no
+// separate database to migrate from.
+// ---------------------------------------------------------------------------
+
+const DailyReportTaskSummarySchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  tags: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+});
+
+const DailyReportInProgressSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  progress: z.string().trim().max(300).optional(),
+});
+
+const DailyReportPostponedSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  reason: z.string().trim().max(500).optional(),
+});
+
+const DailyReportSnapshotSchema = z.object({
+  completedTasks: z.array(DailyReportTaskSummarySchema).max(200).default([]),
+  inProgressTasks: z.array(DailyReportInProgressSchema).max(200).default([]),
+  postponedTasks: z.array(DailyReportPostponedSchema).max(200).default([]),
+});
+
+function sanitizeSnapshot(
+  date: string,
+  input?: {
+    completedTasks?: Array<{ id: string; title: string; tags?: string[] }>;
+    inProgressTasks?: Array<{ id: string; title: string; progress?: string }>;
+    postponedTasks?: Array<{ id: string; title: string; reason?: string }>;
+  },
+): import('../../services/v2/dailyReport.js').DailyReportInput {
+  return {
+    date,
+    completedTasks: (input?.completedTasks ?? []).map((t) => ({ id: t.id, title: t.title, tags: t.tags })),
+    inProgressTasks: (input?.inProgressTasks ?? []).map((t) => ({ id: t.id, title: t.title, progress: t.progress })),
+    postponedTasks: (input?.postponedTasks ?? []).map((t) => ({ id: t.id, title: t.title, reason: t.reason })),
+    reflection: '',
+  };
+}
+
+v2Router.post('/reports/daily', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const schema = z.object({
+      date: z.string(),
+      reflection: z.string().max(20_000).default(''),
+      snapshot: DailyReportSnapshotSchema.optional(),
+    });
+    const parsed = schema.parse(req.body ?? {});
+    assertIsoDate(parsed.date, 'date');
+    const result = await generateAndSaveDailyReport(
+      repo,
+      ctx.root,
+      parsed.date,
+      parsed.reflection,
+      { snapshot: sanitizeSnapshot(parsed.date, parsed.snapshot) },
+    );
+    res.status(200).json({
+      ok: true,
+      report: {
+        date: parsed.date,
+        filePath: result.filePath,
+        byteSize: result.byteSize,
+      },
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/reports/daily', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const date = String(req.query.date ?? '').trim();
+    assertIsoDate(date, 'date');
+    const markdown = await readDailyReport(ctx.root, date);
+    res.status(200).json({
+      ok: true,
+      date,
+      markdown,
+      exists: markdown !== null,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/reports/daily/list', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const yearRaw = req.query.year;
+    const monthRaw = req.query.month;
+    const year = Number(yearRaw);
+    if (!Number.isInteger(year) || year < 1970 || year > 2999) {
+      return res.status(400).json({
+        error: { code: 'bad_request', message: 'year must be a 4-digit integer.' },
+      });
+    }
+    let month: number | undefined;
+    if (monthRaw !== undefined) {
+      month = Number(monthRaw);
+      if (!Number.isInteger(month) || month < 1 || month > 12) {
+        return res.status(400).json({
+          error: { code: 'bad_request', message: 'month must be between 1 and 12.' },
+        });
+      }
+    }
+    const reports = await listDailyReports(ctx.root, year, month);
+    res.status(200).json({
+      ok: true,
+      year,
+      month: month ?? null,
+      total: reports.length,
+      reports,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+

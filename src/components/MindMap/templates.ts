@@ -122,6 +122,60 @@ export const MINDMAP_TEMPLATES: readonly Template[] = [
       { text: 'Phase 4 — Review', children: ['Review data', 'Document learnings', 'Plan next cycle'] },
     ]),
   },
+  /**
+   * Sprint 1 / Gap 1 — Risk Review.
+   *
+   * Demo template for the three new Phase-2 kinds (`question`,
+   * `resource`, `risk`). One example node per kind is pre-classified
+   * so a new user can right-click → "Change Type" and see the visual
+   * treatment immediately, instead of having to remember to re-tag
+   * a few generic branches first.
+   *
+   * Layout mirrors the spec example: the root is the project under
+   * review; the four sub-branches cover typical risk-review facets
+   * (Scope / Schedule / Cost / Quality) and each carries one
+   * example question / resource / risk node underneath. The
+   * `position: { x: 0, y: 0 }` defaults are intentionally the same
+   * as the other templates — MindMapCanvas runs the layout pass
+   * right after forking.
+   */
+  {
+    id: 'risk-review',
+    title: '项目风险评估',
+    titleEn: 'Project Risk Review',
+    hint: '范围 / 进度 / 成本 / 质量',
+    hintEn: 'Scope / Schedule / Cost / Quality',
+    build: (language = 'zh') => {
+      // The four facets are the same across languages; the labels
+      // and root text localize. The `demo` map below flips the first
+      // sub-node of the first three branches into question / resource
+      // / risk so a fresh fork ships with one example of each new
+      // Phase-2 kind visible in the canvas.
+      const map = language === 'zh'
+        ? buildSimpleTree('项目风险评估', '项目名', [
+          { text: '范围风险', children: ['需求变更频繁', '客户期望不清'] },
+          { text: '进度风险', children: ['关键路径依赖', '人员流动'] },
+          { text: '成本风险', children: ['预算超支', '汇率波动'] },
+          { text: '质量风险', children: ['测试覆盖不足', '第三方依赖不稳定'] },
+        ])
+        : buildSimpleTree('Project Risk Review', 'Project name', [
+          { text: 'Scope risks', children: ['Frequent scope changes', 'Unclear customer expectations'] },
+          { text: 'Schedule risks', children: ['Critical-path dependencies', 'Team turnover'] },
+          { text: 'Cost risks', children: ['Budget overrun', 'FX fluctuation'] },
+          { text: 'Quality risks', children: ['Insufficient test coverage', 'Unstable third-party deps'] },
+        ]);
+      const demo: Array<{ id: string; kind: 'question' | 'resource' | 'risk' }> = [
+        { id: 'tpl-b0c0', kind: 'question' },
+        { id: 'tpl-b1c0', kind: 'resource' },
+        { id: 'tpl-b2c0', kind: 'risk' },
+      ];
+      for (const d of demo) {
+        const node = map.nodes.find((n) => n.id === d.id);
+        if (node) node.kind = d.kind;
+      }
+      return map;
+    },
+  },
 ];
 
 export function getTemplate(id: string): Template | undefined {

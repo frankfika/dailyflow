@@ -618,6 +618,13 @@ export const replan = (date: string, body: { availableMinutes?: number; maxItems
 // Memory
 // ---------------------------------------------------------------------------
 
+/**
+ * Search match tier. Order matters: structured > metadata > fulltext.
+ * The MemoryView shows a coloured badge per tier so the user can see
+ * why a hit ranked where it did (gap 4 / slide 06 demo).
+ */
+export type MemoryMatchTier = "structured" | "metadata" | "fulltext";
+
 export interface MemoryHit {
   type: string;
   id: string;
@@ -626,6 +633,10 @@ export interface MemoryHit {
   score: number;
   sourceIds: string[];
   evidenceIds: string[];
+  /** Which ranking tier produced this hit (gap 4). */
+  matchTier?: MemoryMatchTier;
+  /** Human-readable explanation for the UI / debug. */
+  tierReason?: string;
 }
 
 export const searchMemory = (q: string, signal?: AbortSignal) =>

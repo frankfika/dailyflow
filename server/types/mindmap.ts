@@ -17,8 +17,23 @@
 /**
  * v2 node discriminator. `branch` is the implicit default for any node
  * written before the kind field existed (SPEC §2.2).
+ *
+ * Sprint 1 / Gap 1: extends with three semantic kinds — `'question'`
+ * (待澄清的问题), `'resource'` (资料 / 参考链接) and `'risk'` (风险 /
+ * 注意事项). They share storage semantics with `'tag'` — a label-only
+ * role with no linked task — but each gets its own visual treatment
+ * (see MindMapNode.tsx) and its own right-click menu entry (see
+ * NodeContextMenu). All five non-root Phase-2 kinds are writable via
+ * `PUT /api/mindmaps/:id/nodes/:nodeId/kind`.
  */
-export type MindMapNodeKind = 'root' | 'branch' | 'tag' | 'task';
+export type MindMapNodeKind =
+  | 'root'
+  | 'branch'
+  | 'tag'
+  | 'task'
+  | 'question'
+  | 'resource'
+  | 'risk';
 
 export const DEFAULT_MINDMAP_NODE_KIND: MindMapNodeKind = 'branch';
 

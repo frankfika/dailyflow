@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { motion } from 'motion/react';
-import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot, Mic, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ModelLibrary } from './ModelLibrary';
 import { TeamSettings } from './TeamSettings';
@@ -23,10 +23,13 @@ import {
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
 import { getTodayStr } from '../utils/tagColors';
+import { ProactiveSettingsSection } from './ProactiveSettingsSection';
+import { TranscriptionSettingsSection } from './TranscriptionSettingsSection';
+import { PrivacyPanel } from './PrivacyPanel';
 
 declare const __APP_VERSION__: string;
 
-type SettingsTab = 'general' | 'ai' | 'sync' | 'about' | 'team';
+type SettingsTab = 'general' | 'ai' | 'transcription' | 'sync' | 'privacy' | 'about' | 'team';
 
 interface SettingsModalProps {
   showSettings: boolean;
@@ -881,6 +884,17 @@ export function SettingsModal({
             {language === 'zh' ? 'AI 模型' : 'AI Models'}
           </button>
           <button
+            onClick={() => setConfigTab('transcription')}
+            className={`flex items-center gap-1.5 py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
+              configTab === 'transcription'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            <Mic className="w-3.5 h-3.5" />
+            {language === 'zh' ? '转写' : 'Transcription'}
+          </button>
+          <button
             onClick={() => setConfigTab('sync')}
             className={`py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
               configTab === 'sync'
@@ -889,6 +903,17 @@ export function SettingsModal({
             }`}
           >
             {language === 'zh' ? '同步' : 'Sync'}
+          </button>
+          <button
+            onClick={() => setConfigTab('privacy')}
+            className={`flex items-center gap-1.5 py-3 px-4 text-xs font-bold  border-b-2 transition-colors ${
+              configTab === 'privacy'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-text-muted hover:text-text-heading'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {language === 'zh' ? '隐私' : 'Privacy'}
           </button>
           <button
             onClick={() => setConfigTab('about')}
@@ -918,6 +943,13 @@ export function SettingsModal({
             <div className="h-[65dvh] min-h-0 -m-2">
               <ModelLibrary language={language} />
             </div>
+          )}
+          {configTab === 'transcription' && (
+            <TranscriptionSettingsSection
+              language={language}
+              showSettings={showSettings}
+              configTab={configTab}
+            />
           )}
           {configTab === 'general' && (
             <div className="space-y-5">
@@ -1085,6 +1117,14 @@ export function SettingsModal({
 
               <hr className="border-border" />
 
+              {/* Proactive proposals (Gap 3 — Sprint 1) */}
+              <ProactiveSettingsSection
+                language={language}
+                showToast={showToast}
+              />
+
+              <hr className="border-border" />
+
               {/* Workspace Data: export / import / reset (Phase X) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -1189,6 +1229,11 @@ export function SettingsModal({
             </div>
           )}
 
+          {configTab === 'privacy' && (
+            <div className="py-4 px-1" data-testid="settings-tab-privacy">
+              <PrivacyPanel language={language} />
+            </div>
+          )}
           {configTab === 'sync' && (
             <div className="space-y-5">
               {/* Sync Sub-Tab Switcher */}

@@ -17,6 +17,41 @@ import {
 } from '../services/eventExecutionService.js';
 import { createTopicSpace } from '../services/topicSpaces.js';
 import type { EventContext } from '../types/event.js';
+// Sprint 1 Gap 7: mirror v1 task completion back to the linked mindmap node.
+import { bootstrapV2 } from '../services/v2/workspaceContext.js';
+import {
+  mirrorTaskCompletionToMindmap,
+  type MirrorResult,
+} from '../services/v2/taskCompletionMirror.js';
+
+/**
+ * Best-effort v1 mirror hook. The v1 events router has no V2Repository
+ * bound to res.locals, so we bootstrap one lazily. Any failure is
+ * swallowed and logged — task completion must NEVER be blocked by a
+ * mirror failure (see ROADSHOW_VS_PRODUCT_GAP.md "缺口 7").
+ */
+async function mirrorV1TaskCompletion(taskId: string, taskDate: string): Promise<MirrorResult | null> {
+  let b;
+  try {
+    b = await bootstrapV2({
+      workspaceRoot: process.env.DAILYFLOW_V2_WORKSPACE_ROOT || undefined,
+      workspaceId: process.env.DAILYFLOW_V2_WORKSPACE_ID || undefined,
+    });
+  } catch (err) {
+    console.warn('[events/complete-node-task] v2 bootstrap for mirror failed (non-blocking):', err);
+    return null;
+  }
+  try {
+    return await mirrorTaskCompletionToMindmap(b.repo, {
+      taskId,
+      taskDate,
+      completedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('[events/complete-node-task] mindmap mirror failed (non-blocking):', err);
+    return null;
+  }
+}
 
 const router = Router();
 
@@ -203,7 +238,7 @@ router.post('/actions/edit-node-task', async (req, res) => {
 /**
  * POST /api/events/actions/complete-node-task
  * Body: { taskId, scheduledDate }
- * Returns: { completed, alreadyDone }
+ * Returns: { completed, alreadyDone, mirror? }
  */
 router.post('/actions/complete-node-task', async (req, res) => {
   try {
@@ -212,7 +247,18 @@ router.post('/actions/complete-node-task', async (req, res) => {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
     }
     const result = await completeNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate });
-    res.json(result);
+
+    // Sprint 1 Gap 7: mirror the completion back to the linked mindmap
+    // node. We only mirror when the checkbox actually flipped — a
+    // double-call that returns alreadyDone=true should not re-stamp
+    // the node, which is exactly the same idempotency the v2 hook
+    // gets for free via the commit state machine.
+    let mirror: MirrorResult | null = null;
+    if (result.completed) {
+      mirror = await mirrorV1TaskCompletion(b.taskId, b.scheduledDate);
+    }
+
+    res.json({ ...result, mirror });
   } catch (error: any) {
     console.error('[events] complete-node-task error:', error);
     const status = error?.status ?? 500;

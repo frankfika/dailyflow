@@ -1221,8 +1221,23 @@ export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warn
  * Topic Space v2 (Phase 1): semantic kind for a mind map node. The
  * default for legacy nodes is `'branch'` — anything older is treated as
  * a regular branch node until Phase 2 lets the user re-classify it.
+ *
+ * Sprint 1 / Gap 1: extends the discriminator with three Phase-2
+ * semantic kinds — `'question'` (待澄清的问题), `'resource'` (资料 /
+ * 参考链接) and `'risk'` (风险 / 注意事项) — so the right-click
+ * "Change Type" menu can re-classify nodes beyond just tag/branch.
+ * All four Phase-2 kinds (tag, task, question, resource, risk) are
+ * `mindmapsApi.updateNodeKind`-writable; `'root'` and `'branch'` are
+ * not (the menu hides those entries, see NodeContextMenu).
  */
-export type MindMapNodeKind = 'root' | 'branch' | 'tag' | 'task';
+export type MindMapNodeKind =
+  | 'root'
+  | 'branch'
+  | 'tag'
+  | 'task'
+  | 'question'
+  | 'resource'
+  | 'risk';
 
 export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
   'default',
@@ -1449,6 +1464,55 @@ export const mindmapsApi = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Sprint 1 / Gap 2 — Mind-map "AI organize" suggestion.
+//
+// POST /api/v2/mindmaps/:id/organize is a *read-only* proposal endpoint.
+// It returns a structured suggestion (groups + rationale) without ever
+// writing to the mind map; the user has to press "应用" in the modal
+// before the client persists changes via mindmapsApi.update.
+// ---------------------------------------------------------------------------
+
+export type OrganizeStrategy = 'by_topic' | 'by_priority' | 'by_time';
+
+export interface OrganizeSuggestionGroup {
+  parentText: string;
+  parentKind: 'branch' | 'question' | 'resource' | 'risk' | 'tag';
+  nodeIds: string[];
+}
+
+export interface OrganizeSuggestionEdge {
+  source: string;
+  target: string;
+}
+
+export interface OrganizeSuggestion {
+  strategy: OrganizeStrategy;
+  rationale: string;
+  groups: OrganizeSuggestionGroup[];
+  suggestedEdges: OrganizeSuggestionEdge[];
+  groupRationale: Record<string, string>;
+  stats: { looseNodes: number; organizedNodes: number; groupCount: number };
+}
+
+export const organizeApi = {
+  /**
+   * Ask the server to suggest a structural re-organization for the
+   * current mind map. The server returns a pure suggestion — no writes.
+   */
+  async organize(mindmapId: string, strategy: OrganizeStrategy): Promise<OrganizeSuggestion> {
+    const map = await mindmapsApi.get(mindmapId);
+    const res = await fetch(`${API_BASE}/v2/mindmaps/${encodeURIComponent(mindmapId)}/organize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy, nodes: map.nodes, edges: map.edges }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to organize mind map');
+    const data = (await res.json()) as { suggestion: OrganizeSuggestion };
+    return data.suggestion;
+  },
+};
+
 export type RecurrenceRule =
   | { type: 'daily' }
   | { type: 'weekly'; weekdays: number[] }
@@ -1630,5 +1694,294 @@ export const teamApi = {
     const res = await fetch(`${API_BASE}/team/members/${encodeURIComponent(memberId)}/tasks/${date}/timeline?taskId=${encodeURIComponent(taskId)}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch task timeline');
     return res.json();
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Proactive Proposal (Gap 3 — Sprint 1)
+//
+// Same note as features/v2/api/client.ts: the *v1* client.ts is the only
+// file the UI should be editing. The proactive endpoints live under
+// /api/v2 (handled by the v2 router) so we prepend the v2 prefix here.
+// ---------------------------------------------------------------------------
+
+export type ProactiveChannel = 'today_load' | 'ai_chat_open' | 'app_start';
+
+export interface ProactiveConfig {
+  enabled: boolean;
+  quietHours: { start: number; end: number };
+  maxPerWeek: number;
+  overdueTaskDays: number;
+}
+
+export const DEFAULT_PROACTIVE_CONFIG: ProactiveConfig = {
+  enabled: true,
+  quietHours: { start: 22, end: 8 },
+  maxPerWeek: 3,
+  overdueTaskDays: 5,
+};
+
+export type ProactiveSuggestionAction = 'move_to_today' | 'regroup' | 'mark_done' | 'dismiss';
+
+export interface ProactiveSuggestion {
+  label: string;
+  action: ProactiveSuggestionAction;
+  payload?: Record<string, unknown>;
+}
+
+export interface ProactiveProposal {
+  id: string;
+  kind: 'overdue_task' | 'stale_commitment' | 'unreviewed_outcome';
+  title: string;
+  body: string;
+  entityId: string;
+  entityType: string;
+  severity: 'info' | 'warning' | 'urgent';
+  createdAt: string;
+  cooldown: { channel: ProactiveChannel; lastFiredAt?: string };
+  suggestions: ProactiveSuggestion[];
+}
+
+export const proactiveApi = {
+  async getConfig(): Promise<ProactiveConfig> {
+    const res = await fetch(`${API_BASE}/v2/proactive/config`);
+    if (!res.ok) throw await httpError(res, 'Failed to load proactive config');
+    const body = await res.json();
+    return body.config as ProactiveConfig;
+  },
+  async setConfig(cfg: ProactiveConfig): Promise<ProactiveConfig> {
+    const res = await fetch(`${API_BASE}/v2/proactive/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save proactive config');
+    const body = await res.json();
+    return body.config as ProactiveConfig;
+  },
+  async scan(channel: ProactiveChannel = 'today_load'): Promise<ProactiveProposal[]> {
+    const res = await fetch(`${API_BASE}/v2/proactive/scan?channel=${encodeURIComponent(channel)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to scan proactive proposals');
+    const body = await res.json();
+    return (body.proposals ?? []) as ProactiveProposal[];
+  },
+  async recordAction(id: string, action: 'accepted' | 'dismissed'): Promise<void> {
+    const res = await fetch(`${API_BASE}/v2/proactive/${encodeURIComponent(id)}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to record proactive action');
+  },
+};
+
+
+// ---------------------------------------------------------------------------
+// Meeting Transcription (Sprint 1 — Gap 5, Local Whisper)
+//
+// Server routes already exist under /api/v2:
+//   GET  /transcription/local-config
+//   PUT  /transcription/local-config
+//   POST /notes/:id/meeting/transcribe-local
+//
+// There is no dedicated "test connection" endpoint; the server's PUT response
+// carries a `status` field with executable/model/ffmpeg booleans, so
+// "Test Connection" reuses that surface.
+// ---------------------------------------------------------------------------
+
+export interface LocalTranscriptionConfigInput {
+  executablePath: string;
+  modelPath: string;
+  ffmpegPath?: string;
+  language?: string;
+  extraArgs?: string[];
+}
+
+export interface LocalTranscriptionConfigStatus {
+  executable: boolean;
+  model: boolean;
+  ffmpeg: boolean;
+}
+
+export interface LocalTranscriptionJob {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  resultRef?: { type: 'source'; id: string };
+  error?: { code: string; message: string; retryable?: boolean };
+}
+
+export interface LocalTranscriptionDefaults {
+  executablePath: string;
+  modelPath: string;
+  ffmpegPath: string;
+  language: string;
+  extraArgs: string[];
+}
+
+export const transcriptionApi = {
+  async getLocalConfig(): Promise<{
+    config: LocalTranscriptionConfigInput | null;
+    status?: LocalTranscriptionConfigStatus;
+    defaults?: LocalTranscriptionDefaults;
+  }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/local-config`);
+    if (!res.ok) throw await httpError(res, 'Failed to load local transcription config');
+    return res.json();
+  },
+
+  async setLocalConfig(
+    config: LocalTranscriptionConfigInput,
+  ): Promise<{ config: LocalTranscriptionConfigInput; status: LocalTranscriptionConfigStatus }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/local-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save local transcription config');
+    return res.json();
+  },
+
+  /**
+   * The server has no dedicated test endpoint — `setLocalConfig` returns a
+   * `status` payload that we surface here so the UI can render a "test
+   * connection" badge without a special route.
+   */
+  async testLocalConfig(
+    config: LocalTranscriptionConfigInput,
+  ): Promise<LocalTranscriptionConfigStatus> {
+    const result = await this.setLocalConfig(config);
+    return result.status;
+  },
+
+  async transcribeLocal(
+    noteId: string,
+    sourceId: string,
+    config?: LocalTranscriptionConfigInput,
+  ): Promise<{
+    job?: LocalTranscriptionJob;
+    source?: { id: string; body: string };
+    note?: { id: string };
+  }> {
+    const res = await fetch(
+      `${API_BASE}/v2/notes/${encodeURIComponent(noteId)}/meeting/transcribe-local`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId, config }),
+      },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to start local transcription');
+    return res.json();
+  },
+};
+
+
+// ---------------------------------------------------------------------------
+// Daily Report + Reflection (Sprint 1 Gap 5 — Daily 闭环)
+//
+// Endpoints under /api/v2/reports/daily that write a Markdown file into
+// the workspace's `Journal/` directory. The report is plain text — it
+// lives next to the user's other notes so it shows up in `git diff`.
+// ---------------------------------------------------------------------------
+
+export interface DailyReportTaskSnapshot {
+  id: string;
+  title: string;
+  tags?: string[];
+  progress?: string;
+  reason?: string;
+}
+
+export interface DailyReportSnapshot {
+  completedTasks: DailyReportTaskSnapshot[];
+  inProgressTasks: DailyReportTaskSnapshot[];
+  postponedTasks: DailyReportTaskSnapshot[];
+}
+
+export interface DailyReportSummary {
+  date: string;
+  filePath: string;
+  byteSize: number;
+}
+
+export interface DailyReportRecord {
+  date: string;
+  filePath: string;
+  byteSize: number;
+}
+
+export const reportsApi = {
+  /**
+   * Persist a daily report for the given date. The server writes a single
+   * Markdown file to `Journal/YYYY-MM-DD.md` and returns the file path.
+   */
+  async generateDaily(
+    date: string,
+    reflection: string,
+    snapshot?: DailyReportSnapshot,
+  ): Promise<DailyReportSummary> {
+    const res = await fetch(`${API_BASE}/v2/reports/daily`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, reflection, snapshot }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to save daily report');
+    const body = await res.json();
+    return body.report as DailyReportSummary;
+  },
+  /** Read an existing daily journal entry; returns `null` when missing. */
+  async readDaily(date: string): Promise<{ markdown: string | null; exists: boolean }> {
+    const res = await fetch(`${API_BASE}/v2/reports/daily?date=${encodeURIComponent(date)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to read daily report');
+    return res.json() as Promise<{ markdown: string | null; exists: boolean }>;
+  },
+  /** List saved daily reports for a given year (and optionally month). */
+  async listDaily(year: number, month?: number): Promise<DailyReportRecord[]> {
+    const params = new URLSearchParams({ year: String(year) });
+    if (month !== undefined) params.set('month', String(month));
+    const res = await fetch(`${API_BASE}/v2/reports/daily/list?${params.toString()}`);
+    if (!res.ok) throw await httpError(res, 'Failed to list daily reports');
+    const body = await res.json();
+    return (body.reports ?? []) as DailyReportRecord[];
+  },
+};
+
+
+// ---------------------------------------------------------------------------
+// Task-Completion → MindMap mirror (Sprint 1 Gap 7)
+// ---------------------------------------------------------------------------
+// Mirrors a completed Task's status / outcome back to the linked
+// mindmap node (kind='task'). The node is never deleted — the
+// completion is appended to its `note` and `status` flips to 'done'.
+// See docs/TASK_MIRROR_TO_MINDMAP.md.
+// ---------------------------------------------------------------------------
+
+export interface MirrorTaskCompletionInput {
+  taskId: string;
+  taskDate: string;
+  completedAt: string;
+  outcomeSummary?: string;
+}
+
+export interface MirrorTaskCompletionResult {
+  mirrored: boolean;
+  mirroredNodeIds: string[];
+  mindmapIds: string[];
+}
+
+export const mirrorApi = {
+  /**
+   * Trigger an explicit mirror. Use this when the caller has no
+   * automatic hook into the v2 `completeWithOutcome` flow (e.g. a
+   * recovery script after a partial failure).
+   */
+  async taskCompletion(input: MirrorTaskCompletionInput): Promise<MirrorTaskCompletionResult> {
+    const res = await fetch(`${API_BASE}/v2/mirror/task-completion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to mirror task completion');
+    return res.json() as Promise<MirrorTaskCompletionResult>;
   },
 };

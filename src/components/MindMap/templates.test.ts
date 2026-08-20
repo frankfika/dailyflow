@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { MINDMAP_TEMPLATES, getTemplate } from './templates';
 
 describe('MINDMAP_TEMPLATES', () => {
-  it('exposes 4 built-in templates', () => {
-    expect(MINDMAP_TEMPLATES.length).toBe(4);
+  it('exposes 5 built-in templates (4 classic + Sprint 1 risk-review)', () => {
+    // Sprint 1 / Gap 1 — added a 5th template that demos the three
+    // new Phase-2 kinds (question / resource / risk). The number
+    // must stay in sync with MINDMAP_TEMPLATES in templates.ts.
+    expect(MINDMAP_TEMPLATES.length).toBe(5);
   });
 
   it('each template has a unique id and non-empty title/hint', () => {
@@ -50,5 +53,27 @@ describe('MINDMAP_TEMPLATES', () => {
       const nonRoot = map.nodes.length - 1;
       expect(nonRoot).toBeGreaterThan(0);
     }
+  });
+
+  it('risk-review template (Sprint 1) pre-classifies one question / resource / risk node', () => {
+    const t = getTemplate('risk-review');
+    expect(t).toBeDefined();
+    const map = t!.build('zh');
+    const byKind = (kind: string) => map.nodes.filter((n) => n.kind === kind);
+    expect(byKind('question').length).toBe(1);
+    expect(byKind('resource').length).toBe(1);
+    expect(byKind('risk').length).toBe(1);
+    // All other nodes stay as plain branches (no accidental kind drift).
+    const labelled = byKind('question').length + byKind('resource').length + byKind('risk').length;
+    expect(labelled).toBe(3);
+  });
+
+  it('risk-review template localizes both titles and root text', () => {
+    const zh = getTemplate('risk-review')!.build('zh');
+    expect(zh.title).toBe('项目风险评估');
+    expect(zh.nodes.some((n) => n.id === 'tpl-root' && n.text === '项目名')).toBe(true);
+
+    const en = getTemplate('risk-review')!.build('en');
+    expect(en.title).toBe('Project Risk Review');
   });
 });

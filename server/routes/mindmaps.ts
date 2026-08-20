@@ -93,14 +93,38 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-const MUTABLE_NODE_KINDS = new Set<MindMapNodeKind>(['branch', 'tag']);
+/**
+ * Kind values the right-click menu may write via `PUT .../kind`.
+ *
+ * Root and branch are excluded by design:
+ *   - `root`  — the map's anchor; never re-classified (NodeContextMenu
+ *               hides the menu for it, this set is the second line of
+ *               defense).
+ *   - `branch`— the implicit default; writing it back is a no-op so
+ *               the menu doesn't offer a duplicate "unclassify" entry
+ *               (Unclassify is reserved for nodes coming from task/tag).
+ *
+ * Sprint 1 / Gap 1: `question`, `resource`, `risk` join `tag` as
+ * label-only roles with no linked task; they share the same write
+ * semantics (no taskId/taskDate side-effects), only differ in color
+ * and the dedicated menu entry.
+ */
+const MUTABLE_NODE_KINDS = new Set<MindMapNodeKind>([
+  'branch',
+  'tag',
+  'question',
+  'resource',
+  'risk',
+]);
 
 router.put('/:id/nodes/:nodeId/kind', async (req, res) => {
   try {
     const { id: mindmapId, nodeId } = req.params;
     const body = (req.body ?? {}) as { kind?: MindMapNodeKind; tag?: string };
     if (!body.kind || !MUTABLE_NODE_KINDS.has(body.kind)) {
-      return res.status(400).json({ error: "kind must be 'branch' or 'tag'" });
+      return res.status(400).json({
+        error: "kind must be one of 'branch' | 'tag' | 'question' | 'resource' | 'risk'",
+      });
     }
 
     const map = await getMindMap(mindmapId);
@@ -111,6 +135,10 @@ router.put('/:id/nodes/:nodeId/kind', async (req, res) => {
       return res.status(400).json({ error: 'Root node cannot be reclassified' });
     }
 
+    // Only `kind: 'tag'` carries a label payload. The new Phase-2
+    // kinds (question / resource / risk) are visually distinguished
+    // but still carry the node's text as their content, so no extra
+    // body field is needed for them.
     const tag = body.kind === 'tag'
       ? (typeof body.tag === 'string' ? body.tag.trim() : '') || node.text.trim()
       : undefined;
@@ -121,6 +149,9 @@ router.put('/:id/nodes/:nodeId/kind', async (req, res) => {
     const updated = await updateNodeInMindMap(mindmapId, nodeId, {
       kind: body.kind,
       tag,
+      // Switching to a label-only kind always severs the task back-link;
+      // switching from task to task on the same node never reaches this
+      // path (the `link-task` route handles that).
       taskId: undefined,
       taskDate: undefined,
     });

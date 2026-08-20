@@ -13,7 +13,7 @@ import {
   type NoteDocument,
   type SourceItem,
 } from '../api/client';
-import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, saveMeetingTranscriptionSettings, type MeetingTranscriptionSettings } from './meetingTranscription';
+import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, loadTranscriptionBackend, saveMeetingTranscriptionSettings, type MeetingTranscriptionSettings, type TranscriptionBackend } from './meetingTranscription';
 
 export interface MeetingNotePanelProps {
   note: NoteDocument;
@@ -85,6 +85,8 @@ const COPY = {
     consent: '我已告知参会者，并确认有权录音和处理本次会议内容',
     insertTranscript: '加入笔记并编辑',
     backgroundTranscribing: '录音已保存，本地转写正在后台运行。你可以继续编辑或离开此页面。',
+    backendBadgeOpenai: 'OpenAI Whisper',
+    backendBadgeLocal: '本地 Whisper',
     transcribeLater: '转写这段录音',
     localConfig: '本地 whisper.cpp 设置',
     executablePath: 'whisper-cli 路径',
@@ -158,6 +160,8 @@ const COPY = {
     consent: 'I have notified participants and have the right to record and process this meeting',
     insertTranscript: 'Add to note and edit',
     backgroundTranscribing: 'Recording saved. Local transcription is running in the background; you can keep editing or leave this page.',
+    backendBadgeOpenai: 'OpenAI Whisper',
+    backendBadgeLocal: 'Local Whisper',
     transcribeLater: 'Transcribe this recording',
     localConfig: 'Local whisper.cpp settings',
     executablePath: 'whisper-cli path',
@@ -235,7 +239,14 @@ export function MeetingNotePanel({
   const [localStatus, setLocalStatus] = useState<LocalTranscriptionStatus | null>(null);
   const [localConfigSaving, setLocalConfigSaving] = useState(false);
   const [transcribingSourceId, setTranscribingSourceId] = useState<string | null>(null);
+  const [activeBackend, setActiveBackend] = useState<TranscriptionBackend>(() => loadTranscriptionBackend());
   const [audioTranscriptMap, setAudioTranscriptMap] = useState<Record<string, SourceItem>>({});
+  useEffect(() => {
+    const refresh = () => setActiveBackend(loadTranscriptionBackend());
+    refresh();
+    window.addEventListener('storage', refresh);
+    return () => window.removeEventListener('storage', refresh);
+  }, []);
   const selectedMode = transcriptionSettings.mode;
   const remoteEndpoint = transcriptionSettings.remoteApiKey
     && transcriptionSettings.remoteBaseUrl
@@ -671,7 +682,10 @@ export function MeetingNotePanel({
       {transcribingSourceId && (
         <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700" role="status" aria-live="polite">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          {t.backgroundTranscribing}
+          <span>{t.backgroundTranscribing}</span>
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700" data-testid="transcription-backend-badge">
+            {activeBackend === 'local' ? t.backendBadgeLocal : t.backendBadgeOpenai}
+          </span>
         </p>
       )}
       {error && (

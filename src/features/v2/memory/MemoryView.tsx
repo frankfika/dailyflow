@@ -14,6 +14,7 @@ import {
   listLegacyTasks,
   migrateLegacyTask,
   type MemoryHit,
+  type MemoryMatchTier,
   type LegacyTaskView,
 } from '../api/client';
 import { Card, Button, Badge } from '../components/States';
@@ -91,8 +92,8 @@ export function MemoryView({ workspaceId = 'default', language = 'zh' }: { works
             </div>
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
-              {(search.data?.hits ?? []).map((h, i) => (
-                <SearchHit key={i} hit={h} workspaceId={workspaceId} isZh={isZh} />
+              {sortHitsByTier(search.data?.hits ?? []).map((h, i) => (
+                <SearchHit key={`${h.id}-${i}`} hit={h} workspaceId={workspaceId} isZh={isZh} />
               ))}
             </ul>
           )}
@@ -195,16 +196,81 @@ function SearchHit({ hit, workspaceId, isZh }: { hit: MemoryHit; workspaceId: st
       tabIndex={0}
       role="button"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge>{memoryTypeLabel(hit.type, isZh)}</Badge>
+        <TierBadge tier={hit.matchTier} isZh={isZh} />
         <span className="font-medium">{hit.title}</span>
-        <span className="text-xs text-[var(--color-text-muted)]">{isZh ? '相关度' : 'score'} {hit.score}</span>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          {isZh ? '相关度' : 'score'} {hit.score}
+        </span>
       </div>
       <div className="mt-1 text-xs italic">"{hit.snippet}"</div>
+      {hit.tierReason && (
+        <div className="mt-1 text-[10px] text-[var(--color-text-muted)]" title={hit.tierReason}>
+          {isZh ? '匹配原因' : 'reason'}: {hit.tierReason}
+        </div>
+      )}
       <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
         {isZh ? '来源' : 'sources'}: {hit.sourceIds.length} · {isZh ? '证据' : 'evidence'}: {hit.evidenceIds.length}
       </div>
     </li>
+  );
+}
+
+// Tier priority mirrors server/services/v2/memoryService.ts TIER_PRIORITY.
+// Hits without a tier (e.g. older payloads) default to "fulltext" so they
+// land at the bottom — preserving the old single-bucket ranking.
+const TIER_PRIORITY: Record<MemoryMatchTier, number> = {
+  structured: 0,
+  metadata: 1,
+  fulltext: 2,
+};
+
+function sortHitsByTier(hits: MemoryHit[]): MemoryHit[] {
+  return [...hits].sort((a, b) => {
+    const ap = TIER_PRIORITY[a.matchTier ?? "fulltext"];
+    const bp = TIER_PRIORITY[b.matchTier ?? "fulltext"];
+    if (ap !== bp) return ap - bp;
+    if (a.score !== b.score) return b.score - a.score;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function TierBadge({ tier, isZh }: { tier?: MemoryMatchTier; isZh: boolean }) {
+  if (!tier) return null;
+  const labels: Record<MemoryMatchTier, [string, string]> = {
+    structured: ['关联', 'Link'],
+    metadata: ['标签', 'Tag'],
+    fulltext: ['全文', 'Text'],
+  };
+  // Inline-tone class mapping. Tailwind-friendly inline styles keep this
+  // self-contained without a global theme change.
+  const tones: Record<MemoryMatchTier, { bg: string; fg: string; ring: string }> = {
+    structured: { bg: 'rgba(59, 130, 246, 0.12)', fg: '#1d4ed8', ring: 'rgba(59, 130, 246, 0.45)' },
+    metadata: { bg: 'rgba(168, 85, 247, 0.12)', fg: '#7c3aed', ring: 'rgba(168, 85, 247, 0.45)' },
+    fulltext: { bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151', ring: 'rgba(107, 114, 128, 0.45)' },
+  };
+  const t = tones[tier];
+  return (
+    <span
+      data-testid={`tier-badge-${tier}`}
+      title={isZh ? `匹配层级：${labels[tier][0]}` : `Match tier: ${labels[tier][1]}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        borderRadius: 9999,
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: '0.04em',
+        backgroundColor: t.bg,
+        color: t.fg,
+        boxShadow: `inset 0 0 0 1px ${t.ring}`,
+      }}
+    >
+      {isZh ? labels[tier][0] : labels[tier][1]}
+    </span>
   );
 }
 

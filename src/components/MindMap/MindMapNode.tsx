@@ -7,12 +7,15 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import {
+  AlertTriangle,
   CheckCircle2,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   Circle,
   ExternalLink,
+  FileText,
+  HelpCircle,
   ListTodo,
   Pencil,
   Plus,
@@ -62,6 +65,56 @@ export interface MindMapNodeData extends Record<string, unknown> {
 const ROOT_CARD = 'min-w-[180px] max-w-[280px] px-4 py-3 text-base font-semibold';
 const TASK_CARD = 'min-w-[170px] max-w-[260px] px-3 py-2.5 text-sm font-medium';
 
+/**
+ * Sprint 1 / Gap 1 — visual differentiation for the three Phase-2
+ * semantic kinds. Each kind gets:
+ *   - a colored left border to mark it as a label-only role;
+ *   - a lucide icon used inside the metadata badge;
+ *   - a label for the badge (zh / en);
+ *   - the design token name used as the badge background tint.
+ *
+ * Colors are deliberately distinct from `task` (accent / teal) so a
+ * single glance can separate "do this work" from "look at this
+ * question / find this reference / watch out for this risk".
+ */
+type SemanticKind = 'question' | 'resource' | 'risk';
+
+interface KindVisual {
+  /** Lucide icon component (rendered at h-3 w-3). */
+  Icon: typeof HelpCircle;
+  /** Border / accent color (CSS var token, used inline). */
+  colorVar: string;
+  /** Tint for the metadata badge background. */
+  bgVar: string;
+  /** Foreground color for the metadata badge. */
+  fgVar: string;
+}
+
+const KIND_VISUALS: Record<SemanticKind, KindVisual> = {
+  question: {
+    Icon: HelpCircle,
+    colorVar: '--color-info',
+    bgVar: '--color-info-light',
+    fgVar: '--color-info',
+  },
+  resource: {
+    Icon: FileText,
+    colorVar: '--color-text-muted',
+    bgVar: '--color-border',
+    fgVar: '--color-text-muted',
+  },
+  risk: {
+    Icon: AlertTriangle,
+    colorVar: '--color-warning',
+    bgVar: '--color-warning-light',
+    fgVar: '--color-warning',
+  },
+};
+
+function isSemanticKind(kind: MindMapNodeKind): kind is SemanticKind {
+  return kind === 'question' || kind === 'resource' || kind === 'risk';
+}
+
 function parseTags(value: string): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -87,6 +140,19 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
   const active = selected || d.isSelected;
   const nodeKind: MindMapNodeKind = d.isRoot ? 'root' : (d.kind ?? 'branch');
   const isTask = nodeKind === 'task';
+  // Sprint 1 / Gap 1: a semantic kind (question / resource / risk) gets
+  // its own colored left border + iconified metadata badge. Tasks still
+  // take precedence in any visual rule that overlaps (e.g. status cycle).
+  const kindVisual = isSemanticKind(nodeKind) ? KIND_VISUALS[nodeKind] : null;
+  // A label is matched 1:1 with the kind, so a tiny switch is clearer
+  // than indexing a record that would need a fallback for the other
+  // four kinds.
+  const kindLabel: string | null = (() => {
+    if (nodeKind === 'question') return language === 'zh' ? '疑问' : 'Question';
+    if (nodeKind === 'resource') return language === 'zh' ? '资料' : 'Resource';
+    if (nodeKind === 'risk') return language === 'zh' ? '风险' : 'Risk';
+    return null;
+  })();
 
   useEffect(() => {
     if (!d.isEditing) setDraft(d.text);
@@ -166,7 +232,14 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
                 : isTask
                   ? 'border-[var(--color-accent)]/35 hover:border-[var(--color-accent)]/60 hover:shadow-md'
                   : 'border-border-strong hover:border-border-strong hover:shadow-md'
-        } ${isTask ? 'border-l-[3px] border-l-[var(--color-accent)]' : ''}`}
+        } ${
+          isTask
+            ? 'border-l-[3px] border-l-[var(--color-accent)]'
+            : kindVisual
+              ? 'border-l-[3px]'
+              : ''
+        }`}
+        style={kindVisual ? { borderLeftColor: `var(${kindVisual.colorVar})` } : undefined}
         onDoubleClick={(event) => {
           event.stopPropagation();
           d.onStartEdit(id);
@@ -223,6 +296,24 @@ function MindMapNodeImpl({ id, data, selected }: NodeProps) {
                   {d.sourceDate}
                 </span>
               )}
+            </div>
+          )}
+
+          {kindVisual && kindLabel && (
+            <div
+              className="mt-1.5 flex items-center gap-1.5 text-[10px] font-medium text-text-muted"
+              data-testid={`mindmap-${nodeKind}-meta-${id}`}
+            >
+              <span
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5"
+                style={{
+                  background: `var(${kindVisual.bgVar})`,
+                  color: `var(${kindVisual.fgVar})`,
+                }}
+              >
+                <kindVisual.Icon className="h-3 w-3" />
+                {kindLabel}
+              </span>
             </div>
           )}
 
