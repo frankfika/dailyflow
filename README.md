@@ -16,7 +16,7 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/frankfika/dailyflow/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)
 ![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square)
 
-**当前稳定版：v1.9.0** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
+**当前稳定版：v1.9.0** · **Sprint 1 已合并 (10 缺口 + 4 文档)** · [下载与安装说明](https://github.com/frankfika/dailyflow/releases/latest) <!-- x-release-please-version -->
 
 [核心功能](#-核心功能) · [界面预览](#-界面预览) · [快速开始](#-快速开始) · [开发](#-开发) · [文档](#-文档)
 
@@ -35,6 +35,25 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 3. **最后回顾**：用 Memory 和 Review 沉淀已确认的工作上下文。
 
 如果你不想把工作资料锁在单一 SaaS 里，又希望拥有 AI 辅助整理和连接外部日历的能力，DailyFlow 就是为这个取舍设计的。
+
+## 🆕 Sprint 1 已落地（路演前 4 周冲刺完成）
+
+> 2026-08-20 合并到 main · 9 个新 commit · 645 测试通过 / 0 TS 错误
+
+| 类别 | 能力 | 路演页 |
+|---|---|---|
+| **P0** | 脑图节点 7 种类型（task/question/resource/risk/branch/tag/root） | Slide 04 |
+| **P0** | AI 整理脑图：by_topic / by_priority / by_time 三策略 | Slide 04 |
+| **P0** | 主动提案：逾期 5 天任务自动建议排进今天 | Slide 06 |
+| **P0** | Memory 3 层搜索：结构化 > 元数据 > 全文 | Slide 06 |
+| **P0** | 本地 Whisper 后端选择（whisper.cpp） | Slide 05 |
+| **P1** | 日报 + 今日复盘（Journal/YYYY-MM-DD.md） | Slide 03 |
+| **P1** | 任务完成回写脑图节点（status=done + 完成块） | Slide 04 |
+| **P2** | 向量索引（TF-IDF in-memory，lancedb-ready） | Slide 12 |
+| **P2** | Skill 市场雏形（GitHub registry + SHA-256 校验） | Slide 12 |
+| **P2** | 隐私面板（5 类外发请求透明展示） | Slide 05 |
+
+详细设计：[`docs/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## ✨ 核心功能
 
@@ -63,11 +82,14 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 
 ### Mind Map：把复杂问题拆成主分支
 
+- **🆕 7 种节点类型**：`task`（任务）/ `question`（疑问）/ `resource`（资料）/ `risk`（风险）/ `branch`（分支）/ `tag`（标签）/ `root`（根），每种独立图标和颜色。
+- **🆕 AI 整理**：工具栏「AI 整理」按钮提供 by_topic（按类型）/ by_priority（按状态）/ by_time（按日期标签）三种策略，结果以可撤销的"建议单"形式呈现，确认后才落盘。
 - 新增 `思维导图` 标签，每个工作区一组导图，独立的平移/缩放画布（基于 `@xyflow/react`）。
 - 自动水平布局，拖拽改位置，`Tab` 加子节点、`Enter` 加同级节点、`Backspace` 删除、双击 / `F2` 编辑，色板按钮切换 6 个命名色。
 - 子树折叠/展开、节点内联备注、Markdown 导出、撤销/重做（50 步历史）、画布内 `Ctrl/Cmd+F` 搜索。
 - 每个节点有 `todo` / `in-progress` / `done` 三态进度，header 实时显示完成度。
-- 4 个内置模板（SWOT、5W1H、决策树、任务分解），JSON 导入/导出。
+- **🆕 任务回写**：任务完成时自动回写到关联节点（追加 `## 完成 · YYYY-MM-DD` 块 + status=done），思考过程永远保留在原位。
+- 5 个内置模板（SWOT、5W1H、决策树、任务分解、风险评估），JSON 导入/导出。
 - 自动保存到 `<workspaceRoot>/.dailyflow/mindmaps/<id>.json`（600ms 防抖）。
 
 ### Events：像飞书脑图笔记一样拆解项目
@@ -100,9 +122,34 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 
 ### Memory 与 Review：让工作有上下文
 
+- **🆕 3 层搜索排序**：结构化关联（linkedTaskIds / linkedNoteIds 直接命中） > 元数据（title / tag / status / date） > 全文（FTS5 / LIKE），每个 hit 带 `matchTier` 徽章。
+- **🆕 向量索引**（可选加速）：TF-IDF + cosine similarity，> 1000 entity 时自动提示升级到 lancedb。
+- **🆕 主动提案**：扫描 memory 里的承诺 / 任务 / 等待项，发现"关联任务已逾期 5 天"自动生成 Proposal 推到 Today 顶部。三条限制：全局开关 / 静默时段（深夜不提）/ 每周最多 3 次。
 - Memory 聚合已确认的 Commitment、项目、会议、人员、决定和结果。
 - Review 展示每周工作摘要、仍在进行的事项和长期未推进的 Commitment。
 - v2 数据模型按实体保存，并保留审计与导入/导出能力。
+
+### 日报与日复盘
+
+- **🆕** Today 顶部「今日复盘」按钮，归档后自动生成 `Journal/YYYY-MM-DD.md`。
+- 内容：今日完成 / 进行中 / 推迟 / 复盘问题 / 明日聚焦。
+- `builtin_daily_report` Skill：让 LLM 帮你草拟复盘正文（与 `weekly_report` 风格一致）。
+
+### Skill 市场与社区扩展
+
+- **🆕** 从 `dailyflow-skills` GitHub registry 一键安装社区 Skill。
+- **🆕** SHA-256 校验 + manifest schema（`docs/agent-market/community-skills-registry.example.json`）。
+- 已安装的 Skill 在 AIChat skill 选择器中与内置 Skill 平级出现。
+
+### 隐私与 0 字节上传
+
+- **🆕** 设置 → 隐私 Tab：`PrivacyPanel` 列出全部 5 类外发请求（AI Chat / 会议转写 / IPFS / OAuth / 升级检查），每类都有显式开关。
+- 详细审计：[`docs/ZERO_UPLOAD_AUDIT.md`](./docs/ZERO_UPLOAD_AUDIT.md)。
+
+### 会议转写
+
+- **🆕** 后端可切换：OpenAI Whisper（云端，1 行配置） / 本地 whisper.cpp（推荐，主权 AI 承诺）。
+- 详见 [`docs/LOCAL_WHISPER_SETUP.md`](./docs/LOCAL_WHISPER_SETUP.md)。
 
 ### 同步、备份与桌面体验
 
@@ -211,6 +258,22 @@ flowchart LR
 
 ## 📚 文档
 
+**Sprint 1 设计文档**
+- [产品债务清单（28 条）](./docs/PRODUCT_DEBT.md)
+- [V2 16 页全量对账表](./docs/FEATURE_AUDIT.md)
+- [0 字节上传路径审计](./docs/ZERO_UPLOAD_AUDIT.md)
+- [Skill 市场 v2 规划](./docs/AGENT_MARKET_V2.md)
+- [V2 路演 vs 实际产品 差距分析](./docs/ROADSHOW_VS_PRODUCT_GAP.md)
+- [脑图 AI 整理（3 策略）](./docs/MINDMAP_AI_ORGANIZE.md)
+- [主动提案机制](./docs/PROACTIVE_PROPOSAL.md)
+- [Memory 3 层搜索](./docs/MEMORY_SEARCH_TIERS.md)
+- [任务回写脑图](./docs/TASK_MIRROR_TO_MINDMAP.md)
+- [日报与日复盘](./docs/DAILY_REPORT.md)
+- [本地 Whisper 设置指南](./docs/LOCAL_WHISPER_SETUP.md)
+- [向量索引（lancedb-ready）](./docs/VECTOR_INDEX.md)
+- [Agent 市场（Skill 安装）](./docs/AGENT_MARKET.md)
+
+**架构与流程**
 - [AI-native 产品开发规范](./docs/AI_NATIVE_PRODUCT_DEVELOPMENT_SPEC.md)
 - [架构说明](./docs/ARCHITECTURE.md)
 - [数据格式](./docs/DATA_FORMAT.md)

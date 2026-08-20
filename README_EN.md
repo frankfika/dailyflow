@@ -34,6 +34,25 @@ Its workflow is deliberately small:
 
 DailyFlow is a good fit if you want AI assistance and calendar connections without locking your working data inside a single SaaS platform.
 
+## 🆕 Sprint 1 shipped (roadshow 4-week sprint complete)
+
+> 2026-08-20 merged into main · 9 new commits · 645 tests pass / 0 TS errors
+
+| Tier | Feature | Deck slide |
+|---|---|---|
+| **P0** | Mind-map node types: 7 (task / question / resource / risk / branch / tag / root) | Slide 04 |
+| **P0** | AI organize mind-map: by_topic / by_priority / by_time | Slide 04 |
+| **P0** | Proactive proposals: 5-day-overdue tasks surface to Today | Slide 06 |
+| **P0** | Memory 3-tier search: structured > metadata > full-text | Slide 06 |
+| **P0** | Local Whisper backend toggle (whisper.cpp) | Slide 05 |
+| **P1** | Daily report + reflection (`Journal/YYYY-MM-DD.md`) | Slide 03 |
+| **P1** | Task completion mirrored back to mind-map node | Slide 04 |
+| **P2** | Vector index (TF-IDF in-memory, lancedb-ready) | Slide 12 |
+| **P2** | Skill marketplace MVP (GitHub registry + SHA-256) | Slide 12 |
+| **P2** | Privacy panel (5 outbound categories listed) | Slide 05 |
+
+Design docs: [`docs/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
+
 ## ✨ Features
 
 ### Today: start with a clear working surface
@@ -61,11 +80,14 @@ DailyFlow is a good fit if you want AI assistance and calendar connections witho
 
 ### Mind Map: break complex problems into branches
 
+- **🆕 7 node kinds**: `task` / `question` / `resource` / `risk` / `branch` / `tag` / `root`, each with its own icon and accent color.
+- **🆕 AI Organize**: toolbar `AI Organize` button offers three deterministic strategies — by_topic (group by kind) / by_priority (group by status) / by_time (group by date-like tags). The result is a reviewable proposal card; nothing is written until the user accepts.
 - A new `Mind Map` tab with a per-workspace list of maps and an independent pan/zoom canvas (powered by `@xyflow/react`).
 - Auto-laid-out horizontal tree. Drag to reposition, `Tab` to add a child, `Enter` to add a sibling, `Backspace` to delete, double-click or `F2` to edit, color-cycle button for 6 named tokens.
 - Subtree collapse/expand, inline note editor, Markdown export, undo/redo (50-step history), in-canvas `Ctrl/Cmd+F` search.
 - Every node has a three-state `todo` / `in-progress` / `done` status; the header shows a live progress badge.
-- 4 starter templates (SWOT, 5W1H, Decision Tree, Task Breakdown) and JSON import/export.
+- **🆕 Task mirror**: completing a task back-writes to its linked node (`status: done` + `## 完成 · YYYY-MM-DD` block). The reasoning stays in place forever.
+- 5 starter templates (SWOT, 5W1H, Decision Tree, Task Breakdown, Risk Review) and JSON import/export.
 - Auto-save to `<workspaceRoot>/.dailyflow/mindmaps/<id>.json` (600ms debounce).
 
 ![Mind Map](./visual-mindmap-2-populated.png)
