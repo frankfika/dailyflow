@@ -1,0 +1,575 @@
+{"kind":"deck","id":"pr/eao7ca","name":"Deck"}
+{"kind":"layout","layoutId":"1acc346c-2624-49f0-81ce-e01c11fe53c1","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"2368b2ab-6817-4f11-ac91-5cbd142c7a3d","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/2bz5ap","slide":1,"title":"DAILYFLOW  ·  TODO  NOTES  MINDMAP  AI  ·  LOCAL-FIRST  ·  ROADSHOW 2026","textShapes":26}
+{"kind":"shape","id":"sh/idg7upwj","slide":1,"bbox":[290,110,700,700]}
+{"kind":"shape","id":"sh/5g7qpkva","slide":1,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/kfypwfep","slide":1,"text":"DAILYFLOW  ·  TODO  NOTES  MINDMAP  AI  ·  LOCAL-FIRST  ·  ROADSHOW 2026","textPreview":"DAILYFLOW  ·  TODO  NOTES  MINDMAP  AI  ·  LOCAL-FIRST  ·  ROADSHOW 2026","textChars":72,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/vq58jax8","slide":1,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/apw7q5wn","slide":1,"bbox":[96,220,220,28]}
+{"kind":"textbox","id":"sh/xc7qlkfy","slide":1,"text":"待办 · 笔记 · 脑图 · AI","textPreview":"待办 · 笔记 · 脑图 · AI","textChars":17,"textLines":1,"bbox":[96,220,220,28]}
+{"kind":"shape","id":"sh/wrypsfet","slide":1,"bbox":[331,220,220,28]}
+{"kind":"textbox","id":"sh/nm58faxw","slide":1,"text":"本地优先 · LOCAL-FIRST","textPreview":"本地优先 · LOCAL-FIRST","textChars":18,"textLines":1,"bbox":[331,220,220,28]}
+{"kind":"shape","id":"sh/mlw7m5wb","slide":1,"bbox":[566,220,220,28]}
+{"kind":"textbox","id":"sh/0nm1ojux","slide":1,"text":"ROADSHOW 2026","textPreview":"ROADSHOW 2026","textChars":13,"textLines":1,"bbox":[566,220,220,28]}
+{"kind":"textbox","id":"sh/1ovihob2","slide":1,"text":"DailyFlow","textPreview":"DailyFlow","textChars":9,"textLines":1,"bbox":[96,290,760,100]}
+{"kind":"textbox","id":"sh/el4jm9cr","slide":1,"text":"你的个人","textPreview":"你的个人","textChars":4,"textLines":1,"bbox":[96,388,760,80]}
+{"kind":"textbox","id":"sh/zmd0fetc","slide":1,"text":"AI 资产基地.","textPreview":"AI 资产基地.","textChars":8,"textLines":1,"bbox":[96,458,760,80]}
+{"kind":"textbox","id":"sh/cjm1kzul","slide":1,"text":"Your personal AI asset base.","textPreview":"Your personal AI asset base.","textChars":28,"textLines":1,"bbox":[96,542,760,28]}
+{"kind":"textbox","id":"sh/dkvid4b6","slide":1,"text":"一个 AI 工作台：待办、笔记、脑图、日历，加上帮你整理和记忆的 AI。所有数据存在你自己的文件里——用得越久，它越懂你，这份积累就是你的资产。","textPreview":"一个 AI 工作台：待办、笔记、脑图、日历，加上帮你整理和记忆的 AI。所有数据存在你自己的文件里——用得越久，它越懂你，这份积累就是你的资产。","textChars":72,"textLines":1,"bbox":[96,580,800,56]}
+{"kind":"textbox","id":"sh/qh4jipcf","slide":1,"text":"0","textPreview":"0","textChars":1,"textLines":1,"bbox":[96,656,110,32]}
+{"kind":"textbox","id":"sh/rid0but0","slide":1,"text":"BYTES UPLOADED","textPreview":"BYTES UPLOADED","textChars":14,"textLines":1,"bbox":[96,692,130,16]}
+{"kind":"shape","id":"sh/wf61w3up","slide":1,"bbox":[212,668,1,40]}
+{"kind":"textbox","id":"sh/xgz2p8ba","slide":1,"text":"15+","textPreview":"15+","textChars":3,"textLines":1,"bbox":[228,656,110,32]}
+{"kind":"textbox","id":"sh/5cvi9o3e","slide":1,"text":"AI MODELS","textPreview":"AI MODELS","textChars":9,"textLines":1,"bbox":[228,692,130,16]}
+{"kind":"shape","id":"sh/kbm1gjm9","slide":1,"bbox":[344,668,1,40]}
+{"kind":"textbox","id":"sh/jat07ylo","slide":1,"text":"99","textPreview":"99","textChars":2,"textLines":1,"bbox":[360,656,110,32]}
+{"kind":"textbox","id":"sh/i9kjet43","slide":1,"text":"TEST FILES","textPreview":"TEST FILES","textChars":10,"textLines":1,"bbox":[360,692,130,16]}
+{"kind":"shape","id":"sh/x8bi5o3i","slide":1,"bbox":[476,668,1,40]}
+{"kind":"textbox","id":"sh/w721cjmx","slide":1,"text":"v1.8.0","textPreview":"v1.8.0","textChars":6,"textLines":1,"bbox":[492,656,110,32]}
+{"kind":"textbox","id":"sh/v6t03elc","slide":1,"text":"CURRENT RELEASE","textPreview":"CURRENT RELEASE","textChars":15,"textLines":1,"bbox":[492,692,130,16]}
+{"kind":"shape","id":"sh/a5kza94r","slide":1,"bbox":[608,668,1,40]}
+{"kind":"textbox","id":"sh/94bi143m","slide":1,"text":"macOS  ·  Win  ·  Linux","textPreview":"macOS  ·  Win  ·  Linux","textChars":23,"textLines":1,"bbox":[624,666,200,24]}
+{"kind":"textbox","id":"sh/83ih8zm1","slide":1,"text":"PLATFORMS","textPreview":"PLATFORMS","textChars":9,"textLines":1,"bbox":[624,692,200,16]}
+{"kind":"shape","id":"sh/exw7mlgn","slide":1,"bbox":[910,310,140,140]}
+{"kind":"textbox","id":"sh/zy5ovqxs","slide":1,"text":"你的\n资产基地","textPreview":"你的 | 资产基地","textChars":7,"textLines":2,"bbox":[910,310,140,140]}
+{"kind":"shape","id":"sh/0zypobyd","slide":1,"bbox":[850,208,130,200]}
+{"kind":"shape","id":"sh/1076xgfy","slide":1,"bbox":[780,180,140,56]}
+{"kind":"textbox","id":"sh/q9w7i1gb","slide":1,"text":"待办","textPreview":"待办","textChars":2,"textLines":1,"bbox":[780,180,140,56]}
+{"kind":"shape","id":"sh/ra5or6xw","slide":1,"bbox":[980,208,130,200]}
+{"kind":"shape","id":"sh/cbepkbyh","slide":1,"bbox":[1040,180,140,56]}
+{"kind":"textbox","id":"sh/dcn6tgf2","slide":1,"text":"笔记","textPreview":"笔记","textChars":2,"textLines":1,"bbox":[1040,180,140,56]}
+{"kind":"shape","id":"sh/25cne1gf","slide":1,"bbox":[850,408,130,60]}
+{"kind":"shape","id":"sh/36lon6x0","slide":1,"bbox":[780,440,140,56]}
+{"kind":"textbox","id":"sh/vy5kj21g","slide":1,"text":"脑图","textPreview":"脑图","textChars":2,"textLines":1,"bbox":[780,440,140,56]}
+{"kind":"shape","id":"sh/uxw3qxkv","slide":1,"bbox":[980,408,130,60]}
+{"kind":"shape","id":"sh/hk72lcjm","slide":1,"bbox":[1040,440,140,56]}
+{"kind":"textbox","id":"sh/wzels721","slide":1,"text":"AI","textPreview":"AI","textChars":2,"textLines":1,"bbox":[1040,440,140,56]}
+{"kind":"shape","id":"sh/7u5kf21k","slide":1,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/mtw3mxkz","slide":1,"text":"01 / 16","textPreview":"01 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/2bz5ap","slide":1,"text":""}
+{"kind":"slide","id":"sl/199los","slide":2,"title":"01 — THE PROBLEM","textShapes":17}
+{"kind":"shape","id":"sh/l43q1kvu","slide":2,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/y1cr65cj","slide":2,"text":"01 — THE PROBLEM","textPreview":"01 — THE PROBLEM","textChars":16,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/z2l8zad4","slide":2,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/87e9czul","slide":2,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/98nq54v6","slide":2,"text":"THE PROBLEM","textPreview":"THE PROBLEM","textChars":11,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/m5wrapcf","slide":2,"text":"事情是这样散掉的。","textPreview":"事情是这样散掉的。","textChars":9,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/76583ud0","slide":2,"text":"How the workday falls apart.","textPreview":"How the workday falls apart.","textChars":28,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"textbox","id":"sh/obap0vuh","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[80,302,60,30]}
+{"kind":"textbox","id":"sh/pcjqt0vm","slide":2,"text":"事情散在各处。","textPreview":"事情散在各处。","textChars":7,"textLines":1,"bbox":[144,298,1000,36]}
+{"kind":"textbox","id":"sh/pg7adcre","slide":2,"text":"想法在微信里，会议在录音里，任务在脑子里——到了晚上，谁也不记得谁。","textPreview":"想法在微信里，会议在录音里，任务在脑子里——到了晚上，谁也不记得谁。","textChars":34,"textLines":1,"bbox":[144,338,1000,32]}
+{"kind":"shape","id":"sh/ofet47at","slide":2,"bbox":[64,380,1152,1]}
+{"kind":"textbox","id":"sh/3u5sb29o","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[80,402,60,30]}
+{"kind":"textbox","id":"sh/2twb2xs3","slide":2,"text":"工具要人伺候。","textPreview":"工具要人伺候。","textChars":7,"textLines":1,"bbox":[144,398,1000,36]}
+{"kind":"textbox","id":"sh/xk7uhcrq","slide":2,"text":"待办工具假设你自律：每天整理、每周归档。但你需要工具恰恰因为你不自律——三个月，系统就长满杂草。","textPreview":"待办工具假设你自律：每天整理、每周归档。但你需要工具恰恰因为你不自律——三个月，系统就长满杂草。","textChars":48,"textLines":1,"bbox":[144,438,1000,32]}
+{"kind":"shape","id":"sh/cjyt87q5","slide":2,"bbox":[64,480,1152,1]}
+{"kind":"textbox","id":"sh/bipcfm9k","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[80,502,60,30]}
+{"kind":"textbox","id":"sh/qhgb6h8z","slide":2,"text":"AI 聊完就忘。","textPreview":"AI 聊完就忘。","textChars":8,"textLines":1,"bbox":[144,498,1000,36]}
+{"kind":"textbox","id":"sh/lorulwrm","slide":2,"text":"云端助手每次对话从零开始。你教它的偏好、告诉它的背景，散场就没了。","textPreview":"云端助手每次对话从零开始。你教它的偏好、告诉它的背景，散场就没了。","textChars":33,"textLines":1,"bbox":[144,538,1000,32]}
+{"kind":"shape","id":"sh/knitcrq1","slide":2,"bbox":[64,580,1152,1]}
+{"kind":"shape","id":"sh/krqd8vyd","slide":2,"bbox":[64,620,28,2.5]}
+{"kind":"textbox","id":"sh/5szeh0zy","slide":2,"text":"散掉的不是任务，是上下文——而它本该是能攒下来的东西。","textPreview":"散掉的不是任务，是上下文——而它本该是能攒下来的东西。","textChars":27,"textLines":1,"bbox":[104,612,1100,32]}
+{"kind":"textbox","id":"sh/ipov6lg7","slide":2,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/jqxwfqhs","slide":2,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/svqdcfy9","slide":2,"text":"02 / 16","textPreview":"02 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/199los","slide":2,"text":""}
+{"kind":"slide","id":"sl/6uspau","slide":3,"title":"02 — THE LOOP","textShapes":20}
+{"kind":"shape","id":"sh/qlwzad8f","slide":3,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/d87il87q","slide":3,"text":"02 — THE LOOP","textPreview":"02 — THE LOOP","textChars":13,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/cnyhcnq5","slide":3,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/zap0nipw","slide":3,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/y9gzed8b","slide":3,"text":"THE LOOP","textPreview":"THE LOOP","textChars":8,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/lc7ips72","slide":3,"text":"把散掉的工作闭合成一个循环。","textPreview":"把散掉的工作闭合成一个循环。","textChars":14,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/0byhgnqh","slide":3,"text":"What DailyFlow does: close the loop.","textPreview":"What DailyFlow does: close the loop.","textChars":36,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/ne90r2ps","slide":3,"bbox":[64,290,270,220]}
+{"kind":"shape","id":"sh/mdgzix8n","slide":3,"bbox":[80,304,40,22]}
+{"kind":"textbox","id":"sh/w3ul8bal","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[80,304,40,22]}
+{"kind":"textbox","id":"sh/x4n21gb6","slide":3,"text":"收集","textPreview":"收集","textChars":2,"textLines":1,"bbox":[80,340,238,44]}
+{"kind":"shape","id":"sh/ahc36lsf","slide":3,"bbox":[80,392,28,2]}
+{"kind":"textbox","id":"sh/vilkz6t0","slide":3,"text":"Inbox 随手记、笔记、会议录音（本地转写），先进来再说。","textPreview":"Inbox 随手记、笔记、会议录音（本地转写），先进来再说。","textChars":30,"textLines":1,"bbox":[80,408,238,96]}
+{"kind":"shape","id":"sh/k7elcvah","slide":3,"bbox":[338,392,16,14]}
+{"kind":"shape","id":"sh/58nm50b2","slide":3,"bbox":[358,290,270,220]}
+{"kind":"shape","id":"sh/i5w3alsb","slide":3,"bbox":[374,304,40,22]}
+{"kind":"textbox","id":"sh/j6543qtw","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[374,304,40,22]}
+{"kind":"textbox","id":"sh/sbelgvat","slide":3,"text":"整理","textPreview":"整理","textChars":2,"textLines":1,"bbox":[374,340,238,44]}
+{"kind":"shape","id":"sh/tc7m90be","slide":3,"bbox":[374,392,28,2]}
+{"kind":"textbox","id":"sh/1s32t03i","slide":3,"text":"AI 帮你拆解：脑图节点一键变任务，会议内容变成行动项。","textPreview":"AI 帮你拆解：脑图节点一键变任务，会议内容变成行动项。","textChars":28,"textLines":1,"bbox":[374,408,238,96]}
+{"kind":"shape","id":"sh/grulkv2x","slide":3,"bbox":[632,392,16,14]}
+{"kind":"shape","id":"sh/fq1krqlc","slide":3,"bbox":[652,290,270,220]}
+{"kind":"shape","id":"sh/eps3ylkr","slide":3,"bbox":[668,304,40,22]}
+{"kind":"textbox","id":"sh/pw3mxkje","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[668,304,40,22]}
+{"kind":"textbox","id":"sh/ovulof2t","slide":3,"text":"执行","textPreview":"执行","textChars":2,"textLines":1,"bbox":[668,340,238,44]}
+{"kind":"shape","id":"sh/3ulkva18","slide":3,"bbox":[668,392,28,2]}
+{"kind":"textbox","id":"sh/2tc3m5kn","slide":3,"text":"Today 视图每天收敛到 1–3 件真正要推进的事，逾期自动浮现。","textPreview":"Today 视图每天收敛到 1–3 件真正要推进的事，逾期自动浮现。","textChars":34,"textLines":1,"bbox":[668,408,238,96]}
+{"kind":"shape","id":"sh/50j2lg3a","slide":3,"bbox":[926,392,16,14]}
+{"kind":"shape","id":"sh/4zalsb2p","slide":3,"bbox":[946,290,270,220]}
+{"kind":"shape","id":"sh/u5ozmh0n","slide":3,"bbox":[962,304,40,22]}
+{"kind":"textbox","id":"sh/v6x0vm1s","slide":3,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[962,304,40,22]}
+{"kind":"textbox","id":"sh/w76horid","slide":3,"text":"复盘","textPreview":"复盘","textChars":2,"textLines":1,"bbox":[962,340,238,44]}
+{"kind":"shape","id":"sh/h8zixwjy","slide":3,"bbox":[962,392,28,2]}
+{"kind":"textbox","id":"sh/it8jq10j","slide":3,"text":"日报周报自动生成，做完了什么、什么被推迟，全部存回文件。","textPreview":"日报周报自动生成，做完了什么、什么被推迟，全部存回文件。","textChars":28,"textLines":1,"bbox":[962,408,238,96]}
+{"kind":"shape","id":"sh/juh0zm14","slide":3,"bbox":[64,568,28,2.5]}
+{"kind":"textbox","id":"sh/4vq1srip","slide":3,"text":"每一步的数据都落在你自己磁盘上的 Markdown 文件里——循环每转一圈，积累就多一层。","textPreview":"每一步的数据都落在你自己磁盘上的 Markdown 文件里——循环每转一圈，积累就多一层。","textChars":45,"textLines":1,"bbox":[104,560,1100,32]}
+{"kind":"textbox","id":"sh/5wzi1wza","slide":3,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/yx4zex0f","slide":3,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/zyd0n210","slide":3,"text":"03 / 16","textPreview":"03 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/6uspau","slide":3,"text":""}
+{"kind":"slide","id":"sl/c739un","slide":4,"title":"03 — HIGHLIGHT 1","textShapes":21}
+{"kind":"shape","id":"sh/9wnat0j6","slide":4,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/mtcbylkv","slide":4,"text":"03 — HIGHLIGHT 1","textPreview":"03 — HIGHLIGHT 1","textChars":16,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/7u5srq1g","slide":4,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/wjet4v2x","slide":4,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/hknax0ji","slide":4,"text":"HIGHLIGHT 1","textPreview":"HIGHLIGHT 1","textChars":11,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/uxwb25kr","slide":4,"text":"亮点一 · 从脑图到任务，不用重抄一遍。","textPreview":"亮点一 · 从脑图到任务，不用重抄一遍。","textChars":20,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/vi5svq1c","slide":4,"text":"From mindmap to task, no re-writing.","textPreview":"From mindmap to task, no re-writing.","textChars":36,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/cnu9sb2t","slide":4,"bbox":[64,290,600,360]}
+{"kind":"shape","id":"sh/xo3algjy","slide":4,"bbox":[64,290,3,360]}
+{"kind":"textbox","id":"sh/h0vyxor2","slide":4,"text":"MINDMAP  ·  1600 × 900","textPreview":"MINDMAP  ·  1600 × 900","textChars":22,"textLines":1,"bbox":[82,304,564,18]}
+{"kind":"shape","id":"sh/gzmxojah","slide":4,"bbox":[309,420,110,76]}
+{"kind":"textbox","id":"sh/vydgve9w","slide":4,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[309,438,110,16]}
+{"kind":"textbox","id":"sh/ux4fm9sb","slide":4,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[309,458,110,24]}
+{"kind":"textbox","id":"sh/54fy1ory","slide":4,"text":"建议：脑图节点 ≥ 6，至少 1 个 promoted-to-task。","textPreview":"建议：脑图节点 ≥ 6，至少 1 个 promoted-to-task。","textChars":36,"textLines":1,"bbox":[82,626,564,18]}
+{"kind":"shape","id":"sh/436xsjat","slide":4,"bbox":[700,294,28,28]}
+{"kind":"textbox","id":"sh/32xgze98","slide":4,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[700,294,28,28]}
+{"kind":"textbox","id":"sh/i14fq9sn","slide":4,"text":"一个模糊的想法，先在脑图上摊开","textPreview":"一个模糊的想法，先在脑图上摊开","textChars":15,"textLines":1,"bbox":[740,290,480,32]}
+{"kind":"textbox","id":"sh/d8fy58ra","slide":4,"text":"节点可以是疑问、资料、风险，不只是任务。","textPreview":"节点可以是疑问、资料、风险，不只是任务。","textChars":20,"textLines":1,"bbox":[740,326,480,44]}
+{"kind":"shape","id":"sh/s76xw3ap","slide":4,"bbox":[700,386,28,28]}
+{"kind":"textbox","id":"sh/cny9ob2x","slide":4,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[700,386,28,28]}
+{"kind":"textbox","id":"sh/xo7qhw3i","slide":4,"text":"AI 整理成结构，一键转任务","textPreview":"AI 整理成结构，一键转任务","textChars":14,"textLines":1,"bbox":[740,382,480,32]}
+{"kind":"textbox","id":"sh/algrm1k7","slide":4,"text":"想清楚的部分，节点一键转成任务，并与脑图保持关联。","textPreview":"想清楚的部分，节点一键转成任务，并与脑图保持关联。","textChars":25,"textLines":1,"bbox":[740,418,480,44]}
+{"kind":"shape","id":"sh/bmp8f6ls","slide":4,"bbox":[700,478,28,28]}
+{"kind":"textbox","id":"sh/kbi9sb29","slide":4,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[700,478,28,28]}
+{"kind":"textbox","id":"sh/lcrqlg3u","slide":4,"text":"任务进入 Today，结果自动回流","textPreview":"任务进入 Today，结果自动回流","textChars":17,"textLines":1,"bbox":[740,474,480,32]}
+{"kind":"textbox","id":"sh/ypgrq1k3","slide":4,"text":"执行结果回流到脑图，思考过程永远留在原地。","textPreview":"执行结果回流到脑图，思考过程永远留在原地。","textChars":21,"textLines":1,"bbox":[740,510,480,44]}
+{"kind":"shape","id":"sh/jq98j6lo","slide":4,"bbox":[64,660,28,2.5]}
+{"kind":"textbox","id":"sh/0fepgr25","slide":4,"text":"以前的工具里，\"想\"和\"做\"是两张皮：备忘录里想清楚的东西，抄成待办的那一刻就蒸发了。这是 DailyFlow 最不一样的地方。","textPreview":"以前的工具里，\"想\"和\"做\"是两张皮：备忘录里想清楚的东西，抄成待办的那一刻就蒸发了。这是 DailyFlow 最不一样的地方。","textChars":64,"textLines":1,"bbox":[104,652,1000,22]}
+{"kind":"textbox","id":"sh/1gnq9c3a","slide":4,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/3adcvu5s","slide":4,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/i9kbmp4n","slide":4,"text":"04 / 16","textPreview":"04 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/c739un","slide":4,"text":""}
+{"kind":"slide","id":"sl/pqxq9a","slide":5,"title":"04 — HIGHLIGHT 2  ·  SOVEREIGN AI","textShapes":17}
+{"kind":"shape","id":"sh/w76dwra1","slide":5,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/v6dwnm9g","slide":5,"text":"04 — HIGHLIGHT 2  ·  SOVEREIGN AI","textPreview":"04 — HIGHLIGHT 2  ·  SOVEREIGN AI","textChars":33,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/a54vuhsv","slide":5,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/5wfetwri","slide":5,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/kv6d0bax","slide":5,"text":"HIGHLIGHT 2 · SOVEREIGN AI","textPreview":"HIGHLIGHT 2 · SOVEREIGN AI","textChars":26,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/juxwr69s","slide":5,"text":"亮点二 · 主权 AI：绝对控制权在你手里。","textPreview":"亮点二 · 主权 AI：绝对控制权在你手里。","textChars":22,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/i9ovy1s7","slide":5,"text":"Sovereign AI: absolute control stays with you.","textPreview":"Sovereign AI: absolute control stays with you.","textChars":46,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/t0zexgru","slide":5,"bbox":[64,280,380,300]}
+{"kind":"shape","id":"sh/szqx4ba9","slide":5,"bbox":[64,280,380,4]}
+{"kind":"textbox","id":"sh/2h4fql4f","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,304,80,28]}
+{"kind":"textbox","id":"sh/nixwzq50","slide":5,"text":"文件在你自己的磁盘上","textPreview":"文件在你自己的磁盘上","textChars":10,"textLines":1,"bbox":[88,340,332,80]}
+{"kind":"textbox","id":"sh/o36xsvml","slide":5,"text":"全是 Markdown 纯文本，任何编辑器都能打开，0 字节上传。哪天不用 DailyFlow 了，文件还是你的。","textPreview":"全是 Markdown 纯文本，任何编辑器都能打开，0 字节上传。哪天不用 DailyFlow 了，文件还是你的。","textChars":57,"textLines":1,"bbox":[88,432,332,130]}
+{"kind":"shape","id":"sh/p4fe10n6","slide":5,"bbox":[460,280,380,300]}
+{"kind":"shape","id":"sh/a5oful4r","slide":5,"bbox":[460,280,380,4]}
+{"kind":"textbox","id":"sh/b6xw3qlw","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[484,304,80,28]}
+{"kind":"textbox","id":"sh/c76xwvmh","slide":5,"text":"AI 只提建议，不直接改","textPreview":"AI 只提建议，不直接改","textChars":12,"textLines":1,"bbox":[484,340,332,80]}
+{"kind":"textbox","id":"sh/x8fe5032","slide":5,"text":"任何修改先生成一张「建议单」，写清楚要改什么；你确认之后才写入，写错了可以撤回。","textPreview":"任何修改先生成一张「建议单」，写清楚要改什么；你确认之后才写入，写错了可以撤回。","textChars":40,"textLines":1,"bbox":[484,432,332,130]}
+{"kind":"shape","id":"sh/q9kvi147","slide":5,"bbox":[856,280,380,300]}
+{"kind":"shape","id":"sh/radwr65s","slide":5,"bbox":[856,280,380,4]}
+{"kind":"textbox","id":"sh/ve9cz2lk","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[880,304,80,28]}
+{"kind":"textbox","id":"sh/ut0bqxkz","slide":5,"text":"回答必须带出处","textPreview":"回答必须带出处","textChars":7,"textLines":1,"bbox":[880,340,332,80]}
+{"kind":"textbox","id":"sh/hgru1c3q","slide":5,"text":"引用你文件里的原文片段，标明来自哪里；查不到出处的，它不瞎编。","textPreview":"引用你文件里的原文片段，标明来自哪里；查不到出处的，它不瞎编。","textChars":31,"textLines":1,"bbox":[880,432,332,130]}
+{"kind":"shape","id":"sh/wfits725","slide":5,"bbox":[64,620,28,2.5]}
+{"kind":"textbox","id":"sh/7qpcvilo","slide":5,"text":"规矩写在代码里，不是提示词约定——例如「等待中」的事项，AI 排计划时无权放进今天。","textPreview":"规矩写在代码里，不是提示词约定——例如「等待中」的事项，AI 排计划时无权放进今天。","textChars":42,"textLines":1,"bbox":[104,612,1100,32]}
+{"kind":"textbox","id":"sh/mpgbmdk3","slide":5,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/9sruxs3e","slide":5,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/8riton2t","slide":5,"text":"05 / 16","textPreview":"05 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/pqxq9a","slide":5,"text":""}
+{"kind":"slide","id":"sl/mx7tgr","slide":6,"title":"05 — HIGHLIGHT 3  ·  AFTER A YEAR","textShapes":18}
+{"kind":"shape","id":"sh/zqlgjad8","slide":6,"bbox":[290,110,700,700]}
+{"kind":"shape","id":"sh/0ruhcfut","slide":6,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/ls3ylkvy","slide":6,"text":"05 — HIGHLIGHT 3  ·  AFTER A YEAR","textPreview":"05 — HIGHLIGHT 3  ·  AFTER A YEAR","textChars":33,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/qlsz65cb","slide":6,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/bm1gfadw","slide":6,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/cnah8fuh","slide":6,"text":"HIGHLIGHT 3","textPreview":"HIGHLIGHT 3","textChars":11,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/do3yh0v2","slide":6,"text":"亮点三 · 用了一年之后，你可以直接问它。","textPreview":"亮点三 · 用了一年之后，你可以直接问它。","textChars":21,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/ahwzipcv","slide":6,"text":"After a year, just ask it.","textPreview":"After a year, just ask it.","textChars":26,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/vi50rudg","slide":6,"bbox":[96,280,1088,100]}
+{"kind":"textbox","id":"sh/rytcrmdw","slide":6,"text":"「上个月我在哪次会议里，答应过投资人什么？」","textPreview":"「上个月我在哪次会议里，答应过投资人什么？」","textChars":22,"textLines":1,"bbox":[120,290,1040,80]}
+{"kind":"shape","id":"sh/qxkvihcb","slide":6,"bbox":[96,410,350,200]}
+{"kind":"textbox","id":"sh/dkbutwv2","slide":6,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[116,426,80,24]}
+{"kind":"textbox","id":"sh/cj2dkruh","slide":6,"text":"找","textPreview":"找","textChars":1,"textLines":1,"bbox":[116,458,310,36]}
+{"kind":"textbox","id":"sh/zmtcvmds","slide":6,"text":"在你自己的文件里检索：先结构化关联，再元数据，再全文。","textPreview":"在你自己的文件里检索：先结构化关联，再元数据，再全文。","textChars":27,"textLines":1,"bbox":[116,500,310,100]}
+{"kind":"shape","id":"sh/elkvm1c7","slide":6,"bbox":[448,502,16,14]}
+{"kind":"shape","id":"sh/lovexwvy","slide":6,"bbox":[466,410,350,200]}
+{"kind":"textbox","id":"sh/0nmdorud","slide":6,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[486,426,80,24]}
+{"kind":"textbox","id":"sh/nqdwz6d4","slide":6,"text":"给证据","textPreview":"给证据","textChars":3,"textLines":1,"bbox":[486,458,310,36]}
+{"kind":"textbox","id":"sh/mp4vq1cj","slide":6,"text":"附上原文片段和出处，而不是一段「看起来像答案」的话。","textPreview":"附上原文片段和出处，而不是一段「看起来像答案」的话。","textChars":26,"textLines":1,"bbox":[486,500,310,100]}
+{"kind":"shape","id":"sh/ilofi5wr","slide":6,"bbox":[818,502,16,14]}
+{"kind":"shape","id":"sh/jmhgraxc","slide":6,"bbox":[836,410,350,200]}
+{"kind":"textbox","id":"sh/knqxkfex","slide":6,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[856,426,80,24]}
+{"kind":"textbox","id":"sh/5ozytkf2","slide":6,"text":"顺手管事","textPreview":"顺手管事","textChars":4,"textLines":1,"bbox":[856,458,310,36]}
+{"kind":"textbox","id":"sh/ahofelwf","slide":6,"text":"发现关联任务已逾期 5 天，主动问：要不要排进今天？","textPreview":"发现关联任务已逾期 5 天，主动问：要不要排进今天？","textChars":26,"textLines":1,"bbox":[856,500,310,100]}
+{"kind":"textbox","id":"sh/vixgnqx0","slide":6,"text":"第一天它对你一无所知；第三百六十五天它比任何云端 AI 都懂你。这个差距花钱买不到——因为数据从来不在别人手里。","textPreview":"第一天它对你一无所知；第三百六十五天它比任何云端 AI 都懂你。这个差距花钱买不到——因为数据从来不在别人手里。","textChars":56,"textLines":1,"bbox":[96,632,1100,28]}
+{"kind":"textbox","id":"sh/wj6xgvel","slide":6,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/xkfyp0f6","slide":6,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/udszqpwz","slide":6,"text":"06 / 16","textPreview":"06 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/mx7tgr","slide":6,"text":""}
+{"kind":"slide","id":"sl/gim248","slide":7,"title":"06 — REALITY 1  ·  MINDMAP × TODAY","textShapes":15}
+{"kind":"shape","id":"sh/bal83ut4","slide":7,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/cbupwzup","slide":7,"text":"06 — REALITY 1  ·  MINDMAP × TODAY","textPreview":"06 — REALITY 1  ·  MINDMAP × TODAY","textChars":34,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/xc3q54ba","slide":7,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/ydc7y9cv","slide":7,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/zel87utg","slide":7,"text":"REALITY 1","textPreview":"REALITY 1","textChars":9,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/kfup0zul","slide":7,"text":"不是效果图，是每天在用的产品。","textPreview":"不是效果图，是每天在用的产品。","textChars":15,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/lg3q94b6","slide":7,"text":"Not mockups — a product in daily use.","textPreview":"Not mockups — a product in daily use.","textChars":37,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/eh87m5cb","slide":7,"bbox":[64,280,760,360]}
+{"kind":"shape","id":"sh/fihovatw","slide":7,"bbox":[64,280,3,360]}
+{"kind":"textbox","id":"sh/fi9kbudg","slide":7,"text":"MINDMAP  ·  1920 × 900","textPreview":"MINDMAP  ·  1920 × 900","textChars":22,"textLines":1,"bbox":[82,294,724,18]}
+{"kind":"shape","id":"sh/uh0jipwv","slide":7,"bbox":[389,410,110,76]}
+{"kind":"textbox","id":"sh/hkr2d4vm","slide":7,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[389,428,110,16]}
+{"kind":"textbox","id":"sh/gji1kze1","slide":7,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[389,448,110,24]}
+{"kind":"textbox","id":"sh/7e9k7ud4","slide":7,"text":"建议：节点 ≥ 6，至少 1 个 promoted-to-task。","textPreview":"建议：节点 ≥ 6，至少 1 个 promoted-to-task。","textChars":34,"textLines":1,"bbox":[82,616,724,18]}
+{"kind":"shape","id":"sh/6d0jepwz","slide":7,"bbox":[840,280,376,360]}
+{"kind":"shape","id":"sh/tgr29kva","slide":7,"bbox":[840,280,3,360]}
+{"kind":"textbox","id":"sh/sfi1gzep","slide":7,"text":"TODAY  ·  900 × 900","textPreview":"TODAY  ·  900 × 900","textChars":19,"textLines":1,"bbox":[858,294,340,18]}
+{"kind":"shape","id":"sh/jap03ad8","slide":7,"bbox":[973,410,110,76]}
+{"kind":"textbox","id":"sh/i9gja5wn","slide":7,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[973,428,110,16]}
+{"kind":"textbox","id":"sh/mlw3m5gf","slide":7,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[973,448,110,24]}
+{"kind":"textbox","id":"sh/nmpkfah0","slide":7,"text":"建议：3 件重点 · 至少 1 件逾期 5 天。","textPreview":"建议：3 件重点 · 至少 1 件逾期 5 天。","textChars":24,"textLines":1,"bbox":[858,616,340,18]}
+{"kind":"textbox","id":"sh/8nylofyl","slide":7,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/9872hkz6","slide":7,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/a9g3qpgr","slide":7,"text":"07 / 16","textPreview":"07 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/gim248","slide":7,"text":""}
+{"kind":"slide","id":"sl/iq6uwx","slide":8,"title":"07 — REALITY 2  ·  AI × NOTES","textShapes":25}
+{"kind":"shape","id":"sh/itcfa5cz","slide":8,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/5g3elkbq","slide":8,"text":"07 — REALITY 2  ·  AI × NOTES","textPreview":"07 — REALITY 2  ·  AI × NOTES","textChars":29,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/kfuxcfu5","slide":8,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/7i5wnutg","slide":8,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/6hwfepcb","slide":8,"text":"REALITY 2","textPreview":"REALITY 2","textChars":9,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/tknepkbm","slide":8,"text":"AI 在工作的每个环节里。","textPreview":"AI 在工作的每个环节里。","textChars":13,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/sjexgzu1","slide":8,"text":"AI in every part of the work.","textPreview":"AI in every part of the work.","textChars":29,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/nm1wbqtc","slide":8,"bbox":[64,280,580,176]}
+{"kind":"shape","id":"sh/mlsvilcr","slide":8,"bbox":[64,280,3,176]}
+{"kind":"shape","id":"sh/w72t83y5","slide":8,"bbox":[82,294,56,18]}
+{"kind":"textbox","id":"sh/x8ba18fq","slide":8,"text":"已截","textPreview":"已截","textChars":2,"textLines":1,"bbox":[82,294,56,18]}
+{"kind":"textbox","id":"sh/a5kb6tgf","slide":8,"text":"AI CHAT  ·  1600 × 900","textPreview":"AI CHAT  ·  1600 × 900","textChars":22,"textLines":1,"bbox":[144,294,480,18]}
+{"kind":"textbox","id":"sh/v6tszyxk","slide":8,"text":"多会话，任何笔记可挂载为上下文","textPreview":"多会话，任何笔记可挂载为上下文","textChars":15,"textLines":1,"bbox":[82,324,544,32]}
+{"kind":"textbox","id":"sh/kbmtc3yh","slide":8,"text":"多模型 · 多会话 · 上下文挂载","textPreview":"多模型 · 多会话 · 上下文挂载","textChars":17,"textLines":1,"bbox":[82,366,544,24]}
+{"kind":"shape","id":"sh/5cvu58f2","slide":8,"bbox":[544,406,70,30]}
+{"kind":"textbox","id":"sh/i9kbadgb","slide":8,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[544,406,70,30]}
+{"kind":"shape","id":"sh/jatc3yxw","slide":8,"bbox":[660,280,580,176]}
+{"kind":"shape","id":"sh/0fit0jyx","slide":8,"bbox":[660,280,3,176]}
+{"kind":"shape","id":"sh/lgratofi","slide":8,"bbox":[678,294,56,18]}
+{"kind":"textbox","id":"sh/1kzihg3a","slide":8,"text":"已截","textPreview":"已截","textChars":2,"textLines":1,"bbox":[678,294,56,18]}
+{"kind":"textbox","id":"sh/gzqh8bmp","slide":8,"text":"NOTES  ·  1200 × 800","textPreview":"NOTES  ·  1200 × 800","textChars":20,"textLines":1,"bbox":[740,294,480,18]}
+{"kind":"textbox","id":"sh/fyh0f6l4","slide":8,"text":"会议记录、日记、AI 总结统一管理","textPreview":"会议记录、日记、AI 总结统一管理","textChars":17,"textLines":1,"bbox":[678,324,544,32]}
+{"kind":"textbox","id":"sh/ex8z614j","slide":8,"text":"Markdown · 本地全文检索","textPreview":"Markdown · 本地全文检索","textChars":17,"textLines":1,"bbox":[678,366,544,24]}
+{"kind":"shape","id":"sh/pojilg36","slide":8,"bbox":[1140,406,70,30]}
+{"kind":"textbox","id":"sh/onahcvml","slide":8,"text":"≡","textPreview":"≡","textChars":1,"textLines":1,"bbox":[1140,406,70,30]}
+{"kind":"shape","id":"sh/3m10jql0","slide":8,"bbox":[64,472,580,176]}
+{"kind":"shape","id":"sh/2l8zal4v","slide":8,"bbox":[64,472,3,176]}
+{"kind":"textbox","id":"sh/dsjip03i","slide":8,"text":"BRAINSTORM  ·  1200 × 800","textPreview":"BRAINSTORM  ·  1200 × 800","textChars":25,"textLines":1,"bbox":[82,486,544,18]}
+{"kind":"shape","id":"sh/cra1gvmx","slide":8,"bbox":[299,510,110,76]}
+{"kind":"textbox","id":"sh/ax4faxkf","slide":8,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[299,528,110,16]}
+{"kind":"textbox","id":"sh/vydwj210","slide":8,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[299,548,110,24]}
+{"kind":"textbox","id":"sh/wzmxc725","slide":8,"text":"建议：脑图节点 → 拆解 → 任务。","textPreview":"建议：脑图节点 → 拆解 → 任务。","textChars":18,"textLines":1,"bbox":[82,624,544,18]}
+{"kind":"shape","id":"sh/x0velsjq","slide":8,"bbox":[660,472,580,176]}
+{"kind":"shape","id":"sh/i14fexkb","slide":8,"bbox":[660,472,3,176]}
+{"kind":"textbox","id":"sh/j2dwn21w","slide":8,"text":"WEEKLY REPORT  ·  1200 × 800","textPreview":"WEEKLY REPORT  ·  1200 × 800","textChars":28,"textLines":1,"bbox":[678,486,544,18]}
+{"kind":"shape","id":"sh/k36xg72h","slide":8,"bbox":[895,510,110,76]}
+{"kind":"textbox","id":"sh/54fypcj2","slide":8,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[895,528,110,16]}
+{"kind":"textbox","id":"sh/65ofihkn","slide":8,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[895,548,110,24]}
+{"kind":"textbox","id":"sh/rqxgrm1s","slide":8,"text":"建议：自动复盘 · 周报生成。","textPreview":"建议：自动复盘 · 周报生成。","textChars":15,"textLines":1,"bbox":[678,624,544,18]}
+{"kind":"textbox","id":"sh/fmtwvmtc","slide":8,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/elkf2hcr","slide":8,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/1obexcb2","slide":8,"text":"08 / 16","textPreview":"08 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/iq6uwx","slide":8,"text":""}
+{"kind":"slide","id":"sl/vitw7m","slide":9,"title":"08 — THE VISION","textShapes":17}
+{"kind":"shape","id":"sh/6xs3uxgj","slide":9,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/tkjmpsza","slide":9,"text":"08 — THE VISION","textPreview":"08 — THE VISION","textChars":15,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/sja5wnyp","slide":9,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/fm14r2hg","slide":9,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/ulsnyxgv","slide":9,"text":"THE VISION","textPreview":"THE VISION","textChars":10,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/ho3mtczm","slide":9,"text":"这些设计加在一起，是什么？","textPreview":"这些设计加在一起，是什么？","textChars":13,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/gna507y1","slide":9,"text":"What does it add up to? Your personal AI asset base.","textPreview":"What does it add up to? Your personal AI asset base.","textChars":52,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/3ql4vmhc","slide":9,"bbox":[64,290,6,88]}
+{"kind":"textbox","id":"sh/2pcn2hgr","slide":9,"text":"01 · 模型","textPreview":"01 · 模型","textChars":7,"textLines":1,"bbox":[88,298,200,18]}
+{"kind":"textbox","id":"sh/gz25gfa5","slide":9,"text":"模型在贬值","textPreview":"模型在贬值","textChars":5,"textLines":1,"bbox":[88,318,320,56]}
+{"kind":"textbox","id":"sh/hkb69kbq","slide":9,"text":"15+ 家供应商跑在同一接口后面，聪明不再是壁垒，随时可换。","textPreview":"15+ 家供应商跑在同一接口后面，聪明不再是壁垒，随时可换。","textChars":30,"textLines":1,"bbox":[440,308,776,72]}
+{"kind":"shape","id":"sh/uxkne5cz","slide":9,"bbox":[64,394,6,88]}
+{"kind":"textbox","id":"sh/fyto7atk","slide":9,"text":"02 · 云端","textPreview":"02 · 云端","textChars":7,"textLines":1,"bbox":[88,402,200,18]}
+{"kind":"textbox","id":"sh/on25kza1","slide":9,"text":"云端在失忆","textPreview":"云端在失忆","textChars":5,"textLines":1,"bbox":[88,422,320,56]}
+{"kind":"textbox","id":"sh/pov6d4bm","slide":9,"text":"订阅制 AI 不会为你积累任何东西——这是它的商业模式决定的。","textPreview":"订阅制 AI 不会为你积累任何东西——这是它的商业模式决定的。","textChars":31,"textLines":1,"bbox":[440,412,776,72]}
+{"kind":"shape","id":"sh/2lknipsv","slide":9,"bbox":[64,498,6,88]}
+{"kind":"textbox","id":"sh/3mtobutg","slide":9,"text":"03 · DailyFlow 用户","textPreview":"03 · DailyFlow 用户","textChars":17,"textLines":1,"bbox":[88,506,200,18]}
+{"kind":"textbox","id":"sh/crm5ozad","slide":9,"text":"DailyFlow 用户在积累","textPreview":"DailyFlow 用户在积累","textChars":15,"textLines":1,"bbox":[88,526,320,56]}
+{"kind":"textbox","id":"sh/dsv6h4bi","slide":9,"text":"每天的决策、承诺、会议原文都留在本地文件里；模型随便换，记忆不动。","textPreview":"每天的决策、承诺、会议原文都留在本地文件里；模型随便换，记忆不动。","textChars":33,"textLines":1,"bbox":[440,516,776,72]}
+{"kind":"shape","id":"sh/l8r61432","slide":9,"bbox":[64,626,28,2.5]}
+{"kind":"textbox","id":"sh/k7i58z2h","slide":9,"text":"AI 时代，每个人都需要一个自己的资产基地——数据在你这里，规则由你定，AI 为你工作。这就是 DailyFlow。","textPreview":"AI 时代，每个人都需要一个自己的资产基地——数据在你这里，规则由你定，AI 为你工作。这就是 DailyFlow。","textChars":58,"textLines":1,"bbox":[104,618,1100,32]}
+{"kind":"textbox","id":"sh/z69ozulw","slide":9,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/y50n6pkb","slide":9,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/9cb6543y","slide":9,"text":"09 / 16","textPreview":"09 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/vitw7m","slide":9,"text":""}
+{"kind":"slide","id":"sl/4bt4om","slide":10,"title":"09 — COMPETITION","textShapes":38}
+{"kind":"shape","id":"sh/o3m5wrih","slide":10,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/n2d43mhc","slide":10,"text":"09 — COMPETITION","textPreview":"09 — COMPETITION","textChars":16,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/2143uh0r","slide":10,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/xsfm9gze","slide":10,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/cr650bit","slide":10,"text":"COMPETITION","textPreview":"COMPETITION","textChars":11,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/bqd476h8","slide":10,"text":"这个位置，目前是空的。","textPreview":"这个位置，目前是空的。","textChars":11,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/ap4ny10n","slide":10,"text":"This position is currently empty.","textPreview":"This position is currently empty.","textChars":33,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/lwfmdgza","slide":10,"bbox":[64,270,240,50]}
+{"kind":"textbox","id":"sh/kv654bip","slide":10,"text":"产品","textPreview":"产品","textChars":2,"textLines":1,"bbox":[80,270,208,50]}
+{"kind":"shape","id":"sh/ylkf69on","slide":10,"bbox":[304,270,240,50]}
+{"kind":"textbox","id":"sh/jmdwze58","slide":10,"text":"数据在哪","textPreview":"数据在哪","textChars":4,"textLines":1,"bbox":[320,270,208,50]}
+{"kind":"shape","id":"sh/knmx8j6t","slide":10,"bbox":[544,270,280,50]}
+{"kind":"textbox","id":"sh/love1one","slide":10,"text":"AI 记忆","textPreview":"AI 记忆","textChars":5,"textLines":1,"bbox":[560,270,248,50]}
+{"kind":"shape","id":"sh/6p4fatoz","slide":10,"bbox":[824,270,280,50]}
+{"kind":"textbox","id":"sh/7qdw3e54","slide":10,"text":"任务闭环","textPreview":"任务闭环","textChars":4,"textLines":1,"bbox":[840,270,248,50]}
+{"kind":"shape","id":"sh/8bmxcj6p","slide":10,"bbox":[1104,270,200,50]}
+{"kind":"textbox","id":"sh/tcve5ona","slide":10,"text":"开源","textPreview":"开源","textChars":2,"textLines":1,"bbox":[1120,270,168,50]}
+{"kind":"shape","id":"sh/2t0vypof","slide":10,"bbox":[64,320,240,50]}
+{"kind":"textbox","id":"sh/nutwrup0","slide":10,"text":"钉钉等企业协同","textPreview":"钉钉等企业协同","textChars":7,"textLines":1,"bbox":[80,320,208,50]}
+{"kind":"shape","id":"sh/rm5kjmhg","slide":10,"bbox":[304,320,240,50]}
+{"kind":"textbox","id":"sh/6lw3a10v","slide":10,"text":"云端（平台侧）","textPreview":"云端（平台侧）","textChars":7,"textLines":1,"bbox":[320,320,208,50]}
+{"kind":"shape","id":"sh/ton2lwzm","slide":10,"bbox":[544,320,280,50]}
+{"kind":"textbox","id":"sh/snelcri1","slide":10,"text":"平台侧","textPreview":"平台侧","textChars":3,"textLines":1,"bbox":[560,320,248,50]}
+{"kind":"shape","id":"sh/ji5kfm1k","slide":10,"bbox":[824,320,280,50]}
+{"kind":"textbox","id":"sh/ihcj6h0z","slide":10,"text":"协同任务","textPreview":"协同任务","textChars":4,"textLines":1,"bbox":[840,320,248,50]}
+{"kind":"shape","id":"sh/5kn2hwjq","slide":10,"bbox":[1104,320,200,50]}
+{"kind":"textbox","id":"sh/4jel8ri5","slide":10,"text":"否","textPreview":"否","textChars":1,"textLines":1,"bbox":[1120,320,168,50]}
+{"kind":"shape","id":"sh/3epkr6ho","slide":10,"bbox":[64,370,240,50]}
+{"kind":"textbox","id":"sh/2dg3il03","slide":10,"text":"Notion","textPreview":"Notion","textChars":6,"textLines":1,"bbox":[80,370,208,50]}
+{"kind":"shape","id":"sh/kzahc3yl","slide":10,"bbox":[304,370,240,50]}
+{"kind":"textbox","id":"sh/lkji58z6","slide":10,"text":"云端","textPreview":"云端","textChars":2,"textLines":1,"bbox":[320,370,208,50]}
+{"kind":"shape","id":"sh/yx8zadgv","slide":10,"bbox":[544,370,280,50]}
+{"kind":"textbox","id":"sh/zyh03yh0","slide":10,"text":"平台侧 AI","textPreview":"平台侧 AI","textChars":6,"textLines":1,"bbox":[560,370,248,50]}
+{"kind":"shape","id":"sh/8nahgnyx","slide":10,"bbox":[824,370,280,50]}
+{"kind":"textbox","id":"sh/9oji9sfi","slide":10,"text":"弱（数据库型）","textPreview":"弱（数据库型）","textChars":7,"textLines":1,"bbox":[840,370,248,50]}
+{"kind":"shape","id":"sh/mlszedgr","slide":10,"bbox":[1104,370,200,50]}
+{"kind":"textbox","id":"sh/7m107ihc","slide":10,"text":"否","textPreview":"否","textChars":1,"textLines":1,"bbox":[1120,370,168,50]}
+{"kind":"shape","id":"sh/wruhknyt","slide":10,"bbox":[64,420,240,50]}
+{"kind":"textbox","id":"sh/hs3idsfe","slide":10,"text":"Obsidian","textPreview":"Obsidian","textChars":8,"textLines":1,"bbox":[80,420,208,50]}
+{"kind":"shape","id":"sh/h0vits3e","slide":10,"bbox":[304,420,240,50]}
+{"kind":"textbox","id":"sh/gz2h0n29","slide":10,"text":"本地 ✓","textPreview":"本地 ✓","textChars":4,"textLines":1,"bbox":[320,420,208,50]}
+{"kind":"shape","id":"sh/fyt0rilo","slide":10,"bbox":[544,420,280,50]}
+{"kind":"textbox","id":"sh/uxkzydk3","slide":10,"text":"靠插件，无内置闭环","textPreview":"靠插件，无内置闭环","textChars":9,"textLines":1,"bbox":[560,420,248,50]}
+{"kind":"shape","id":"sh/twbip83i","slide":10,"bbox":[824,420,280,50]}
+{"kind":"textbox","id":"sh/sv2hw32x","slide":10,"text":"弱","textPreview":"弱","textChars":1,"textLines":1,"bbox":[840,420,248,50]}
+{"kind":"shape","id":"sh/7ut0nylc","slide":10,"bbox":[1104,420,200,50]}
+{"kind":"textbox","id":"sh/6tkzudkr","slide":10,"text":"否（免费但闭源）","textPreview":"否（免费但闭源）","textChars":8,"textLines":1,"bbox":[1120,420,168,50]}
+{"kind":"shape","id":"sh/dsfi1cjm","slide":10,"bbox":[64,470,240,50]}
+{"kind":"textbox","id":"sh/crm1872h","slide":10,"text":"云端 AI 助手","textPreview":"云端 AI 助手","textChars":8,"textLines":1,"bbox":[80,470,208,50]}
+{"kind":"shape","id":"sh/a1wn65wn","slide":10,"bbox":[304,470,240,50]}
+{"kind":"textbox","id":"sh/b25ofax8","slide":10,"text":"云端","textPreview":"云端","textChars":2,"textLines":1,"bbox":[320,470,208,50]}
+{"kind":"shape","id":"sh/cnep8fed","slide":10,"bbox":[544,470,280,50]}
+{"kind":"textbox","id":"sh/xo76hkfy","slide":10,"text":"聊完就忘","textPreview":"聊完就忘","textChars":4,"textLines":1,"bbox":[560,470,248,50]}
+{"kind":"shape","id":"sh/2xwn25wb","slide":10,"bbox":[824,470,280,50]}
+{"kind":"textbox","id":"sh/ny5obqxw","slide":10,"text":"无","textPreview":"无","textChars":1,"textLines":1,"bbox":[840,470,248,50]}
+{"kind":"shape","id":"sh/oze54veh","slide":10,"bbox":[1104,470,200,50]}
+{"kind":"textbox","id":"sh/p0n6d0f2","slide":10,"text":"否","textPreview":"否","textChars":1,"textLines":1,"bbox":[1120,470,168,50]}
+{"kind":"shape","id":"sh/6tg7epwv","slide":10,"bbox":[64,520,240,50]}
+{"kind":"textbox","id":"sh/7uponux0","slide":10,"text":"DailyFlow","textPreview":"DailyFlow","textChars":9,"textLines":1,"bbox":[80,520,208,50]}
+{"kind":"shape","id":"sh/3y1kfmds","slide":10,"bbox":[304,520,240,50]}
+{"kind":"textbox","id":"sh/ixs36hc7","slide":10,"text":"本地 Markdown ✓","textPreview":"本地 Markdown ✓","textChars":13,"textLines":1,"bbox":[320,520,208,50]}
+{"kind":"shape","id":"sh/50jmhwvi","slide":10,"bbox":[544,520,280,50]}
+{"kind":"textbox","id":"sh/4zal8rud","slide":10,"text":"证据记忆，越用越懂你 ✓","textPreview":"证据记忆，越用越懂你 ✓","textChars":12,"textLines":1,"bbox":[560,520,248,50]}
+{"kind":"shape","id":"sh/r214j6do","slide":10,"bbox":[824,520,280,50]}
+{"kind":"textbox","id":"sh/q1s3a1c3","slide":10,"text":"脑图 → 任务 → 复盘 ✓","textPreview":"脑图 → 任务 → 复盘 ✓","textChars":14,"textLines":1,"bbox":[840,520,248,50]}
+{"kind":"shape","id":"sh/d4jmlwvu","slide":10,"bbox":[1104,520,200,50]}
+{"kind":"textbox","id":"sh/s3alcru9","slide":10,"text":"Apache-2.0 ✓","textPreview":"Apache-2.0 ✓","textChars":12,"textLines":1,"bbox":[1120,520,168,50]}
+{"kind":"shape","id":"sh/f6l4n6d0","slide":10,"bbox":[64,600,28,2.5]}
+{"kind":"textbox","id":"sh/e5c3e1cf","slide":10,"text":"云端的帮你做事，但不让你积累；本地的让你积累，但不管执行。两头都占的，目前只有 DailyFlow。","textPreview":"云端的帮你做事，但不让你积累；本地的让你积累，但不管执行。两头都占的，目前只有 DailyFlow。","textChars":50,"textLines":1,"bbox":[104,592,1100,32]}
+{"kind":"textbox","id":"sh/cvul4bad","slide":10,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/xwn2xgry","slide":10,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/a9c321s7","slide":10,"text":"10 / 16","textPreview":"10 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/4bt4om","slide":10,"text":""}
+{"kind":"slide","id":"sl/40f4r4","slide":11,"title":"10 — OPEN SOURCE  ·  OUR MAIN STRATEGY","textShapes":27}
+{"kind":"shape","id":"sh/q5sfidoz","slide":11,"bbox":[290,110,700,700]}
+{"kind":"shape","id":"sh/dsjet87q","slide":11,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/craxkn65","slide":11,"text":"10 — OPEN SOURCE  ·  OUR MAIN STRATEGY","textPreview":"10 — OPEN SOURCE  ·  OUR MAIN STRATEGY","textChars":38,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/zu1gvipw","slide":11,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/ytsfmdob","slide":11,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/lw3yxs7m","slide":11,"text":"OPEN SOURCE · 主策略","textPreview":"OPEN SOURCE · 主策略","textChars":17,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/0vuxon61","slide":11,"text":"全部代码在 GitHub 上，谁都可以基于它做东西。","textPreview":"全部代码在 GitHub 上，谁都可以基于它做东西。","textChars":26,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/nylgz2ps","slide":11,"text":"Fully open on GitHub — anyone can build on it.","textPreview":"Fully open on GitHub — anyone can build on it.","textChars":46,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/mxcfqxo7","slide":11,"bbox":[64,270,576,200]}
+{"kind":"shape","id":"sh/0jyhgz2x","slide":11,"bbox":[64,270,3,200]}
+{"kind":"textbox","id":"sh/1k7y9k3i","slide":11,"text":"PROJECT DIRECTORY  ·  1600 × 800","textPreview":"PROJECT DIRECTORY  ·  1600 × 800","textChars":32,"textLines":1,"bbox":[82,284,540,18]}
+{"kind":"shape","id":"sh/ehgfepkr","slide":11,"bbox":[297,320,110,76]}
+{"kind":"textbox","id":"sh/zipg7ulc","slide":11,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[297,338,110,16]}
+{"kind":"textbox","id":"sh/onihkz2t","slide":11,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[297,358,110,24]}
+{"kind":"textbox","id":"sh/9oryd43e","slide":11,"text":"建议：仓库结构一览，工程完整度自证。","textPreview":"建议：仓库结构一览，工程完整度自证。","textChars":18,"textLines":1,"bbox":[82,446,540,18]}
+{"kind":"shape","id":"sh/mlgzipkn","slide":11,"bbox":[656,270,560,200]}
+{"kind":"shape","id":"sh/nm9gbul8","slide":11,"bbox":[656,270,3,200]}
+{"kind":"textbox","id":"sh/wrihoj25","slide":11,"text":"RELEASE HISTORY  ·  1600 × 800","textPreview":"RELEASE HISTORY  ·  1600 × 800","textChars":30,"textLines":1,"bbox":[674,284,524,18]}
+{"kind":"shape","id":"sh/xsryhoja","slide":11,"bbox":[881,320,110,76]}
+{"kind":"textbox","id":"sh/587y14bu","slide":11,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[881,338,110,16]}
+{"kind":"textbox","id":"sh/k7eh8zu9","slide":11,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[881,358,110,24]}
+{"kind":"textbox","id":"sh/j65gzeto","slide":11,"text":"建议：releases / CHANGELOG，迭代速度自证。","textPreview":"建议：releases / CHANGELOG，迭代速度自证。","textChars":31,"textLines":1,"bbox":[674,446,524,18]}
+{"kind":"shape","id":"sh/i5wf69c3","slide":11,"bbox":[64,490,280,90]}
+{"kind":"textbox","id":"sh/tc7y5obq","slide":11,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[80,502,50,18]}
+{"kind":"textbox","id":"sh/sbyhcju5","slide":11,"text":"信任必须可验证","textPreview":"信任必须可验证","textChars":7,"textLines":1,"bbox":[120,500,208,22]}
+{"kind":"textbox","id":"sh/7apg3etk","slide":11,"text":"产品处理的是你最私密的东西——工作记忆、会议原文、承诺。「很安全」不该由我们自己说，代码摊开，自己看。","textPreview":"产品处理的是你最私密的东西——工作记忆、会议原文、承诺。「很安全」不该由我们自己说，代码摊开，自己看。","textChars":51,"textLines":1,"bbox":[80,526,248,50]}
+{"kind":"shape","id":"sh/69gza9cz","slide":11,"bbox":[360,490,280,90]}
+{"kind":"textbox","id":"sh/9gnytkvm","slide":11,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[376,502,50,18]}
+{"kind":"textbox","id":"sh/8fux0fu1","slide":11,"text":"谁都可以二次开发","textPreview":"谁都可以二次开发","textChars":8,"textLines":1,"bbox":[416,500,208,22]}
+{"kind":"textbox","id":"sh/e98ne1on","slide":11,"text":"Apache-2.0，可以 fork、可以做垂直版本；Agent Skill 接口开放，社区能直接给它写技能。","textPreview":"Apache-2.0，可以 fork、可以做垂直版本；Agent Skill 接口开放，社区能直接给它写技能。","textChars":55,"textLines":1,"bbox":[376,526,248,50]}
+{"kind":"shape","id":"sh/zah4n658","slide":11,"bbox":[64,596,280,90]}
+{"kind":"textbox","id":"sh/0ba5gr6d","slide":11,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[80,608,50,18]}
+{"kind":"textbox","id":"sh/1wjmpwny","slide":11,"text":"反锁定是双向的","textPreview":"反锁定是双向的","textChars":7,"textLines":1,"bbox":[120,606,208,22]}
+{"kind":"textbox","id":"sh/mxsni1oj","slide":11,"text":"用户不被我们锁定；我们也只能靠持续迭代留住用户——这是开源对团队的硬约束。","textPreview":"用户不被我们锁定；我们也只能靠持续迭代留住用户——这是开源对团队的硬约束。","textChars":37,"textLines":1,"bbox":[80,632,248,50]}
+{"kind":"shape","id":"sh/ny14r654","slide":11,"bbox":[360,596,280,90]}
+{"kind":"textbox","id":"sh/oza5kb6p","slide":11,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[376,608,50,18]}
+{"kind":"textbox","id":"sh/90jmtgna","slide":11,"text":"开源不死","textPreview":"开源不死","textChars":4,"textLines":1,"bbox":[416,606,208,22]}
+{"kind":"textbox","id":"sh/21o36hof","slide":11,"text":"哪怕我们明天关门，代码、数据格式、你的文件都还在。产品寿命不绑定公司寿命。","textPreview":"哪怕我们明天关门，代码、数据格式、你的文件都还在。产品寿命不绑定公司寿命。","textChars":37,"textLines":1,"bbox":[376,632,248,50]}
+{"kind":"textbox","id":"sh/32x4fmp0","slide":11,"text":"APACHE-2.0  ·  github.com/dailyflow","textPreview":"APACHE-2.0  ·  github.com/dailyflow","textChars":35,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/jypkjyho","slide":11,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/ixgjatg3","slide":11,"text":"11 / 16","textPreview":"11 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/40f4r4","slide":11,"text":""}
+{"kind":"slide","id":"sl/47eo07","slide":12,"title":"11 — BUSINESS MODEL  ·  OPEN CORE","textShapes":23}
+{"kind":"shape","id":"sh/eh0j2psv","slide":12,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/1kr2d4rm","slide":12,"text":"11 — BUSINESS MODEL  ·  OPEN CORE","textPreview":"11 — BUSINESS MODEL  ·  OPEN CORE","textChars":33,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/gji14za1","slide":12,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/re907u9k","slide":12,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/6dgjypsz","slide":12,"text":"BUSINESS MODEL · OPEN CORE","textPreview":"BUSINESS MODEL · OPEN CORE","textChars":26,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/tgri9kra","slide":12,"text":"核心永久免费开源，收费只在增值服务。","textPreview":"核心永久免费开源，收费只在增值服务。","textChars":18,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/sfi10zap","slide":12,"text":"Free forever; revenue only from add-ons.","textPreview":"Free forever; revenue only from add-ons.","textChars":40,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/jap03a98","slide":12,"bbox":[64,280,220,320]}
+{"kind":"shape","id":"sh/i9gju5sn","slide":12,"bbox":[64,280,3,320]}
+{"kind":"textbox","id":"sh/s7ulsbyx","slide":12,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[78,294,40,18]}
+{"kind":"textbox","id":"sh/t8321gfi","slide":12,"text":"Token 直通","textPreview":"Token 直通","textChars":8,"textLines":1,"bbox":[78,316,192,60]}
+{"kind":"textbox","id":"sh/65c3q1gr","slide":12,"text":"AI 按量计费是行业惯例。可直接接入官方 token，透明通道，成本多少就多少，不转售、不截留上下文。","textPreview":"AI 按量计费是行业惯例。可直接接入官方 token，透明通道，成本多少就多少，不转售、不截留上下文。","textChars":51,"textLines":1,"bbox":[78,382,192,200]}
+{"kind":"shape","id":"sh/r6lkz6xc","slide":12,"bbox":[297,280,220,320]}
+{"kind":"shape","id":"sh/43uloryl","slide":12,"bbox":[297,280,3,320]}
+{"kind":"textbox","id":"sh/5432xwf6","slide":12,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[311,294,40,18]}
+{"kind":"textbox","id":"sh/i1s3m1gv","slide":12,"text":"托管多端同步","textPreview":"托管多端同步","textChars":6,"textLines":1,"bbox":[311,316,192,60]}
+{"kind":"textbox","id":"sh/j2lkv6xg","slide":12,"text":"同步本身是免费的：现在用 Git 和 IPFS——去中心化、和个人身份绑定。收费的是「托管版」：不想折腾的人买个省心。","textPreview":"同步本身是免费的：现在用 Git 和 IPFS——去中心化、和个人身份绑定。收费的是「托管版」：不想折腾的人买个省心。","textChars":59,"textLines":1,"bbox":[311,382,192,200]}
+{"kind":"shape","id":"sh/ozel0vy5","slide":12,"bbox":[530,280,220,320]}
+{"kind":"shape","id":"sh/p0nm90fq","slide":12,"bbox":[530,280,3,320]}
+{"kind":"textbox","id":"sh/xg32t07u","slide":12,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[544,294,40,18]}
+{"kind":"textbox","id":"sh/cfalkvq9","slide":12,"text":"高级 AI 功能","textPreview":"高级 AI 功能","textChars":8,"textLines":1,"bbox":[544,316,192,60]}
+{"kind":"textbox","id":"sh/be1krqpo","slide":12,"text":"批量整理、自动化编排、深度复盘等超出日常的增值能力。","textPreview":"批量整理、自动化编排、深度复盘等超出日常的增值能力。","textChars":26,"textLines":1,"bbox":[544,382,192,200]}
+{"kind":"shape","id":"sh/ats3il83","slide":12,"bbox":[763,280,220,320]}
+{"kind":"shape","id":"sh/psj2pg7i","slide":12,"bbox":[763,280,3,320]}
+{"kind":"textbox","id":"sh/oralgbqx","slide":12,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[777,294,40,18]}
+{"kind":"textbox","id":"sh/nq1kn6ps","slide":12,"text":"向量数据库等","textPreview":"向量数据库等","textChars":6,"textLines":1,"bbox":[777,316,192,60]}
+{"kind":"textbox","id":"sh/2ps3el87","slide":12,"text":"记忆规模变大后的语义索引加速。本地全文检索永远免费，向量索引是可选项。","textPreview":"记忆规模变大后的语义索引加速。本地全文检索永远免费，向量索引是可选项。","textChars":35,"textLines":1,"bbox":[777,382,192,200]}
+{"kind":"shape","id":"sh/1oj2lg7m","slide":12,"bbox":[996,280,220,320]}
+{"kind":"shape","id":"sh/0nqlcbq1","slide":12,"bbox":[996,280,3,320]}
+{"kind":"textbox","id":"sh/qtozmhoz","slide":12,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1010,294,40,18]}
+{"kind":"textbox","id":"sh/rux0fm5k","slide":12,"text":"开源 Agent 市场","textPreview":"开源 Agent 市场","textChars":11,"textLines":1,"bbox":[1010,316,192,60]}
+{"kind":"textbox","id":"sh/sv6ho76p","slide":12,"text":"Skill 和 Agent 能力开放生态：第三方开发者发布技能，市场交易分成是长期收入。","textPreview":"Skill 和 Agent 能力开放生态：第三方开发者发布技能，市场交易分成是长期收入。","textChars":44,"textLines":1,"bbox":[1010,382,192,200]}
+{"kind":"shape","id":"sh/dwzihcna","slide":12,"bbox":[64,626,28,2.5]}
+{"kind":"textbox","id":"sh/ipozixon","slide":12,"text":"每一类都不碰你的数据——商业模式和产品立场，是同一件事。","textPreview":"每一类都不碰你的数据——商业模式和产品立场，是同一件事。","textChars":28,"textLines":1,"bbox":[104,618,1100,32]}
+{"kind":"textbox","id":"sh/3qx0b258","slide":12,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/4r6hk76t","slide":12,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/5sfidcne","slide":12,"text":"12 / 16","textPreview":"12 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/47eo07","slide":12,"text":""}
+{"kind":"slide","id":"sl/mujmaq","slide":13,"title":"12 — MOAT","textShapes":20}
+{"kind":"shape","id":"sh/5g3y5g3q","slide":13,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/itcfu1kz","slide":13,"text":"12 — MOAT","textPreview":"12 — MOAT","textChars":9,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/julg36lk","slide":13,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/sjux0v21","slide":13,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/tkny903m","slide":13,"text":"MOAT","textPreview":"MOAT","textChars":4,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/6hcfylkb","slide":13,"text":"为什么这个位置难以复制。","textPreview":"为什么这个位置难以复制。","textChars":12,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/7ilg7qlw","slide":13,"text":"Why this position is hard to copy.","textPreview":"Why this position is hard to copy.","textChars":34,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/gnex4v2d","slide":13,"bbox":[64,280,580,170]}
+{"kind":"textbox","id":"sh/honyd03y","slide":13,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,302,60,30]}
+{"kind":"textbox","id":"sh/to3qhcfe","slide":13,"text":"数据复利","textPreview":"数据复利","textChars":4,"textLines":1,"bbox":[154,300,470,36]}
+{"kind":"textbox","id":"sh/snup87et","slide":13,"text":"用户第 365 天的体验建立在 365 天的个人数据上。功能可以抄，用户攒下的东西抄不走。","textPreview":"用户第 365 天的体验建立在 365 天的个人数据上。功能可以抄，用户攒下的东西抄不走。","textChars":45,"textLines":1,"bbox":[88,350,532,90]}
+{"kind":"shape","id":"sh/r2l8f2x8","slide":13,"bbox":[656,280,580,170]}
+{"kind":"textbox","id":"sh/61s76hwn","slide":13,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[680,302,60,30]}
+{"kind":"textbox","id":"sh/1s3qlwfa","slide":13,"text":"开源信任","textPreview":"开源信任","textChars":4,"textLines":1,"bbox":[746,300,470,36]}
+{"kind":"textbox","id":"sh/gru9crep","slide":13,"text":"处理私密记忆的产品，信任是入口；开源是最贵的信任凭证，我们愿意付这个代价。","textPreview":"处理私密记忆的产品，信任是入口；开源是最贵的信任凭证，我们愿意付这个代价。","textChars":37,"textLines":1,"bbox":[680,350,532,90]}
+{"kind":"shape","id":"sh/fql8jmxk","slide":13,"bbox":[64,462,580,170]}
+{"kind":"textbox","id":"sh/epc7ahwz","slide":13,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[88,484,60,30]}
+{"kind":"textbox","id":"sh/hwjq9sf6","slide":13,"text":"清晰的架构模式","textPreview":"清晰的架构模式","textChars":7,"textLines":1,"bbox":[154,482,470,36]}
+{"kind":"textbox","id":"sh/wvapgnyl","slide":13,"text":"规则引擎在前、建议单确认、服务分层清晰。功能快速长出来而不失控，二次开发成本足够低。","textPreview":"规则引擎在前、建议单确认、服务分层清晰。功能快速长出来而不失控，二次开发成本足够低。","textChars":42,"textLines":1,"bbox":[88,532,532,90]}
+{"kind":"shape","id":"sh/8fupwn6h","slide":13,"bbox":[656,462,580,170]}
+{"kind":"textbox","id":"sh/9gnqpsn2","slide":13,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[680,484,60,30]}
+{"kind":"textbox","id":"sh/mdc7uxob","slide":13,"text":"迭代速度","textPreview":"迭代速度","textChars":4,"textLines":1,"bbox":[746,482,470,36]}
+{"kind":"textbox","id":"sh/nel8n25w","slide":13,"text":"一个人，四个月，从 CLI 到 v1.8.0，99 个测试文件；本地优先没有云端成本拖累。","textPreview":"一个人，四个月，从 CLI 到 v1.8.0，99 个测试文件；本地优先没有云端成本拖累。","textChars":45,"textLines":1,"bbox":[680,532,532,90]}
+{"kind":"shape","id":"sh/w3e9076d","slide":13,"bbox":[64,660,28,2.5]}
+{"kind":"textbox","id":"sh/x4nqtcny","slide":13,"text":"4 个位置 · 任何一个都难抄走 · 用户在中间。","textPreview":"4 个位置 · 任何一个都难抄走 · 用户在中间。","textChars":25,"textLines":1,"bbox":[104,654,1100,22]}
+{"kind":"textbox","id":"sh/ahwryxon","slide":13,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/v258r258","slide":13,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/k7y947mp","slide":13,"text":"13 / 16","textPreview":"13 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/mujmaq","slide":13,"text":""}
+{"kind":"slide","id":"sl/rvcwje","slide":14,"title":"13 — NEXT  ·  PORTABLE AI","textShapes":27}
+{"kind":"shape","id":"sh/vqx8fy14","slide":14,"bbox":[290,110,700,700]}
+{"kind":"shape","id":"sh/gr69o3ip","slide":14,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/hsfqh8ja","slide":14,"text":"13 — NEXT  ·  PORTABLE AI","textPreview":"13 — NEXT  ·  PORTABLE AI","textChars":25,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/itorqd0f","slide":14,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/3ux8ji10","slide":14,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/4f69snil","slide":14,"text":"NEXT · PORTABLE AI","textPreview":"NEXT · PORTABLE AI","textChars":18,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/5gfqlsj6","slide":14,"text":"下一步——一个「懂你待办」的随身 AI。","textPreview":"下一步——一个「懂你待办」的随身 AI。","textChars":20,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/yxk7etkb","slide":14,"text":"A portable AI that knows your todos.","textPreview":"A portable AI that knows your todos.","textChars":36,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"textbox","id":"sh/jyt87e1w","slide":14,"text":"不是录音笔，也不是替代手机——是把你的资产基地带在身上：它知道你的任务，记得你的承诺，随时接得住你的想法。","textPreview":"不是录音笔，也不是替代手机——是把你的资产基地带在身上：它知道你的任务，记得你的承诺，随时接得住你的想法。","textChars":53,"textLines":1,"bbox":[64,280,1152,36]}
+{"kind":"shape","id":"sh/nipg7mls","slide":14,"bbox":[64,340,360,110]}
+{"kind":"shape","id":"sh/mhgfeh47","slide":14,"bbox":[80,356,28,28]}
+{"kind":"textbox","id":"sh/94ry9c3i","slide":14,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[80,356,28,28]}
+{"kind":"textbox","id":"sh/83ihgrmx","slide":14,"text":"随身待办","textPreview":"随身待办","textChars":4,"textLines":1,"bbox":[120,356,290,24]}
+{"kind":"textbox","id":"sh/zepg32lg","slide":14,"text":"今天的三件重点、快逾期的承诺，抬手就能看、随口就能问。","textPreview":"今天的三件重点、快逾期的承诺，抬手就能看、随口就能问。","textChars":27,"textLines":1,"bbox":[80,396,328,48]}
+{"kind":"shape","id":"sh/ydgfax4v","slide":14,"bbox":[440,340,360,110]}
+{"kind":"shape","id":"sh/lg7y5c3m","slide":14,"bbox":[456,356,28,28]}
+{"kind":"textbox","id":"sh/0fyxc7m1","slide":14,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[456,356,28,28]}
+{"kind":"textbox","id":"sh/ba5gz2lk","slide":14,"text":"随时捕获","textPreview":"随时捕获","textChars":4,"textLines":1,"bbox":[496,356,290,24]}
+{"kind":"textbox","id":"sh/q9wf6x4z","slide":14,"text":"会议、口头约定、路上的灵感，按一下就记下来（mindmap / note / task 的输入端）。","textPreview":"会议、口头约定、路上的灵感，按一下就记下来（mindmap / note / task 的输入端）。","textChars":50,"textLines":1,"bbox":[456,396,328,48]}
+{"kind":"shape","id":"sh/elwzixor","slide":14,"bbox":[816,340,360,110]}
+{"kind":"shape","id":"sh/f65gripc","slide":14,"bbox":[832,356,28,28]}
+{"kind":"textbox","id":"sh/g7ehkn6x","slide":14,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[832,356,28,28]}
+{"kind":"textbox","id":"sh/18nyts7i","slide":14,"text":"回到桌前自动归位","textPreview":"回到桌前自动归位","textChars":8,"textLines":1,"bbox":[872,356,290,24]}
+{"kind":"textbox","id":"sh/29wzmxon","slide":14,"text":"录下的内容汇入工作区：变成笔记、抽成行动项、等你确认（记忆与智能层现成复用）。","textPreview":"录下的内容汇入工作区：变成笔记、抽成行动项、等你确认（记忆与智能层现成复用）。","textChars":39,"textLines":1,"bbox":[832,396,328,48]}
+{"kind":"textbox","id":"sh/3a50v2p8","slide":14,"text":"为什么是硬件","textPreview":"为什么是硬件","textChars":6,"textLines":1,"bbox":[64,478,300,18]}
+{"kind":"shape","id":"sh/obyho76t","slide":14,"bbox":[64,512,8,8]}
+{"kind":"textbox","id":"sh/pc7ixc7e","slide":14,"text":"重要的话都不在电脑前说","textPreview":"重要的话都不在电脑前说","textChars":11,"textLines":1,"bbox":[82,506,680,22]}
+{"kind":"textbox","id":"sh/qdgzqhoz","slide":14,"text":"手机掏出来、解锁、打开 App，冲动已经过去了。","textPreview":"手机掏出来、解锁、打开 App，冲动已经过去了。","textChars":24,"textLines":1,"bbox":[82,528,680,32]}
+{"kind":"shape","id":"sh/bep0z25k","slide":14,"bbox":[64,570,8,8]}
+{"kind":"textbox","id":"sh/lkba50vy","slide":14,"text":"AI Pin / Rabbit 想替代手机都失败了","textPreview":"AI Pin / Rabbit 想替代手机都失败了","textChars":25,"textLines":1,"bbox":[82,564,680,22]}
+{"kind":"textbox","id":"sh/kj2tcvud","slide":14,"text":"我们不替代手机，只做「随身」这一件事。","textPreview":"我们不替代手机，只做「随身」这一件事。","textChars":19,"textLines":1,"bbox":[82,586,680,32]}
+{"kind":"shape","id":"sh/zits3qds","slide":14,"bbox":[784,478,432,130]}
+{"kind":"shape","id":"sh/yhkba5c7","slide":14,"bbox":[784,478,3,130]}
+{"kind":"textbox","id":"sh/98va9kvu","slide":14,"text":"PORTABLE DEVICE  ·  1200 × 1200","textPreview":"PORTABLE DEVICE  ·  1200 × 1200","textChars":31,"textLines":1,"bbox":[802,492,396,18]}
+{"kind":"shape","id":"sh/872tgfu9","slide":14,"bbox":[945,493,110,76]}
+{"kind":"textbox","id":"sh/7mts7ad4","slide":14,"text":"SCREENSHOT","textPreview":"SCREENSHOT","textChars":10,"textLines":1,"bbox":[945,511,110,16]}
+{"kind":"textbox","id":"sh/mlkbe5cj","slide":14,"text":"在此插入截图","textPreview":"在此插入截图","textChars":6,"textLines":1,"bbox":[945,531,110,24]}
+{"kind":"textbox","id":"sh/hcvudkb6","slide":14,"text":"建议：硬件渲染图：耳挂 / 胸针 / 录音笔 — 工业设计共创中。","textPreview":"建议：硬件渲染图：耳挂 / 胸针 / 录音笔 — 工业设计共创中。","textChars":33,"textLines":1,"bbox":[802,584,396,18]}
+{"kind":"shape","id":"sh/wbmtkful","slide":14,"bbox":[64,620,1152,40]}
+{"kind":"textbox","id":"sh/s7qdcjet","slide":14,"text":"状态：方案推进中    寻找硬件共创伙伴（供应链 + 端侧模型厂商）","textPreview":"状态：方案推进中    寻找硬件共创伙伴（供应链 + 端侧模型厂商）","textChars":34,"textLines":1,"bbox":[64,620,1152,40]}
+{"kind":"textbox","id":"sh/t8ze5ofe","slide":14,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/65ova9wn","slide":14,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/r6xw3ex8","slide":14,"text":"14 / 16","textPreview":"14 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/rvcwje","slide":14,"text":""}
+{"kind":"slide","id":"sl/ncpzef","slide":15,"title":"14 — THE ASK","textShapes":14}
+{"kind":"shape","id":"sh/0nu9k3ml","slide":15,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/fmlsryl0","slide":15,"text":"14 — THE ASK","textPreview":"14 — THE ASK","textChars":12,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/elcrit4f","slide":15,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"shape","id":"sh/pcnax832","slide":15,"bbox":[64,110,28,2.5]}
+{"kind":"textbox","id":"sh/obe9o3mh","slide":15,"text":"THE ASK","textPreview":"THE ASK","textChars":7,"textLines":1,"bbox":[104,100,800,24]}
+{"kind":"textbox","id":"sh/nq5svylw","slide":15,"text":"需要两样东西。","textPreview":"需要两样东西。","textChars":7,"textLines":1,"bbox":[64,140,1100,70]}
+{"kind":"textbox","id":"sh/2pwrmd4b","slide":15,"text":"Two things.","textPreview":"Two things.","textChars":11,"textLines":1,"bbox":[64,212,1100,28]}
+{"kind":"shape","id":"sh/5gjalo3y","slide":15,"bbox":[64,280,580,280]}
+{"kind":"shape","id":"sh/4fa9cjmd","slide":15,"bbox":[64,280,580,6]}
+{"kind":"textbox","id":"sh/y1s36d87","slide":15,"text":"A · 资金","textPreview":"A · 资金","textChars":6,"textLines":1,"bbox":[92,310,280,24]}
+{"kind":"textbox","id":"sh/z214zi9s","slide":15,"text":"拓展这个项目","textPreview":"拓展这个项目","textChars":6,"textLines":1,"bbox":[92,344,524,80]}
+{"kind":"textbox","id":"sh/03al8nqd","slide":15,"text":"让一个人的开源项目变成可持续的产品——工程、设计、硬件打样、市场首发。","textPreview":"让一个人的开源项目变成可持续的产品——工程、设计、硬件打样、市场首发。","textChars":35,"textLines":1,"bbox":[92,436,524,100]}
+{"kind":"shape","id":"sh/l4jm1sri","slide":15,"bbox":[660,280,580,280]}
+{"kind":"shape","id":"sh/m5s3ax83","slide":15,"bbox":[660,280,580,6]}
+{"kind":"textbox","id":"sh/n614329o","slide":15,"text":"B · 生态合作","textPreview":"B · 生态合作","textChars":8,"textLines":1,"bbox":[688,310,280,24]}
+{"kind":"textbox","id":"sh/87alcnq9","slide":15,"text":"把你接进来","textPreview":"把你接进来","textChars":5,"textLines":1,"bbox":[688,344,524,80]}
+{"kind":"textbox","id":"sh/9s3m5sru","slide":15,"text":"模型厂商（一键接入）、硬件供应链与端侧模型（随身 AI）、Agent 市场开发者、分发渠道。","textPreview":"模型厂商（一键接入）、硬件供应链与端侧模型（随身 AI）、Agent 市场开发者、分发渠道。","textChars":46,"textLines":1,"bbox":[688,436,524,100]}
+{"kind":"shape","id":"sh/atcnex8f","slide":15,"bbox":[64,596,1152,60]}
+{"kind":"textbox","id":"sh/vul47290","slide":15,"text":"90 天，让第 1000 个人开始建立自己的 AI 资产基地。","textPreview":"90 天，让第 1000 个人开始建立自己的 AI 资产基地。","textChars":31,"textLines":1,"bbox":[64,596,1152,60]}
+{"kind":"textbox","id":"sh/7ylkv2ps","slide":15,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/6xc32xon","slide":15,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/t0n2xcny","slide":15,"text":"15 / 16","textPreview":"15 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/ncpzef","slide":15,"text":""}
+{"kind":"slide","id":"sl/eixukl","slide":16,"title":"15 — CLOSING","textShapes":10}
+{"kind":"shape","id":"sh/kf69cnqt","slide":16,"bbox":[290,110,700,700]}
+{"kind":"shape","id":"sh/zex8ji98","slide":16,"bbox":[56,38,8,8]}
+{"kind":"textbox","id":"sh/ydorad83","slide":16,"text":"15 — CLOSING","textPreview":"15 — CLOSING","textChars":12,"textLines":1,"bbox":[76,28,900,24]}
+{"kind":"textbox","id":"sh/94zqpsrq","slide":16,"text":"DAILYFLOW · 2026","textPreview":"DAILYFLOW · 2026","textChars":16,"textLines":1,"bbox":[1080,28,144,24]}
+{"kind":"textbox","id":"sh/8j69g7q5","slide":16,"text":"AI 时代，每个人都需要一个","textPreview":"AI 时代，每个人都需要一个","textChars":14,"textLines":1,"bbox":[96,200,1088,160]}
+{"kind":"textbox","id":"sh/7ix8n29k","slide":16,"text":"自己的 资产基地.","textPreview":"自己的 资产基地.","textChars":9,"textLines":1,"bbox":[96,268,1088,110]}
+{"kind":"textbox","id":"sh/mhorex8z","slide":16,"text":"In the AI era, everyone needs a base of their own.","textPreview":"In the AI era, everyone needs a base of their own.","textChars":50,"textLines":1,"bbox":[96,396,1088,36]}
+{"kind":"textbox","id":"sh/h8zqtc7m","slide":16,"text":"软件在跑，代码开源；随身 AI 在路上。\n剩下的，是让每个人都拥有一份带不走的 AI 资产。","textPreview":"软件在跑，代码开源；随身 AI 在路上。 | 剩下的，是让每个人都拥有一份带不走的 AI 资产。","textChars":46,"textLines":2,"bbox":[96,456,1088,88]}
+{"kind":"textbox","id":"sh/w7q9k7q1","slide":16,"text":"— 让记忆归你。","textPreview":"— 让记忆归你。","textChars":8,"textLines":1,"bbox":[96,580,1088,56]}
+{"kind":"textbox","id":"sh/214zqh4b","slide":16,"text":"let the memory be yours.","textPreview":"let the memory be yours.","textChars":24,"textLines":1,"bbox":[96,626,1088,24]}
+{"kind":"textbox","id":"sh/3md0jm5w","slide":16,"text":"DAILYFLOW · ROADSHOW 2026","textPreview":"DAILYFLOW · ROADSHOW 2026","textChars":25,"textLines":1,"bbox":[64,678,800,22]}
+{"kind":"shape","id":"sh/4nm1srmh","slide":16,"bbox":[1168,666,72,32]}
+{"kind":"textbox","id":"sh/povilwn2","slide":16,"text":"16 / 16","textPreview":"16 / 16","textChars":7,"textLines":1,"bbox":[1168,666,72,32]}
+{"kind":"notes","id":"nt/eixukl","slide":16,"text":""}

@@ -27,7 +27,7 @@ export const LocalTranscriptionConfigSchema = z.object({
   language: z.string().trim().min(1).max(20).default('auto'),
   extraArgs: z.array(z.string().max(500)).max(32).default([]),
 });
-export type LocalTranscriptionConfig = z.infer<typeof LocalTranscriptionConfigSchema>;
+export type LocalTranscriptionConfig = z.input<typeof LocalTranscriptionConfigSchema>;
 
 export interface LocalTranscriptionRunner {
   (config: LocalTranscriptionConfig, audioPath: string): Promise<{ text: string }>;

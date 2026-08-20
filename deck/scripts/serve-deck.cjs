@@ -7,8 +7,14 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = Number(process.env.DECK_PORT || 4173);
-const HOST = process.env.DECK_HOST || '127.0.0.1';
+const argv = process.argv.slice(2);
+function argVal(flag) {
+  const i = argv.indexOf(flag);
+  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : undefined;
+}
+
+const PORT = Number(argVal('--port') || process.env.PORT || process.env.DECK_PORT || 4173);
+const HOST = argVal('--host') || process.env.HOST || process.env.DECK_HOST || '127.0.0.1';
 const ROOT = path.resolve(__dirname, '..');
 
 const MIME = {

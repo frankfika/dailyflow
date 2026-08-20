@@ -106,3 +106,7 @@
   color: var(--paper-2);
   text-align: right;
 }
+
+/* lang toggle must beat the ul display:grid rule above (specificity fix) */
+[data-lang="zh-CN"] .slide[data-layout="ask"] .ask-card ul.lang-en { display: none; }
+[data-lang="en-US"] .slide[data-layout="ask"] .ask-card ul.lang-zh { display: none; }
