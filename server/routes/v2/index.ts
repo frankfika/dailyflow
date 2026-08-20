@@ -747,6 +747,40 @@ v2Router.post('/notes/:id/agents/run', async (req, res) => {
     handleError(err, res);
   }
 });
+// ---------------------------------------------------------------------------
+// Mind-map "AI organize" — Sprint 1 / Gap 2
+//
+//   POST /api/v2/mindmaps/:id/organize
+//     body  : { strategy: 'by_topic' | 'by_priority' | 'by_time',
+//               nodes:   [{ id, text, kind?, status?, tags? }, …],
+//               edges:   [{ id, source, target }, …] }
+//     200   : { suggestion: OrganizeSuggestion }
+//     4xx   : validation / not-found (Zod)
+//
+// The handler is deliberately *read-only*. It returns a suggestion the
+// client previews in the modal; the user must explicitly press "应用" before
+// anything is persisted via the legacy PUT /api/mindmaps/:id. This keeps
+// the "永远给撤销按钮 / 第一次仅给推荐" rule from Gap 2 (see
+// docs/MINDMAP_AI_ORGANIZE.md).
+// ---------------------------------------------------------------------------
+
+v2Router.post('/mindmaps/:id/organize', async (req, res) => {
+  try {
+    // v2 bootstrap is not strictly needed for the read-only organizer —
+    // it doesn't touch v2 storage — but we still respect the same error
+    // envelope and feature flags for consistency with neighbouring routes.
+    getV2(res);
+    const parsed = OrganizeInputSchema.parse({
+      ...(req.body ?? {}),
+      mindmapId: req.params.id,
+    });
+    const suggestion = organizeMindmap(null, parsed);
+    res.status(200).json({ suggestion });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
 
 // ---------------------------------------------------------------------------
 // Commitment (DF2-007)
@@ -2072,3 +2106,51 @@ v2Router.get('/reports/daily/list', async (req, res) => {
     handleError(err, res);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Sprint 1 Gap 2: AI organize mindmap (suggestion only, no write-back)
+// ---------------------------------------------------------------------------
+import {
+  organizeMindmap,
+  OrganizeStrategySchema,
+  type OrganizeNode as _OrganizeNode,
+  type OrganizeEdge as _OrganizeEdge,
+} from '../../services/v2/organizeMindmap.js';
+
+v2Router.post('/mindmaps/:id/organize', async (req, res) => {
+  try {
+    const parsed = OrganizeStrategySchema.safeParse(req.body?.strategy);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: { code: 'bad_request', message: 'strategy must be one of by_topic | by_priority | by_time.' },
+      });
+    }
+    const { repo } = await getV2(res);
+    const mapId = req.params.id;
+    const mindmap = await listMindMapsForV2(repo);
+    const map = mindmap.find((m: any) => m.id === mapId);
+    if (!map) {
+      return res.status(404).json({ error: { code: 'not_found', message: `mindmap ${mapId} not found` } });
+    }
+    const suggestion = organizeMindmap(repo, {
+      mindmapId: mapId,
+      strategy: parsed.data,
+      nodes: map.nodes as _OrganizeNode[],
+      edges: map.edges as _OrganizeEdge[],
+    });
+    res.json(suggestion);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+/**
+ * listMindMapsForV2 — read the on-disk mindmaps for the active workspace
+ * (v1 mindmap service). This avoids taking a v2 dependency for what is
+ * effectively a read-only helper.
+ */
+async function listMindMapsForV2(_repo: any) {
+  // Lazy import to avoid loading the v1 mindmap service at module init.
+  const { listMindMaps } = await import('../../services/mindmaps.js');
+  return listMindMaps();
+}

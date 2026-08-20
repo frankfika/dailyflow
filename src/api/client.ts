@@ -1464,6 +1464,55 @@ export const mindmapsApi = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Sprint 1 / Gap 2 — Mind-map "AI organize" suggestion.
+//
+// POST /api/v2/mindmaps/:id/organize is a *read-only* proposal endpoint.
+// It returns a structured suggestion (groups + rationale) without ever
+// writing to the mind map; the user has to press "应用" in the modal
+// before the client persists changes via mindmapsApi.update.
+// ---------------------------------------------------------------------------
+
+export type OrganizeStrategy = 'by_topic' | 'by_priority' | 'by_time';
+
+export interface OrganizeSuggestionGroup {
+  parentText: string;
+  parentKind: 'branch' | 'question' | 'resource' | 'risk' | 'tag';
+  nodeIds: string[];
+}
+
+export interface OrganizeSuggestionEdge {
+  source: string;
+  target: string;
+}
+
+export interface OrganizeSuggestion {
+  strategy: OrganizeStrategy;
+  rationale: string;
+  groups: OrganizeSuggestionGroup[];
+  suggestedEdges: OrganizeSuggestionEdge[];
+  groupRationale: Record<string, string>;
+  stats: { looseNodes: number; organizedNodes: number; groupCount: number };
+}
+
+export const organizeApi = {
+  /**
+   * Ask the server to suggest a structural re-organization for the
+   * current mind map. The server returns a pure suggestion — no writes.
+   */
+  async organize(mindmapId: string, strategy: OrganizeStrategy): Promise<OrganizeSuggestion> {
+    const map = await mindmapsApi.get(mindmapId);
+    const res = await fetch(`${API_BASE}/v2/mindmaps/${encodeURIComponent(mindmapId)}/organize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy, nodes: map.nodes, edges: map.edges }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to organize mind map');
+    const data = (await res.json()) as { suggestion: OrganizeSuggestion };
+    return data.suggestion;
+  },
+};
+
 export type RecurrenceRule =
   | { type: 'daily' }
   | { type: 'weekly'; weekdays: number[] }
