@@ -5,6 +5,37 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/frankfika/dailyflow/compare/v1.9.0...v2.0.0) (2026-08-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* Mind-map node `kind` field is now one of 7 values: `root` | `branch` | `tag` | `task` | `question` | `resource` | `risk` (was 4). Legacy nodes default to `branch`; no migration required.
+
+### Features
+
+* **mindmap:** 7 node kinds with distinct icon + color ([9370ecd](https://github.com/frankfika/dailyflow/commit/9370ecd))
+* **mindmap:** AI organize suggestion (by_topic / by_priority / by_time) ([ad4d91e](https://github.com/frankfika/dailyflow/commit/ad4d91e))
+* **mindmap:** mirror task completion back to node (`status=done` + 完成块) ([0d0747d](https://github.com/frankfika/dailyflow/commit/0d0747d))
+* **memory:** 3-tier search ranking (structured > metadata > fulltext) ([d695c23](https://github.com/frankfika/dailyflow/commit/d695c23))
+* **memory:** proactive proposal mechanism (overdue-task detection) ([a7c4980](https://github.com/frankfika/dailyflow/commit/a7c4980))
+* **transcription:** settings UI for local Whisper backend ([8a3d11e](https://github.com/frankfika/dailyflow/commit/8a3d11e))
+* **report:** daily report + reflection with `Journal/YYYY-MM-DD.md` ([096d129](https://github.com/frankfika/dailyflow/commit/096d129))
+* **vector:** in-memory TF-IDF vector index (lancedb-ready interface) ([f4830d1](https://github.com/frankfika/dailyflow/commit/f4830d1))
+* **skills:** community skill marketplace (registry + SHA-256 + localStorage) ([f4830d1](https://github.com/frankfika/dailyflow/commit/f4830d1))
+* **privacy:** PrivacyPanel surfaces all 5 outbound categories ([f4830d1](https://github.com/frankfika/dailyflow/commit/f4830d1))
+
+### Documentation
+
+* **sprint0:** 4 preparation docs (product debt, feature audit, zero-upload audit, agent-market plan) ([300113f](https://github.com/frankfika/dailyflow/commit/300113f))
+* **readme:** document Sprint 1 features with V2 slide mapping ([1758a16](https://github.com/frankfika/dailyflow/commit/1758a16))
+* 7 new design docs: `MINDMAP_AI_ORGANIZE.md` / `MEMORY_SEARCH_TIERS.md` / `PROACTIVE_PROPOSAL.md` / `TASK_MIRROR_TO_MINDMAP.md` / `DAILY_REPORT.md` / `LOCAL_WHISPER_SETUP.md` / `VECTOR_INDEX.md` / `AGENT_MARKET.md`
+
+### Notes
+
+* Sprint 1 = 4-week pre-roadshow sprint. 14/14 items shipped. 645 tests pass, 0 TS errors.
+* See `docs/ROADSHOW_VS_PRODUCT_GAP.md` for the full gap analysis.
+
 ## [1.9.0](https://github.com/frankfika/dailyflow/compare/v1.8.0...v1.9.0) (2026-08-18)
 
 
