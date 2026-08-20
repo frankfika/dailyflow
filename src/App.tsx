@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS } from './api/client';
+import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
@@ -21,6 +21,7 @@ import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from './components/TodayBacklog';
 import { TodayScopeTabs } from './components/TodayScopeTabs';
+import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
 import { TodayProactiveBanner } from './components/TodayProactiveBanner';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
@@ -156,6 +157,13 @@ export default function App() {
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
+  // Daily reflection modal — opened from TodayScopeTabs "今日复盘" button or
+  // auto-triggered after the day rolls over if the user hasn't written
+  // today's Journal entry yet.
+  const [showDailyReflection, setShowDailyReflection] = useState(false);
+  const [savingDailyReflection, setSavingDailyReflection] = useState(false);
+  const [lastDailySummary, setLastDailySummary] = useState<import('./api/client').DailyReportSummary | null>(null);
+  const [reflectionDate, setReflectionDate] = useState<string>(todayStr);
 
   const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
@@ -1087,27 +1095,92 @@ export default function App() {
     }
   };
 
-  const handleConfirmRollover = async () => {
+  // ---------------------------------------------------------------------
+  // Daily reflection (Sprint 1 Gap 5 — Daily 闭环)
+  //
+  // Splits the in-memory tasks by status so the modal can pre-fill today's
+  // completed / in-progress / postponed lists. Auto-triggered after the
+  // day rolls over; also reachable from the "今日复盘" button in TodayScopeTabs.
+  // ---------------------------------------------------------------------
+
+  const buildReflectionTasks = (): {
+    completed: DailyReflectionTask[];
+    inProgress: DailyReflectionTask[];
+    postponed: DailyReflectionTask[];
+  } => {
+    const completed: DailyReflectionTask[] = [];
+    const inProgress: DailyReflectionTask[] = [];
+    const postponed: DailyReflectionTask[] = [];
+    for (const task of tasks) {
+      const item: DailyReflectionTask = {
+        id: task.id,
+        title: task.title,
+        tags: task.tags,
+      };
+      if (task.status === 'done') {
+        completed.push(item);
+      } else if (task.status === 'migrated') {
+        postponed.push({ ...item, reason: task.source_date ? `已迁移自 ${task.source_date}` : undefined });
+      } else {
+        inProgress.push({ ...item, progress: task.deadline ? `截止 ${task.deadline}` : undefined });
+      }
+    }
+    return { completed, inProgress, postponed };
+  };
+
+  const handleOpenReflection = useCallback(() => {
+    setReflectionDate(todayStr);
+    setShowDailyReflection(true);
+  }, [todayStr]);
+
+  const handleSaveReflection = useCallback(
+    async (params: {
+      date: string;
+      reflection: string;
+      snapshot: import('./api/client').DailyReportSnapshot;
+    }) => {
+      setSavingDailyReflection(true);
+      try {
+        const summary = await reportsApi.generateDaily(params.date, params.reflection, params.snapshot);
+        setLastDailySummary(summary);
+        showToast(
+          language === 'zh' ? `已写入 ${summary.filePath}` : `Saved to ${summary.filePath}`,
+          'success'
+        );
+      } catch (err) {
+        console.error('Failed to save daily report', err);
+        showToast(language === 'zh' ? '日报保存失败' : 'Failed to save daily report', 'error');
+        throw err;
+      } finally {
+        setSavingDailyReflection(false);
+      }
+    },
+    [language, showToast],
+  );
+
+    const handleConfirmRollover = async () => {
     setIsRollingOver(true);
     try {
       const result = await rolloverApi.apply(currentFileDate, activeContext);
       setShowRolloverPreview(false);
       setRolloverPreview(null);
-      if (result.migratedCount > 0) {
-        showToast(
-          language === 'zh' ? `已迁移 ${result.migratedCount} 个任务` : `Migrated ${result.migratedCount} tasks`,
-          'success'
-        );
-        // Refresh
-        const data = await filesApi.get(currentFileDate);
-        if (data) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-          setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
-        }
-        await refreshEarlierOpenTasks();
+      showToast(
+        language === 'zh' ? '已归档昨日，进入今日' : 'Yesterday archived — welcome to today',
+        'success'
+      );
+      // Refresh the just-archived day so the modal sees the final state.
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
+      await refreshEarlierOpenTasks();
+      // Auto-open the reflection modal for the day that was just archived.
+      // The user can dismiss it if they don't want to write a journal entry.
+      setReflectionDate(currentFileDate);
+      setShowDailyReflection(true);
     } catch (e) {
       console.error('Rollover failed', e);
       showToast(language === 'zh' ? '迁移失败' : 'Rollover failed', 'error');
@@ -1284,6 +1357,23 @@ export default function App() {
         language={language}
         onClose={() => setShowRolloverPreview(false)}
         onConfirm={handleConfirmRollover}
+      />
+
+      <DailyReflectionModal
+        show={showDailyReflection}
+        date={reflectionDate}
+        language={language}
+        completedTasks={buildReflectionTasks().completed}
+        inProgressTasks={buildReflectionTasks().inProgress}
+        postponedTasks={buildReflectionTasks().postponed}
+        saving={savingDailyReflection}
+        lastSaved={lastDailySummary}
+        showToast={showToast}
+        onClose={() => {
+          setShowDailyReflection(false);
+          setLastDailySummary(null);
+        }}
+        onConfirm={handleSaveReflection}
       />
 
       <Sidebar
@@ -1489,6 +1579,8 @@ export default function App() {
                     onTagChange={setSelectedCategory}
                     language={language}
                     storageKey={`df_today_mindmap_tabs_${activeWorkspaceId || 'default'}`}
+                    onOpenReflection={handleOpenReflection}
+                    reflectionSaving={savingDailyReflection}
                   />
 
                   <TodayBacklog

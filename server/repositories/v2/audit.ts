@@ -38,7 +38,10 @@ export type AuditEventKind =
   | 'file.write'
   | 'file.conflict'
   | 'workspace.reset'
-  | 'workspace.import';
+  | 'workspace.import'
+  | 'daily_report.create'
+  | 'daily_report.read'
+  | 'daily_report.list';
 
 export interface AuditEvent {
   /** Stable, time-sortable id. */

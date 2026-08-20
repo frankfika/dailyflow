@@ -123,6 +123,12 @@ import {
   localTranscriptionDefaults,
   localTranscriptionStatus,
 } from '../../services/v2/localTranscriptionService.js';
+import {
+  generateAndSaveDailyReport,
+  listDailyReports,
+  readDailyReport,
+  assertIsoDate,
+} from '../../services/v2/dailyReport.js';
 
 export const v2Router = Router();
 
@@ -1872,6 +1878,141 @@ v2Router.post('/proactive/:id/action', async (req, res) => {
     }).parse(req.body);
     const next = await recordProposalAction(req.params.id, body.action);
     res.json({ ok: true, state: next });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// Daily Report + Reflection (Sprint 1 Gap 5 — Daily 闭环)
+//
+//   POST /api/v2/reports/daily              body: { date, reflection, snapshot? }
+//   GET  /api/v2/reports/daily?date=YYYY-MM-DD
+//   GET  /api/v2/reports/daily/list?year=YYYY&month=MM
+//
+// The routes write a single Markdown file under `Journal/YYYY-MM-DD.md`
+// at the active workspace root. The file is plain text, lives alongside
+// the user's other notes, and shows up in `git diff` — there is no
+// separate database to migrate from.
+// ---------------------------------------------------------------------------
+
+const DailyReportTaskSummarySchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  tags: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+});
+
+const DailyReportInProgressSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  progress: z.string().trim().max(300).optional(),
+});
+
+const DailyReportPostponedSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  title: z.string().trim().min(1).max(300),
+  reason: z.string().trim().max(500).optional(),
+});
+
+const DailyReportSnapshotSchema = z.object({
+  completedTasks: z.array(DailyReportTaskSummarySchema).max(200).default([]),
+  inProgressTasks: z.array(DailyReportInProgressSchema).max(200).default([]),
+  postponedTasks: z.array(DailyReportPostponedSchema).max(200).default([]),
+});
+
+function sanitizeSnapshot(
+  date: string,
+  input?: {
+    completedTasks?: Array<{ id: string; title: string; tags?: string[] }>;
+    inProgressTasks?: Array<{ id: string; title: string; progress?: string }>;
+    postponedTasks?: Array<{ id: string; title: string; reason?: string }>;
+  },
+): import('../../services/v2/dailyReport.js').DailyReportInput {
+  return {
+    date,
+    completedTasks: (input?.completedTasks ?? []).map((t) => ({ id: t.id, title: t.title, tags: t.tags })),
+    inProgressTasks: (input?.inProgressTasks ?? []).map((t) => ({ id: t.id, title: t.title, progress: t.progress })),
+    postponedTasks: (input?.postponedTasks ?? []).map((t) => ({ id: t.id, title: t.title, reason: t.reason })),
+    reflection: '',
+  };
+}
+
+v2Router.post('/reports/daily', async (req, res) => {
+  try {
+    const { repo, ctx } = getV2(res);
+    const schema = z.object({
+      date: z.string(),
+      reflection: z.string().max(20_000).default(''),
+      snapshot: DailyReportSnapshotSchema.optional(),
+    });
+    const parsed = schema.parse(req.body ?? {});
+    assertIsoDate(parsed.date, 'date');
+    const result = await generateAndSaveDailyReport(
+      repo,
+      ctx.root,
+      parsed.date,
+      parsed.reflection,
+      { snapshot: sanitizeSnapshot(parsed.date, parsed.snapshot) },
+    );
+    res.status(200).json({
+      ok: true,
+      report: {
+        date: parsed.date,
+        filePath: result.filePath,
+        byteSize: result.byteSize,
+      },
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/reports/daily', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const date = String(req.query.date ?? '').trim();
+    assertIsoDate(date, 'date');
+    const markdown = await readDailyReport(ctx.root, date);
+    res.status(200).json({
+      ok: true,
+      date,
+      markdown,
+      exists: markdown !== null,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/reports/daily/list', async (req, res) => {
+  try {
+    const { ctx } = getV2(res);
+    const yearRaw = req.query.year;
+    const monthRaw = req.query.month;
+    const year = Number(yearRaw);
+    if (!Number.isInteger(year) || year < 1970 || year > 2999) {
+      return res.status(400).json({
+        error: { code: 'bad_request', message: 'year must be a 4-digit integer.' },
+      });
+    }
+    let month: number | undefined;
+    if (monthRaw !== undefined) {
+      month = Number(monthRaw);
+      if (!Number.isInteger(month) || month < 1 || month > 12) {
+        return res.status(400).json({
+          error: { code: 'bad_request', message: 'month must be between 1 and 12.' },
+        });
+      }
+    }
+    const reports = await listDailyReports(ctx.root, year, month);
+    res.status(200).json({
+      ok: true,
+      year,
+      month: month ?? null,
+      total: reports.length,
+      reports,
+    });
   } catch (err) {
     handleError(err, res);
   }

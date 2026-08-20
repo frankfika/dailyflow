@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GripVertical, Orbit, Tags, X } from 'lucide-react';
+import { GripVertical, NotebookPen, Orbit, Tags, X } from 'lucide-react';
 import { STANDALONE_MINDMAP_FILTER, type TodayPlanningGroup } from './TodayBacklog';
 
 export function reconcileMindmapOrder(
@@ -22,6 +22,13 @@ interface TodayScopeTabsProps {
   onTagChange: (tag: string | null) => void;
   language: 'en' | 'zh';
   storageKey: string;
+  /**
+   * When provided, the tabs surface a "今日复盘" button that opens the
+   * DailyReflectionModal. Wired by App.tsx so the tabs stay presentational.
+   */
+  onOpenReflection?: () => void;
+  /** True while a reflection is being saved (button spinner). */
+  reflectionSaving?: boolean;
 }
 
 export function TodayScopeTabs({
@@ -34,6 +41,8 @@ export function TodayScopeTabs({
   onTagChange,
   language,
   storageKey,
+  onOpenReflection,
+  reflectionSaving = false,
 }: TodayScopeTabsProps) {
   const groupSignature = useMemo(() => groups.map((group) => `${group.mindmapId}:${group.title}:${group.taskIds.length}`).join('\u0000'), [groups]);
   const [orderedGroups, setOrderedGroups] = useState<TodayPlanningGroup[]>(groups);
@@ -109,6 +118,19 @@ export function TodayScopeTabs({
           ))}
         </div>
         {orderedGroups.length > 1 && <span className="hidden shrink-0 text-[10px] text-text-muted/55 lg:inline">{language === 'zh' ? '拖动排序' : 'Drag to reorder'}</span>}
+        {onOpenReflection && (
+          <button
+            type="button"
+            onClick={onOpenReflection}
+            disabled={reflectionSaving}
+            data-testid="today-open-reflection"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
+            title={language === 'zh' ? '今日复盘并写入 Journal/YYYY-MM-DD.md' : 'Reflect on today and save to Journal/YYYY-MM-DD.md'}
+          >
+            <NotebookPen className="h-3 w-3" aria-hidden="true" />
+            {language === 'zh' ? '今日复盘' : 'Reflect'}
+          </button>
+        )}
       </div>
 
       {tags.length > 0 && (

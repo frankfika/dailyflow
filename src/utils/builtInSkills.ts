@@ -46,6 +46,55 @@ tags: ["productivity", "weekly", "report"]
 请使用简洁的 bullet points，避免冗长描述。如果用户提供了具体日期范围，请按该范围筛选任务。`,
   },
   {
+    id: 'builtin_daily_report',
+    name: '日报生成器',
+    category: 'Productivity',
+    description: '基于今日任务 + 用户复盘，生成结构化日报并写入 Journal/YYYY-MM-DD.md',
+    markdown: `---
+name: 日报生成器
+description: 基于今日任务 + 用户复盘，生成结构化日报并写入 Journal/YYYY-MM-DD.md
+scope: chat
+icon: FileText
+version: 1.0
+author: DailyFlow
+tags: ["productivity", "daily", "report", "journal"]
+---
+
+请根据用户提供的当日任务快照与复盘文本，生成一份结构化的日报。日报将作为 Markdown 文件写入 \`Journal/YYYY-MM-DD.md\`（YYYY-MM-DD 为当日日期）。
+
+日报必须包含以下章节，使用简体中文，标题层级用 Markdown 的 \`##\`、\`###\`：
+
+## 元信息
+- 日期：YYYY-MM-DD（用户提供的当日日期）
+- 生成时间：HH:MM（24h，本地时区）
+- 完成率：百分比（已完成 / 总数）
+- 复盘来源：用户手写 / 自动生成
+
+## ✅ 今日完成
+按 项目/标签 分组列出已完成任务，每条：
+- **任务标题** — 简短一句交付说明（如有备注）
+
+## ⏰ 进行中
+列出尚未完成但今天动过的任务，每条附上当前进度（百分比或一句话描述）。
+
+## ⛔ 推迟 / 取消
+列出被推迟或取消的任务，每条附上原因（用户已说明则直接复用，否则填 \`未说明\`）。
+
+## 💭 今日复盘
+- 复盘正文（用户提供），可分 3 段：进展 / 卡点 / 启发
+- 自动追加 3 条改进建议（基于卡点或推迟任务推断）
+
+## 🎯 明日聚焦
+基于进行中任务和推迟原因，建议明天优先处理的 3 件事，按优先级排序。
+
+## 输出要求
+1. 严格使用 Markdown，不要包裹在代码块里
+2. 不要使用 \`json\` 块或额外表格
+3. 没有内容的章节可以省略，但 \`## 元信息\` 和 \`## 今日复盘\` 必须存在
+4. 不要捏造用户没有写过的数据；如果某些数据缺失就省略该子项
+`,
+  },
+  {
     id: 'builtin_task_breakdown',
     name: '任务拆解',
     category: 'Productivity',
