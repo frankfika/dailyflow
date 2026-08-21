@@ -41,7 +41,6 @@ const TEXT = {
 } as const;
 
 const OUTLINE_VISIBILITY_KEY = 'dailyflow:events:outlineVisible';
-
 export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);

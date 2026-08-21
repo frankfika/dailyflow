@@ -233,7 +233,7 @@ export function Sidebar({
     persistToggle(true);
   };
 
-  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory';
+  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'mindmap';
   const [showMore, setShowMore] = useState(isAdvancedTab);
 
   useEffect(() => {
