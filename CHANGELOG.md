@@ -5,6 +5,24 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0](https://github.com/frankfika/dailyflow/compare/v2.0.0...v2.1.0) (2026-08-21)
+
+
+### Features
+
+* **events:** Ctrl/Cmd+wheel zoom anchored at pointer + Fit all button ([aa0a510](https://github.com/frankfika/dailyflow/commit/aa0a5108547bf814be0d6f1529e9f44a9c63d7cf))
+
+
+### Bug Fixes
+
+* **mindmap:** remove hand-rolled wheel zoom that broke trackpad scrolling ([2f23b88](https://github.com/frankfika/dailyflow/commit/2f23b88947a1220139a4c840706b33194a4e44e2))
+* **server/test:** resolve local transcription types + vitest scanning worktrees ([8ef2bf3](https://github.com/frankfika/dailyflow/commit/8ef2bf3db53d29704ab6329753c08e53d665ea49))
+
+
+### Performance Improvements
+
+* **events:** stop re-GETting the full mind map before every mutation ([f1ef18f](https://github.com/frankfika/dailyflow/commit/f1ef18f88152c86e483535ae52612d224a1df531))
+
 ## [2.0.0](https://github.com/frankfika/dailyflow/compare/v1.9.0...v2.0.0) (2026-08-20)
 
 
