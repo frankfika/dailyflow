@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, Check, ChevronDown, Focus, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { collectHiddenDescendants } from '../../../components/MindMap/layout';
@@ -26,6 +26,10 @@ type Copy = {
   nextWeek: string;
   pickDate: string;
   confirm: string;
+  zoomIn: string;
+  zoomOut: string;
+  zoomReset: string;
+  fitAll: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -50,6 +54,10 @@ const COPY: Record<'en' | 'zh', Copy> = {
     nextWeek: 'Next week',
     pickDate: 'Pick date',
     confirm: 'Schedule',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    zoomReset: 'Reset zoom',
+    fitAll: 'Fit all',
   },
   zh: {
     child: '子节点',
@@ -72,6 +80,10 @@ const COPY: Record<'en' | 'zh', Copy> = {
     nextWeek: '下周',
     pickDate: '选择日期',
     confirm: '安排',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    zoomReset: '还原缩放',
+    fitAll: '适应全部',
   },
 };
 
@@ -121,6 +133,10 @@ export function EventCanvas({
   const [childText, setChildText] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  // Ref mirror of `zoom` so the native wheel listener (bound once) reads the
+  // freshest zoom without re-subscribing on every render.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   const [draftText, setDraftText] = useState<Record<string, string>>({});
   // Single schedule picker shared by the node chip ('node' anchor) and the
   // bottom toolbar ('toolbar' anchor); only one popover is visible at a time.
@@ -225,6 +241,75 @@ export function EventCanvas({
   useEffect(() => {
     setSchedulePicker((prev) => (prev?.anchor === 'toolbar' ? null : prev));
   }, [activeNodeId]);
+
+  // Apply a pending zoom + scroll adjustment after React commits the new zoom.
+  // The wheel handler / fit-all compute the target zoom and the scroll delta
+  // that keeps the anchor point stable; a layout effect writes the offsets
+  // once the new size has actually taken effect.
+  const pendingAdjustRef = useRef<{ nextZoom: number; adjustX: number; adjustY: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!pendingAdjustRef.current) return;
+    const adjust = pendingAdjustRef.current;
+    pendingAdjustRef.current = null;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.scrollLeft += adjust.adjustX;
+    scroller.scrollTop += adjust.adjustY;
+  });
+
+  // Native non-passive wheel listener. React 19 registers root wheel handlers
+  // as passive, so a JSX onWheel's preventDefault() is a silent no-op. We zoom
+  // on Ctrl/Cmd + wheel — the universal editor convention — and let plain wheel
+  // fall through to the container's native overflow scroll, so trackpad
+  // two-finger pan "just works" with no extra code.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const scrollerNow = scrollRef.current;
+      if (!scrollerNow) return;
+      const currentZoom = zoomRef.current;
+      const next = Math.max(0.4, Math.min(1.6, currentZoom * Math.exp(-e.deltaY * 0.0015)));
+      if (next === currentZoom) return;
+      // Anchor the zoom at the cursor: compute the content-space point under
+      // the pointer, then after applying the new zoom, scroll so that point
+      // stays under the pointer.
+      const rect = scrollerNow.getBoundingClientRect();
+      const pointerX = e.clientX - rect.left;
+      const pointerY = e.clientY - rect.top;
+      const contentX = (scrollerNow.scrollLeft + pointerX) / currentZoom;
+      const contentY = (scrollerNow.scrollTop + pointerY) / currentZoom;
+      const adjustX = contentX * next - (scrollerNow.scrollLeft + pointerX);
+      const adjustY = contentY * next - (scrollerNow.scrollTop + pointerY);
+      pendingAdjustRef.current = { nextZoom: next, adjustX, adjustY };
+      setZoom(next);
+    };
+    scroller.addEventListener('wheel', onWheel, { passive: false });
+    return () => scroller.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Frame the whole visible tree in the viewport. Uses the same anchor trick
+  // so the center of the current view stays put while it zooms out.
+  const handleFitAll = useCallback(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const viewportW = scroller.clientWidth;
+    const viewportH = scroller.clientHeight;
+    if (viewportW < 32 || viewportH < 32) return;
+    const currentZoom = zoomRef.current;
+    const fitZoom = Math.max(
+      0.4,
+      Math.min(1.6, Math.min((viewportW * 0.9) / normalized.width, (viewportH * 0.9) / normalized.height)),
+    );
+    const contentCenterX = (scroller.scrollLeft + viewportW / 2) / currentZoom;
+    const contentCenterY = (scroller.scrollTop + viewportH / 2) / currentZoom;
+    const adjustX = contentCenterX * fitZoom - (scroller.scrollLeft + viewportW / 2);
+    const adjustY = contentCenterY * fitZoom - (scroller.scrollTop + viewportH / 2);
+    pendingAdjustRef.current = { nextZoom: fitZoom, adjustX, adjustY };
+    setZoom(fitZoom);
+  }, [normalized.height, normalized.width]);
 
   function textFor(nodeId: string) {
     return draftText[nodeId] ?? event.nodes.find((n) => n.id === nodeId)?.text ?? '';
@@ -529,9 +614,10 @@ export function EventCanvas({
       onClick={() => { setMoreOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-        <button type="button" onClick={() => setZoom((value) => Math.max(0.6, Number((value - 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Zoom out"><Minus className="h-4 w-4" /></button>
-        <button type="button" onClick={() => setZoom(1)} className="min-w-10 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Reset zoom">{Math.round(zoom * 100)}%</button>
-        <button type="button" onClick={() => setZoom((value) => Math.min(1.4, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Zoom in"><Plus className="h-4 w-4" /></button>
+        <button type="button" onClick={handleFitAll} className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.fitAll} title={copy.fitAll} data-testid="event-fit-all"><Focus className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={() => setZoom((value) => Math.max(0.4, Number((value - 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomOut} title={copy.zoomOut}><Minus className="h-4 w-4" /></button>
+        <button type="button" onClick={() => setZoom(1)} className="min-w-10 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomReset} title={copy.zoomReset}>{Math.round(zoom * 100)}%</button>
+        <button type="button" onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomIn} title={copy.zoomIn}><Plus className="h-4 w-4" /></button>
       </div>
 
       {/* Sizer keeps the scrollable area proportional to the zoomed content —
