@@ -27,7 +27,9 @@ export const LocalTranscriptionConfigSchema = z.object({
   language: z.string().trim().min(1).max(20).default('auto'),
   extraArgs: z.array(z.string().max(500)).max(32).default([]),
 });
-export type LocalTranscriptionConfig = z.input<typeof LocalTranscriptionConfigSchema>;
+// Resolve defaults (ffmpegPath/language/extraArgs) so the runner never has to
+// handle undefined fields — every schema value is a concrete string/array.
+export type LocalTranscriptionConfig = z.output<typeof LocalTranscriptionConfigSchema>;
 
 export interface LocalTranscriptionRunner {
   (config: LocalTranscriptionConfig, audioPath: string): Promise<{ text: string }>;
