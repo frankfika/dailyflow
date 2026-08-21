@@ -5,6 +5,14 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1](https://github.com/frankfika/dailyflow/compare/v2.1.0...v2.1.1) (2026-08-21)
+
+
+### Bug Fixes
+
+* harden persistence and workspace flows ([44bbae2](https://github.com/frankfika/dailyflow/commit/44bbae2eb7fb58aec80d9e935898da7389263a29))
+* update advanced navigation after branch merge ([729b46a](https://github.com/frankfika/dailyflow/commit/729b46a1deaad844bb3eb066b67f6c1d97f4300c))
+
 ## [2.1.0](https://github.com/frankfika/dailyflow/compare/v2.0.0...v2.1.0) (2026-08-21)
 
 
