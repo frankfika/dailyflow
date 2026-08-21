@@ -21,12 +21,20 @@ let workspaceId: string;
 
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-svc-'));
+  // Isolate the AI config so these tests are hermetic regardless of what the
+  // host machine has configured. loadV2AIConfig → loadConfig honors
+  // DAILYFLOW_CONFIG_FILE; an empty config yields the deterministic local
+  // provider instead of a real (possibly network-blocked) model call.
+  const cfgFile = path.join(workspace, 'config.json');
+  await fs.writeFile(cfgFile, '{}');
+  process.env.DAILYFLOW_CONFIG_FILE = cfgFile;
   const b = await bootstrapV2({ workspaceRoot: workspace, workspaceId: 'ws_test' });
   repo = b.repo;
   workspaceId = b.ctx.workspaceId;
 });
 
 afterEach(async () => {
+  delete process.env.DAILYFLOW_CONFIG_FILE;
   await fs.rm(workspace, { recursive: true, force: true });
 });
 

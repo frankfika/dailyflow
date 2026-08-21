@@ -17,12 +17,19 @@ let workspaceId: string;
 
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-meeting-'));
+  // Isolate the AI config (see integration.test.ts): an empty config makes
+  // loadV2AIConfig return the deterministic local provider so meeting tests
+  // never attempt a real model call on a configured host.
+  const cfgFile = path.join(workspace, 'config.json');
+  await fs.writeFile(cfgFile, '{}');
+  process.env.DAILYFLOW_CONFIG_FILE = cfgFile;
   const b = await bootstrapV2({ workspaceRoot: workspace, workspaceId: 'ws_test' });
   repo = b.repo;
   workspaceId = b.ctx.workspaceId;
 });
 
 afterEach(async () => {
+  delete process.env.DAILYFLOW_CONFIG_FILE;
   await fs.rm(workspace, { recursive: true, force: true });
 });
 
