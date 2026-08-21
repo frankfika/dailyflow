@@ -5,6 +5,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import {
   eventsApi,
   dispatchDomainEvent,
@@ -24,6 +25,7 @@ import {
 } from '../../../api/client';
 import { queryKeys } from '../../../queryKeys';
 import { ulid } from 'ulid';
+import { MAP_WRITE_SCOPE, dropEventMap, readEventMap, writeEventMap } from './mindMapCache';
 
 export interface CreateEventInput {
   title: string;
@@ -41,7 +43,8 @@ export function useEvents(opts?: { from?: string; to?: string }): UseQueryResult
 }
 
 export function useEventById(id: string | null | undefined): UseQueryResult<{ event: EventDetail | null }> {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: queryKeys.event(id ?? ''),
     queryFn: () => eventsApi.getById(id as string),
     enabled: Boolean(id),
@@ -49,6 +52,25 @@ export function useEventById(id: string | null | undefined): UseQueryResult<{ ev
     refetchOnMount: 'always',
     retry: 1,
   });
+  // When an event first loads for a *freshly opened* event, the underlying
+  // MindMap may have been edited on disk in the meantime (e.g. in MindMap
+  // view) since we last cached a full-map snapshot. Drop the snapshot so the
+  // first mutation resyncs from the server instead of clobbering those edits.
+  // We key on the eventId we've already seeded so refetches *during* an active
+  // edit session don't drop the fresh snapshot the mutations just wrote. The
+  // ref resets on remount, so each time the Events surface re-opens this
+  // event it re-arms.
+  const lastSeededEventIdRef = useRef<string | null>(null);
+  const event = query.data?.event;
+  useEffect(() => {
+    const mindmapId = event?.mindmapId;
+    if (!mindmapId) return;
+    if (lastSeededEventIdRef.current !== event.id) {
+      lastSeededEventIdRef.current = event.id;
+      dropEventMap(qc, mindmapId);
+    }
+  }, [event, qc]);
+  return query;
 }
 
 export function useTodayItems(date: string, context?: 'work' | 'life'): UseQueryResult<{ items: TodayItem[] }> {
@@ -97,19 +119,30 @@ export function useScheduleEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId, date, taskId, fromDate }) => {
       if (taskId && fromDate && fromDate !== date) {
         await eventsApi.rescheduleNodeTask({ taskId, fromDate, toDate: date, mindmapId, nodeId });
         return;
       }
-      if (!taskId) await mindmapsApi.promoteNodeToTask(mindmapId, nodeId, { date });
+      if (!taskId) {
+        const updated = await mindmapsApi.promoteNodeToTask(mindmapId, nodeId, { date });
+        writeEventMap(qc, updated);
+      }
     },
     onSuccess: (_data, vars) => {
-      invalidateCommonAfterWrite(qc, { eventId: vars.eventId, scheduledDate: vars.date });
+      invalidateCommonAfterWrite(qc, {
+        eventId: vars.eventId,
+        scheduledDate: vars.date,
+        mindmapId: vars.mindmapId,
+      });
       if (vars.fromDate && vars.fromDate !== vars.date) {
         qc.invalidateQueries({ queryKey: queryKeys.todayItems(vars.fromDate, 'v2') });
       }
     },
+    // rescheduleNodeTask returns only a boolean; the map on disk changed, so
+    // don't trust the snapshot after a failed reschedule either.
+    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
   });
 }
 
@@ -120,9 +153,11 @@ export function useUnscheduleEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: ({ mindmapId, nodeId, taskId, scheduledDate }) =>
       eventsApi.unscheduleNodeTask({ mindmapId, nodeId, taskId, scheduledDate }),
     onSuccess: (_data, vars) => invalidateCommonAfterWrite(qc, vars),
+    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
   });
 }
 
@@ -130,12 +165,15 @@ export function useUnscheduleEventNode(): UseMutationResult<
 // Mutations (§4.4 write contract + §5 cache invalidation rules)
 // ---------------------------------------------------------------------------
 
-function invalidateCommonAfterWrite(qc: ReturnType<typeof useQueryClient>, vars: { scheduledDate: string; eventId?: string }) {
+function invalidateCommonAfterWrite(qc: ReturnType<typeof useQueryClient>, vars: { scheduledDate: string; eventId?: string; mindmapId?: string }) {
   qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
   qc.invalidateQueries({ queryKey: queryKeys.todayItems(vars.scheduledDate, 'v2') });
   qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
   qc.invalidateQueries({ queryKey: queryKeys.standaloneTasks() });
   if (vars.eventId) qc.invalidateQueries({ queryKey: queryKeys.event(vars.eventId) });
+  // These paths mutate map nodes server-side (kind/taskId/status). We don't
+  // know the exact post-state, so drop the snapshot rather than write a guess.
+  if (vars.mindmapId) dropEventMap(qc, vars.mindmapId);
   dispatchDomainEvent(DOMAIN_EVENTS.tasksChanged, { date: vars.scheduledDate });
 }
 
@@ -257,9 +295,10 @@ export function useUndoConvertStandaloneToEventNodeTask(): UseMutationResult<
 
 type EventMapMutationContext = { eventId: string; mindmapId: string; nodeId?: string };
 
-function invalidateEventMap(qc: ReturnType<typeof useQueryClient>, eventId: string) {
-  qc.invalidateQueries({ queryKey: queryKeys.event(eventId) });
+function invalidateEventMap(qc: ReturnType<typeof useQueryClient>, vars: EventMapMutationContext) {
+  qc.invalidateQueries({ queryKey: queryKeys.event(vars.eventId) });
   qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+  dropEventMap(qc, vars.mindmapId);
 }
 
 function getSubtreeIds(edges: { id: string; source: string; target: string }[], rootId: string): Set<string> {
@@ -285,8 +324,9 @@ export function useAddEventChild(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, parentId, text, nodeId }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [parentId]);
       const parent = map.nodes.find((node) => node.id === parentId);
       if (!parent) throw new Error('Parent node no longer exists');
       const siblings = map.edges
@@ -305,10 +345,11 @@ export function useAddEventChild(): UseMutationResult<
         },
         kind: 'branch' as const,
       };
-      await mindmapsApi.update(mindmapId, {
+      const updated = await mindmapsApi.update(mindmapId, {
         nodes: [...map.nodes, node],
         edges: [...map.edges, { id: `edge_${ulid()}`, source: parentId, target: childNodeId }],
       });
+      writeEventMap(qc, updated);
       return { nodeId: childNodeId };
     },
     onMutate: async (vars) => {
@@ -346,8 +387,9 @@ export function useAddEventChild(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -359,8 +401,9 @@ export function useAddEventSibling(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, referenceId, text, nodeId }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [referenceId]);
       const refNode = map.nodes.find((node) => node.id === referenceId);
       if (!refNode) throw new Error('Reference node no longer exists');
       const parentEdge = map.edges.find((edge) => edge.target === referenceId);
@@ -398,10 +441,11 @@ export function useAddEventSibling(): UseMutationResult<
       });
       nextNodes.push(newNode);
 
-      await mindmapsApi.update(mindmapId, {
+      const updated = await mindmapsApi.update(mindmapId, {
         nodes: nextNodes,
         edges: [...map.edges, { id: `edge_${ulid()}`, source: parentId, target: siblingNodeId }],
       });
+      writeEventMap(qc, updated);
       return { nodeId: siblingNodeId };
     },
     onMutate: async (vars) => {
@@ -452,8 +496,9 @@ export function useAddEventSibling(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -464,10 +509,12 @@ export function useRenameEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId, text }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [nodeId]);
       const nodes = map.nodes.map((node) => node.id === nodeId ? { ...node, text: text.trim() || node.text } : node);
-      await mindmapsApi.update(mindmapId, { nodes });
+      const updated = await mindmapsApi.update(mindmapId, { nodes });
+      writeEventMap(qc, updated);
     },
     onMutate: async (vars) => {
       const key = queryKeys.event(vars.eventId);
@@ -485,8 +532,9 @@ export function useRenameEventNode(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -497,8 +545,10 @@ export function useDeleteEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId }) => {
-      await mindmapsApi.deleteNodeSubtree(mindmapId, nodeId, 'keep-tasks');
+      const updated = await mindmapsApi.deleteNodeSubtree(mindmapId, nodeId, 'keep-tasks');
+      writeEventMap(qc, updated);
     },
     onMutate: async (vars) => {
       const key = queryKeys.event(vars.eventId);
@@ -517,8 +567,9 @@ export function useDeleteEventNode(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -534,8 +585,9 @@ export function useOutdentEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [nodeId]);
       const parentEdge = map.edges.find((edge) => edge.target === nodeId);
       if (!parentEdge) return { outdented: false };
       const parentId = parentEdge.source;
@@ -566,7 +618,8 @@ export function useOutdentEventNode(): UseMutationResult<
         .filter((edge) => !(edge.source === parentId && edge.target === nodeId))
         .concat([{ id: `edge_${ulid()}`, source: grandId, target: nodeId }]);
 
-      await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: nextEdges });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: nextEdges });
+      writeEventMap(qc, updated);
       return { outdented: true };
     },
     onMutate: async (vars) => {
@@ -607,8 +660,9 @@ export function useOutdentEventNode(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -623,9 +677,10 @@ export function useMoveEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId, newParentId }) => {
       if (nodeId === newParentId) return { moved: false };
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [nodeId, newParentId]);
       const subtreeIds = getSubtreeIds(map.edges, nodeId);
       if (subtreeIds.has(newParentId)) return { moved: false };
 
@@ -652,7 +707,8 @@ export function useMoveEventNode(): UseMutationResult<
         .filter((e) => e.target !== nodeId)
         .concat([{ id: `edge_${ulid()}`, source: newParentId, target: nodeId }]);
 
-      await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: nextEdges });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: nextEdges });
+      writeEventMap(qc, updated);
       return { moved: true };
     },
     onMutate: async (vars) => {
@@ -695,8 +751,9 @@ export function useMoveEventNode(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -712,14 +769,16 @@ export function useUpdateNodePosition(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId, x, y }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [nodeId]);
       const exists = map.nodes.some((n) => n.id === nodeId);
       if (!exists) return { moved: false };
       const nextNodes = map.nodes.map((n) =>
         n.id === nodeId ? { ...n, position: { x, y } } : n,
       );
-      await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: map.edges });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: map.edges });
+      writeEventMap(qc, updated);
       return { moved: true };
     },
     onMutate: async (vars) => {
@@ -738,8 +797,9 @@ export function useUpdateNodePosition(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
 
@@ -754,8 +814,9 @@ export function useReorderEventNode(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
+    scope: MAP_WRITE_SCOPE,
     mutationFn: async ({ mindmapId, nodeId, direction }) => {
-      const map = await mindmapsApi.get(mindmapId);
+      const map = await readEventMap(qc, mindmapId, [nodeId]);
       const parentEdge = map.edges.find((e) => e.target === nodeId);
       if (!parentEdge) return { reordered: false };
       const parentId = parentEdge.source;
@@ -784,7 +845,8 @@ export function useReorderEventNode(): UseMutationResult<
         return n;
       });
 
-      await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: map.edges });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges: map.edges });
+      writeEventMap(qc, updated);
       return { reordered: true };
     },
     onMutate: async (vars) => {
@@ -827,7 +889,8 @@ export function useReorderEventNode(): UseMutationResult<
     },
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
     },
-    onSuccess: (_data, vars) => invalidateEventMap(qc, vars.eventId),
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });
 }
