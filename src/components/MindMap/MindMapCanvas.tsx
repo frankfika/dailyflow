@@ -739,30 +739,8 @@ function MindMapCanvasInner({
     // fitView here, which would race with the new positions arriving.
   }, [onRequestLayout]);
 
-  const handlePointerWheelZoom = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    // Trackpads use small, high-frequency deltas for two-finger panning;
-    // let React Flow handle those. A discrete mouse wheel emits larger
-    // steps, which we zoom around the actual pointer position.
-    if (event.ctrlKey || Math.abs(event.deltaY) < 40) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const viewport = getViewport();
-    const pointerX = event.clientX - rect.left;
-    const pointerY = event.clientY - rect.top;
-    const flowX = (pointerX - viewport.x) / viewport.zoom;
-    const flowY = (pointerY - viewport.y) / viewport.zoom;
-    const nextZoom = Math.max(0.1, Math.min(2, viewport.zoom * Math.exp(-event.deltaY * 0.0015)));
-    void setViewport({
-      x: pointerX - flowX * nextZoom,
-      y: pointerY - flowY * nextZoom,
-      zoom: nextZoom,
-    }, { duration: 0 });
-  }, [getViewport, setViewport]);
-
   return (
-    <div className="relative h-full w-full outline-none" ref={containerRef} onWheelCapture={handlePointerWheelZoom}>
+    <div className="relative h-full w-full outline-none" ref={containerRef}>
       <ReactFlow
         nodes={decoratedNodes}
         edges={rfEdges}
