@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { configApi } from '../api/client';
 
 export interface TeamConfig {
@@ -20,6 +20,8 @@ export function TeamSettings({ language, showSettings, configTab, onChange }: Te
   const [teamRole, setTeamRole] = useState<'leader' | 'member'>('member');
   const [teamMemberId, setTeamMemberId] = useState('');
   const [teamMembers, setTeamMembers] = useState<{ id: string; name: string; path: string }[]>([]);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
     if (!showSettings || configTab !== 'team') return;
@@ -35,13 +37,13 @@ export function TeamSettings({ language, showSettings, configTab, onChange }: Te
       setTeamRole(next.role);
       setTeamMemberId(next.memberId);
       setTeamMembers(next.members);
-      onChange(enabled, enabled ? next : null);
+      onChangeRef.current(enabled, enabled ? next : null);
     }).catch(() => {
       setTeamEnabled(false);
       setTeamMembers([]);
-      onChange(false, null);
+      onChangeRef.current(false, null);
     });
-  }, [showSettings, configTab, onChange]);
+  }, [showSettings, configTab]);
 
   const emit = (enabled: boolean, role: 'leader' | 'member', memberId: string, members: { id: string; name: string; path: string }[]) => {
     onChange(enabled, enabled ? { role, memberId, members } : null);

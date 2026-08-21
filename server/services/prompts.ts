@@ -81,6 +81,12 @@ async function getPromptsDir(): Promise<string> {
   return promptsDir;
 }
 
+function assertSafePromptId(id: string): void {
+  if (!id || id === '.' || id === '..' || /[\\/\0]/.test(id)) {
+    throw Object.assign(new Error('Invalid prompt id'), { status: 400 });
+  }
+}
+
 function parseFrontmatterArray(value: string): string[] | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -208,6 +214,7 @@ export async function getAllPrompts(): Promise<PromptTemplate[]> {
 }
 
 export async function getPromptById(id: string): Promise<PromptTemplate | null> {
+  assertSafePromptId(id);
   const promptsDir = await getPromptsDir();
   const filePath = path.join(promptsDir, `${id}.md`);
   try {
@@ -242,6 +249,7 @@ export async function updatePrompt(
   id: string,
   updates: Partial<Omit<PromptTemplate, 'id' | 'createdAt'>>
 ): Promise<PromptTemplate | null> {
+  assertSafePromptId(id);
   const existing = await getPromptById(id);
   if (!existing) return null;
 
@@ -259,6 +267,7 @@ export async function updatePrompt(
 }
 
 export async function deletePrompt(id: string): Promise<boolean> {
+  assertSafePromptId(id);
   const promptsDir = await getPromptsDir();
   try {
     await fs.unlink(path.join(promptsDir, `${id}.md`));

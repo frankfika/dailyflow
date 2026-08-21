@@ -2,28 +2,31 @@ use std::process::Command;
 
 use crate::models::{GitStatus, GitSyncResult};
 
+fn checked_output(mut command: Command, context: &str) -> Result<std::process::Output, String> {
+    let output = command.output().map_err(|e| format!("{}: {}", context, e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() { context.to_string() } else { format!("{}: {}", context, stderr) });
+    }
+    Ok(output)
+}
+
 pub fn get_git_status(workspace_root: &str) -> Result<GitStatus, String> {
     // Check if git repo
-    Command::new("git")
-        .args(["rev-parse", "--git-dir"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|e| format!("Not a git repository or git command failed: {}", e))?;
+    let mut repo_command = Command::new("git");
+    repo_command.args(["rev-parse", "--git-dir"]).current_dir(workspace_root);
+    checked_output(repo_command, "Not a git repository")?;
 
     // Get current branch
-    let branch_output = Command::new("git")
-        .args(["branch", "--show-current"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut branch_command = Command::new("git");
+    branch_command.args(["branch", "--show-current"]).current_dir(workspace_root);
+    let branch_output = checked_output(branch_command, "Unable to read current branch")?;
     let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
 
     // Get status
-    let status_output = Command::new("git")
-        .args(["status", "--porcelain"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut status_command = Command::new("git");
+    status_command.args(["status", "--porcelain"]).current_dir(workspace_root);
+    let status_output = checked_output(status_command, "Unable to read git status")?;
     let status_str = String::from_utf8_lossy(&status_output.stdout);
 
     let mut staged = Vec::new();
@@ -165,16 +168,14 @@ pub fn init_git_repo(workspace_root: &str) -> Result<(), String> {
         .args(["rev-parse", "--git-dir"])
         .current_dir(workspace_root)
         .output()
-        .is_ok()
+        .is_ok_and(|output| output.status.success())
     {
         return Ok(());
     }
 
-    Command::new("git")
-        .args(["init"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut init_command = Command::new("git");
+    init_command.args(["init"]).current_dir(workspace_root);
+    checked_output(init_command, "Unable to initialize git repository")?;
 
     Ok(())
 }
@@ -185,17 +186,15 @@ pub fn set_git_remote(workspace_root: &str, repo_url: &str) -> Result<(), String
         .current_dir(workspace_root)
         .output();
 
-    let args = if result.is_ok() {
+    let args = if result.is_ok_and(|output| output.status.success()) {
         vec!["remote", "set-url", "origin", repo_url]
     } else {
         vec!["remote", "add", "origin", repo_url]
     };
 
-    Command::new("git")
-        .args(&args)
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut remote_command = Command::new("git");
+    remote_command.args(&args).current_dir(workspace_root);
+    checked_output(remote_command, "Unable to configure git remote")?;
 
     Ok(())
 }

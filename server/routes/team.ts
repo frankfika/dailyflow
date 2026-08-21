@@ -24,7 +24,10 @@ const router = Router();
 function handleError(err: unknown, res: import('express').Response) {
   const message = err instanceof Error ? err.message : String(err);
   console.error('[team]', message);
-  res.status(500).json({ error: message });
+  const status = typeof (err as { status?: unknown })?.status === 'number'
+    ? (err as { status: number }).status
+    : 500;
+  res.status(status).json({ error: message });
 }
 
 router.get('/members', async (_req, res) => {

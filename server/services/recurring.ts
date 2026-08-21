@@ -5,6 +5,7 @@ import { readDailyNote, writeDailyNote } from './fileSystem.js';
 import { appendTaskToMarkdown } from './parser.js';
 import { loadConfig } from './config.js';
 import type { Config } from '../types/task.js';
+import { withDateLock } from './lock.js';
 
 export interface RecurringTask {
   id: string;
@@ -73,27 +74,29 @@ export async function instantiateRecurringTasks(date: string, suppliedConfig?: C
   const tasksToFire = recurringTasks.filter(rt => shouldFireOnDate(rt.recurrence, date));
   if (tasksToFire.length === 0) return { created: 0 };
 
-  const note = await readDailyNote(date, config);
-  const existingTasks = note?.tasks ?? [];
-  let content = note?.content ?? '';
-  let created = 0;
-  for (const rt of tasksToFire) {
-    if (existingTasks.some(t => t.title === rt.title && t.tags?.includes('recurring'))) continue;
-    const tags = [...(rt.tags || [])];
-    if (!tags.includes('recurring')) tags.push('recurring');
-    if (!tags.some(t => ['work', 'life'].includes(t))) tags.push('work');
-    content = appendTaskToMarkdown(content, {
-      id: `t_${Date.now()}_${created}`,
-      title: rt.title,
-      description: rt.description,
-      status: 'todo',
-      tags,
-      priority: rt.priority,
-      project: rt.project,
-      source_date: date,
-    }, date);
-    created++;
-  }
-  if (created > 0) await writeDailyNote(date, content, config);
-  return { created };
+  return withDateLock(date, async () => {
+    const note = await readDailyNote(date, config);
+    const existingTasks = note?.tasks ?? [];
+    let content = note?.content ?? '';
+    let created = 0;
+    for (const rt of tasksToFire) {
+      if (existingTasks.some(t => t.title === rt.title && t.tags?.includes('recurring'))) continue;
+      const tags = [...(rt.tags || [])];
+      if (!tags.includes('recurring')) tags.push('recurring');
+      if (!tags.some(t => ['work', 'life'].includes(t))) tags.push('work');
+      content = appendTaskToMarkdown(content, {
+        id: `t_${Date.now()}_${created}`,
+        title: rt.title,
+        description: rt.description,
+        status: 'todo',
+        tags,
+        priority: rt.priority,
+        project: rt.project,
+        source_date: date,
+      }, date);
+      created++;
+    }
+    if (created > 0) await writeDailyNote(date, content, config);
+    return { created };
+  });
 }

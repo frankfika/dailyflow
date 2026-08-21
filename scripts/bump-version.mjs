@@ -42,10 +42,37 @@ function updateCargoToml(path) {
   console.log(`  ${path} -> ${version}`);
 }
 
+function replaceChecked(path, pattern, replacement) {
+  const full = resolve(root, path);
+  const text = readFileSync(full, 'utf8');
+  const next = text.replace(pattern, replacement);
+  if (next === text) {
+    console.error(`  ${path}: expected version marker was not found`);
+    process.exit(1);
+  }
+  writeFileSync(full, next);
+  console.log(`  ${path} -> ${version}`);
+}
+
 console.log(`Bumping version to ${version}`);
 updateJson('package.json', (j) => { j.version = version; });
+updateJson('package-lock.json', (j) => {
+  j.version = version;
+  if (j.packages?.['']) j.packages[''].version = version;
+});
 updateJson('src-tauri/tauri.conf.json', (j) => { j.version = version; });
+updateJson('.release-please-manifest.json', (j) => { j['.'] = version; });
 updateCargoToml('src-tauri/Cargo.toml');
+replaceChecked(
+  'src-tauri/Cargo.lock',
+  /(\[\[package\]\]\s*\nname = "dailyflow"\s*\nversion = ")[^"]+("\s*\n)/,
+  `$1${version}$2`,
+);
+replaceChecked(
+  'README.md',
+  /(当前稳定版：v)[^*\s]+/,
+  `$1${version}`,
+);
 
 console.log('\nNext steps:');
 console.log(`  1. Review the diff: git diff`);

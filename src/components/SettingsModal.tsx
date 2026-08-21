@@ -578,20 +578,16 @@ export function SettingsModal({
     setIsExporting(true);
     setDataStatus(null);
     try {
-      const kinds = ['source', 'note', 'commitment', 'decision', 'outcome', 'project', 'person', 'organization', 'evidence'] as const;
-      const entitiesByKind = await Promise.all(
-        kinds.map(async (kind) => {
-          const r = await fetch(`${V2_BASE}/export/entities?kind=${kind}&limit=500`);
-          if (!r.ok) throw new Error(`Failed to fetch ${kind}: HTTP ${r.status}`);
-          const data = await r.json();
-          return [kind, data.items ?? []] as const;
-        })
-      );
+      const response = await fetch(`${V2_BASE}/export/workspace`);
+      if (!response.ok) throw new Error(`Failed to export workspace: HTTP ${response.status}`);
+      const data = await response.json() as { entities?: Record<string, unknown[]> };
+      if (!data.entities) throw new Error('Export response did not contain entities');
+      const entitiesByKind = Object.entries(data.entities);
       const exportPayload = {
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         workspaceRoot,
-        entities: Object.fromEntries(entitiesByKind),
+        entities: data.entities,
       };
       const totalEntities = entitiesByKind.reduce((s, [, items]) => s + items.length, 0);
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });

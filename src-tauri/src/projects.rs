@@ -9,6 +9,32 @@ fn get_projects_dir(workspace_root: &str) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+fn validate_project_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(String::from("Invalid project ID"));
+    }
+    Ok(())
+}
+
+fn project_id_from_name(name: &str) -> Result<String, String> {
+    let mut id = String::new();
+    let mut separator = false;
+    for ch in name.trim().to_lowercase().chars() {
+        if ch.is_alphanumeric() || ch == '_' {
+            id.push(ch);
+            separator = false;
+        } else if !separator && !id.is_empty() {
+            id.push('-');
+            separator = true;
+        }
+    }
+    while id.ends_with('-') {
+        id.pop();
+    }
+    validate_project_id(&id)?;
+    Ok(id)
+}
+
 fn parse_project_file(content: &str, file_path: &str) -> Project {
     let lines: Vec<&str> = content.split('\n').collect();
 
@@ -124,6 +150,7 @@ pub fn get_all_projects(workspace_root: &str) -> Result<Vec<Project>, String> {
 }
 
 pub fn get_project_by_id(workspace_root: &str, id: &str) -> Result<Option<Project>, String> {
+    validate_project_id(id)?;
     let projects_dir = get_projects_dir(workspace_root)?;
     let file_path = projects_dir.join(format!("{}.md", id));
 
@@ -139,7 +166,7 @@ pub fn get_project_by_id(workspace_root: &str, id: &str) -> Result<Option<Projec
 
 pub fn create_project(workspace_root: &str, data: &ProjectInput) -> Result<Project, String> {
     let projects_dir = get_projects_dir(workspace_root)?;
-    let id = data.name.to_lowercase().replace(' ', "-");
+    let id = project_id_from_name(&data.name)?;
     let now = chrono::Utc::now().to_rfc3339();
 
     let project = Project {
@@ -159,6 +186,9 @@ pub fn create_project(workspace_root: &str, data: &ProjectInput) -> Result<Proje
     };
 
     let file_path = projects_dir.join(format!("{}.md", id));
+    if file_path.exists() {
+        return Err(String::from("A project with this ID already exists"));
+    }
     let content = generate_project_file(&project);
     fs::write(&file_path, content).map_err(|e| e.to_string())?;
 
@@ -172,6 +202,7 @@ pub fn update_project(
     id: &str,
     updates: &ProjectUpdateInput,
 ) -> Result<Project, String> {
+    validate_project_id(id)?;
     let project = get_project_by_id(workspace_root, id)?;
     let mut project = match project {
         Some(p) => p,
@@ -208,6 +239,7 @@ pub fn update_project(
 }
 
 pub fn delete_project(workspace_root: &str, id: &str) -> Result<(), String> {
+    validate_project_id(id)?;
     let project = get_project_by_id(workspace_root, id)?;
     if let Some(project) = project {
         if let Some(file_path) = project.file_path {
@@ -215,4 +247,21 @@ pub fn delete_project(workspace_root: &str, id: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_project_path_traversal() {
+        assert!(validate_project_id("../../outside").is_err());
+        assert!(validate_project_id("nested/project").is_err());
+    }
+
+    #[test]
+    fn creates_safe_project_ids() {
+        assert_eq!(project_id_from_name("  Launch / Plan  ").unwrap(), "launch-plan");
+        assert!(project_id_from_name("../..").is_err());
+    }
 }

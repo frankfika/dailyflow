@@ -9,7 +9,7 @@ import path from 'path';
 import { parseMarkdown } from './parser.js';
 import { parseNoteFile, scanNotesRecursive } from './notes.js';
 import { listDailyNotes } from './fileSystem.js';
-import { gitLog } from './gitSync.js';
+import { gitLogMatching } from './gitSync.js';
 import type { Config, DailyNote, Note, Task } from '../types/task.js';
 
 export interface TaskTimelineEntry {
@@ -20,9 +20,17 @@ export interface TaskTimelineEntry {
 }
 
 function memberConfig(base: Config, memberId: string): Config {
+  const member = base.team?.members.find(candidate => candidate.id === memberId);
+  if (!member) throw Object.assign(new Error('Unknown team member'), { status: 404 });
+  const relativePath = member.path.trim() || path.join('members', member.id);
+  const workspaceRoot = path.resolve(base.workspaceRoot, relativePath);
+  const rel = path.relative(path.resolve(base.workspaceRoot), workspaceRoot);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Invalid team member path'), { status: 400 });
+  }
   return {
     ...base,
-    workspaceRoot: path.join(base.workspaceRoot, 'members', memberId),
+    workspaceRoot,
   };
 }
 
@@ -99,7 +107,7 @@ export async function buildTaskTimeline(
   baseConfig: Config,
   memberId: string,
   date: string,
-  _taskId: string,
+  taskId: string,
 ): Promise<TaskTimelineEntry[]> {
   const config = memberConfig(baseConfig, memberId);
   const filePath = getDailyFilePath(config, date);
@@ -107,7 +115,7 @@ export async function buildTaskTimeline(
   if (!relPath || relPath.startsWith('..') || path.isAbsolute(relPath)) {
     return [];
   }
-  const log = await gitLog(config.workspaceRoot, relPath, 50);
+  const log = await gitLogMatching(config.workspaceRoot, relPath, taskId, 50);
   return log.map((entry) => {
     const message = entry.message.toLowerCase();
     let change: TaskTimelineEntry['change'] = 'unknown';

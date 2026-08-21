@@ -104,7 +104,15 @@ router.post('/', async (req, res) => {
     res.setHeader('Deprecation', 'true');
     res.setHeader('Warning', '299 DailyFlow "POST /api/config is deprecated; use versioned PATCH /api/config"');
     res.setHeader('Link', '</api/config>; rel="successor-version"');
-    await saveConfig(req.body);
+    const candidate = req.body as Record<string, unknown> | null;
+    if (!candidate || typeof candidate !== 'object'
+      || typeof candidate.workspaceRoot !== 'string'
+      || typeof candidate.dailyPathTemplate !== 'string'
+      || !Array.isArray(candidate.rolloverSkipTags)
+      || !Array.isArray(candidate.workspaces)) {
+      return res.status(400).json({ error: 'A complete config is required; use versioned PATCH for partial updates' });
+    }
+    await saveConfig(candidate as unknown as import('../types/task.js').Config);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error saving config:', error);

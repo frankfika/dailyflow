@@ -59,6 +59,7 @@ export interface AuditEvent {
 }
 
 const ZERO_HASH = '0'.repeat(64);
+const appendTails = new Map<string, Promise<void>>();
 
 export class AuditLog {
   constructor(private readonly layout: V2Layout, private readonly workspaceId: string) {}
@@ -68,18 +69,29 @@ export class AuditLog {
   }
 
   async append(input: Omit<AuditEvent, 'id' | 'ts' | 'workspaceId' | 'hash' | 'prevHash'>): Promise<AuditEvent> {
-    const prev = await this.lastHash();
-    const event: AuditEvent = {
-      id: 'aud_' + crypto.randomBytes(8).toString('hex'),
-      ts: new Date().toISOString(),
-      workspaceId: this.workspaceId,
-      prevHash: prev,
-      ...input,
-    };
-    event.hash = hashEvent(event);
-    await fs.mkdir(path.dirname(this.filePath()), { recursive: true });
-    await fs.appendFile(this.filePath(), JSON.stringify(event) + '\n', 'utf8');
-    return event;
+    const filePath = this.filePath();
+    const previous = appendTails.get(filePath) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(async () => {
+      const prev = await this.lastHash();
+      const event: AuditEvent = {
+        id: 'aud_' + crypto.randomBytes(8).toString('hex'),
+        ts: new Date().toISOString(),
+        workspaceId: this.workspaceId,
+        prevHash: prev,
+        ...input,
+      };
+      event.hash = hashEvent(event);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.appendFile(filePath, JSON.stringify(event) + '\n', 'utf8');
+      return event;
+    });
+    const settled = run.then(() => undefined, () => undefined);
+    appendTails.set(filePath, settled);
+    try {
+      return await run;
+    } finally {
+      if (appendTails.get(filePath) === settled) appendTails.delete(filePath);
+    }
   }
 
   async readAll(): Promise<AuditEvent[]> {

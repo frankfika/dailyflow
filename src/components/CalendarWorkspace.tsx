@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   CalendarDays,
@@ -246,16 +246,19 @@ export function CalendarWorkspace({
   const [syncingTaskIds, setSyncingTaskIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const range = useMemo(() => viewRange(date, mode), [date, mode]);
+  const loadRevision = useRef(0);
 
   const load = useCallback(async () => {
+    const revision = ++loadRevision.current;
     setLoading(true);
     setError('');
     try {
-      setData(await calendarApi.getWorkspace(range.start, range.end));
+      const next = await calendarApi.getWorkspace(range.start, range.end);
+      if (revision === loadRevision.current) setData(next);
     } catch (e: any) {
-      setError(e.message);
+      if (revision === loadRevision.current) setError(e.message);
     } finally {
-      setLoading(false);
+      if (revision === loadRevision.current) setLoading(false);
     }
   }, [range.start, range.end]);
 

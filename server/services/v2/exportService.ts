@@ -44,6 +44,22 @@ export interface ListOpts {
   limit?: number;
 }
 
+/** Complete, import-compatible snapshot used by Settings → Export workspace. */
+export async function exportWorkspace(repo: V2Repository) {
+  const [source, note, commitment, decision, outcome, project, person, organization, evidence] = await Promise.all([
+    repo.listSourceItems(),
+    repo.listNoteDocuments(),
+    repo.listCommitments(),
+    repo.listDecisions(),
+    repo.listOutcomes(),
+    repo.listProjects(),
+    repo.listPeople(),
+    repo.listOrganizations(),
+    repo.listEvidence(),
+  ]);
+  return { source, note, commitment, decision, outcome, project, person, organization, evidence };
+}
+
 export async function listEntities(
   repo: V2Repository,
   kind: EntityKind,

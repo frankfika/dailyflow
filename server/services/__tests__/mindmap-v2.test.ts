@@ -56,6 +56,11 @@ describe.sequential('mindmap v2', () => {
     expect(root?.kind).toBe('root');
   });
 
+  it('rejects route-controlled path traversal IDs', async () => {
+    await expect(getMindMap('../../../outside')).rejects.toThrow(/invalid mind map id/i);
+    await expect(updateMindMap('../outside', { title: 'pwned' })).rejects.toThrow(/invalid mind map id/i);
+  });
+
   it('reads a v1 file on disk without rewriting it', async () => {
     const dir = path.join(tmpRoot, '.dailyflow', 'mindmaps');
     await fs.mkdir(dir, { recursive: true });

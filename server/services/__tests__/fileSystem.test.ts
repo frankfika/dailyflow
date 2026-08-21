@@ -142,6 +142,20 @@ describe('writeDailyNote + readDailyNote', () => {
     const maliciousDate = '../../../etc/passwd';
     await expect(writeDailyNote(maliciousDate, 'xss', badConfig)).rejects.toThrow('Invalid file path');
   });
+
+  it.runIf(process.platform !== 'win32')('rejects a Daily symlink that escapes the workspace', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'dailyflow-outside-'));
+    const dailyLink = path.join(TEST_DIR, 'Daily');
+    await fs.rm(dailyLink, { recursive: true, force: true });
+    await fs.symlink(outside, dailyLink, 'dir');
+    try {
+      await expect(writeDailyNote('2026-05-05', 'secret', TEST_CONFIG)).rejects.toThrow('Invalid file path');
+      await expect(fs.stat(path.join(outside, '2026', '05', '2026-05-05.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await fs.rm(dailyLink, { force: true });
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('listDailyNotes', () => {

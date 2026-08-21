@@ -39,6 +39,7 @@ import { createNote as createV2Note } from './features/v2/api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
+import { useQueryClient } from '@tanstack/react-query';
 
 type Task = {
   id: string;
@@ -89,6 +90,7 @@ async function verifyGithubConnection(repoUrl: string, token: string): Promise<b
 }
 
 export default function App() {
+  const queryClient = useQueryClient();
   const todayStr = getTodayStr();
   const [currentFileDate, setCurrentFileDate] = useState(todayStr);
   const [filesMap, setFilesMap] = useState<Record<string, string>>({});
@@ -148,6 +150,7 @@ export default function App() {
   };
 
   const [brainDumpText, setBrainDumpText] = useState('');
+  const brainDumpProgressRef = useRef<{ source: string; date: string; pending: Task[] } | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
   const [tagInputValue, setTagInputValue] = useState('');
@@ -771,6 +774,10 @@ export default function App() {
     setIsSwitchingWorkspace(true);
     try {
       const ws = await workspacesApi.activate(id);
+      // Every backend-backed query resolves through the newly activated root.
+      // Clear even legacy/global keys so observers cannot reuse data belonging
+      // to the previous workspace.
+      queryClient.clear();
       setActiveWorkspaceId(id);
       setWorkspaceRoot(ws.path);
 
@@ -800,6 +807,7 @@ export default function App() {
       setFilesMap({});
 
       await reloadFileList();
+      await loadTasksForDate(getTodayStr());
 
       showToast(
         language === 'zh' ? `已切换到 ${ws.name}` : `Switched to ${ws.name}`,
@@ -814,7 +822,7 @@ export default function App() {
     } finally {
       setIsSwitchingWorkspace(false);
     }
-  }, [activeWorkspaceId, language, reloadFileList]);
+  }, [activeWorkspaceId, language, loadTasksForDate, queryClient, reloadFileList]);
 
   // Keyboard shortcuts: Cmd/Ctrl+N toggles task input; Cmd/Ctrl+Shift+R
   // creates a canonical v2 meeting note and opens its recording panel.
@@ -840,47 +848,59 @@ export default function App() {
   }, [openMeetingNote]);
 
   const processBrainDump = async () => {
-    if (!brainDumpText.trim()) return;
+    const sourceText = brainDumpText.trim();
+    if (!sourceText) return;
     setIsProcessingBrainDump(true);
     try {
-      if (!aiApiKey || !aiBaseUrl) {
-        throw new Error('AI provider not configured');
-      }
-
-      const { summary: content } = await aiApi.summarize({
-        apiKey: aiApiKey,
-        model: aiModel || undefined,
-        baseUrl: aiBaseUrl,
-        systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
-        userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${brainDumpText}"`,
-      });
-
-      const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
-      const extracted = JSON.parse(jsonStr) as any[];
-
-      const newTasks: Task[] = extracted.map((t, idx) => {
-        const tags = Array.isArray(t.tags) && t.tags.length > 0
-          ? t.tags.map((tag: string) => tag.toLowerCase())
-          : [];
-        if (!tags.some((tag: string) => ['work', 'life'].includes(tag))) {
-          tags.push(activeContext);
+      let progress = brainDumpProgressRef.current;
+      if (!progress || progress.source !== sourceText || progress.date !== currentFileDate) {
+        if (!aiApiKey || !aiBaseUrl) {
+          throw new Error('AI provider not configured');
         }
-        return {
-          id: `t_${Date.now()}_${idx}`,
-          title: t.title,
-          status: 'todo',
-          tags,
-          source_date: currentFileDate,
-          project: t.project,
-          deadline: t.deadline,
-          priority: t.priority as any
-        };
-      });
 
-      // Add new tasks via API
-      for (const nt of newTasks) {
-        await tasksApi.create(currentFileDate, nt);
+        const { summary: content } = await aiApi.summarize({
+          apiKey: aiApiKey,
+          model: aiModel || undefined,
+          baseUrl: aiBaseUrl,
+          systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
+          userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${sourceText}"`,
+        });
+
+        const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+        const extracted = JSON.parse(jsonStr) as any[];
+        const batchId = Date.now();
+        const pending: Task[] = extracted.map((t, idx) => {
+          const tags = Array.isArray(t.tags) && t.tags.length > 0
+            ? t.tags.map((tag: string) => tag.toLowerCase())
+            : [];
+          if (!tags.some((tag: string) => ['work', 'life'].includes(tag))) tags.push(activeContext);
+          return {
+            id: `t_${batchId}_${idx}`,
+            title: t.title,
+            status: 'todo',
+            tags,
+            source_date: currentFileDate,
+            project: t.project,
+            deadline: t.deadline,
+            priority: t.priority as any,
+          };
+        });
+        progress = { source: sourceText, date: currentFileDate, pending };
+        brainDumpProgressRef.current = progress;
       }
+
+      const failed: Task[] = [];
+      for (const task of progress.pending) {
+        try {
+          await tasksApi.create(currentFileDate, task);
+        } catch {
+          failed.push(task);
+        }
+      }
+      brainDumpProgressRef.current = failed.length > 0
+        ? { source: sourceText, date: currentFileDate, pending: failed }
+        : null;
+
       // Refresh markdown and re-sync tasks with server-side parsed IDs
       const fileData = await filesApi.get(currentFileDate);
       if (fileData) {
@@ -888,6 +908,9 @@ export default function App() {
         setTasks(fileData.tasks as Task[]);
         setLastSyncedMD(fileData.content);
         setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
+      }
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} extracted tasks could not be created`);
       }
       setBrainDumpText('');
       setShowBrainDump(false);

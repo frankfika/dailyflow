@@ -1,6 +1,6 @@
 import { readDailyNote, writeDailyNote, listDailyNotes } from './fileSystem.js';
 import { generateMarkdown, appendTaskToMarkdown, updateTaskInMarkdown } from './parser.js';
-import { withDateLock } from './lock.js';
+import { withDateLocks } from './lock.js';
 import { taskMatchesContext } from '../utils/contextFilter.js';
 import type { Task, Config, RolloverPreview } from '../types/task.js';
 
@@ -90,13 +90,14 @@ export async function applyRollover(
   config: Config,
   context: 'work' | 'life' = 'work'
 ): Promise<{ success: boolean; migratedCount: number }> {
-  return withDateLock(`rollover:${toDate}`, async () => {
-    const allDates = await listDailyNotes(config);
-    const previousDates = allDates.filter(date => date < toDate).sort();
+  const allDates = await listDailyNotes(config);
+  const previousDates = allDates.filter(date => date < toDate).sort();
 
-    if (previousDates.length === 0) {
-      return { success: true, migratedCount: 0 };
-    }
+  if (previousDates.length === 0) {
+    return { success: true, migratedCount: 0 };
+  }
+
+  return withDateLocks([...previousDates, toDate], async () => {
 
     // 读取目标日期的文件（如果存在）
     const toNote = await readDailyNote(toDate, config);
@@ -111,6 +112,7 @@ export async function applyRollover(
     }
 
     let totalMigrated = 0;
+    const sourceUpdates: Array<{ date: string; content: string }> = [];
 
     for (const fromDate of previousDates) {
       const fromNote = await readDailyNote(fromDate, config);
@@ -182,14 +184,19 @@ export async function applyRollover(
           fromContent = lines.join('\n');
         }
       }
-      await writeDailyNote(fromDate, fromContent, config);
+      sourceUpdates.push({ date: fromDate, content: fromContent });
 
       totalMigrated += migratedTasks.length;
     }
 
     // 只有在有任务迁移时才写入目标文件
     if (totalMigrated > 0) {
+      // Prefer a harmless duplicate over losing the only actionable copy:
+      // the destination must be durable before source tasks are hidden.
       await writeDailyNote(toDate, newContent, config);
+      for (const update of sourceUpdates) {
+        await writeDailyNote(update.date, update.content, config);
+      }
     }
 
     return {

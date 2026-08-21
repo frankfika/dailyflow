@@ -82,6 +82,7 @@ import {
 import {
   listEntities,
   getEntity as getExportEntity,
+  exportWorkspace,
   searchEntities,
 } from '../../services/v2/exportService.js';
 import {
@@ -1704,6 +1705,15 @@ v2Router.post('/external-writes/:id/confirm', requireConnectorsV2, async (req, r
 // Export / MCP (Phase 9)
 // ---------------------------------------------------------------------------
 
+v2Router.get('/export/workspace', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    res.json({ entities: await exportWorkspace(repo) });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
 v2Router.get('/export/entities', async (req, res) => {
   try {
     const { repo } = getV2(res);
@@ -2106,5 +2116,4 @@ v2Router.get('/reports/daily/list', async (req, res) => {
     handleError(err, res);
   }
 });
-
 

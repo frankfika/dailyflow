@@ -330,17 +330,6 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
   // a flush (e.g. before unmount).
   const inflightRef = useRef<Promise<AutosavePersistResult> | null>(null);
 
-  // Keep the expectedRef in sync when the note identity changes (e.g.
-  // the user switched to a different note in the same component).
-  useLayoutEffect(() => {
-    generationRef.current += 1;
-    expectedRef.current = note?.autoSaveVersion ?? 0;
-    baseRef.current = note ?? null;
-    setLastSavedVersion(note?.autoSaveVersion ?? 0);
-    pendingRef.current = {};
-    setStatus('idle');
-  }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const persist = useCallback(
     async (
       vars: AutosaveVars,
@@ -447,6 +436,53 @@ export function useNoteAutosave(note: NoteDocument | null | undefined): UseNoteA
     },
     [update],
   );
+
+  // Switching notes must not erase the old note's debounced patch. Layout
+  // effects run before NoteEditor cleanup, so capture and queue it here before
+  // resetting refs for the new identity.
+  useLayoutEffect(() => {
+    const previousGeneration = generationRef.current;
+    const previousNote = baseRef.current;
+    const previousExpected = expectedRef.current;
+    const pending = pendingRef.current;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    pendingRef.current = {};
+
+    if (previousNote && previousNote.id !== note?.id && Object.keys(pending).length > 0) {
+      const previousWrite = inflightRef.current;
+      const run = (async () => {
+        const priorResult = previousWrite ? await previousWrite : undefined;
+        const latestPrevious = priorResult?.note?.id === previousNote.id
+          ? priorResult.note
+          : previousNote;
+        return persist(
+          pending,
+          previousGeneration,
+          latestPrevious,
+          latestPrevious.autoSaveVersion ?? previousExpected,
+          latestPrevious,
+        );
+      })();
+      inflightRef.current = run;
+      void run.finally(() => {
+        if (inflightRef.current === run) inflightRef.current = null;
+      });
+    }
+
+    generationRef.current += 1;
+    expectedRef.current = note?.autoSaveVersion ?? 0;
+    baseRef.current = note ?? null;
+    setLastSavedVersion(note?.autoSaveVersion ?? 0);
+    setStatus('idle');
+    setLastError(undefined);
+    // Identity is the only reset trigger. `useMutation` may return a new
+    // object as status changes, which in turn changes `persist`; depending on
+    // it here would reset a freshly reported conflict/error back to idle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.id]);
 
   const enqueue = useCallback(
     (vars: AutosaveVars): Promise<AutosavePersistResult> => {

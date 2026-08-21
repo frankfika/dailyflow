@@ -117,6 +117,7 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         ensure_executable(&node_path)?;
         let mut command = Command::new(&node_path);
         command.arg(&script_path).current_dir(&resource_path);
+        command.env("NODE_ENV", "production");
         if let Some(path) = bundled_lark_cli.as_deref() {
             command.env("LARK_CLI_PATH", path);
         }
@@ -150,6 +151,7 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
     for node_path in &node_candidates {
         let mut command = Command::new(node_path);
         command.arg(&script_path).current_dir(&resource_path);
+        command.env("NODE_ENV", "production");
         if let Some(path) = bundled_lark_cli.as_deref() {
             command.env("LARK_CLI_PATH", path);
         }

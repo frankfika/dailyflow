@@ -247,6 +247,15 @@ function writeLocalCache(store: ProviderConfigStore): void {
   localStorage.removeItem(LEGACY_TRANSCRIPTION_STORAGE_KEY);
 }
 
+let providerPersistQueue: Promise<void> = Promise.resolve();
+
+function enqueueProviderConfigPersist(): Promise<void> {
+  providerPersistQueue = providerPersistQueue
+    .catch(() => undefined)
+    .then(() => persistProviderConfigsToBackend());
+  return providerPersistQueue;
+}
+
 export function saveProviderConfigs(store: ProviderConfigStore): void {
   const current = loadProviderConfigs();
   const normalized = normalizeStore({
@@ -265,7 +274,7 @@ export function saveProviderConfigs(store: ProviderConfigStore): void {
   // of silently leaving the server without credentials. Skip under tests:
   // Node fetch cannot resolve the dev server's relative `/api` URL.
   if (import.meta.env.MODE === 'test') return;
-  persistProviderConfigsToBackend().then(() => {
+  enqueueProviderConfigPersist().then(() => {
     try {
       dispatchDomainEvent(DOMAIN_EVENTS.aiProviderChanged, { source: 'backend-sync' });
     } catch { /* ignore */ }

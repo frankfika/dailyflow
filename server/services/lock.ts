@@ -52,3 +52,13 @@ export async function withDateLock<T>(date: string, fn: () => Promise<T>): Promi
 
   return await chain;
 }
+
+/** Acquire several date locks in a stable order to avoid deadlocks. */
+export async function withDateLocks<T>(dates: string[], fn: () => Promise<T>): Promise<T> {
+  const keys = [...new Set(dates)].sort();
+  const acquire = (index: number): Promise<T> =>
+    index >= keys.length
+      ? fn()
+      : withDateLock(keys[index], () => acquire(index + 1));
+  return acquire(0);
+}

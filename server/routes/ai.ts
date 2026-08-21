@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { lookup } from 'node:dns/promises';
+import net from 'node:net';
 
 const router = Router();
 
@@ -41,6 +43,42 @@ function isLoopbackHost(url: URL): boolean {
     || hostname === '[::1]';
 }
 
+function isBlockedAddress(address: string): boolean {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, '');
+  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  if (mapped) return isBlockedAddress(mapped);
+  if (net.isIPv4(normalized)) {
+    const [a, b, c] = normalized.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2))))
+      || (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100)))
+      || (a === 203 && b === 0 && c === 113);
+  }
+  if (net.isIPv6(normalized)) {
+    return normalized === '::' || normalized === '::1'
+      || normalized.startsWith('fc') || normalized.startsWith('fd')
+      || normalized.startsWith('fe') || normalized.startsWith('ff')
+      || normalized.startsWith('2001:db8:');
+  }
+  return true;
+}
+
+async function assertSafeAiTarget(rawUrl: string): Promise<void> {
+  const url = new URL(rawUrl);
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const exactLoopback = isLoopbackHost(url);
+  const addresses = net.isIP(host)
+    ? [host]
+    : (await lookup(host, { all: true, verbatim: true })).map(item => item.address);
+  if (addresses.length === 0) throw new Error('AI provider hostname did not resolve');
+  if (!exactLoopback && addresses.some(isBlockedAddress)) {
+    throw new Error('Invalid URL: resolved address is internal or reserved');
+  }
+}
+
 export function resolveAiUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
 
@@ -76,6 +114,7 @@ router.post('/summarize', async (req, res) => {
     }
 
     const url = resolveAiUrl(body.baseUrl);
+    await assertSafeAiTarget(url);
     const model = body.model || 'default';
     const systemPrompt = body.systemPrompt || 'You are a helpful assistant that summarizes notes concisely in Markdown.';
     const maxTokens = body.maxTokens ?? 4096;
@@ -94,6 +133,7 @@ router.post('/summarize', async (req, res) => {
           { role: 'user', content: body.userPrompt },
         ],
       }),
+      redirect: 'error',
     });
 
     if (!upstream.ok) {

@@ -1,4 +1,5 @@
 import { Router, json as expressJson } from 'express';
+import { withDateLock, withDateLocks } from '../services/lock.js';
 import {
   listEvents as svcListEvents,
   getEventById,
@@ -176,7 +177,7 @@ router.post('/actions/create-task-for-node', async (req, res) => {
         error: 'Required fields missing: mindmapId, nodeId, title, scheduledDate',
       });
     }
-    const result = await createTaskForNode({
+    const result = await withDateLock(b.scheduledDate, () => createTaskForNode({
       workspaceRoot: typeof b.workspaceRoot === 'string' ? b.workspaceRoot : undefined,
       mindmapId: b.mindmapId,
       nodeId: b.nodeId,
@@ -188,7 +189,7 @@ router.post('/actions/create-task-for-node', async (req, res) => {
       priority: (b.priority === 'high' || b.priority === 'medium' || b.priority === 'low') ? b.priority : undefined,
       project: typeof b.project === 'string' ? b.project : undefined,
       existingTaskId: typeof b.existingTaskId === 'string' ? b.existingTaskId : undefined,
-    });
+    }));
     res.json(result);
   } catch (error: any) {
     console.error('[events] create-task-for-node error:', error);
@@ -213,7 +214,7 @@ router.post('/actions/edit-node-task', async (req, res) => {
       });
     }
     const u = b.updates;
-    const result = await editNodeTask({
+    const result = await withDateLock(b.scheduledDate, () => editNodeTask({
       taskId: b.taskId,
       scheduledDate: b.scheduledDate,
       updates: {
@@ -226,7 +227,7 @@ router.post('/actions/edit-node-task', async (req, res) => {
         priority: (u.priority === '' || u.priority === 'high' || u.priority === 'medium' || u.priority === 'low') ? u.priority : undefined,
         project: typeof u.project === 'string' ? u.project : undefined,
       },
-    });
+    }));
     res.json(result);
   } catch (error: any) {
     console.error('[events] edit-node-task error:', error);
@@ -246,7 +247,7 @@ router.post('/actions/complete-node-task', async (req, res) => {
     if (!b.taskId || !b.scheduledDate) {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
     }
-    const result = await completeNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate });
+    const result = await withDateLock(b.scheduledDate, () => completeNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate }));
 
     // Sprint 1 Gap 7: mirror the completion back to the linked mindmap
     // node. We only mirror when the checkbox actually flipped — a
@@ -277,7 +278,7 @@ router.post('/actions/undo-complete-node-task', async (req, res) => {
     if (!b.taskId || !b.scheduledDate) {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
     }
-    const result = await undoCompleteNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate });
+    const result = await withDateLock(b.scheduledDate, () => undoCompleteNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate }));
     res.json(result);
   } catch (error: any) {
     console.error('[events] undo-complete-node-task error:', error);
@@ -299,12 +300,12 @@ router.post('/actions/convert-standalone-to-event-node-task', async (req, res) =
         error: 'Required fields missing: taskId, scheduledDate, mindmapId, nodeId',
       });
     }
-    const result = await convertStandaloneToEventNodeTask({
+    const result = await withDateLock(b.scheduledDate, () => convertStandaloneToEventNodeTask({
       taskId: b.taskId,
       scheduledDate: b.scheduledDate,
       mindmapId: b.mindmapId,
       nodeId: b.nodeId,
-    });
+    }));
     res.json(result);
   } catch (error: any) {
     console.error('[events] convert-standalone error:', error);
@@ -324,10 +325,10 @@ router.post('/actions/undo-convert-standalone-to-event-node-task', async (req, r
     if (!b.taskId || !b.scheduledDate) {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
     }
-    const result = await undoConvertStandaloneToEventNodeTask({
+    const result = await withDateLock(b.scheduledDate, () => undoConvertStandaloneToEventNodeTask({
       taskId: b.taskId,
       scheduledDate: b.scheduledDate,
-    });
+    }));
     res.json(result);
   } catch (error: any) {
     console.error('[events] undo-convert-standalone error:', error);
@@ -342,12 +343,12 @@ router.post('/actions/unschedule-node-task', async (req, res) => {
     if (!b.taskId || !b.scheduledDate || !b.mindmapId || !b.nodeId) {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate, mindmapId, nodeId' });
     }
-    res.json(await unscheduleNodeTask({
+    res.json(await withDateLock(b.scheduledDate, () => unscheduleNodeTask({
       taskId: b.taskId,
       scheduledDate: b.scheduledDate,
       mindmapId: b.mindmapId,
       nodeId: b.nodeId,
-    }));
+    })));
   } catch (error: any) {
     console.error('[events] unschedule error:', error);
     res.status(error?.status ?? 500).json({ error: error.message });
@@ -360,13 +361,13 @@ router.post('/actions/reschedule-node-task', async (req, res) => {
     if (!b.taskId || !b.fromDate || !b.toDate || !b.mindmapId || !b.nodeId) {
       return res.status(400).json({ error: 'Required fields missing: taskId, fromDate, toDate, mindmapId, nodeId' });
     }
-    res.json(await rescheduleNodeTask({
+    res.json(await withDateLocks([b.fromDate, b.toDate], () => rescheduleNodeTask({
       taskId: b.taskId,
       fromDate: b.fromDate,
       toDate: b.toDate,
       mindmapId: b.mindmapId,
       nodeId: b.nodeId,
-    }));
+    })));
   } catch (error: any) {
     console.error('[events] reschedule error:', error);
     res.status(error?.status ?? 500).json({ error: error.message });

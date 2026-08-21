@@ -31,6 +31,11 @@ function baseConfig(root: string): Config {
     dailyPathTemplate: 'Daily/{year}/{month}/{date}.md',
     rolloverTrigger: 'manual',
     rolloverSkipTags: [],
+    team: {
+      role: 'leader',
+      memberId: 'leader',
+      members: [{ id: 'alice', name: 'Alice', path: 'members/alice' }],
+    },
   } as Config;
 }
 

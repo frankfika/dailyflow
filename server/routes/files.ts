@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { readDailyNote, writeDailyNote, listDailyNotes } from '../services/fileSystem.js';
 import { loadConfig } from '../services/config.js';
+import { withDateLock } from '../services/lock.js';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.post('/:date', async (req, res) => {
     const { content } = req.body;
     const config = await loadConfig();
 
-    await writeDailyNote(date, content, config);
+    await withDateLock(date, () => writeDailyNote(date, content, config));
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error creating file:', error);
@@ -64,7 +65,7 @@ router.put('/:date', async (req, res) => {
     const { content } = req.body;
     const config = await loadConfig();
 
-    await writeDailyNote(date, content, config);
+    await withDateLock(date, () => writeDailyNote(date, content, config));
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error updating file:', error);

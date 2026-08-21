@@ -187,11 +187,11 @@ function SourceCard({ source, onChanged, language }: { source: SourceItem; onCha
   const [fallback, setFallback] = useState<{ reason?: string } | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const persistedProposals = useQuery({
-    queryKey: queryKeys.proposals(workspaceId, { status: 'pending', sourceId: source.id }),
+    queryKey: queryKeys.proposals(workspaceId, { status: 'pending' }),
     queryFn: () => listProposals({ status: 'pending' }),
   });
   const persistedJobs = useQuery({
-    queryKey: queryKeys.jobs(workspaceId, { entityType: 'source', entityId: source.id }),
+    queryKey: queryKeys.jobs(workspaceId),
     queryFn: () => listJobs(),
     refetchInterval: query => {
       const job = query.state.data?.items.find(item => item.entityRef.type === 'source' && item.entityRef.id === source.id);

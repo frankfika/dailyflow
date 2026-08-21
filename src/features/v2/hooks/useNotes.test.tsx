@@ -119,6 +119,29 @@ describe('useNoteAutosave conflict safety', () => {
     });
   });
 
+  it('flushes a debounced edit before switching note identity', async () => {
+    const noteB = { ...note, id: 'note_01KBBBBBBBBBBBBBBBB', body: 'note B' };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      note: { ...note, body: 'unsaved A', autoSaveVersion: 1 },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    globalThis.fetch = fetchMock as typeof fetch;
+    const { result, rerender } = renderHook(
+      ({ activeNote }) => useNoteAutosave(activeNote),
+      { initialProps: { activeNote: note }, wrapper: wrapper() },
+    );
+
+    act(() => result.current.schedule({ body: 'unsaved A' }));
+    rerender({ activeNote: noteB });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(note.id);
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({ body: 'unsaved A' });
+  });
+
   it('keeps the newest edit when another save is already queued', async () => {
     let resolveFirst!: (response: Response) => void;
     const firstResponse = new Promise<Response>((resolve) => {

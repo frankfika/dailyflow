@@ -326,7 +326,6 @@ pub fn edit_task_in_markdown(
     };
     let checkbox = &trimmed[2..bracket_end];
     let original_content = trimmed[bracket_end + 1..].trim_start();
-
     // Extract all metadata parts to preserve
     let meta_parts = extract_all_meta(original_content);
     let meta_suffix = if meta_parts.is_empty() {
@@ -431,6 +430,7 @@ pub fn edit_task_full_in_markdown(
     };
     let checkbox = &trimmed[2..bracket_end];
     let original_content = trimmed[bracket_end + 1..].trim_start();
+    let original_task = parse_markdown(line).into_iter().next();
 
     // Extract original ID and migrated marker
     let task_id = if let Some(pos) = original_content.find("^id-") {
@@ -462,7 +462,7 @@ pub fn edit_task_full_in_markdown(
     let mut new_line = format!("{}{} [{}] {}", indent, bullet, checkbox, title);
 
     // Add tags
-    if let Some(tags) = &updates.tags {
+    if let Some(tags) = updates.tags.as_ref().or_else(|| original_task.as_ref().and_then(|t| t.tags.as_ref())) {
         let filtered: Vec<&String> = tags.iter().filter(|t| !t.is_empty() && t.as_str() != "tasks").collect();
         if !filtered.is_empty() {
             let tag_str: Vec<String> = filtered.iter().map(|t| format!("#{}", t.replace(' ', "-"))).collect();
@@ -471,13 +471,13 @@ pub fn edit_task_full_in_markdown(
         }
     }
 
-    if let Some(project) = &updates.project {
+    if let Some(project) = updates.project.as_ref().or_else(|| original_task.as_ref().and_then(|t| t.project.as_ref())).filter(|p| !p.is_empty()) {
         new_line.push_str(&format!(" #project:{}", project.replace(' ', "_")));
     }
-    if let Some(deadline) = &updates.deadline {
+    if let Some(deadline) = updates.deadline.as_ref().or_else(|| original_task.as_ref().and_then(|t| t.deadline.as_ref())).filter(|d| !d.is_empty()) {
         new_line.push_str(&format!(" #deadline:{}", deadline));
     }
-    if let Some(priority) = &updates.priority {
+    if let Some(priority) = updates.priority.as_ref().or_else(|| original_task.as_ref().and_then(|t| t.priority.as_ref())).filter(|p| !p.is_empty()) {
         new_line.push_str(&format!(" #priority:{}", priority));
     }
 
@@ -533,20 +533,15 @@ fn strip_all_meta(content: &str) -> String {
     }
 
     // Remove remaining #tags
-    let bytes_copy: Vec<u8> = s.as_bytes().to_vec();
     let mut result = String::new();
-    let mut ci = 0;
-    while ci < bytes_copy.len() {
-        if bytes_copy[ci] == b'#' {
-            let _tag_start = ci;
-            ci += 1;
-            while ci < bytes_copy.len() && (bytes_copy[ci].is_ascii_alphanumeric() || bytes_copy[ci] == b'_' || bytes_copy[ci] == b'-') {
-                ci += 1;
+    let mut chars = s.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '#' {
+            while chars.peek().is_some_and(|next| next.is_alphanumeric() || *next == '_' || *next == '-') {
+                chars.next();
             }
-            // skip this tag
         } else {
-            result.push(bytes_copy[ci] as char);
-            ci += 1;
+            result.push(ch);
         }
     }
 
@@ -674,5 +669,22 @@ mod tests {
         let remaining = parse_markdown(&result);
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].title, "Task B");
+    }
+
+    #[test]
+    fn test_full_edit_preserves_unicode_and_omitted_metadata() {
+        let md = "- [ ] 跟进客户 🚀 #work #project:Alpha #deadline:2026-09-01 #priority:high ^id-u1\n";
+        let updates = TaskUpdateInput {
+            tags: Some(vec!["life".to_string()]),
+            ..TaskUpdateInput::default()
+        };
+
+        let result = edit_task_full_in_markdown(md, 0, &updates, None);
+        let task = parse_markdown(&result).remove(0);
+        assert_eq!(task.title, "跟进客户 🚀");
+        assert_eq!(task.tags, Some(vec!["life".to_string()]));
+        assert_eq!(task.project.as_deref(), Some("Alpha"));
+        assert_eq!(task.deadline.as_deref(), Some("2026-09-01"));
+        assert_eq!(task.priority.as_deref(), Some("high"));
     }
 }

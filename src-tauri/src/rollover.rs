@@ -88,6 +88,7 @@ pub fn apply_rollover(to_date: &str, config: &Config) -> Result<RolloverResult, 
     let to_note = read_daily_note(to_date, config)?;
     let mut new_content = to_note.map(|n| n.content).unwrap_or_default();
     let mut total_migrated = 0;
+    let mut source_updates: Vec<(String, String)> = Vec::new();
 
     for from_date in &previous_dates {
         let from_note = match read_daily_note(from_date, config)? {
@@ -151,13 +152,18 @@ pub fn apply_rollover(to_date: &str, config: &Config) -> Result<RolloverResult, 
                 from_content = update_task_in_markdown(&from_content, line, "done");
             }
         }
-        write_daily_note(from_date, &from_content, config)?;
+        source_updates.push((from_date.clone(), from_content));
 
         total_migrated += tasks_to_migrate.len();
     }
 
     if total_migrated > 0 {
+        // Persist the copies before hiding the originals. If a later source update
+        // fails, retrying can create duplicates, but it cannot lose the task.
         write_daily_note(to_date, &new_content, config)?;
+        for (from_date, content) in source_updates {
+            write_daily_note(&from_date, &content, config)?;
+        }
     }
 
     Ok(RolloverResult {

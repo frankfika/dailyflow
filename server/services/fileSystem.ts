@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { Dirent } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { parseMarkdown } from './parser.js';
 import type { DailyNote, Config } from '../types/task.js';
 
@@ -36,6 +37,36 @@ export function validatePath(filePath: string, workspaceRoot: string): boolean {
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
+function isWithinRoot(candidate: string, root: string, allowRoot = false): boolean {
+  const rel = path.relative(root, candidate);
+  return (allowRoot && rel === '') || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+async function nearestExistingRealPath(candidate: string): Promise<string> {
+  let current = candidate;
+  while (true) {
+    try {
+      return await fs.realpath(current);
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT') throw error;
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      current = parent;
+    }
+  }
+}
+
+async function prepareContainedParent(filePath: string, workspaceRoot: string): Promise<void> {
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  const realRoot = await fs.realpath(workspaceRoot);
+  const parent = path.dirname(filePath);
+  const existingAncestor = await nearestExistingRealPath(parent);
+  if (!isWithinRoot(existingAncestor, realRoot, true)) throw new Error('Invalid file path');
+  await fs.mkdir(parent, { recursive: true });
+  const realParent = await fs.realpath(parent);
+  if (!isWithinRoot(realParent, realRoot, true)) throw new Error('Invalid file path');
+}
+
 /**
  * 读取指定日期的日记文件
  */
@@ -47,6 +78,11 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
   }
 
   try {
+    const [realRoot, realFile] = await Promise.all([
+      fs.realpath(config.workspaceRoot),
+      fs.realpath(filePath),
+    ]);
+    if (!isWithinRoot(realFile, realRoot)) throw new Error('Invalid file path');
     const content = await fs.readFile(filePath, 'utf-8');
     const stats = await fs.stat(filePath);
     let tasks = parseMarkdown(content);
@@ -110,14 +146,19 @@ export async function writeDailyNote(date: string, content: string, config: Conf
     throw new Error('Invalid file path');
   }
 
-  // 确保目录存在
-  const dir = path.dirname(filePath);
-  await fs.mkdir(dir, { recursive: true });
+  await prepareContainedParent(filePath, config.workspaceRoot);
 
   // 原子写入：先写临时文件，再重命名
-  const tempPath = `${filePath}.tmp`;
-  await fs.writeFile(tempPath, content, 'utf-8');
-  await fs.rename(tempPath, filePath);
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    await fs.writeFile(tempPath, content, 'utf-8');
+    await fs.rename(tempPath, filePath);
+  } finally {
+    await fs.rm(tempPath, { force: true }).catch(() => undefined);
+  }
 }
 
 /**

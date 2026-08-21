@@ -81,6 +81,24 @@ export async function gitLog(workspaceRoot: string, filePath?: string, maxCount 
   }));
 }
 
+export async function gitLogMatching(
+  workspaceRoot: string,
+  filePath: string,
+  text: string,
+  maxCount = 50,
+): ReturnType<typeof gitLog> {
+  const git = gitFor(workspaceRoot);
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const format = '%H%x1f%aI%x1f%an%x1f%ae%x1f%s';
+  const raw = await git.raw([
+    'log', `--max-count=${maxCount}`, `--format=${format}`, `-G${escaped}`, '--', filePath,
+  ]);
+  return raw.split('\n').filter(Boolean).map(line => {
+    const [hash, date, author_name, author_email, ...message] = line.split('\x1f');
+    return { hash, date, author_name, author_email, message: message.join('\x1f') };
+  });
+}
+
 export function getMemberRoot(config: Config, memberId: string): string {
   return path.join(config.workspaceRoot, 'members', memberId);
 }
