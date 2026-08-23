@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { CalendarDays, Check, ChevronDown, Focus, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
-import { collectHiddenDescendants } from '../../../components/MindMap/layout';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
 
 type Copy = {
@@ -164,8 +163,27 @@ export function EventCanvas({
     // still hide descendants of collapsed nodes and shift the whole visible
     // tree so its top-left starts at (PAD, PAD) (legacy data may have nodes
     // at negative coordinates).
+    //
+    // Collapse state lives ONLY in the `collapsedIds` Set (the canvas toggle
+    // is not persisted to the node), so we derive the hidden subtree from
+    // that Set — NOT from `collectHiddenDescendants`, which reads the
+    // persisted `node.collapsed` field and thus would hide nothing the UI
+    // actually collapses.
     const PAD = 120;
-    const hidden = collectHiddenDescendants(event.nodes, event.edges);
+    const hidden = new Set<string>();
+    for (const id of collapsedIds) {
+      // BFS over edges to collect every descendant of a collapsed node.
+      const queue = [id];
+      while (queue.length) {
+        const current = queue.shift()!;
+        for (const edge of event.edges) {
+          if (edge.source === current && !hidden.has(edge.target)) {
+            hidden.add(edge.target);
+            queue.push(edge.target);
+          }
+        }
+      }
+    }
     // Drop edges whose endpoints are hidden so the SVG doesn't draw ghosts.
     const visibleEdges = event.edges.filter(
       (e) => !hidden.has(e.source) && !hidden.has(e.target),

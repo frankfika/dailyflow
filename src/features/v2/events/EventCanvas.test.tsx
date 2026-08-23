@@ -187,6 +187,18 @@ describe('EventCanvas node actions', () => {
     expect(onMoveNodePosition).toHaveBeenCalledWith('step', 350, 30);
   });
 
+  it('hides a child whose ancestor is collapsed', () => {
+    // EVENT.root has one child 'step'. Collapsing the root must hide the
+    // child from the canvas, not just flip the chevron.
+    renderCanvas({ collapsedIds: new Set(['root']) });
+    expect(screen.queryByTestId('event-node-step')).not.toBeInTheDocument();
+  });
+
+  it('shows the child again when the collapsed ancestor is expanded', () => {
+    renderCanvas({ collapsedIds: new Set() });
+    expect(screen.getByTestId('event-node-step')).toBeInTheDocument();
+  });
+
   it('does not start a drag from the Add to Task chip, collapse button, or inline add buttons', () => {
     // Make 'step' a non-task node for this test.
     const onMoveNodePosition = vi.fn();
