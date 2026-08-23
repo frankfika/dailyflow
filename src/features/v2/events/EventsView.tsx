@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles, X } from 'lucide-react';
 import { ulid } from 'ulid';
 import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
 import {
@@ -21,6 +21,7 @@ import {
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
+import { AgentRunPanel } from './AgentRunPanel';
 
 export interface EventsViewProps {
   language?: 'zh' | 'en';
@@ -150,6 +151,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const [moreOpen, setMoreOpen] = useState(false);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [outlineVisible, setOutlineVisible] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const raw = window.localStorage.getItem(OUTLINE_VISIBILITY_KEY);
@@ -285,6 +287,17 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-950 dark:text-gray-50">{event.title}</h1>
       <button
         type="button"
+        onClick={() => setAgentPanelOpen(true)}
+        title={language === 'zh' ? 'AI 推进这个事件' : 'AI push this event forward'}
+        aria-label={language === 'zh' ? 'AI 推进' : 'AI push forward'}
+        className="flex items-center gap-1.5 rounded-lg border border-[#23877B]/30 bg-[#23877B]/5 px-3 py-2 text-sm font-medium text-[#23877B] hover:bg-[#23877B]/10"
+        data-testid="event-agent-run-open"
+      >
+        <Sparkles className="h-4 w-4" />
+        {language === 'zh' ? 'AI 推进' : 'AI'}
+      </button>
+      <button
+        type="button"
         onClick={toggleOutline}
         title={outlineVisible ? t.hideOutline : t.showOutline}
         aria-label={outlineVisible ? t.hideOutline : t.showOutline}
@@ -344,6 +357,16 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         />
       </div>
     </div>
+    {agentPanelOpen && (
+      <AgentRunPanel
+        language={language}
+        eventId={event.id}
+        mindmapId={event.mindmapId}
+        onNotice={onNotice}
+        onApplied={() => { void detailQ.refetch(); }}
+        onClose={() => setAgentPanelOpen(false)}
+      />
+    )}
   </section>;
 }
 

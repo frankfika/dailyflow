@@ -735,3 +735,91 @@ export interface V2Status {
 }
 
 export const getStatus = () => request<V2Status>('GET', '/status');
+
+// ---------------------------------------------------------------------------
+// AI Event Operator (DailyFlow 2.2 / DFH) — "AI 推进这个 Event"
+// ---------------------------------------------------------------------------
+
+export type EventOperatorPhaseId = 'collect' | 'retrieve' | 'extract' | 'resolve' | 'prepare' | 'review';
+export interface EventOperatorRun {
+  id: string;
+  schemaVersion: 2;
+  workspaceId: string;
+  eventId: string;
+  mindmapId: string;
+  runtimeId: 'deepseek-harness';
+  runtimeVersion: string;
+  proposalId?: string;
+  phase: EventOperatorPhaseId;
+  status: 'queued' | 'starting' | 'running' | 'waiting_review' | 'applying' | 'succeeded' | 'failed' | 'cancelled';
+  error?: { code: string; message: string; retryable: boolean };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GraphOperation {
+  changeId: string;
+  op: 'add_node' | 'update_node' | 'move_node' | 'link_entity';
+  tempId?: string;
+  parentId?: string;
+  nodeId?: string;
+  node?: { kind: string; text: string; note?: string };
+  domainDraft?: { entity?: string; title?: string; state?: string; waitingOnText?: string; reviewAt?: string; decision?: string };
+  confidence: number;
+  reason: string;
+}
+
+export interface EventGraphProposal {
+  id: string;
+  schemaVersion: 1;
+  workspaceId: string;
+  eventId: string;
+  mindmapId: string;
+  agentRunId: string;
+  baseRevision: string;
+  status: 'pending' | 'partially_accepted' | 'accepted' | 'rejected' | 'expired';
+  operations: GraphOperation[];
+  summary: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  createdAt: string;
+  acceptedChangeIds?: string[];
+}
+
+export interface EventOperatorHealth {
+  health: { ready: boolean; modelConfigured: boolean; toolkitSafe?: boolean };
+  runtime: string;
+  mode?: string;
+}
+
+export const getEventOperatorHealth = () => request<EventOperatorHealth>('GET', '/agent-runtime/health');
+
+export const startEventOperatorRun = (eventId: string, body: {
+  mindmapId: string;
+  trigger?: 'event_canvas' | 'meeting_note' | 'new_evidence';
+  templateMaxOps?: number;
+}) => request<{ run: EventOperatorRun; proposal: EventGraphProposal | null; events: unknown[]; mode: string }>(
+  'POST',
+  `/events/${encodeURIComponent(eventId)}/agent-runs`,
+  body,
+);
+
+export const getEventOperatorRun = (runId: string) => request<{ run: EventOperatorRun }>('GET', `/agent-runs/${runId}`);
+
+export const cancelEventOperatorRun = (runId: string) => request<{ run: EventOperatorRun }>('POST', `/agent-runs/${runId}/cancel`, {});
+
+export const getPendingGraphProposal = (eventId: string) =>
+  request<{ proposal: EventGraphProposal | null }>('GET', `/events/${encodeURIComponent(eventId)}/graph-proposals/pending`);
+
+export const applyGraphProposal = (eventId: string, proposalId: string, options?: { selection?: string[] }) =>
+  request<{ proposal: EventGraphProposal; createdCommitments: number; appliedChanges: string[]; staleChangeIds: string[] }>(
+    'POST',
+    `/events/${encodeURIComponent(eventId)}/graph-proposals/${proposalId}/apply`,
+    { selection: options?.selection },
+  );
+
+export const rejectGraphProposal = (eventId: string, proposalId: string, reason?: string) =>
+  request<{ proposal: EventGraphProposal }>(
+    'POST',
+    `/events/${encodeURIComponent(eventId)}/graph-proposals/${proposalId}/reject`,
+    { reason: reason ?? 'user_rejected' },
+  );
