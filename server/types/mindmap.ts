@@ -33,9 +33,33 @@ export type MindMapNodeKind =
   | 'task'
   | 'question'
   | 'resource'
-  | 'risk';
+  | 'risk'
+  | 'decision'
+  | 'waiting'
+  | 'outcome';
 
 export const DEFAULT_MINDMAP_NODE_KIND: MindMapNodeKind = 'branch';
+
+/**
+ * v2.2: restricted entity back-links a node may carry (DFH-101).
+ * The node never duplicates the linked entity's status/due/owner — query
+ * layers project from the authoritative entity instead.
+ */
+export interface MindMapEntityRef {
+  type: 'commitment' | 'decision' | 'outcome' | 'note' | 'source' | 'evidence';
+  id: string;
+}
+
+/**
+ * v2.2: where a node came from, so recovery can reason about AI-authored nodes
+ * and so the canvas can label accepted-vs-manual provenance.
+ */
+export interface MindMapNodeProvenance {
+  origin: 'user' | 'ai' | 'migration';
+  proposalId?: string;
+  agentRunId?: string;
+  acceptedAt?: string;
+}
 
 export interface MindMapNode {
   id: string;
@@ -74,6 +98,14 @@ export interface MindMapNode {
   taskDate?: string;
   /** Stable sibling planning order. Lower values are planned first. */
   planOrder?: number;
+  /**
+   * v2.2: authored entity back-links (commitment/decision/outcome/note/...).
+   * Present only on nodes the AI-event pipeline or migration wrote; existing
+   * nodes read fine without it (all fields optional).
+   */
+  entityRefs?: MindMapEntityRef[];
+  /** v2.2: provenance of the node. Optional — old nodes carry none. */
+  provenance?: MindMapNodeProvenance;
 }
 
 /** Three-state task marker. `todo` is the implicit default. */

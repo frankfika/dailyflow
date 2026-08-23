@@ -22,6 +22,10 @@ export type EntityPrefix =
   | 'plan' // DailyPlan
   | 'prop' // Proposal
   | 'run' // AgentRun
+  | 'arev' // AgentRun event (Run event log entry per node)
+  | 'eval' // EventOperatorRun (AI Event Operator, schemaVersion 2)
+  | 'gprop' // EventGraphProposal
+  | 'gchg' // GraphOperation change id (tempId inside a graph proposal)
   | 'job' // durable background Job
   | 'chg'; // ProposedChange (in-memory, not persisted as a separate entity)
 
