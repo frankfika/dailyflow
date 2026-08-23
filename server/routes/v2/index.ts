@@ -137,6 +137,16 @@ import {
   type CompletionMirrorInput,
   type MirrorResult,
 } from '../../services/v2/taskCompletionMirror.js';
+import {
+  startEventOperatorRun,
+  getEventOperatorRun,
+  cancelEventOperatorRun,
+  getPendingGraphProposal,
+  applyEventGraphProposal,
+  rejectEventGraphProposal,
+} from '../../services/v2/eventOperatorService.js';
+import { makeEventGraphRouteDeps } from '../../services/v2/eventGraphMindmapBridge.js';
+import { FakeEventOperatorRuntime } from '../../services/harness/FakeEventOperatorRuntime.js';
 
 export const v2Router = Router();
 
@@ -312,6 +322,15 @@ function handleError(err: unknown, res: Response): void {
     }
     if (e.code === 'invalid_job_transition' || e.code === 'job_not_retryable' || e.code === 'job_not_cancellable') {
       res.status(409).json({ error: { code: e.code, message: e.message, from: e.from, to: e.to } });
+      return;
+    }
+    // AI Event Operator errors.
+    if (e.code === 'proposal_stale' || e.code === 'pending_proposal_exists' || e.code === 'run_not_cancellable' || e.code === 'proposal_not_pending') {
+      res.status(409).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'proposal_invalid') {
+      res.status(422).json({ error: { code: e.code, message: e.message, issues: (e as { issues?: unknown }).issues } });
       return;
     }
   }
@@ -2117,3 +2136,140 @@ v2Router.get('/reports/daily/list', async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// AI Event Operator (DailyFlow 2.2 / DFH) — "AI 推进这个 Event"
+//
+//   POST  /api/v2/events/:id/agent-runs          start an AI run (→ proposal)
+//   GET   /api/v2/agent-runs/:id                 read a run
+//   GET   /api/v2/events/:id/agent-runs          list runs for an event
+//   POST  /api/v2/agent-runs/:id/cancel          cancel a running run
+//   GET   /api/v2/events/:id/graph-proposals/pending   pending proposal to review
+//   POST  /api/v2/events/:id/graph-proposals/:pid/apply   approve + apply
+//   POST  /api/v2/events/:id/graph-proposals/:pid/reject  decline
+//   GET   /api/v2/agent-runtime/health          runtime health (Fake/DSH)
+//
+// Every write flows through a pending EventGraphProposal the user reviews;
+// the server applies it atomically (create Commitments + write the graph).
+// ---------------------------------------------------------------------------
+
+v2Router.get('/agent-runtime/health', async (_req, res) => {
+  try {
+    const rt = new FakeEventOperatorRuntime();
+    const health = await rt.health();
+    res.json({ health, runtime: 'template', note: 'Keyless template mode — no model inference yet.' });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/events/:id/agent-runs', async (req, res) => {
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const deps = makeEventGraphRouteDeps(repo, workspaceId);
+    const body = z.object({
+      mindmapId: z.string().min(8),
+      trigger: z.enum(['event_canvas', 'meeting_note', 'new_evidence']).optional(),
+      selectedContextRefs: z.array(z.object({ type: z.string().min(1), id: z.string().min(8) })).optional(),
+      contextBudgetBytes: z.number().int().positive().max(8 * 1024 * 1024).optional(),
+      templateMaxOps: z.number().int().positive().max(12).optional(),
+    }).parse(req.body ?? {});
+    const result = await startEventOperatorRun(repo, workspaceId, {
+      eventId: req.params.id,
+      mindmapId: body.mindmapId,
+      trigger: body.trigger,
+      selectedContextRefs: body.selectedContextRefs,
+      contextBudgetBytes: body.contextBudgetBytes,
+    }, deps, { templateMaxOps: body.templateMaxOps });
+    if (!result.proposal) {
+      res.status(201).json({ run: result.run, proposal: null, events: result.events, mode: 'waiting' });
+      return;
+    }
+    res.status(201).json({ run: result.run, proposal: result.proposal, events: result.events, mode: 'waiting_review' });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/events/:id/agent-runs', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const runs = await repo.listEventOperatorRuns({ eventId: req.params.id });
+    res.json({ items: runs });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/agent-runs/:id', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const run = await getEventOperatorRun(repo, req.params.id);
+    if (!run) return res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } });
+    res.json({ run });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/agent-runs/:id/cancel', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const run = await cancelEventOperatorRun(repo, req.params.id);
+    if (!run) return res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } });
+    res.json({ run });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/events/:id/graph-proposals/pending', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const proposal = await getPendingGraphProposal(repo, req.params.id);
+    res.json({ proposal: proposal ? { ...proposal, operations: proposal.operations } : null });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.get('/events/:id/graph-proposals', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const items = await repo.listEventGraphProposals({ eventId: req.params.id });
+    res.json({ items });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/events/:id/graph-proposals/:pid/apply', async (req, res) => {
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const deps = makeEventGraphRouteDeps(repo, workspaceId);
+    const body = z.object({
+      selection: z.array(z.string()).optional(),
+      userOverrides: z.record(z.record(z.unknown())).optional(),
+      forceStale: z.boolean().optional(),
+    }).parse(req.body ?? {});
+    const result = await applyEventGraphProposal(repo, deps, req.params.pid, {
+      selection: body.selection,
+      userOverrides: body.userOverrides,
+      forceStale: body.forceStale,
+    });
+    res.json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/events/:id/graph-proposals/:pid/reject', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const reason = req.body?.reason ?? 'user_rejected';
+    const proposal = await rejectEventGraphProposal(repo, req.params.pid, reason);
+    res.json({ proposal });
+  } catch (err) {
+    handleError(err, res);
+  }
+});

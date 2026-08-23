@@ -41,7 +41,14 @@ export type AuditEventKind =
   | 'workspace.import'
   | 'daily_report.create'
   | 'daily_report.read'
-  | 'daily_report.list';
+  | 'daily_report.list'
+  // AI Event Operator (2.2)
+  | 'event_run.create'
+  | 'event_run.update'
+  | 'event_run.cancel'
+  | 'graph_proposal.create'
+  | 'graph_proposal.apply'
+  | 'graph_proposal.reject';
 
 export interface AuditEvent {
   /** Stable, time-sortable id. */
