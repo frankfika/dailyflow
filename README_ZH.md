@@ -8,6 +8,9 @@
 >
 > 本地优先的任务、笔记、日历与 AI 工作台。
 
+> ⚠️ **本文已过时**（停留在 v1.5.0，未同步后续 Events / Mind Map / Topic Spaces / v2 AI-Native 等功能）。
+> 最新内容请以 [`README.md`](./README.md)（简体中文，随版本自动更新）与 [`README_EN.md`](./README_EN.md) 为准。
+
 ![DailyFlow Today](./docs/assets/home.png)
 
 ![Version](https://img.shields.io/github/v/release/frankfika/dailyflow?style=flat-square&label=version)

@@ -92,6 +92,14 @@ Design docs: [`docs/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/ROADSHOW_VS_PRODUCT_GAP.
 
 ![Mind Map](./visual-mindmap-2-populated.png)
 
+### Events: break a project into next actions
+
+- Left outline + right canvas dual pane; the project and its actions stay in view together.
+- Outline: single-click to edit, `Enter` sibling, `Tab` child, `↑↓` move, `Backspace` delete empty node.
+- Canvas nodes have persistent `+` buttons; the whole canvas pans/zooms/scrolls freely and node positions persist.
+- A node becomes a task through "Add to Task" with a date picker (today / tomorrow / +3d / next week / custom); scheduling only happens on confirm.
+- **🆕 AI Push forward (Event Operator — template mode)**: the `AI` button on an event detail generates a batch of "next step" candidate nodes you can approve individually; on accept the server **atomically creates real Commitments**, writes the new nodes back to the canvas, and tags AI provenance. **Zero writes before your confirmation**; if the event changes while you're reviewing, stale suggestions are flagged and never silently overwritten. ⚠️ **Currently a local "template mode" placeholder**: suggestions come from a deterministic template over the event's existing content, **not real model inference yet**. After you configure a model API key, the DeepSeek Harness runtime takes over and only the suggestion source changes — review/apply stay identical. See [event-operator-vertical-slice.md](./docs/implementation/event-operator-vertical-slice.md).
+
 ### Topic Spaces: semantic grouping across the workspace
 
 - A new `Topic Space` dimension that ties every artifact of a project, initiative, or long-running goal together.

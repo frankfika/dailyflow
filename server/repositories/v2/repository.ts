@@ -70,6 +70,12 @@ import {
   type JobStatus,
 } from '../../domain/v2/jobs.js';
 export type { JobRecord, JobStatus } from '../../domain/v2/jobs.js';
+import {
+  EventOperatorRunSchema,
+  EventGraphProposalSchema,
+  type EventOperatorRun,
+  type EventGraphProposal,
+} from '../../domain/v2/eventOperator.js';
 
 export interface WorkspaceContext {
   root: string;
@@ -620,6 +626,117 @@ export class V2Repository {
         }
       }
       return out;
+    } catch (err: any) {
+      if (err && err.code === 'ENOENT') return [];
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // EventOperatorRun (schemaVersion 2, AI Event Operator) — JSON, not
+  // markdown. This is the DSH successor of the v1 AgentRun; it lives in the
+  // same `.dailyflow/agent-runs/` folder so both stay readable.
+  // -------------------------------------------------------------------------
+
+  private eventRunPath(id: string): string {
+    if (!/^eval_[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) {
+      throw new Error('Invalid event operator run id.');
+    }
+    return path.join(this.layout.runs, `${id}.json`);
+  }
+
+  async saveEventOperatorRun(r: EventOperatorRun, opts: WriteOptions = {}): Promise<AtomicWriteResult> {
+    const validated = EventOperatorRunSchema.parse(r);
+    const filePath = this.eventRunPath(validated.id);
+    const result = await atomicWrite({ filePath, content: `${JSON.stringify(validated, null, 2)}\n`, expectedHash: opts.expectedHash });
+    await this.appendAudit(opts, result);
+    return result;
+  }
+
+  async getEventOperatorRun(id: string): Promise<EventOperatorRun | null> {
+    let filePath: string;
+    try {
+      filePath = this.eventRunPath(id);
+    } catch {
+      // A malformed id is "not found", not a crash — so the route can 404.
+      return null;
+    }
+    try {
+      const parsed = EventOperatorRunSchema.safeParse(JSON.parse(await fs.readFile(filePath, 'utf8')));
+      return parsed.success && parsed.data.workspaceId === this.ctx.workspaceId ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async listEventOperatorRuns(opts: { eventId?: string } = {}): Promise<EventOperatorRun[]> {
+    try {
+      const files = await listFiles(this.layout.runs, '.json');
+      const out: EventOperatorRun[] = [];
+      for (const f of files) {
+        try {
+          const text = await fs.readFile(f, 'utf8');
+          const parsed = EventOperatorRunSchema.safeParse(JSON.parse(text));
+          if (!parsed.success) continue;
+          if (parsed.data.workspaceId !== this.ctx.workspaceId) continue;
+          if (opts.eventId && parsed.data.eventId !== opts.eventId) continue;
+          out.push(parsed.data);
+        } catch {
+          // skip corrupt
+        }
+      }
+      return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    } catch (err: any) {
+      if (err && err.code === 'ENOENT') return [];
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // EventGraphProposal (schemaVersion 1, AI Event Operator) — JSON.
+  // -------------------------------------------------------------------------
+
+  private graphProposalPath(id: string): string {
+    if (!/^gprop_[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) {
+      throw new Error('Invalid event graph proposal id.');
+    }
+    return path.join(this.layout.graphProposals, `${id}.json`);
+  }
+
+  async saveEventGraphProposal(p: EventGraphProposal, opts: WriteOptions = {}): Promise<AtomicWriteResult> {
+    const validated = EventGraphProposalSchema.parse(p);
+    const filePath = this.graphProposalPath(validated.id);
+    const result = await atomicWrite({ filePath, content: `${JSON.stringify(validated, null, 2)}\n`, expectedHash: opts.expectedHash });
+    await this.appendAudit(opts, result);
+    return result;
+  }
+
+  async getEventGraphProposal(id: string): Promise<EventGraphProposal | null> {
+    try {
+      const parsed = EventGraphProposalSchema.safeParse(JSON.parse(await fs.readFile(this.graphProposalPath(id), 'utf8')));
+      return parsed.success && parsed.data.workspaceId === this.ctx.workspaceId ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async listEventGraphProposals(opts: { eventId?: string; status?: EventGraphProposal['status'] } = {}): Promise<EventGraphProposal[]> {
+    try {
+      const files = await listFiles(this.layout.graphProposals, '.json');
+      const out: EventGraphProposal[] = [];
+      for (const f of files) {
+        try {
+          const parsed = EventGraphProposalSchema.safeParse(JSON.parse(await fs.readFile(f, 'utf8')));
+          if (!parsed.success) continue;
+          if (parsed.data.workspaceId !== this.ctx.workspaceId) continue;
+          if (opts.eventId && parsed.data.eventId !== opts.eventId) continue;
+          if (opts.status && parsed.data.status !== opts.status) continue;
+          out.push(parsed.data);
+        } catch {
+          // skip corrupt
+        }
+      }
+      return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     } catch (err: any) {
       if (err && err.code === 'ENOENT') return [];
       throw err;
