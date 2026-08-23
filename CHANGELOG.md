@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/frankfika/dailyflow/compare/v2.1.1...v2.2.0) (2026-08-23)
+
+
+### Features
+
+* **event-operator:** AI Event Operator vertical slice — “AI 推进” (模板模式) ([#50](https://github.com/frankfika/dailyflow/issues/50)) ([68d5e2a](https://github.com/frankfika/dailyflow/commit/68d5e2aef32521912d5dc053fb0c21c240db914c))
+
 ## [2.1.1](https://github.com/frankfika/dailyflow/compare/v2.1.0...v2.1.1) (2026-08-21)
 
 
