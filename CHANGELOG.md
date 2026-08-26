@@ -5,6 +5,18 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0](https://github.com/frankfika/dailyflow/compare/v2.2.2...v2.3.0) (2026-08-26)
+
+
+### Features
+
+* **event-operator:** ship DeepSeek Harness runtime ([ccb3ab2](https://github.com/frankfika/dailyflow/commit/ccb3ab22aa40f8ad0f33a7a66c1ff3e86b71cf96))
+
+
+### Bug Fixes
+
+* **ci:** sync DSH peer dependency lockfile ([b133cf5](https://github.com/frankfika/dailyflow/commit/b133cf55e04cb72ef0fbdb2ea8ad3d3a54dcfe1d))
+
 ## [2.2.2](https://github.com/frankfika/dailyflow/compare/v2.2.1...v2.2.2) (2026-08-24)
 
 
