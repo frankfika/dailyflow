@@ -24,6 +24,7 @@ import {
   mirrorTaskCompletionToMindmap,
   type MirrorResult,
 } from '../services/v2/taskCompletionMirror.js';
+import { completeCommitmentTodayItem } from '../services/v2/eventCommitmentProjection.js';
 
 /**
  * Best-effort v1 mirror hook. The v1 events router has no V2Repository
@@ -246,6 +247,15 @@ router.post('/actions/complete-node-task', async (req, res) => {
     const b = req.body || {};
     if (!b.taskId || !b.scheduledDate) {
       return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
+    }
+    if (typeof b.taskId === 'string' && b.taskId.startsWith('com_')) {
+      const { repo } = await bootstrapV2();
+      const result = await completeCommitmentTodayItem(repo, b.taskId);
+      const mirror = result.completed
+        ? await mirrorTaskCompletionToMindmap(repo, { taskId: b.taskId, taskDate: b.scheduledDate, completedAt: result.completedAt ?? new Date().toISOString() })
+        : null;
+      res.json({ ...result, mirror });
+      return;
     }
     const result = await withDateLock(b.scheduledDate, () => completeNodeTask({ taskId: b.taskId, scheduledDate: b.scheduledDate }));
 

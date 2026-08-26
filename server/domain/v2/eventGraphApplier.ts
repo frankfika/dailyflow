@@ -182,6 +182,7 @@ function makeCreateChange(
       draft: {
         summary: draft.outcomeSummary ?? title,
         kind: draft.outcomeKind ?? 'delivered',
+        commitmentId: draft.commitmentId,
       },
       evidenceIds: op.evidenceIds,
       confidence: op.confidence,

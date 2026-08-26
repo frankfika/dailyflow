@@ -1,0 +1,48 @@
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      dailyflow:
+        displayName: DailyFlow Model Center
+        apiKeyEnv: DAILYFLOW_DSH_API_KEY
+        api: !!js process.env.DAILYFLOW_DSH_API ?? 'openai-completions'
+        baseURL: !!js process.env.DAILYFLOW_DSH_BASE_URL
+        timeoutMs: 120000
+        retryPolicy:
+          mode: normal
+          maxRetries: 1
+        models:
+          - id: !!js process.env.DAILYFLOW_DSH_MODEL ?? 'dailyflow-model'
+            name: DailyFlow Event Operator
+            contextWindow: 131072
+            maxTokens: 4096
+
+# The preview spine requires its shell producer to settle the concrete agent
+# factory. It is never model-visible: the per-agent allow-mask and monotonic
+# guard below exclude `bash` before the first prompt is assembled.
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- id: bash-runtime
+  name: '@deepseek-ai/dsh-bash-local'
+
+- id: acp-agent
+  name: '@deepseek-ai/dsh-acp-demo'
+  config:
+    provider: dailyflow
+    model: !!js process.env.DAILYFLOW_DSH_MODEL ?? 'dailyflow-model'
+    maxParallelToolCalls: 1
+    persona: >-
+      You are DailyFlow's Event Operator. The seven DailyFlow tools are your
+      complete authority. Work only on the event projection supplied by them.
+      Never claim to use files, shell, terminal, browser, web, MCP, subagents,
+      workflows, or any workspace capability. Formal business records are
+      proposal-only and require user review in DailyFlow.
+    tools:
+      mode: native
+    workspaceContext: false
+    persistenceRoot: !!js process.env.DAILYFLOW_DSH_SESSION_ROOT
+    persistenceCompression: none
+
+- id: dailyflow-tools
+  name: './dailyflow-tools.mjs'

@@ -101,7 +101,7 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 - 新建事件后画布中央直接输入第一个步骤，零门槛开始拆解。
 - 节点通过「添加为任务」转成任务：弹出日期浮层（今天 / 明天 / +3 天 / 下周 / 自定义日期），点「安排」确认后才排期，不再一键硬塞今天。
 - 节点 chip、大纲行、底部工具栏三个入口共用同一个日期浮层；任务节点带绿色侧条和日期标记，可改期、移出日程或直接标记完成，Today 里能看到来源事件和节点路径。
-- **🆕 AI 推进（Event Operator — 模板模式）**：事件详情右上角「AI 推进」，先由 AI 生成一批"下一步"候选节点（可逐条勾选），你接受后服务端**原子创建真实 Commitment** 并写回画布、标记 AI 来源。**确认前零写入**；事件若在审阅期间被改动，建议会标记过期而绝不静默覆盖。⚠️ **当前为本地「模板模式」占位**：建议由确定性模板基于事件已有内容生成，**尚未接入真实模型推理**；接入模型 key 后由 DeepSeek Harness 接管，仅替换建议来源，审阅 / 应用流程不变。详见 [event-operator-vertical-slice.md](./docs/implementation/event-operator-vertical-slice.md)。
+- **🆕 AI 推进（Event Operator）**：事件详情右上角「AI 推进」会先展示本次发送的 Event、Evidence 和 Commitment 范围，确认后由打包的 DeepSeek Harness sidecar 运行受限 Agent。运行过程支持实时阶段、取消、断线重连和恢复；候选节点、边、Commitment、Decision 与 Outcome 可在画布上逐项审阅，接受后才原子写入。**确认前正式数据零写入**，revision 冲突、重复提交和部分失败均有防护；模型只能看到 7 个 DailyFlow 白名单工具，不暴露 Shell、文件写入、Terminal 或任意 MCP。详见 [DeepSeek Harness 实施计划](./docs/DAILYFLOW_2_2_DEEPSEEK_HARNESS_IMPLEMENTATION_PLAN.md)。
 
 ![Mind Map](./visual-mindmap-2-populated.png)
 

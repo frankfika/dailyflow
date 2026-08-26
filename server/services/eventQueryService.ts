@@ -6,6 +6,9 @@ import { getTopicSpace, listTopicSpaces, findTopicSpaceByTaskId } from './topicS
 import * as path from 'path';
 import fsBase from 'fs';
 import { promises as fs } from 'fs';
+import { V2Repository } from '../repositories/v2/repository.js';
+import { projectCommitmentsIntoEventDetail, listCommitmentTodayItems } from './v2/eventCommitmentProjection.js';
+import type { MindMap } from '../types/mindmap.js';
 
 async function resolveWorkspaceRoot(workspaceRoot?: string): Promise<string> {
   if (workspaceRoot !== undefined) {
@@ -111,8 +114,13 @@ export async function getEventById(
 ): Promise<EventDetail | null> {
   const root = await resolveWorkspaceRoot(workspaceRoot);
   const spaceFile = await resolveEventIdToSpaceFile(eventId, root);
-  if (spaceFile) return getEventDetail(spaceFile, root, scanFrom, scanTo);
-  return buildIndependentMindMapEventDetail(root, eventId, scanFrom, scanTo);
+  const detail = spaceFile
+    ? await getEventDetail(spaceFile, root, scanFrom, scanTo)
+    : await buildIndependentMindMapEventDetail(root, eventId, scanFrom, scanTo);
+  if (!detail) return null;
+  const map = await readMindMapAtRoot(root, detail.mindmapId);
+  if (!map) return detail;
+  return projectCommitmentsIntoEventDetail(await v2RepositoryForRoot(root), detail, map);
 }
 
 export async function listEvents(workspaceRoot?: string): Promise<EventSummary[]> {
@@ -139,8 +147,45 @@ export async function listTodayItems(
 ): Promise<TodayItem[]> {
   const root = await resolveWorkspaceRoot(workspaceRoot);
   const safeContext = normalizeContext(context);
-  const result = await adapterListToday(root, date, safeContext);
-  return result || [];
+  const legacy = await adapterListToday(root, date, safeContext) || [];
+  const summaries = await listEvents(root);
+  const eventMaps: Array<{ detail: EventDetail; map: MindMap }> = [];
+  for (const summary of summaries) {
+    const detail = await getEventById(summary.id, root);
+    if (!detail) continue;
+    const map = await readMindMapAtRoot(root, detail.mindmapId);
+    if (map) eventMaps.push({ detail, map });
+  }
+  const projected = await listCommitmentTodayItems(await v2RepositoryForRoot(root), date, eventMaps, safeContext);
+  // A commitment entityRef is authoritative for its node. Overwrite a legacy
+  // item at the same surface key and then dedupe by task/commitment id.
+  const bySurface = new Map(legacy.map((item) => [item.id, item]));
+  for (const item of projected) bySurface.set(item.id, item);
+  const seenTaskIds = new Set<string>();
+  return [...bySurface.values()].filter((item) => {
+    if (seenTaskIds.has(item.taskId)) return false;
+    seenTaskIds.add(item.taskId);
+    return true;
+  });
+}
+
+async function v2RepositoryForRoot(root: string): Promise<V2Repository> {
+  let workspaceId = 'ws_v2_default';
+  try {
+    const config = await loadConfig();
+    if (config.workspaceRoot && path.resolve(config.workspaceRoot) === path.resolve(root) && config.activeWorkspaceId) {
+      workspaceId = config.activeWorkspaceId;
+    }
+  } catch { /* explicit fixture roots use the default V2 workspace id */ }
+  return new V2Repository({ root, workspaceId });
+}
+
+async function readMindMapAtRoot(root: string, mindmapId: string): Promise<MindMap | null> {
+  try {
+    return JSON.parse(await fs.readFile(path.join(root, '.dailyflow', 'mindmaps', `${mindmapId}.json`), 'utf8')) as MindMap;
+  } catch {
+    return null;
+  }
 }
 
 export async function listStandaloneTasks(

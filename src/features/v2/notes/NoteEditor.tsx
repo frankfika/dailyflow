@@ -27,6 +27,7 @@ import { relativeTime } from './relativeTime';
 import { useWorkspaceScope } from '../../../workspaceScope';
 import { queryKeys } from '../../../queryKeys';
 import { MeetingNotePanel } from './MeetingNotePanel';
+import { MeetingEventLauncher } from './MeetingEventLauncher';
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -577,6 +578,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             }}
             onInsertTranscript={insertTranscriptIntoNote}
           />
+          <MeetingEventLauncher note={note} language={language} onNotice={onNotice} />
           </div>
         </div>
       )}

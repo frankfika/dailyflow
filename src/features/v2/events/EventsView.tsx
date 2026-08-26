@@ -22,6 +22,8 @@ import {
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
 import { AgentRunPanel } from './AgentRunPanel';
+import { EventOperatorContextPreview, type ContextRef } from './EventOperatorContextPreview';
+import { getPendingGraphProposal, listEventOperatorRuns, type EventGraphProposal, type EventOperatorRun } from '../api/client';
 
 export interface EventsViewProps {
   language?: 'zh' | 'en';
@@ -152,6 +154,13 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
+  const [contextPreviewOpen, setContextPreviewOpen] = useState(false);
+  const [runContextRefs, setRunContextRefs] = useState<ContextRef[]>([]);
+  const [autoStartRun, setAutoStartRun] = useState(false);
+  const [graphProposal, setGraphProposal] = useState<EventGraphProposal | null>(null);
+  const [proposalSelection, setProposalSelection] = useState<Set<string>>(() => new Set());
+  const [activeProposalChangeId, setActiveProposalChangeId] = useState<string | null>(null);
+  const [recoverableRun, setRecoverableRun] = useState<EventOperatorRun | null>(null);
   const [outlineVisible, setOutlineVisible] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const raw = window.localStorage.getItem(OUTLINE_VISIBILITY_KEY);
@@ -159,6 +168,31 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   });
   const event = detailQ.data?.event;
   const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
+
+  useEffect(() => {
+    if (!event) return;
+    const key = `dailyflow:event-operator-context:${event.id}`;
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return;
+      sessionStorage.removeItem(key);
+      const parsed = JSON.parse(raw) as { contextRefs?: ContextRef[] };
+      setRunContextRefs(parsed.contextRefs ?? []);
+      setContextPreviewOpen(true);
+    } catch { /* optional navigation handoff */ }
+  }, [event?.id]);
+
+  useEffect(() => {
+    if (!event) return;
+    let live = true;
+    Promise.all([getPendingGraphProposal(event.id), listEventOperatorRuns(event.id)]).then(([pending, runs]) => {
+      if (!live) return;
+      const latest = runs.items[0] ?? null;
+      if (pending.proposal) { setGraphProposal(pending.proposal); setRecoverableRun(latest); }
+      else if (latest && ['queued', 'starting', 'running', 'waiting_review', 'applying', 'failed'].includes(latest.status)) setRecoverableRun(latest);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [event?.id]);
 
   const toggleOutline = useCallback(() => {
     setOutlineVisible((prev) => {
@@ -282,12 +316,13 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const focusedNodeId = query && matches.length ? matches[0].id : null;
 
   return <section className="flex h-full min-h-0 flex-col" data-testid="event-detail">
+    {recoverableRun && <button type="button" onClick={() => setAgentPanelOpen(true)} className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2 text-left text-xs text-amber-900" data-testid="agent-run-recovery-banner"><span>{language === 'zh' ? `发现可恢复的 AI Run：${recoverableRun.status === 'waiting_review' ? '建议等待审阅' : recoverableRun.error?.message ?? recoverableRun.status}` : `Resumable AI run: ${recoverableRun.status === 'waiting_review' ? 'proposal awaiting review' : recoverableRun.error?.message ?? recoverableRun.status}`}</span><span className="font-semibold">{language === 'zh' ? '恢复' : 'Resume'} →</span></button>}
     <header className="relative z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#101514]">
       <button onClick={onBack} aria-label={t.back} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><ArrowLeft className="h-4 w-4" /></button>
       <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-950 dark:text-gray-50">{event.title}</h1>
       <button
         type="button"
-        onClick={() => setAgentPanelOpen(true)}
+        onClick={() => setContextPreviewOpen(true)}
         title={language === 'zh' ? 'AI 推进这个事件' : 'AI push this event forward'}
         aria-label={language === 'zh' ? 'AI 推进' : 'AI push forward'}
         className="flex items-center gap-1.5 rounded-lg border border-[#23877B]/30 bg-[#23877B]/5 px-3 py-2 text-sm font-medium text-[#23877B] hover:bg-[#23877B]/10"
@@ -354,6 +389,10 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onUnschedule={handleUnschedule}
           onToggleDone={handleToggleDone}
           onMoveNodePosition={handleMoveNodePosition}
+          proposal={graphProposal}
+          proposalSelection={proposalSelection}
+          activeProposalChangeId={activeProposalChangeId}
+          onSelectProposalChange={(changeId) => { setActiveProposalChangeId(changeId); setAgentPanelOpen(true); }}
         />
       </div>
     </div>
@@ -362,11 +401,15 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         language={language}
         eventId={event.id}
         mindmapId={event.mindmapId}
+        initialContextRefs={runContextRefs}
+        autoStart={autoStartRun}
         onNotice={onNotice}
         onApplied={() => { void detailQ.refetch(); }}
-        onClose={() => setAgentPanelOpen(false)}
+        onClose={() => { setAgentPanelOpen(false); setAutoStartRun(false); }}
+        onProposalChange={(proposal, selection, activeChangeId) => { setGraphProposal(proposal); setProposalSelection(new Set(selection)); setActiveProposalChangeId(activeChangeId); }}
       />
     )}
+    {contextPreviewOpen && <EventOperatorContextPreview event={event} language={language} defaultRefs={runContextRefs} onCancel={() => setContextPreviewOpen(false)} onConfirm={(refs) => { setRunContextRefs(refs); setAutoStartRun(true); setContextPreviewOpen(false); setAgentPanelOpen(true); }} />}
   </section>;
 }
 

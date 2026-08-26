@@ -749,6 +749,11 @@ export interface EventOperatorRun {
   mindmapId: string;
   runtimeId: 'deepseek-harness';
   runtimeVersion: string;
+  modelProvider?: string;
+  model?: string;
+  promptVersion?: string;
+  contextManifest?: Array<{ entityType: string; entityId: string; bytes: number; version?: string; contentHash?: string }>;
+  metrics?: { durationMs?: number; modelRequests?: number; toolCalls?: number; inputTokens?: number; outputTokens?: number; estimatedCost?: number };
   proposalId?: string;
   phase: EventOperatorPhaseId;
   status: 'queued' | 'starting' | 'running' | 'waiting_review' | 'applying' | 'succeeded' | 'failed' | 'cancelled';
@@ -764,7 +769,10 @@ export interface GraphOperation {
   parentId?: string;
   nodeId?: string;
   node?: { kind: string; text: string; note?: string };
-  domainDraft?: { entity?: string; title?: string; state?: string; waitingOnText?: string; reviewAt?: string; decision?: string };
+  newParentId?: string;
+  patch?: { text?: string; kind?: string; note?: string };
+  evidenceIds?: string[];
+  domainDraft?: { entity?: string; title?: string; state?: string; waitingOnText?: string; reviewAt?: string; decision?: string; ownerText?: string; dueAt?: string; nextAction?: string; rationale?: string };
   confidence: number;
   reason: string;
 }
@@ -786,7 +794,7 @@ export interface EventGraphProposal {
 }
 
 export interface EventOperatorHealth {
-  health: { ready: boolean; modelConfigured: boolean; toolkitSafe?: boolean };
+  health: { ready: boolean; modelConfigured: boolean; toolkitSafe?: boolean; version?: string; profileVersion?: string; protocolVersion?: string; sidecar?: string; codexSubagentEnabled?: boolean };
   runtime: string;
   mode?: string;
 }
@@ -796,6 +804,7 @@ export const getEventOperatorHealth = () => request<EventOperatorHealth>('GET', 
 export const startEventOperatorRun = (eventId: string, body: {
   mindmapId: string;
   trigger?: 'event_canvas' | 'meeting_note' | 'new_evidence';
+  selectedContextRefs?: Array<{ type: string; id: string }>;
   templateMaxOps?: number;
 }) => request<{ run: EventOperatorRun; proposal: EventGraphProposal | null; events: unknown[]; mode: string }>(
   'POST',
@@ -805,17 +814,64 @@ export const startEventOperatorRun = (eventId: string, body: {
 
 export const getEventOperatorRun = (runId: string) => request<{ run: EventOperatorRun }>('GET', `/agent-runs/${runId}`);
 
+export const listEventOperatorRuns = (eventId: string) =>
+  request<{ items: EventOperatorRun[] }>('GET', `/events/${encodeURIComponent(eventId)}/agent-runs`);
+
+export const retryEventOperatorRun = (runId: string) =>
+  request<{ run: EventOperatorRun; proposal?: EventGraphProposal | null }>('POST', `/agent-runs/${encodeURIComponent(runId)}/retry`, {});
+
+export interface StoredRunEvent {
+  schemaVersion: 1;
+  workspaceId: string;
+  runId: string;
+  cursor: string;
+  fingerprint: string;
+  type: string;
+  at: string;
+  payload: Record<string, unknown>;
+}
+
+/** Resumable SSE stream. The cursor is persisted by the caller and sent on reconnect. */
+export function subscribeEventOperatorRun(
+  runId: string,
+  cursor: string | undefined,
+  handlers: { onEvent: (event: StoredRunEvent) => void; onOpen?: () => void; onError?: () => void },
+): () => void {
+  if (typeof EventSource === 'undefined') return () => {};
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  const source = new EventSource(`${API_BASE.api}/api/v2/agent-runs/${encodeURIComponent(runId)}/events${query}`);
+  const consume = (raw: MessageEvent<string>) => {
+    try { handlers.onEvent(JSON.parse(raw.data) as StoredRunEvent); } catch { /* malformed events are ignored */ }
+  };
+  const types = ['run.started', 'phase.changed', 'tool.called', 'tool.completed', 'proposal.ready', 'run.completed', 'run.failed', 'run.cancelled'];
+  types.forEach((type) => source.addEventListener(type, consume as EventListener));
+  source.onopen = () => handlers.onOpen?.();
+  source.onerror = () => handlers.onError?.();
+  return () => source.close();
+}
+
 export const cancelEventOperatorRun = (runId: string) => request<{ run: EventOperatorRun }>('POST', `/agent-runs/${runId}/cancel`, {});
 
 export const getPendingGraphProposal = (eventId: string) =>
   request<{ proposal: EventGraphProposal | null }>('GET', `/events/${encodeURIComponent(eventId)}/graph-proposals/pending`);
 
-export const applyGraphProposal = (eventId: string, proposalId: string, options?: { selection?: string[] }) =>
-  request<{ proposal: EventGraphProposal; createdCommitments: number; appliedChanges: string[]; staleChangeIds: string[] }>(
+export const applyGraphProposal = (eventId: string, proposalId: string, options?: { idempotencyKey?: string; selection?: string[]; userOverrides?: Record<string, Record<string, unknown>> }) =>
+  request<{ proposal: EventGraphProposal; createdCommitments: number; appliedChanges: string[]; staleChangeIds: string[]; replayed?: boolean; affectedSurfaces: string[] }>(
     'POST',
     `/events/${encodeURIComponent(eventId)}/graph-proposals/${proposalId}/apply`,
-    { selection: options?.selection },
+    {
+      idempotencyKey: options?.idempotencyKey ?? graphApplyKey(proposalId, options?.selection, options?.userOverrides),
+      selection: options?.selection,
+      userOverrides: options?.userOverrides,
+    },
   );
+
+function graphApplyKey(proposalId: string, selection?: string[], overrides?: Record<string, Record<string, unknown>>): string {
+  const value = JSON.stringify({ selection: [...(selection ?? [])].sort(), overrides: overrides ?? {} });
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  return `graph-apply:${proposalId}:${(hash >>> 0).toString(16)}`;
+}
 
 export const rejectGraphProposal = (eventId: string, proposalId: string, reason?: string) =>
   request<{ proposal: EventGraphProposal }>(

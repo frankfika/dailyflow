@@ -58,6 +58,8 @@ export interface MindMapNodeProvenance {
   origin: 'user' | 'ai' | 'migration';
   proposalId?: string;
   agentRunId?: string;
+  /** Stable Proposal operation identity used to make graph writes idempotent. */
+  changeId?: string;
   acceptedAt?: string;
 }
 

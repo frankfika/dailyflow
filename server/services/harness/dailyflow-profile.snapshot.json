@@ -1,0 +1,30 @@
+{
+  "profile": "dailyflow",
+  "profileVersion": "1",
+  "runtimePackage": "@deepseek-ai/dsh@0.1.1-rc.2",
+  "protocolPackage": "@deepseek-ai/dsh-acp@0.1.1-rc.2",
+  "tools": [
+    "read_event",
+    "read_mindmap",
+    "read_evidence",
+    "search_evidence",
+    "list_commitments",
+    "propose_graph_patch",
+    "complete_event_run"
+  ],
+  "disabledCapabilities": [
+    "bash",
+    "shell",
+    "filesystem",
+    "terminal",
+    "pty",
+    "mcp",
+    "web",
+    "browser",
+    "schedule",
+    "skills",
+    "subagent",
+    "workflow"
+  ],
+  "codexSubagent": false
+}

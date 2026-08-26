@@ -304,6 +304,18 @@ describe('validateGraphProposal', () => {
     expect(r.issues.some((i) => i.code === 'WAITING_FIELDS_MISSING')).toBe(true);
   });
 
+  it.each([
+    ['task', { entity: 'decision', decision: 'x' }],
+    ['decision', { entity: 'commitment', title: 'x' }],
+    ['outcome', { entity: 'outcome', outcomeSummary: 'done', commitmentId: 'com_GHOST' }],
+  ] as const)('rejects invalid %s domain materialization', (kind, domainDraft) => {
+    const proposal = validProposal({
+      operations: [{ changeId: `bad_${kind}`, op: 'add_node', tempId: `tmp_${kind}`, parentId: 'root_1', node: { kind, text: 'x' }, domainDraft, evidenceIds: ['ev_999'], confidence: 0.8, reason: 'r' }],
+    });
+    const result = validateGraphProposal(proposal, snapshot());
+    expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'DOMAIN_DRAFT_INVALID', changeId: `bad_${kind}` })]));
+  });
+
   it('rejects illegal root kind transition', () => {
     const p = validProposal({
       operations: [

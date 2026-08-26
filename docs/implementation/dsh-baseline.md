@@ -2,7 +2,7 @@
 
 > 来源：DailyFlow 2.2 DeepSeek Harness 实施计划（DFH-001）
 > 日期：2026-08-23
-> 执行分支：`claude/beautiful-goldstine-8a684f`（worktree）
+> 执行分支：历史基线记录（实施已收口到 `main`）
 
 ## 版本引用
 
@@ -57,3 +57,10 @@
 ## 基线签名
 
 三闸门全绿，可作为后续每个 DFH 任务回归对照的干净起点。
+
+## 2026-08-26 实施收口
+
+- DSH 生产路径锁定 `0.1.1-rc.2`，通过 ACP/stdio 启动；provider adapter 仅保留为显式 degraded 模式。
+- 桌面产物包含 Node `22.19.0`、DSH profile 和依赖闭包；打包后 ACP boot 与精确 7 工具 schema 已由 `npm run check:dsh-bundle` 验证。
+- 正式数据只能经 Proposal 审阅/应用写入；Run 事件持久化、SSE cursor、取消、恢复、诊断、隐私裁剪均已接入。
+- 收口回归：TypeScript 通过，Vitest `128 files / 947 tests`，前端生产构建与 server/sidecar 打包通过。

@@ -70,6 +70,8 @@ export async function bootstrapV2(opts: V2BootstrapOptions = {}): Promise<V2Boot
     layout.attachments,
     layout.proposals,
     layout.runs,
+    layout.runEvents,
+    layout.graphProposals,
     path.dirname(layout.internal.audit),
   ]) {
     await fs.mkdir(dir, { recursive: true });

@@ -40,7 +40,8 @@
     "resources": [
       "../dist-server/index.cjs",
       "../dist-server/node",
-      "../dist-server/lark-cli*"
+      "../dist-server/lark-cli*",
+      "../dist-server/dsh/**/*"
     ]
   },
   "plugins": {

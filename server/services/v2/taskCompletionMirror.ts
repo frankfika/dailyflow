@@ -89,7 +89,10 @@ export async function mirrorTaskCompletionToMindmap(
     if (!map) continue;
 
     const matches = map.nodes.filter(
-      (n) => n.kind === 'task' && n.taskId === taskId,
+      (n) => n.kind === 'task' && (
+        n.taskId === taskId
+        || n.entityRefs?.some((ref) => ref.type === 'commitment' && ref.id === taskId)
+      ),
     );
     if (matches.length === 0) continue;
 

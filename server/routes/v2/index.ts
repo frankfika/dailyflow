@@ -144,9 +144,14 @@ import {
   getPendingGraphProposal,
   applyEventGraphProposal,
   rejectEventGraphProposal,
+  validateEventGraphProposal,
 } from '../../services/v2/eventOperatorService.js';
 import { makeEventGraphRouteDeps } from '../../services/v2/eventGraphMindmapBridge.js';
-import { FakeEventOperatorRuntime } from '../../services/harness/FakeEventOperatorRuntime.js';
+import { getDeepSeekHarnessRuntime } from '../../services/harness/DeepSeekHarnessRuntime.js';
+import { streamEventOperatorRunEvents } from '../../services/v2/eventOperatorSse.js';
+import { prepareEventOperatorRunRetry, recoverEventOperatorRuns } from '../../services/v2/eventRunRecovery.js';
+import { diagnoseEventOperatorRuntime } from '../../services/v2/eventOperatorDiagnostics.js';
+import { EVENT_OPERATOR_TOOL_WHITELIST } from '../../services/v2/eventOperatorTools.js';
 
 export const v2Router = Router();
 
@@ -177,7 +182,8 @@ v2Router.use(async (_req, res, next) => {
 });
 
 function getV2(res: Response): { repo: import('../../repositories/v2/repository.js').V2Repository; workspaceId: string; ctx: import('../../repositories/v2/repository.js').WorkspaceContext } {
-  return res.locals.v2;
+  const value = res.locals.v2 as { repo: import('../../repositories/v2/repository.js').V2Repository; ctx: import('../../repositories/v2/repository.js').WorkspaceContext };
+  return { ...value, workspaceId: value.ctx.workspaceId };
 }
 
 async function requireConnectorsV2(_req: Request, res: Response, next: NextFunction) {
@@ -325,11 +331,19 @@ function handleError(err: unknown, res: Response): void {
       return;
     }
     // AI Event Operator errors.
-    if (e.code === 'proposal_stale' || e.code === 'pending_proposal_exists' || e.code === 'run_not_cancellable' || e.code === 'proposal_not_pending') {
+    if (e.code === 'proposal_stale' || e.code === 'pending_proposal_exists' || e.code === 'run_not_cancellable' || e.code === 'run_not_retryable' || e.code === 'proposal_not_pending' || e.code === 'IDEMPOTENCY_KEY_REUSED' || e.code === 'PROPOSAL_ALREADY_APPLIED' || e.code === 'PROPOSAL_APPLY_BUSY') {
       res.status(409).json({ error: { code: e.code, message: e.message } });
       return;
     }
-    if (e.code === 'proposal_invalid') {
+    if (e.code === 'not_found') {
+      res.status(404).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'invalid_cursor') {
+      res.status(400).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'proposal_invalid' || e.code === 'graph_domain_apply_failed') {
       res.status(422).json({ error: { code: e.code, message: e.message, issues: (e as { issues?: unknown }).issues } });
       return;
     }
@@ -2155,9 +2169,17 @@ v2Router.get('/reports/daily/list', async (req, res) => {
 
 v2Router.get('/agent-runtime/health', async (_req, res) => {
   try {
-    const rt = new FakeEventOperatorRuntime();
+    const rt = getDeepSeekHarnessRuntime();
     const health = await rt.health();
-    res.json({ health, runtime: 'template', note: 'Keyless template mode — no model inference yet.' });
+    const diagnostic = diagnoseEventOperatorRuntime({ health, actualTools: EVENT_OPERATOR_TOOL_WHITELIST });
+    res.json({
+      health,
+      diagnostic,
+      runtime: health.degraded ? 'provider-adapter-fallback' : 'deepseek-harness',
+      note: health.degraded
+        ? 'A real model is available through the restricted provider adapter; the official DSH ACP sidecar is not active.'
+        : undefined,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -2212,6 +2234,37 @@ v2Router.get('/agent-runs/:id', async (req, res) => {
   }
 });
 
+v2Router.get('/agent-runs/:id/events', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    await streamEventOperatorRunEvents(repo, req.params.id, req, res);
+  } catch (err) {
+    if (!res.headersSent) handleError(err, res);
+    else res.end();
+  }
+});
+
+v2Router.post('/agent-runs/recover', async (_req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const results = await recoverEventOperatorRuns(repo);
+    res.json({ items: results });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/agent-runs/:id/retry', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const run = await prepareEventOperatorRunRetry(repo, req.params.id);
+    if (!run) return res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } });
+    res.json({ run });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
 v2Router.post('/agent-runs/:id/cancel', async (req, res) => {
   try {
     const { repo } = getV2(res);
@@ -2248,16 +2301,69 @@ v2Router.post('/events/:id/graph-proposals/:pid/apply', async (req, res) => {
     const { repo, workspaceId } = getV2(res);
     const deps = makeEventGraphRouteDeps(repo, workspaceId);
     const body = z.object({
+      idempotencyKey: z.string().min(1).max(512).optional(),
       selection: z.array(z.string()).optional(),
       userOverrides: z.record(z.record(z.unknown())).optional(),
-      forceStale: z.boolean().optional(),
     }).parse(req.body ?? {});
     const result = await applyEventGraphProposal(repo, deps, req.params.pid, {
+      idempotencyKey: body.idempotencyKey,
       selection: body.selection,
       userOverrides: body.userOverrides,
-      forceStale: body.forceStale,
     });
     res.json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// Canonical Event Graph Proposal API. The older event-nested routes remain as
+// compatibility aliases for the shipped client.
+v2Router.get('/event-graph-proposals/:pid', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const proposal = await repo.getEventGraphProposal(req.params.pid);
+    if (!proposal) return res.status(404).json({ error: { code: 'not_found', message: 'Graph proposal not found' } });
+    res.json({ proposal });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/event-graph-proposals/:pid/validate', async (req, res) => {
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const result = await validateEventGraphProposal(repo, makeEventGraphRouteDeps(repo, workspaceId), req.params.pid);
+    res.status(result.valid ? 200 : 409).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/event-graph-proposals/:pid/apply', async (req, res) => {
+  try {
+    const { repo, workspaceId } = getV2(res);
+    const body = z.object({
+      idempotencyKey: z.string().min(1).max(512),
+      selection: z.array(z.string()).optional(),
+      overrides: z.record(z.record(z.unknown())).optional(),
+    }).parse(req.body ?? {});
+    const result = await applyEventGraphProposal(repo, makeEventGraphRouteDeps(repo, workspaceId), req.params.pid, {
+      idempotencyKey: body.idempotencyKey,
+      selection: body.selection,
+      userOverrides: body.overrides,
+    });
+    res.json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+v2Router.post('/event-graph-proposals/:pid/reject', async (req, res) => {
+  try {
+    const { repo } = getV2(res);
+    const body = z.object({ reason: z.string().max(500).default('user_rejected') }).parse(req.body ?? {});
+    const proposal = await rejectEventGraphProposal(repo, req.params.pid, body.reason);
+    res.json({ proposal });
   } catch (err) {
     handleError(err, res);
   }

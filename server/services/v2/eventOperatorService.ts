@@ -5,7 +5,7 @@
  *
  * This is the server spine of the AI Event Operator vertical slice. It:
  *   1. `startEventOperatorRun` — persists an `EventOperatorRun`, drives a
- *      runtime (default: the deterministic `FakeEventOperatorRuntime`), and on
+ *      runtime (default: the production `DeepSeekHarnessRuntime`), and on
  *      `proposal.ready` persists an `EventGraphProposal` (a "graph patch"
  *      proposal) derived from the current event snapshot.
  *   2. `applyEventGraphProposal` — the user-approved apply. It calls the pure
@@ -26,11 +26,12 @@
  */
 import type { V2Repository } from '../../repositories/v2/repository.js';
 import { newId } from '../../domain/v2/ulid.js';
-import { FakeEventOperatorRuntime } from '../harness/FakeEventOperatorRuntime.js';
+import { getDeepSeekHarnessRuntime } from '../harness/DeepSeekHarnessRuntime.js';
 import type {
   AgentRuntime,
   RuntimeEvent,
   RuntimePhase,
+  RuntimeProposalDraft,
   RuntimeRunSpec,
 } from '../harness/AgentRuntime.js';
 import {
@@ -46,7 +47,6 @@ import {
 import {
   computeBaseRevision,
   validateGraphProposal,
-  stableHash,
   type GraphSnapshotBase,
 } from '../../domain/v2/eventGraphValidator.js';
 import {
@@ -59,6 +59,12 @@ import {
   rejectProposal,
 } from './proposalService.js';
 import { transition } from '../../domain/v2/eventRuntimeState.js';
+import { persistRuntimeEvent } from './runtimeEventPersistence.js';
+import {
+  graphApplyRequestHash,
+  inspectGraphApplyReplay,
+  withEventGraphApplyLock,
+} from './eventGraphApplyContract.js';
 
 export interface EventOperatorDeps {
   runtime?: AgentRuntime;
@@ -75,37 +81,33 @@ export interface EventOperatorDeps {
   }) => Promise<void>;
 }
 
-const PHASES: EventOperatorPhase[] = ['collect', 'retrieve', 'extract', 'resolve', 'prepare', 'review'];
-
 function isoNow(): string {
   return new Date().toISOString();
 }
 
-/**
- * The keyless "template mode" runtime default. It walks the phase sequence,
- * touches two read tools, then emits `proposal.ready` before completing — so
- * the shipped route actually produces a reviewable proposal, and so a future
- * DSH runtime that also emits `proposal.ready` plugs in identically. (An empty
- * Fake emits only `run.started` and would make the API inert — see the
- * adversarial review finding that this default is what makes the slice work.)
- */
-function defaultTemplateRuntime(): AgentRuntime {
-  return new FakeEventOperatorRuntime({
-    phases: PHASES,
-    deltas: 2,
-    tools: ['read_mindmap', 'read_evidence'],
-    proposal: true,
-    result: { status: 'succeeded' },
-  });
-}
-
-function scopeToSpec(scope: EventOperatorScope): RuntimeRunSpec {
+function scopeToSpec(scope: EventOperatorScope, snap: GraphSnapshotBase): RuntimeRunSpec {
+  const projection = {
+    event: { id: scope.eventId, status: snap.eventStatus },
+    mindmap: {
+      id: snap.mindmapId,
+      nodes: snap.nodes.map((node) => ({ id: node.id, kind: node.kind, text: node.text, entityRefs: node.entityRefs })),
+      edges: snap.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+    },
+    commitments: snap.commitments,
+    allowedEntityIds: [...snap.knownEntityIds],
+    allowedEvidenceIds: [...snap.knownEvidenceIds],
+  };
   return {
     eventId: scope.eventId,
     workspaceId: scope.workspaceId,
     scope,
     promptVersion: '1',
-    context: { bytes: scope.contextBudgetBytes, manifest: scopesToManifest(scope) },
+    context: {
+      bytes: Buffer.byteLength(JSON.stringify(projection)),
+      manifest: scopesToManifest(scope),
+      projection,
+      baseRevision: computeBaseRevision(snap),
+    },
   };
 }
 
@@ -279,6 +281,43 @@ export function buildTemplateProposal(
   return proposal;
 }
 
+/** Convert a model-produced draft into the only persisted approval object. */
+export function buildRuntimeProposal(
+  scope: EventOperatorScope,
+  snap: GraphSnapshotBase,
+  agentRunId: string,
+  draft: RuntimeProposalDraft,
+): EventGraphProposal {
+  const authoritativeRevision = computeBaseRevision(snap);
+  if (draft.baseRevision !== authoritativeRevision) {
+    throw Object.assign(new Error('Runtime proposal was generated from a stale or foreign graph revision.'), {
+      code: 'proposal_stale',
+    });
+  }
+  const proposal = EventGraphProposalSchema.parse({
+    id: newId('gprop'),
+    schemaVersion: 1,
+    workspaceId: scope.workspaceId,
+    eventId: scope.eventId,
+    mindmapId: scope.mindmapId,
+    agentRunId,
+    baseRevision: authoritativeRevision,
+    status: 'pending',
+    operations: draft.operations,
+    summary: draft.summary,
+    riskLevel: draft.operations.length > 4 ? 'medium' : 'low',
+    createdAt: isoNow(),
+  });
+  const validation = validateGraphProposal(proposal, snap);
+  if (!validation.ok) {
+    throw Object.assign(new Error('Model proposal failed DailyFlow graph validation.'), {
+      code: 'PROPOSAL_VALIDATION_FAILED',
+      issues: validation.issues,
+    });
+  }
+  return proposal;
+}
+
 function hasEntityRef(n: { entityRefs?: unknown }): boolean {
   return Array.isArray(n.entityRefs) && n.entityRefs.length > 0;
 }
@@ -301,7 +340,7 @@ export async function startEventOperatorRun(
   deps: EventOperatorDeps,
   opts: StartRunOptions = {},
 ): Promise<{ run: EventOperatorRun; proposal: EventGraphProposal | null; events: RuntimeEvent[] }> {
-  const runtime = opts.runtimeOverride ?? deps.runtime ?? defaultTemplateRuntime();
+  const runtime = opts.runtimeOverride ?? deps.runtime ?? getDeepSeekHarnessRuntime();
   const scope: EventOperatorScope = {
     workspaceId,
     trigger: opts.trigger ?? scopeInput.trigger ?? 'event_canvas',
@@ -328,9 +367,9 @@ export async function startEventOperatorRun(
     eventId: scope.eventId,
     mindmapId: scope.mindmapId,
     runtimeId: 'deepseek-harness' as const,
-    runtimeVersion: 'template@1',
-    modelProvider: 'template',
-    model: 'template-decomposition',
+    runtimeVersion: 'starting',
+    modelProvider: 'pending',
+    model: 'pending',
     promptVersion: '1',
     scope,
     phase: 'collect',
@@ -350,16 +389,52 @@ export async function startEventOperatorRun(
     auditData: { eventId: scope.eventId, trigger: scope.trigger },
   });
 
-  const handle = await runtime.start(scopeToSpec(scope));
+  const runtimeHealth = await runtime.health();
+  if (!runtimeHealth.ready) {
+    const failed = EventOperatorRunSchema.parse({
+      ...run,
+      status: 'failed',
+      error: {
+        code: runtimeHealth.failureCode ?? 'runtime_unavailable',
+        message: `Event Operator runtime is unavailable: ${runtimeHealth.failureCode ?? 'unknown'}`,
+        retryable: runtimeHealth.failureCode !== 'MODEL_NOT_CONFIGURED',
+      },
+      updatedAt: isoNow(),
+    });
+    await repo.saveEventOperatorRun(failed, {
+      auditKind: 'event_run.update',
+      auditEntity: { type: 'event_operator_run', id: run.id },
+      auditData: { event: 'runtime.health_failed', failureCode: runtimeHealth.failureCode },
+    });
+    throw Object.assign(new Error(`Event Operator runtime is unavailable: ${runtimeHealth.failureCode ?? 'unknown'}`), {
+      code: runtimeHealth.failureCode ?? 'runtime_unavailable',
+    });
+  }
+  const initialSnapshot = await deps.loadSnapshot(repo, scope);
+  const handle = await runtime.start(scopeToSpec(scope, initialSnapshot));
+  let latest = EventOperatorRunSchema.parse({
+    ...run,
+    runtimeVersion: runtimeHealth.runtimeVersion ?? 'unknown',
+    runtimeSessionId: handle.runId,
+    modelProvider: runtimeHealth.degraded ? 'openai-compatible-fallback' : 'deepseek-harness',
+    model: runtimeHealth.degraded ? 'configured-chat-model' : 'dsh-profile-model',
+    updatedAt: isoNow(),
+  });
+  await repo.saveEventOperatorRun(latest, {
+    auditKind: 'event_run.update',
+    auditEntity: { type: 'event_operator_run', id: run.id },
+    auditData: { event: 'runtime.started', runtimeSessionId: handle.runId },
+  });
 
   // Drain the deterministic stream synchronously. A real runtime streams async;
   // the seam + event store already support that, but the Fake is fast and we
   // can persist a complete, ordered run before returning.
   const events: RuntimeEvent[] = [];
-  let latest = { ...run };
   let proposal: EventGraphProposal | null = null;
   for await (const ev of handle.events()) {
     events.push(ev);
+    const persisted = await persistRuntimeEvent(repo, run.id, ev);
+    latest = EventOperatorRunSchema.parse({ ...latest, lastEventCursor: persisted.event.cursor });
     latest = await foldEvent(repo, latest, ev, deps, scope, { maxOps: opts.templateMaxOps }, (p) => { proposal = p; });
   }
 
@@ -386,7 +461,26 @@ async function foldEvent(
       break;
     case 'proposal.ready': {
       const snap = await deps.loadSnapshot(repo, scope);
-      const proposal = buildTemplateProposal(scope, snap, run.id, templateOpts);
+      let proposal: EventGraphProposal;
+      try {
+        proposal = ev.proposal
+          ? buildRuntimeProposal(scope, snap, run.id, ev.proposal)
+          : buildTemplateProposal(scope, snap, run.id, templateOpts);
+      } catch (error) {
+        const rawCode = (error as { code?: unknown })?.code;
+        next = EventOperatorRunSchema.parse({
+          ...next,
+          status: 'failed',
+          error: {
+            code: typeof rawCode === 'string' ? rawCode : 'PROPOSAL_VALIDATION_FAILED',
+            message: error instanceof Error ? error.message.slice(0, 500) : 'Proposal validation failed.',
+            retryable: true,
+            stage: 'prepare',
+          },
+          updatedAt: isoNow(),
+        });
+        break;
+      }
       await repo.saveEventGraphProposal(proposal, {
         auditKind: 'graph_proposal.create',
         auditEntity: { type: 'event_graph_proposal', id: proposal.id },
@@ -415,7 +509,7 @@ async function foldEvent(
     case 'run.completed':
       // If a proposal was persisted we hold at waiting_review (the user must
       // approve). Otherwise the run finishes clean.
-      if (next.status !== 'waiting_review') next = setStatus(next, 'succeeded');
+      if (!['waiting_review', 'failed', 'cancelled'].includes(next.status)) next = setStatus(next, 'succeeded');
       break;
     default:
       break;
@@ -449,6 +543,9 @@ export async function cancelEventOperatorRun(repo: V2Repository, runId: string):
   if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') {
     throw Object.assign(new Error(`Run is ${run.status}, cannot cancel.`), { code: 'run_not_cancellable' });
   }
+  if (run.runtimeSessionId) {
+    await getDeepSeekHarnessRuntime().cancel(run.runtimeSessionId);
+  }
   const next = setStatus(run, 'cancelled');
   transition(run.status, 'cancelled');
   await repo.saveEventOperatorRun(next, {
@@ -463,6 +560,33 @@ export async function getPendingGraphProposal(repo: V2Repository, eventId: strin
   return list[0] ?? null;
 }
 
+export async function validateEventGraphProposal(
+  repo: V2Repository,
+  deps: EventOperatorDeps,
+  proposalId: string,
+): Promise<{ proposal: EventGraphProposal; valid: boolean; issues: ReturnType<typeof validateGraphProposal>['issues']; currentRevision: string }> {
+  const proposal = await repo.getEventGraphProposal(proposalId);
+  if (!proposal) throw Object.assign(new Error('Graph proposal not found.'), { code: 'not_found' });
+  const scope: EventOperatorScope = {
+    workspaceId: proposal.workspaceId,
+    eventId: proposal.eventId,
+    mindmapId: proposal.mindmapId,
+    trigger: 'event_canvas',
+    selectedContextRefs: [],
+    contextBudgetBytes: 256 * 1024,
+  };
+  const snapshot = await deps.loadSnapshot(repo, scope);
+  const validation = validateGraphProposal(proposal, snapshot);
+  const currentRevision = computeBaseRevision(snapshot);
+  const revisionIssues = currentRevision === proposal.baseRevision ? [] : [{
+    code: 'REVISION_STALE',
+    message: 'The Event graph changed after this Proposal was created.',
+    retryable: true,
+  }];
+  const issues = [...validation.issues, ...revisionIssues];
+  return { proposal, valid: issues.length === 0, issues, currentRevision };
+}
+
 // ---------------------------------------------------------------------------
 // Apply / reject
 // ---------------------------------------------------------------------------
@@ -472,6 +596,8 @@ export interface ApplyGraphResult {
   createdCommitments: number;
   appliedChanges: string[];
   staleChangeIds: string[];
+  replayed?: boolean;
+  affectedSurfaces: Array<'events' | 'today' | 'proposals' | 'memory' | 'agentRuns'>;
 }
 
 /**
@@ -484,11 +610,22 @@ export async function applyEventGraphProposal(
   repo: V2Repository,
   deps: EventOperatorDeps,
   proposalId: string,
-  options: { selection?: string[]; userOverrides?: Record<string, Record<string, unknown>>; forceStale?: boolean } = {},
+  options: { idempotencyKey?: string; selection?: string[]; userOverrides?: Record<string, Record<string, unknown>> } = {},
+): Promise<ApplyGraphResult> {
+  return withEventGraphApplyLock(repo, proposalId, () => applyEventGraphProposalUnlocked(repo, deps, proposalId, options));
+}
+
+async function applyEventGraphProposalUnlocked(
+  repo: V2Repository,
+  deps: EventOperatorDeps,
+  proposalId: string,
+  options: { idempotencyKey?: string; selection?: string[]; userOverrides?: Record<string, Record<string, unknown>> },
 ): Promise<ApplyGraphResult> {
   let proposal = await repo.getEventGraphProposal(proposalId);
   if (!proposal) throw Object.assign(new Error('Graph proposal not found.'), { code: 'not_found' });
-  const key = `event-graph-apply:${proposal.id}`;
+  const key = options.idempotencyKey ?? `event-graph-apply:${proposal.id}`;
+  const replay = inspectGraphApplyReplay(proposal, { idempotencyKey: key, selection: options.selection, overrides: options.userOverrides });
+  if (replay) return { ...replay, affectedSurfaces: ['events', 'today', 'proposals', 'memory', 'agentRuns'] };
   if (proposal.status !== 'pending') {
     throw Object.assign(new Error(`Graph proposal is ${proposal.status}.`), { code: 'proposal_not_pending' });
   }
@@ -511,7 +648,7 @@ export async function applyEventGraphProposal(
     options.userOverrides,
   );
 
-  if (plan.staleChangeIds.length > 0 && !options.forceStale) {
+  if (plan.staleChangeIds.length > 0) {
     throw Object.assign(
       new Error(`The event changed after this proposal was built (${plan.staleChangeIds.length} change(s) are stale). Refresh and regenerate.`),
       { code: 'proposal_stale', staleChangeIds: plan.staleChangeIds },
@@ -529,8 +666,8 @@ export async function applyEventGraphProposal(
   let createdCount = 0;
   if (proposal.entityApplyKey === key && proposal.createdEntities) {
     // A previous attempt created the entities; the graph write failed. Reuse them.
-    for (const p of proposal.createdEntities) entities.set(p.changeId, { type: 'commitment', id: p.id });
-    createdCount = proposal.createdEntities.length;
+    for (const p of proposal.createdEntities) entities.set(p.changeId, { type: p.type, id: p.id });
+    createdCount = proposal.createdEntities.filter((item) => item.type === 'commitment').length;
   } else if (plan.createChanges.length > 0) {
     const wrapperProposal = await createProposal(repo, proposal.workspaceId, {
       kind: 'extract_commitments',
@@ -538,45 +675,77 @@ export async function applyEventGraphProposal(
       changes: plan.createChanges as Required<typeof plan.createChanges>,
       modelRunId: newId('run'),
     });
-    const applied = await applyProposal(repo, wrapperProposal.id, { idempotencyKey: key });
-    // createdList holds only commitment creates (decision/outcome creates are
-    // persisted by proposalService but are not surfaced here). Walk createChanges
-    // and consume one created commitment per *successful commitment* create, so
-    // interleaved decisions/outcomes and rejected changes can't misattribute refs.
-    const rejectedSet = new Set(applied.rejected.map((r) => r.changeId));
-    const createdList = applied.created.filter((c) => c.commitment);
-    let ptr = 0;
-    const createdPairs: { changeId: string; id: string }[] = [];
-    for (const ch of plan.createChanges) {
-      if (ch.entity !== 'commitment') continue;
-      if (rejectedSet.has(ch.changeId)) continue; // this create failed — not created, no slot consumed
-      const c = createdList[ptr++];
-      if (c?.commitment && ch.changeId) {
-        entities.set(ch.changeId, { type: 'commitment', id: c.commitment.id });
-        createdPairs.push({ changeId: ch.changeId, id: c.commitment.id });
-      }
+    const applied = await applyProposal(repo, wrapperProposal.id, { idempotencyKey: key, applyAtomic: true });
+    const createdPairs: { changeId: string; id: string; type: 'commitment' | 'decision' | 'outcome' }[] = [];
+    for (const created of applied.createdEntities) {
+      entities.set(created.changeId, { type: created.type, id: created.entity.id });
+      createdPairs.push({ changeId: created.changeId, id: created.entity.id, type: created.type });
     }
-    createdCount = createdList.length;
+    if (applied.rejected.length > 0) {
+      await compensateCreatedEntities(repo, createdPairs);
+      throw Object.assign(new Error(`Graph Proposal domain apply failed for ${applied.rejected.length} change(s).`), {
+        code: 'graph_domain_apply_failed',
+        rejected: applied.rejected,
+      });
+    }
+    createdCount = createdPairs.filter((item) => item.type === 'commitment').length;
     // Persist the claim now — before writeGraph — so a graph-write failure
     // cannot double-create on the user's retry. This is an idempotency marker,
     // not the final acceptance (that happens only after the graph is written).
     proposal = EventGraphProposalSchema.parse({ ...proposal, entityApplyKey: key, createdEntities: createdPairs, status: 'pending' });
-    await repo.saveEventGraphProposal(proposal);
+    try {
+      await repo.saveEventGraphProposal(proposal);
+    } catch (error) {
+      await compensateCreatedEntities(repo, createdPairs);
+      throw error;
+    }
   }
 
   // Persist the graph (nodes/edges + entityRefs) via the seam.
-  await deps.writeGraph({ scope, snapshot, proposal, plan, entities });
+  try {
+    await deps.writeGraph({ scope, snapshot, proposal, plan, entities });
+  } catch (error) {
+    // The graph writer is an atomic document write. If it fails, compensate
+    // every formal entity created by this attempt and clear the durable claim
+    // so a retry cannot link deleted IDs.
+    const createdThisAttempt = proposal.createdEntities ?? [];
+    await compensateCreatedEntities(repo, createdThisAttempt);
+    proposal = EventGraphProposalSchema.parse({
+      ...proposal,
+      entityApplyKey: undefined,
+      createdEntities: undefined,
+      status: 'pending',
+    });
+    await repo.saveEventGraphProposal(proposal, {
+      auditKind: 'event_run.update',
+      auditEntity: { type: 'event_graph_proposal', id: proposal.id },
+      auditActor: 'system',
+      auditData: { event: 'graph_apply.compensated', errorCode: (error as { code?: string })?.code },
+    });
+    throw error;
+  }
 
-  const acceptedChangeIds = [...(proposal.acceptedChangeIds ?? []), ...plan.createChanges.map((c) => c.changeId)];
+  const selected = new Set(options.selection ?? proposal.operations.map((operation) => operation.changeId));
+  const acceptedChangeIds = [...new Set([
+    ...(proposal.acceptedChangeIds ?? []),
+    ...proposal.operations
+      .filter((operation) => selected.has(operation.changeId) && !plan.staleChangeIds.includes(operation.changeId))
+      .map((operation) => operation.changeId),
+  ])];
+  const status = acceptedChangeIds.length === 0
+    ? 'rejected'
+    : acceptedChangeIds.length === proposal.operations.length ? 'accepted' : 'partially_accepted';
   const updated: EventGraphProposal = EventGraphProposalSchema.parse({
     ...proposal,
     acceptedChangeIds,
     applyReceipt: {
       idempotencyKey: key,
-      requestHash: stableHash(JSON.stringify(acceptedChangeIds.sort())),
+      requestHash: graphApplyRequestHash({ selection: options.selection, overrides: options.userOverrides }),
       appliedAt: isoNow(),
+      acceptedChangeIds,
+      staleChangeIds: plan.staleChangeIds,
     },
-    status: 'accepted',
+    status,
   });
   await repo.saveEventGraphProposal(updated, {
     auditKind: 'graph_proposal.apply',
@@ -600,7 +769,22 @@ export async function applyEventGraphProposal(
     await repo.saveEventOperatorRun(done, { auditKind: 'event_run.update', auditEntity: { type: 'event_operator_run', id: run.id }, auditData: { event: 'graph.applied' } });
   }
 
-  return { proposal: updated, createdCommitments: createdCount, appliedChanges: plan.createChanges.map((c) => c.changeId), staleChangeIds: plan.staleChangeIds };
+  return {
+    proposal: updated,
+    createdCommitments: createdCount,
+    appliedChanges: acceptedChangeIds,
+    staleChangeIds: plan.staleChangeIds,
+    affectedSurfaces: ['events', 'today', 'proposals', 'memory', 'agentRuns'],
+  };
+}
+
+async function compensateCreatedEntities(
+  repo: V2Repository,
+  entities: Array<{ id: string; type: 'commitment' | 'decision' | 'outcome' }>,
+): Promise<void> {
+  for (const entity of [...entities].reverse()) {
+    await repo.deleteCreatedEntity(entity.type, entity.id);
+  }
 }
 
 export async function rejectEventGraphProposal(
@@ -610,6 +794,7 @@ export async function rejectEventGraphProposal(
 ): Promise<EventGraphProposal> {
   const proposal = await repo.getEventGraphProposal(proposalId);
   if (!proposal) throw Object.assign(new Error('Graph proposal not found.'), { code: 'not_found' });
+  if (proposal.status === 'rejected') return proposal;
   if (proposal.status !== 'pending') {
     throw Object.assign(new Error(`Graph proposal is ${proposal.status}.`), { code: 'proposal_not_pending' });
   }

@@ -49,9 +49,15 @@ export const CreateProposalInputSchema = z.object({
 });
 export type CreateProposalInput = z.infer<typeof CreateProposalInputSchema>;
 
+type CreatedEntityWithoutChangeId =
+  | { type: 'commitment'; entity: Commitment }
+  | { type: 'decision'; entity: Decision }
+  | { type: 'outcome'; entity: Outcome };
+
 export interface ApplyResult {
   proposal: Proposal;
   created: { commitment: Commitment; evidence?: Evidence[] }[];
+  createdEntities: Array<CreatedEntityWithoutChangeId & { changeId: string }>;
   updated: Commitment[];
   rejected: { changeId: string; reason: string }[];
   followUpProposal?: Proposal;
@@ -131,7 +137,7 @@ async function applyProposalUnlocked(
     if (receipt.requestHash !== requestHash) {
       throw new Error('Idempotency key was already used with a different proposal selection');
     }
-    return { proposal, created: [], updated: [], rejected: [] };
+    return { proposal, created: [], createdEntities: [], updated: [], rejected: [] };
   }
   if (proposal.status === 'accepted' || proposal.status === 'rejected' || proposal.status === 'expired') {
     throw new Error(`Proposal is ${proposal.status}, cannot apply`);
@@ -149,6 +155,7 @@ async function applyProposalUnlocked(
 
   const acceptedChangeIds: string[] = [...alreadyAccepted];
   const created: ApplyResult['created'] = [];
+  const createdEntities: ApplyResult['createdEntities'] = [];
   const updated: Commitment[] = [];
   const rejected: ApplyResult['rejected'] = [];
 
@@ -158,7 +165,9 @@ async function applyProposalUnlocked(
       const result = await applyChange(repo, proposal.workspaceId, change, override, options.expectedHash);
       if (result.kind === 'created' && result.commitment) {
         created.push({ commitment: result.commitment, evidence: result.evidence });
-      } else if (result.kind === 'updated' && result.commitment) {
+      }
+      if (result.kind === 'created' && result.entity) createdEntities.push({ ...result.entity, changeId: change.changeId });
+      else if (result.kind === 'updated' && result.commitment) {
         updated.push(result.commitment);
       }
       if (!acceptedChangeIds.includes(change.changeId)) acceptedChangeIds.push(change.changeId);
@@ -192,13 +201,22 @@ async function applyProposalUnlocked(
     ] : proposal.applyReceipts,
     updatedAt: new Date().toISOString(),
   };
-  await repo.saveProposal(updatedProposal, {
-    auditKind: 'proposal.accept',
-    auditEntity: { type: 'proposal', id: proposal.id },
-    auditData: { status, applied: acceptedChangeIds.length, rejected: rejected.length },
-  });
+  try {
+    await repo.saveProposal(updatedProposal, {
+      auditKind: 'proposal.accept',
+      auditEntity: { type: 'proposal', id: proposal.id },
+      auditData: { status, applied: acceptedChangeIds.length, rejected: rejected.length },
+    });
+  } catch (error) {
+    if (options.applyAtomic) {
+      for (const created of [...createdEntities].reverse()) {
+        await repo.deleteCreatedEntity(created.type, created.entity.id);
+      }
+    }
+    throw error;
+  }
 
-  return { proposal: updatedProposal, created, updated, rejected };
+  return { proposal: updatedProposal, created, createdEntities, updated, rejected };
 }
 
 function hashApplyRequest(options: ApplyOptions): string {
@@ -216,7 +234,7 @@ async function applyChange(
   override: Record<string, unknown> | undefined,
   expectedHash: string | undefined
 ): Promise<
-  | { kind: 'created'; commitment?: Commitment; evidence?: Evidence[] }
+  | { kind: 'created'; commitment?: Commitment; evidence?: Evidence[]; entity?: CreatedEntityWithoutChangeId }
   | { kind: 'updated'; commitment?: Commitment }
   | { kind: 'noop' }
 > {
@@ -244,7 +262,7 @@ async function applyChange(
         createdBy: 'ai',
       };
       const c = await createCommitment(repo, workspaceId, input, { expectedHash });
-      return { kind: 'created', commitment: c };
+      return { kind: 'created', commitment: c, entity: { type: 'commitment', entity: c } };
     }
     if (change.op === 'update' || change.op === 'transition') {
       const targetId = change.targetId;
@@ -281,7 +299,7 @@ async function applyChange(
       auditEntity: { type: 'decision', id: decision.id },
       auditData: { sourceProposal: change.changeId },
     });
-    return { kind: 'created' };
+    return { kind: 'created', entity: { type: 'decision', entity: decision } };
   }
 
   if (change.entity === 'plan' && change.op === 'create') {
@@ -304,6 +322,32 @@ async function applyChange(
       auditData: { itemCount: plan.items.length, availableMinutes: plan.availableMinutes },
     });
     return { kind: 'created' };
+  }
+
+  if (change.entity === 'outcome' && change.op === 'create') {
+    const commitmentId = draft.commitmentId as string | undefined;
+    if (!commitmentId || !(await repo.getCommitment(commitmentId))) {
+      throw new Error('outcome create requires an existing commitmentId');
+    }
+    const outcome: Outcome = {
+      id: newId('out'),
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: 'ai',
+      workspaceId,
+      commitmentId,
+      kind: (draft.kind as Outcome['kind']) ?? 'delivered',
+      summary: (draft.summary as string) ?? (draft.title as string) ?? 'Outcome',
+      evidenceIds: change.evidenceIds,
+      followUpCommitmentIds: [],
+    };
+    await repo.saveOutcome(outcome, {
+      auditKind: 'outcome.create',
+      auditEntity: { type: 'outcome', id: outcome.id },
+      auditData: { sourceProposal: change.changeId },
+    });
+    return { kind: 'created', entity: { type: 'outcome', entity: outcome } };
   }
 
   // 'evidence' / 'source' / 'project' / 'person' / 'outcome' changes are

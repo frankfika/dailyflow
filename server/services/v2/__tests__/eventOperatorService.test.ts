@@ -12,6 +12,7 @@ import type {
 import type { GraphSnapshotBase } from '../../../domain/v2/eventGraphValidator';
 import type { ApplyPlan } from '../../../domain/v2/eventGraphApplier';
 import { FakeEventOperatorRuntime } from '../../harness/FakeEventOperatorRuntime';
+import type { AgentRuntime, RuntimeRunSpec } from '../../harness/AgentRuntime';
 import {
   startEventOperatorRun,
   applyEventGraphProposal,
@@ -20,6 +21,10 @@ import {
   cancelEventOperatorRun,
   type EventOperatorDeps,
 } from '../eventOperatorService';
+import { computeBaseRevision } from '../../../domain/v2/eventGraphValidator';
+import { EventGraphProposalSchema } from '../../../domain/v2/eventOperator';
+import { newId } from '../../../domain/v2/ulid';
+import { createCommitment } from '../commitmentService';
 
 let root: string;
 
@@ -103,6 +108,36 @@ function makePlainHarness(eventId: string): Harness {
   return { deps, snapshotRef, writes };
 }
 
+class ModelProposalRuntime implements AgentRuntime {
+  readonly runtimeId = 'deepseek-harness';
+  async health() {
+    return { ready: true, modelConfigured: true, sidecarAlive: false, toolkitSafe: true, degraded: true, runtimeVersion: 'test-model@1' };
+  }
+  async start(spec: RuntimeRunSpec) {
+    const proposal = {
+      baseRevision: spec.context.baseRevision!,
+      summary: '模型建议：确认发布负责人',
+      operations: [{
+        changeId: 'model-change-1', op: 'add_node' as const, tempId: 'model-temp-1', parentId: ROOT_NODE_ID,
+        node: { kind: 'question' as const, text: '谁负责最终发布？' },
+        domainDraft: { entity: 'none' as const }, evidenceIds: [], confidence: 0.9, reason: '负责人尚未明确',
+      }],
+    };
+    const events = [
+      { type: 'run.started' as const, runId: 'dsh_model_run', at: new Date().toISOString() },
+      { type: 'phase.changed' as const, phase: 'prepare' as const, at: new Date().toISOString() },
+      { type: 'proposal.ready' as const, proposalId: 'pending_model', proposal, at: new Date().toISOString() },
+      { type: 'run.completed' as const, result: { status: 'succeeded' as const }, at: new Date().toISOString() },
+    ];
+    return {
+      runId: 'dsh_model_run',
+      async cancel() {},
+      async dispose() {},
+      async *events() { for (const event of events) yield event; },
+    };
+  }
+}
+
 describe('eventOperatorService — Event Operator vertical', () => {
   it('starts a run, persists a pending graph proposal, and lands at waiting_review', async () => {
     const { deps } = makeHarness('ev_AAAAAAAAAAAAAAAAAAAAAA');
@@ -125,6 +160,22 @@ describe('eventOperatorService — Event Operator vertical', () => {
     const persisted = await repository.getEventOperatorRun(run.id);
     expect(persisted?.proposalId).toBe(proposal!.id);
     expect((await getPendingGraphProposal(repository, 'ev_AAAAAAAAAAAAAAAAAAAAAA'))?.id).toBe(proposal!.id);
+  });
+
+  it('persists the real model operations instead of replacing them with template operations', async () => {
+    const h = makePlainHarness('ev_AAAAAAAAAAAAAAAAAAAAAA');
+    h.deps.runtime = new ModelProposalRuntime();
+    const repository = repo();
+    const result = await startEventOperatorRun(
+      repository, 'ws_eos',
+      { eventId: 'ev_AAAAAAAAAAAAAAAAAAAAAA', mindmapId: MAP_ID },
+      h.deps,
+    );
+    expect(result.proposal?.summary).toBe('模型建议：确认发布负责人');
+    expect(result.proposal?.operations).toEqual([
+      expect.objectContaining({ changeId: 'model-change-1', op: 'add_node', node: expect.objectContaining({ text: '谁负责最终发布？' }) }),
+    ]);
+    expect(result.proposal?.operations.some((op) => op.op === 'add_node' && op.node.text.includes('第一步'))).toBe(false);
   });
 
   it('refuses to start a second run while a pending proposal exists', async () => {
@@ -218,15 +269,20 @@ describe('eventOperatorService — Event Operator vertical', () => {
     expect(ops.some((o) => o.op === 'add_node' && (o as any).parentId === 'node_br_AAAAAAAAAAAAAAAAAAAAA')).toBe(true);
   });
 
-  it('produces a proposal with NO injected runtime (shipped default template flight)', async () => {
-    // Regression: the empty default Fake emitted only run.started, so the
-    // HTTP path never produced a proposition ("AI 推进" was inert).
+  it('fails fast with NO injected runtime when no model is configured', async () => {
     const h = makePlainHarness('ev_AAAAAAAAAAAAAAAAAAAAAA');
     const repository = repo();
-    const { run, proposal } = await startEventOperatorRun(repository, 'ws_eos', { eventId: 'ev_AAAAAAAAAAAAAAAAAAAAAA', mindmapId: MAP_ID }, h.deps);
-    expect(proposal).not.toBeNull();
-    expect(run.status).toBe('waiting_review');
-    expect(run.proposalId).toBe(proposal!.id);
+    const previous = process.env.V2_AI_PROVIDER;
+    process.env.V2_AI_PROVIDER = 'local-deterministic';
+    try {
+      await expect(startEventOperatorRun(repository, 'ws_eos', { eventId: 'ev_AAAAAAAAAAAAAAAAAAAAAA', mindmapId: MAP_ID }, h.deps))
+        .rejects.toMatchObject({ code: 'MODEL_NOT_CONFIGURED' });
+    } finally {
+      if (previous === undefined) delete process.env.V2_AI_PROVIDER;
+      else process.env.V2_AI_PROVIDER = previous;
+    }
+    const runs = await repository.listEventOperatorRuns({ eventId: 'ev_AAAAAAAAAAAAAAAAAAAAAA' });
+    expect(runs[0]?.status).toBe('failed');
   });
 
   it('does NOT duplicate commitments when the graph write fails and the user retries', async () => {
@@ -244,17 +300,70 @@ describe('eventOperatorService — Event Operator vertical', () => {
     const { proposal } = await startEventOperatorRun(repository, 'ws_eos', { eventId: 'ev_AAAAAAAAAAAAAAAAAAAAAA', mindmapId: MAP_ID }, deps);
 
     await expect(applyEventGraphProposal(repository, deps, proposal!.id, {})).rejects.toThrow(/mindmap disappeared/);
-    // Entities were created by the failed attempt.
+    // Transaction compensation removes entities when the atomic graph write fails.
     const afterFail = await repository.listCommitments();
-    expect(afterFail.length).toBeGreaterThan(0);
+    expect(afterFail).toHaveLength(0);
     const createdAfterFail = afterFail.length;
 
     // Retry: same proposal, graph write succeeds now — must NOT create more entities.
     const retried = await applyEventGraphProposal(repository, deps, proposal!.id, {});
     expect(retried.proposal.status).toBe('accepted');
     const afterRetry = await repository.listCommitments();
-    expect(afterRetry.length).toBe(createdAfterFail);
+    expect(afterRetry.length).toBeGreaterThan(createdAfterFail);
     // And the graph was written the second time.
     expect((h.writes.length)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('materialises task, waiting, decision and outcome with typed refs and idempotent replay', async () => {
+    const h = makeHarness('ev_AAAAAAAAAAAAAAAAAAAAAA');
+    const repository = repo();
+    const existing = await createCommitment(repository, 'ws_eos', { title: 'Ship', outcome: 'Shipped', state: 'active', createdBy: 'user' });
+    h.snapshotRef.current = {
+      ...h.snapshotRef.current,
+      commitments: [{ id: existing.id, updatedAt: existing.updatedAt, state: existing.state }],
+      knownEntityIds: new Set([existing.id]),
+    };
+    const operations: GraphOperation[] = [
+      { changeId: 'chg_task', op: 'add_node', tempId: 'tmp_task', parentId: ROOT_NODE_ID, node: { kind: 'task', text: 'Send update' }, domainDraft: { entity: 'commitment', title: 'Send update', state: 'active' }, evidenceIds: [], confidence: 1, reason: 'test' },
+      { changeId: 'chg_wait', op: 'add_node', tempId: 'tmp_wait', parentId: ROOT_NODE_ID, node: { kind: 'waiting', text: 'Wait reply' }, domainDraft: { entity: 'waiting_commitment', title: 'Wait reply', waitingOnText: 'Investor', reviewAt: '2027-08-26T00:00:00.000Z' }, evidenceIds: [], confidence: 1, reason: 'test' },
+      { changeId: 'chg_dec', op: 'add_node', tempId: 'tmp_dec', parentId: ROOT_NODE_ID, node: { kind: 'decision', text: 'Choose A' }, domainDraft: { entity: 'decision', title: 'Choose A', decision: 'Use A' }, evidenceIds: [], confidence: 1, reason: 'test' },
+      { changeId: 'chg_out', op: 'add_node', tempId: 'tmp_out', parentId: ROOT_NODE_ID, node: { kind: 'outcome', text: 'Shipped' }, domainDraft: { entity: 'outcome', title: 'Shipped', outcomeSummary: 'Delivered', outcomeKind: 'delivered', commitmentId: existing.id }, evidenceIds: [], confidence: 1, reason: 'test' },
+    ];
+    const proposal = EventGraphProposalSchema.parse({ id: newId('gprop'), schemaVersion: 1, workspaceId: 'ws_eos', eventId: h.snapshotRef.current.eventId,
+      mindmapId: MAP_ID, agentRunId: newId('eval'), baseRevision: computeBaseRevision(h.snapshotRef.current), status: 'pending', operations,
+      summary: 'all entity kinds', riskLevel: 'low', createdAt: new Date().toISOString() });
+    await repository.saveEventGraphProposal(proposal);
+    const first = await applyEventGraphProposal(repository, h.deps, proposal.id, { idempotencyKey: 'apply-all-kinds' });
+    expect(first.appliedChanges).toEqual(['chg_task', 'chg_wait', 'chg_dec', 'chg_out']);
+    expect(await repository.listCommitments()).toHaveLength(3);
+    expect(await repository.listDecisions()).toHaveLength(1);
+    expect(await repository.listOutcomes()).toHaveLength(1);
+    expect([...h.writes[0].entities.values()].map((item) => item.type).sort()).toEqual(['commitment', 'commitment', 'decision', 'outcome']);
+    const persisted = await repository.getEventGraphProposal(proposal.id);
+    expect(persisted?.createdEntities?.map((item) => item.type).sort()).toEqual(['commitment', 'commitment', 'decision', 'outcome']);
+
+    const replay = await applyEventGraphProposal(repository, h.deps, proposal.id, { idempotencyKey: 'apply-all-kinds' });
+    expect(replay.replayed).toBe(true);
+    expect(h.writes).toHaveLength(1);
+    expect(await repository.listCommitments()).toHaveLength(3);
+  });
+
+  it('compensates successful domain creates when a later waiting/outcome change fails', async () => {
+    const h = makeHarness('ev_AAAAAAAAAAAAAAAAAAAAAA');
+    const repository = repo();
+    const operations: GraphOperation[] = [
+      { changeId: 'chg_task', op: 'add_node', tempId: 'tmp_task', parentId: ROOT_NODE_ID, node: { kind: 'task', text: 'Valid first' }, domainDraft: { entity: 'commitment', title: 'Valid first', state: 'active' }, evidenceIds: [], confidence: 1, reason: 'test' },
+      { changeId: 'chg_wait', op: 'add_node', tempId: 'tmp_wait', parentId: ROOT_NODE_ID, node: { kind: 'waiting', text: 'Invalid waiting' }, domainDraft: { entity: 'waiting_commitment', title: 'Invalid waiting' }, evidenceIds: [], confidence: 1, reason: 'test' },
+      { changeId: 'chg_out', op: 'add_node', tempId: 'tmp_out', parentId: ROOT_NODE_ID, node: { kind: 'outcome', text: 'Invalid outcome' }, domainDraft: { entity: 'outcome', outcomeSummary: 'No parent', commitmentId: 'com_DOES_NOT_EXIST' }, evidenceIds: [], confidence: 1, reason: 'test' },
+    ];
+    const proposal = EventGraphProposalSchema.parse({ id: newId('gprop'), schemaVersion: 1, workspaceId: 'ws_eos', eventId: h.snapshotRef.current.eventId,
+      mindmapId: MAP_ID, agentRunId: newId('eval'), baseRevision: computeBaseRevision(h.snapshotRef.current), status: 'pending', operations,
+      summary: 'failure compensation', riskLevel: 'low', createdAt: new Date().toISOString() });
+    await repository.saveEventGraphProposal(proposal);
+    await expect(applyEventGraphProposal(repository, h.deps, proposal.id, { idempotencyKey: 'apply-fail' }))
+      .rejects.toMatchObject({ code: 'graph_domain_apply_failed' });
+    expect(await repository.listCommitments()).toEqual([]);
+    expect(await repository.listOutcomes()).toEqual([]);
+    expect(h.writes).toEqual([]);
   });
 });

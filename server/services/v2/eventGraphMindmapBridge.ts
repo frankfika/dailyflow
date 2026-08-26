@@ -69,6 +69,10 @@ async function writeEventGraphToMindmap(ctx: {
   // Place new nodes as a tidy child column under their parent, reusing the
   // v1 auto-layout spacing so the canvas reads naturally after apply.
   for (const a of ctx.plan.addNodes) {
+    // A prior attempt may have committed the atomic mindmap write and then
+    // crashed before saving the Proposal receipt. Stable changeId provenance
+    // makes retry a no-op instead of duplicating the node.
+    if (nodes.some((node) => node.provenance?.proposalId === ctx.proposal.id && node.provenance?.changeId === a.changeId)) continue;
     const parent = nodePos.get(a.parentId) ?? { x: 0, y: 0 };
     const siblingCount = edges.filter((e) => e.source === a.parentId).length;
     const id = `node_${ulid()}`;
@@ -80,8 +84,8 @@ async function writeEventGraphToMindmap(ctx: {
       kind: a.kind as MindMapNode['kind'],
       position: { x: parent.x + 140, y: parent.y + 104 * (siblingCount + 1) },
       ...(entityRef
-        ? { entityRefs: [{ type: entityRef.type, id: entityRef.id }], provenance: { origin: 'ai' as const, proposalId: ctx.proposal.id } }
-        : {}),
+        ? { entityRefs: [{ type: entityRef.type, id: entityRef.id }], provenance: { origin: 'ai' as const, proposalId: ctx.proposal.id, agentRunId: ctx.proposal.agentRunId, changeId: a.changeId, acceptedAt: new Date().toISOString() } }
+        : { provenance: { origin: 'ai' as const, proposalId: ctx.proposal.id, agentRunId: ctx.proposal.agentRunId, changeId: a.changeId, acceptedAt: new Date().toISOString() } }),
     };
     nodes.push(node);
     nodePos.set(id, node.position);
@@ -100,6 +104,13 @@ async function writeEventGraphToMindmap(ctx: {
   for (const m of ctx.plan.moveNodes) {
     const e = edges.find((e) => e.target === m.nodeId);
     if (e) e.source = m.newParentId;
+  }
+
+  for (const link of ctx.plan.linkEntities) {
+    const node = nodes.find((item) => item.id === link.nodeId);
+    if (!node) continue;
+    const exists = (node.entityRefs ?? []).some((ref) => ref.type === link.entityRef.type && ref.id === link.entityRef.id);
+    if (!exists) node.entityRefs = [...(node.entityRefs ?? []), link.entityRef as NonNullable<MindMapNode['entityRefs']>[number]];
   }
 
   await updateMindMap(ctx.scope.mindmapId, { nodes, edges });

@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   startEventOperatorRun: vi.fn(),
   applyGraphProposal: vi.fn(),
   rejectGraphProposal: vi.fn(),
+  listEventOperatorRuns: vi.fn(),
+  getEventOperatorRun: vi.fn(),
+  cancelEventOperatorRun: vi.fn(),
+  retryEventOperatorRun: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
@@ -15,6 +19,10 @@ vi.mock('../api/client', () => ({
   startEventOperatorRun: mocks.startEventOperatorRun,
   applyGraphProposal: mocks.applyGraphProposal,
   rejectGraphProposal: mocks.rejectGraphProposal,
+  listEventOperatorRuns: mocks.listEventOperatorRuns,
+  getEventOperatorRun: mocks.getEventOperatorRun,
+  cancelEventOperatorRun: mocks.cancelEventOperatorRun,
+  retryEventOperatorRun: mocks.retryEventOperatorRun,
 }));
 
 const PROPOSAL: EventGraphProposal & { operations: any[] } = {
@@ -41,6 +49,11 @@ describe('AgentRunPanel — AI 推进 UX', () => {
     mocks.startEventOperatorRun.mockReset();
     mocks.applyGraphProposal.mockReset();
     mocks.rejectGraphProposal.mockReset();
+    mocks.listEventOperatorRuns.mockReset();
+    mocks.getEventOperatorRun.mockReset();
+    mocks.cancelEventOperatorRun.mockReset();
+    mocks.retryEventOperatorRun.mockReset();
+    mocks.listEventOperatorRuns.mockResolvedValue({ items: [] });
   });
 
   it('shows the start action when no pending proposal exists', async () => {
@@ -61,10 +74,12 @@ describe('AgentRunPanel — AI 推进 UX', () => {
     expect(screen.getByText('产品上线 · 第一步')).toBeInTheDocument();
     expect(screen.getByText('产品上线 · 关键决策')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId('agent-suggestion-gchg_1'));
+    fireEvent.click(screen.getByTestId('agent-suggestion-gchg_2'));
     fireEvent.click(screen.getByTestId('agent-run-apply'));
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(mocks.applyGraphProposal).toHaveBeenCalledWith('ev_1', 'gprop_pending', { selection: ['gchg_1', 'gchg_2'] });
+    expect(mocks.applyGraphProposal).toHaveBeenCalledWith('ev_1', 'gprop_pending', { selection: ['gchg_1', 'gchg_2'], userOverrides: {} });
   });
 
   it('reject declines the proposal without applying', async () => {
@@ -85,10 +100,28 @@ describe('AgentRunPanel — AI 推进 UX', () => {
     render(<AgentRunPanel language="en" eventId="ev_1" mindmapId="map_1" onApplied={onApplied} onClose={() => {}} />);
 
     const applyBtn = await screen.findByTestId('agent-run-apply');
-    // Deselect the second suggestion → only the first is kept.
-    fireEvent.click(screen.getByTestId('agent-suggestion-gchg_2'));
+    // Select only the first suggestion.
+    fireEvent.click(screen.getByTestId('agent-suggestion-gchg_1'));
     expect(applyBtn).toHaveTextContent('1');
     fireEvent.click(applyBtn);
-    await waitFor(() => expect(mocks.applyGraphProposal).toHaveBeenCalledWith('ev_1', 'gprop_pending', { selection: ['gchg_1'] }));
+    await waitFor(() => expect(mocks.applyGraphProposal).toHaveBeenCalledWith('ev_1', 'gprop_pending', { selection: ['gchg_1'], userOverrides: {} }));
+  });
+
+  it('keeps high-risk items out of the low-risk batch action', async () => {
+    mocks.getPendingGraphProposal.mockResolvedValue({ proposal: { ...PROPOSAL, riskLevel: 'high' } });
+    render(<AgentRunPanel language="en" eventId="ev_1" mindmapId="map_1" onApplied={() => {}} onClose={() => {}} />);
+    expect(await screen.findByTestId('agent-accept-low-risk')).toBeDisabled();
+  });
+
+  it('opens an inspector and keeps title edits local until apply', async () => {
+    mocks.getPendingGraphProposal.mockResolvedValue({ proposal: PROPOSAL });
+    mocks.applyGraphProposal.mockResolvedValue({ proposal: PROPOSAL, createdCommitments: 1, appliedChanges: ['gchg_1'], staleChangeIds: [] });
+    render(<AgentRunPanel language="en" eventId="ev_1" mindmapId="map_1" onApplied={() => {}} onClose={() => {}} />);
+    const inspector = await screen.findByTestId('proposal-node-inspector');
+    fireEvent.change(inspector.querySelector('input')!, { target: { value: 'Edited locally' } });
+    expect(mocks.applyGraphProposal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('agent-suggestion-gchg_1'));
+    fireEvent.click(screen.getByTestId('agent-run-apply'));
+    await waitFor(() => expect(mocks.applyGraphProposal).toHaveBeenCalledWith('ev_1', 'gprop_pending', expect.objectContaining({ userOverrides: { gchg_1: { text: 'Edited locally' } } })));
   });
 });

@@ -44,6 +44,8 @@ export interface V2Layout {
   };
   proposals: string;
   runs: string;
+  /** Append-only, replayable RuntimeEvent JSONL store, partitioned by run id. */
+  runEvents: string;
   /** EventGraphProposal JSON store (AI Event Operator, schemaVersion 1). */
   graphProposals: string;
 }
@@ -73,6 +75,7 @@ export function deriveLayout(workspaceRoot: string): V2Layout {
     attachments: path.join(workspaceRoot, 'Attachments'),
     proposals: path.join(workspaceRoot, '.dailyflow', 'proposals'),
     runs: path.join(workspaceRoot, '.dailyflow', 'agent-runs'),
+    runEvents: path.join(workspaceRoot, '.dailyflow', 'agent-run-events'),
     graphProposals: path.join(workspaceRoot, '.dailyflow', 'graph-proposals'),
     internal: {
       audit: path.join(workspaceRoot, '.dailyflow', 'audit.jsonl'),

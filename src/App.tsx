@@ -112,6 +112,16 @@ export default function App() {
   const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
+  useEffect(() => {
+    const openEventOperator = (event: Event) => {
+      const eventId = (event as CustomEvent<{ eventId?: string }>).detail?.eventId;
+      if (!eventId) return;
+      setRequestedEventId(eventId);
+      setActiveTab('events');
+    };
+    window.addEventListener('df:open-event-operator', openEventOperator);
+    return () => window.removeEventListener('df:open-event-operator', openEventOperator);
+  }, []);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
   // Meeting capture has one canonical owner: a v2 NoteDocument. Every entry
   // point creates and opens a meeting note instead of mounting the retired

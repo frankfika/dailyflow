@@ -26,6 +26,7 @@ import { getTodayStr } from '../utils/tagColors';
 import { ProactiveSettingsSection } from './ProactiveSettingsSection';
 import { TranscriptionSettingsSection } from './TranscriptionSettingsSection';
 import { PrivacyPanel } from './PrivacyPanel';
+import { RuntimeDiagnosticsCard } from '../features/v2/events/RuntimeDiagnosticsCard';
 
 declare const __APP_VERSION__: string;
 
@@ -936,8 +937,9 @@ export function SettingsModal({
         {/* Scrollable Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-5" data-testid="settings-scroll-region">
           {configTab === 'ai' && (
-            <div className="h-[65dvh] min-h-0 -m-2">
-              <ModelLibrary language={language} />
+            <div className="space-y-4 -m-2">
+              <div className="h-[52dvh] min-h-0"><ModelLibrary language={language} /></div>
+              <RuntimeDiagnosticsCard language={language} />
             </div>
           )}
           {configTab === 'transcription' && (

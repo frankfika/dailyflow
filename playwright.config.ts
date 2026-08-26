@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const e2eRoot = mkdtempSync(join(tmpdir(), 'dailyflow-playwright-'));
+const webPort = Number(process.env.DAILYFLOW_E2E_WEB_PORT ?? 47831);
+const apiPort = Number(process.env.DAILYFLOW_E2E_API_PORT ?? 47842);
+const baseURL = `http://localhost:${webPort}`;
 process.env.DAILYFLOW_E2E_ROOT = e2eRoot;
 const seededWorkspace = join(e2eRoot, 'seed-workspace');
 mkdirSync(seededWorkspace, { recursive: true });
@@ -49,7 +52,7 @@ export default defineConfig({
   globalTeardown: './e2e/global-teardown.ts',
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:47831',
+    baseURL,
     trace: 'on-first-retry',
   },
   projects: [
@@ -59,8 +62,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev:all',
-    url: 'http://localhost:47831',
+    command: process.env.DAILYFLOW_E2E_WEB_PORT
+      ? `npx concurrently "npm run dev -- --port ${webPort}" "npm run server"`
+      : 'npm run dev:all',
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 120000,
     env: {
@@ -69,8 +74,8 @@ export default defineConfig({
       // have the desktop app open while the suite runs; sharing that port can
       // overwrite their real ~/.dailyflow/config.json and produce false-green
       // tests against production state.
-      PORT: '47842',
-      VITE_API_PROXY_TARGET: 'http://127.0.0.1:47842',
+      PORT: String(apiPort),
+      VITE_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
       DAILYFLOW_CONFIG_FILE: join(e2eRoot, 'config.json'),
       DAILYFLOW_RECURRING_FILE: join(e2eRoot, 'recurring_tasks.json'),
     },

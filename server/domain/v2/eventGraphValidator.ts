@@ -295,8 +295,21 @@ function checkNodeDomainIntegrity(
     if (draft.entity === 'commitment' && op.node.kind !== 'task' && op.node.kind !== 'waiting') {
       add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'A commitment draft must live on a task or waiting node.', changeId, 'domainDraft.entity');
     }
-    if (op.node.kind !== 'task' && op.node.kind !== 'waiting' && (op.node.kind === 'decision' || op.node.kind === 'outcome')) {
-      // decision/outcome nodes with a decision/outcome draft are fine; nothing extra.
+    if (op.node.kind === 'task' && draft.entity !== 'commitment') {
+      add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'A task node must materialize a commitment.', changeId, 'domainDraft.entity');
+    }
+    if (op.node.kind === 'waiting' && draft.entity !== 'waiting_commitment' && draft.entity !== 'commitment') {
+      add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'A waiting node must materialize a waiting commitment.', changeId, 'domainDraft.entity');
+    }
+    if (op.node.kind === 'decision' && draft.entity !== 'decision') {
+      add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'A decision node must materialize a decision.', changeId, 'domainDraft.entity');
+    }
+    if (op.node.kind === 'outcome') {
+      if (draft.entity !== 'outcome') {
+        add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'An outcome node must materialize an outcome.', changeId, 'domainDraft.entity');
+      } else if (!draft.commitmentId || !snap.knownEntityIds.has(draft.commitmentId)) {
+        add(VALIDATION_CODES.DOMAIN_DRAFT_INVALID, 'An outcome must reference an existing in-scope commitment.', changeId, 'domainDraft.commitmentId');
+      }
     }
   }
 }

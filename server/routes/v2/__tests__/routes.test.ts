@@ -13,6 +13,11 @@ import os from 'os';
 import { v2Router } from '../index';
 import { loadConfig } from '../../../services/config';
 import { saveConfig } from '../../../services/config';
+import { V2Repository } from '../../../repositories/v2/repository';
+import { EventOperatorRunSchema, EventGraphProposalSchema } from '../../../domain/v2/eventOperator';
+import { newId } from '../../../domain/v2/ulid';
+import { persistRuntimeEvent } from '../../../services/v2/runtimeEventPersistence';
+import { computeBaseRevision } from '../../../domain/v2/eventGraphValidator';
 
 let app: express.Express;
 let workspace: string;
@@ -280,6 +285,51 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       // 14. Sync cannot be invoked through a disabled capability.
       const sync = await post('/connectors/google-calendar/sync', {});
       expect(sync.status).toBe(404);
+
+      // 15. Durable run events replay as SSE and a retryable failed Run can be queued.
+      const repo = new V2Repository({ root: workspace, workspaceId: 'ws_test' });
+      const runId = newId('eval');
+      const eventId = 'event_route_operator';
+      const mapId = 'map_route_operator';
+      const runNow = new Date().toISOString();
+      await repo.saveEventOperatorRun(EventOperatorRunSchema.parse({
+        id: runId, schemaVersion: 2, workspaceId: 'ws_test', eventId, mindmapId: mapId,
+        runtimeId: 'deepseek-harness', runtimeVersion: 'test', modelProvider: 'test', model: 'test', promptVersion: '1',
+        scope: { workspaceId: 'ws_test', eventId, mindmapId: mapId, trigger: 'event_canvas', selectedContextRefs: [], contextBudgetBytes: 4096 },
+        phase: 'prepare', status: 'failed', contextManifest: [], metrics: {}, idempotencyKey: 'route-run',
+        error: { code: 'RUNTIME_SESSION_LOST', message: 'lost', retryable: true, stage: 'prepare' }, createdAt: runNow, updatedAt: runNow,
+      }));
+      await persistRuntimeEvent(repo, runId, { type: 'run.failed', error: { code: 'lost', message: 'lost', retryable: true }, at: runNow });
+      const sse = await fetch(`http://localhost:9999/api/v2/agent-runs/${runId}/events`);
+      const sseBody = await sse.text();
+      expect(sse.status).toBe(200);
+      expect(sse.headers.get('content-type')).toContain('text/event-stream');
+      expect(sseBody).toContain('id: 1\nevent: run.failed');
+      const retry = await post(`/agent-runs/${runId}/retry`, {});
+      expect(retry.status).toBe(200);
+      expect(retry.body.run.status).toBe('queued');
+
+      // 16. Canonical Proposal API validates and idempotently replays apply.
+      const mapNow = new Date().toISOString();
+      const rootNodeId = 'node_route_root';
+      const map = { id: mapId, title: 'Route Event', rootId: rootNodeId, nodes: [{ id: rootNodeId, text: 'Route Event', kind: 'root', position: { x: 0, y: 0 } }], edges: [], version: 2, createdAt: mapNow, updatedAt: mapNow };
+      await fs.mkdir(path.join(workspace, '.dailyflow', 'mindmaps'), { recursive: true });
+      await fs.writeFile(path.join(workspace, '.dailyflow', 'mindmaps', `${mapId}.json`), JSON.stringify(map));
+      const commitments = await repo.listCommitments();
+      const baseRevision = computeBaseRevision({ mindmapId: mapId, mindmapUpdatedAt: mapNow, eventStatus: 'active', nodes: map.nodes, edges: [], commitments: commitments.map((c) => ({ id: c.id, updatedAt: c.updatedAt, state: c.state })) });
+      const graphProposal = EventGraphProposalSchema.parse({ id: newId('gprop'), schemaVersion: 1, workspaceId: 'ws_test', eventId, mindmapId: mapId, agentRunId: runId,
+        baseRevision, status: 'pending', operations: [{ changeId: 'route_change', op: 'add_node', tempId: 'route_tmp', parentId: rootNodeId, node: { kind: 'branch', text: 'Review' }, evidenceIds: [], confidence: 1, reason: 'route test' }],
+        summary: 'Route proposal', riskLevel: 'low', createdAt: mapNow });
+      await repo.saveEventGraphProposal(graphProposal);
+      expect((await get(`/event-graph-proposals/${graphProposal.id}`)).status).toBe(200);
+      const graphValidation = await post(`/event-graph-proposals/${graphProposal.id}/validate`, {});
+      expect(graphValidation.status, JSON.stringify(graphValidation.body)).toBe(200);
+      const graphApply = await post(`/event-graph-proposals/${graphProposal.id}/apply`, { idempotencyKey: 'route-apply-key' });
+      expect(graphApply.status).toBe(200);
+      expect(graphApply.body.proposal.status).toBe('accepted');
+      const graphReplay = await post(`/event-graph-proposals/${graphProposal.id}/apply`, { idempotencyKey: 'route-apply-key' });
+      expect(graphReplay.status).toBe(200);
+      expect(graphReplay.body.replayed).toBe(true);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

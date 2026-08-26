@@ -14,7 +14,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const NODE_VERSION = '20.18.1';
+// DeepSeek Harness requires ^22.19.0 or >=24 (notably node:sqlite).
+const NODE_VERSION = '22.19.0';
 const distServerDir = join(__dirname, '..', 'dist-server');
 
 const platform = process.platform;

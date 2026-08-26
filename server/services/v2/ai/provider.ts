@@ -32,6 +32,9 @@ export interface CompletionRequest {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  /** Allows runtime cancellation to abort the actual provider request. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
 }
 
 export interface CompletionResult {
@@ -152,6 +155,8 @@ class OpenAICompatibleProvider implements AIProvider {
             response_format: { type: 'json_object' },
           };
 
+    const timeout = AbortSignal.timeout(req.timeoutMs ?? 120_000);
+    const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
     try {
       const resp = await fetch(url, {
         method: 'POST',
@@ -162,6 +167,7 @@ class OpenAICompatibleProvider implements AIProvider {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify(body),
+        signal,
       });
       if (!resp.ok) {
         const text = await resp.text().catch(() => '');
@@ -196,13 +202,14 @@ class OpenAICompatibleProvider implements AIProvider {
         fallback: false,
       };
     } catch (err) {
+      const aborted = signal.aborted;
       return {
         data: null,
         text: err instanceof Error ? err.message : String(err),
         provider: this.name,
         model: this.opts.model,
         fallback: true,
-        fallbackReason: 'network_error',
+        fallbackReason: aborted ? 'timeout' : 'network_error',
       };
     }
   }

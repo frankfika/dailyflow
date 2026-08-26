@@ -218,4 +218,18 @@ describe('EventCanvas node actions', () => {
     fireEvent.pointerUp(canvas, { clientX: 200, clientY: 200, pointerId: 9 });
     expect(onMoveNodePosition).not.toHaveBeenCalled();
   });
+
+  it('renders proposal nodes as a non-persistent overlay and opens the inspector selection', () => {
+    const onSelectProposalChange = vi.fn();
+    renderCanvas({
+      proposal: { id: 'gprop_1', schemaVersion: 1, workspaceId: 'ws', eventId: EVENT.id, mindmapId: EVENT.mindmapId, agentRunId: 'eval_1', baseRevision: 'rev', status: 'pending', summary: 'one', riskLevel: 'low', createdAt: '', operations: [{ changeId: 'chg_1', op: 'add_node', parentId: 'root', node: { kind: 'task', text: 'AI candidate' }, confidence: 0.9, reason: 'next step' }] },
+      proposalSelection: new Set(['chg_1']),
+      activeProposalChangeId: 'chg_1',
+      onSelectProposalChange,
+    });
+    const candidate = screen.getByTestId('proposal-node-chg_1');
+    expect(candidate).toHaveTextContent('AI candidate');
+    fireEvent.click(candidate);
+    expect(onSelectProposalChange).toHaveBeenCalledWith('chg_1');
+  });
 });

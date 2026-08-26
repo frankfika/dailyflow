@@ -88,6 +88,7 @@ export const MindMapNodeProvenanceSchema = z
     origin: MindMapNodeOriginSchema,
     proposalId: z.string().optional(),
     agentRunId: z.string().optional(),
+    changeId: z.string().optional(),
     acceptedAt: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
@@ -211,6 +212,7 @@ export const DomainEntityDraftSchema = z.object({
   rationale: z.string().max(2000).optional(),
   outcomeSummary: z.string().max(2000).optional(),
   outcomeKind: z.enum(['delivered', 'decided', 'sent', 'confirmed', 'failed', 'cancelled']).optional(),
+  commitmentId: z.string().min(8).optional(),
 }).strict();
 export type DomainEntityDraft = z.infer<typeof DomainEntityDraftSchema>;
 
@@ -334,6 +336,8 @@ export const EventGraphProposalSchema = z.object({
     idempotencyKey: z.string().min(1),
     requestHash: z.string().min(1),
     appliedAt: z.string().datetime({ offset: true }),
+    acceptedChangeIds: z.array(z.string()).optional(),
+    staleChangeIds: z.array(z.string()).optional(),
   }).optional(),
   /**
    * Durable entity-apply idempotency (DFH apply fix): once the associated
@@ -343,7 +347,11 @@ export const EventGraphProposalSchema = z.object({
    * instead of creating duplicates.
    */
   entityApplyKey: z.string().min(1).optional(),
-  createdEntities: z.array(z.object({ changeId: z.string().min(1), id: z.string().min(1) })).optional(),
+  createdEntities: z.array(z.object({
+    changeId: z.string().min(1),
+    id: z.string().min(1),
+    type: z.enum(['commitment', 'decision', 'outcome']).default('commitment'),
+  })).optional(),
 }).strict();
 export type EventGraphProposal = z.infer<typeof EventGraphProposalSchema>;
 
@@ -361,5 +369,6 @@ export const RuntimeHealthSchema = z.object({
   sidecarAlive: z.boolean().optional(),
   toolkitSafe: z.boolean().optional(),
   failureCode: z.string().optional(),
+  degraded: z.boolean().optional(),
 }).strict();
 export type RuntimeHealth = z.infer<typeof RuntimeHealthSchema>;

@@ -76,6 +76,13 @@ import {
   type EventOperatorRun,
   type EventGraphProposal,
 } from '../../domain/v2/eventOperator.js';
+import {
+  StoredRunEventSchema,
+  type StoredRunEvent,
+  type RunEventPage,
+} from '../../domain/v2/eventRunEvents.js';
+
+const runEventAppendTails = new Map<string, Promise<void>>();
 
 export interface WorkspaceContext {
   root: string;
@@ -496,6 +503,30 @@ export class V2Repository {
     return this.listAll('outcome', OutcomeSchema, this.layout.outcomes);
   }
 
+  /** Compensation primitive used only by the graph-apply transaction. */
+  async deleteCreatedEntity(type: 'commitment' | 'decision' | 'outcome', id: string): Promise<boolean> {
+    const directory = type === 'commitment'
+      ? this.layout.commitments.all
+      : type === 'decision' ? this.layout.decisions : this.layout.outcomes;
+    const known = type === 'commitment'
+      ? Boolean(await this.getCommitment(id))
+      : type === 'decision'
+        ? (await this.listDecisions()).some((item) => item.id === id)
+        : (await this.listOutcomes()).some((item) => item.id === id);
+    if (!known) return false;
+    const files = await listFilesRecursive(directory, ['.md']);
+    const target = files.find((file) => path.basename(file) === `${id}.md`);
+    if (!target) return false;
+    await fs.unlink(target);
+    await this.audit.append({
+      kind: 'file.write',
+      actor: 'system',
+      entity: { type, id },
+      data: { event: 'graph_apply.compensate_delete' },
+    });
+    return true;
+  }
+
   // -------------------------------------------------------------------------
   // Project / Person / Organization / Decision
   // -------------------------------------------------------------------------
@@ -690,6 +721,102 @@ export class V2Repository {
       if (err && err.code === 'ENOENT') return [];
       throw err;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // EventOperator RuntimeEvent log — append-only JSONL with durable cursors.
+  // -------------------------------------------------------------------------
+
+  private eventRunEventsPath(runId: string): string {
+    // Reuse the exact run-id validation and keep paths repository-derived.
+    this.eventRunPath(runId);
+    return path.join(this.layout.runEvents, `${runId}.jsonl`);
+  }
+
+  /**
+   * Append one sanitized runtime event. Concurrent calls are serialized per
+   * run and duplicate fingerprints return the original envelope.
+   */
+  async appendEventOperatorRunEvent(
+    input: Omit<StoredRunEvent, 'schemaVersion' | 'workspaceId' | 'cursor'>,
+  ): Promise<{ event: StoredRunEvent; appended: boolean }> {
+    const run = await this.getEventOperatorRun(input.runId);
+    if (!run) throw Object.assign(new Error('Event operator run not found.'), { code: 'not_found' });
+    const filePath = this.eventRunEventsPath(input.runId);
+    const previous = runEventAppendTails.get(filePath) ?? Promise.resolve();
+    let resolveGate!: () => void;
+    const gate = new Promise<void>((resolve) => { resolveGate = resolve; });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    runEventAppendTails.set(filePath, tail);
+    await previous.catch(() => undefined);
+    try {
+      const existing = await this.readEventOperatorRunEvents(input.runId);
+      const duplicate = existing.find((item) => item.fingerprint === input.fingerprint);
+      if (duplicate) return { event: duplicate, appended: false };
+      const nextSequence = existing.length === 0
+        ? 1
+        : Math.max(...existing.map((item) => Number(item.cursor))) + 1;
+      const event = StoredRunEventSchema.parse({
+        ...input,
+        schemaVersion: 1,
+        workspaceId: this.ctx.workspaceId,
+        cursor: String(nextSequence),
+      });
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.appendFile(filePath, `${JSON.stringify(event)}\n`, 'utf8');
+      // Keep the Run's recovery pointer in sync with the durable log. This is
+      // written inside the append critical section, so a lower cursor cannot
+      // race and overwrite a newer one.
+      const latestRun = await this.getEventOperatorRun(input.runId);
+      if (latestRun && Number(latestRun.lastEventCursor ?? 0) < nextSequence) {
+        await this.saveEventOperatorRun(EventOperatorRunSchema.parse({
+          ...latestRun,
+          lastEventCursor: event.cursor,
+          updatedAt: new Date().toISOString(),
+        }));
+      }
+      return { event, appended: true };
+    } finally {
+      resolveGate();
+      if (runEventAppendTails.get(filePath) === tail) runEventAppendTails.delete(filePath);
+    }
+  }
+
+  async readEventOperatorRunEvents(runId: string): Promise<StoredRunEvent[]> {
+    const run = await this.getEventOperatorRun(runId);
+    if (!run) return [];
+    try {
+      const raw = await fs.readFile(this.eventRunEventsPath(runId), 'utf8');
+      const out: StoredRunEvent[] = [];
+      for (const line of raw.split('\n')) {
+        if (!line.trim()) continue;
+        const parsed = StoredRunEventSchema.safeParse(JSON.parse(line));
+        if (parsed.success && parsed.data.workspaceId === this.ctx.workspaceId) out.push(parsed.data);
+      }
+      return out.sort((a, b) => Number(a.cursor) - Number(b.cursor));
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') return [];
+      throw err;
+    }
+  }
+
+  async pageEventOperatorRunEvents(
+    runId: string,
+    opts: { afterCursor?: string; limit?: number } = {},
+  ): Promise<RunEventPage> {
+    if (opts.afterCursor !== undefined && !/^\d+$/.test(opts.afterCursor)) {
+      throw Object.assign(new Error('Cursor must be a non-negative decimal sequence.'), { code: 'invalid_cursor' });
+    }
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+    const after = Number(opts.afterCursor ?? 0);
+    const candidates = (await this.readEventOperatorRunEvents(runId))
+      .filter((item) => Number(item.cursor) > after);
+    const items = candidates.slice(0, limit);
+    return {
+      items,
+      nextCursor: items.at(-1)?.cursor ?? opts.afterCursor,
+      hasMore: candidates.length > items.length,
+    };
   }
 
   // -------------------------------------------------------------------------

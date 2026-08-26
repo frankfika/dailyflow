@@ -14,12 +14,26 @@
  */
 export type RuntimePhase = 'collect' | 'retrieve' | 'extract' | 'resolve' | 'prepare' | 'review';
 
+import type { GraphOperation } from '../../domain/v2/eventOperator.js';
+
+export interface RuntimeProposalDraft {
+  baseRevision: string;
+  summary: string;
+  operations: GraphOperation[];
+}
+
 export interface RuntimeRunSpec {
   eventId: string;
   workspaceId: string;
   scope: unknown; // EventOperatorScope at runtime; typed loosely to keep the seam runtime-agnostic
   promptVersion: string;
-  context: { bytes: number; manifest: unknown[] };
+  context: {
+    bytes: number;
+    manifest: unknown[];
+    /** A bounded, DailyFlow-owned projection. The runtime cannot fetch outside it. */
+    projection?: unknown;
+    baseRevision?: string;
+  };
 }
 
 export interface RuntimeUserInput {
@@ -54,6 +68,8 @@ export type RuntimeHealth = {
   sidecarAlive?: boolean;
   toolkitSafe?: boolean;
   failureCode?: string;
+  /** True when the safe in-process provider adapter is used instead of ACP. */
+  degraded?: boolean;
 };
 
 /** Ordered, immutable event stream a Run producer hands to the store/UI. */
@@ -64,7 +80,7 @@ export type RuntimeEvent =
   | { type: 'tool.started'; callId: string; tool: string; safeArgs: unknown; at: string }
   | { type: 'tool.completed'; callId: string; summary: unknown; at: string }
   | { type: 'approval.required'; approval: RuntimeApproval; at: string }
-  | { type: 'proposal.ready'; proposalId: string; at: string }
+  | { type: 'proposal.ready'; proposalId: string; proposal?: RuntimeProposalDraft; at: string }
   | { type: 'run.completed'; result: RuntimeResult; at: string }
   | { type: 'run.failed'; error: RuntimeError; at: string }
   | { type: 'run.cancelled'; at: string };
@@ -94,6 +110,11 @@ export interface AgentRuntime {
   readonly runtimeId: string;
   health(): Promise<RuntimeHealth>;
   start(spec: RuntimeRunSpec): Promise<RuntimeRunHandle>;
+  /** Runtime-wide forms are used by HTTP cancellation/recovery paths. */
+  send?(runId: string, input: RuntimeUserInput): Promise<void>;
+  cancel?(runId: string): Promise<void>;
+  dispose?(runId: string): Promise<void>;
+  events?(runId: string, cursor?: string): AsyncIterable<RuntimeEvent>;
   /** Best-effort runtime-wide hints (e.g. dispose all sidecars). */
   disposeAll?(): Promise<void>;
 }

@@ -3,6 +3,7 @@ import { CalendarDays, Check, ChevronDown, Focus, ListTodo, Minus, MoreHorizonta
 import type { EventDetail, EventNode } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
+import type { EventGraphProposal, GraphOperation } from '../api/client';
 
 type Copy = {
   child: string;
@@ -103,6 +104,10 @@ interface EventCanvasProps {
   onToggleDone: (node: EventNode) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
   onMoveNodePosition: (nodeId: string, x: number, y: number) => Promise<void>;
+  proposal?: EventGraphProposal | null;
+  proposalSelection?: Set<string>;
+  activeProposalChangeId?: string | null;
+  onSelectProposalChange?: (changeId: string) => void;
 }
 
 const NODE_W = 196;
@@ -126,6 +131,10 @@ export function EventCanvas({
   onToggleDone,
   onDelete,
   onMoveNodePosition,
+  proposal,
+  proposalSelection = new Set<string>(),
+  activeProposalChangeId,
+  onSelectProposalChange,
 }: EventCanvasProps) {
   const copy = COPY[language];
   const [addingChild, setAddingChild] = useState(false);
@@ -228,6 +237,24 @@ export function EventCanvas({
     for (const edge of event.edges) map.set(edge.target, edge.source);
     return map;
   }, [event.edges]);
+
+  const proposalPreview = useMemo(() => {
+    if (!proposal) return [];
+    const siblingCounts = new Map<string, number>();
+    return proposal.operations.map((op) => {
+      const parentId = op.parentId ?? op.newParentId ?? event.rootNodeId;
+      const parent = byId.get(parentId) ?? byId.get(event.rootNodeId);
+      const sibling = siblingCounts.get(parentId) ?? 0;
+      siblingCounts.set(parentId, sibling + 1);
+      const existing = op.nodeId ? byId.get(op.nodeId) : undefined;
+      return {
+        op,
+        x: existing?.canvasX ?? Math.min(normalized.width - NODE_W - 30, (parent?.canvasX ?? 120) + NODE_W + 100),
+        y: existing?.canvasY ?? (parent?.canvasY ?? 120) + sibling * (NODE_H + 22),
+        parent,
+      };
+    });
+  }, [proposal, byId, event.rootNodeId, normalized.width]);
 
   const activeNode = event.nodes.find((node) => node.id === activeNodeId) ?? null;
   const isRootActive = activeNode?.id === event.rootNodeId;
@@ -654,6 +681,7 @@ export function EventCanvas({
             const y2 = target.canvasY + NODE_H / 2;
             return <path key={edge.id} d={`M ${x1} ${y1} C ${x1 + 70} ${y1}, ${x2 - 70} ${y2}, ${x2} ${y2}`} fill="none" stroke="currentColor" className="text-gray-400 dark:text-gray-600" strokeWidth="2" />;
           })}
+          {proposalPreview.filter(({ op }) => op.op === 'add_node' || op.op === 'move_node').map(({ op, x, y, parent }) => parent ? <path key={`proposal-edge-${op.changeId}`} d={`M ${parent.canvasX + NODE_W} ${parent.canvasY + NODE_H / 2} C ${parent.canvasX + NODE_W + 55} ${parent.canvasY + NODE_H / 2}, ${x - 55} ${y + NODE_H / 2}, ${x} ${y + NODE_H / 2}`} fill="none" stroke="#8b5cf6" strokeDasharray="6 5" strokeWidth="2" opacity={proposalSelection.has(op.changeId) ? 0.85 : 0.35} /> : null)}
         </svg>
 
         {normalized.nodes.map((node) => {
@@ -665,6 +693,7 @@ export function EventCanvas({
           const isTaskNode = Boolean(node.execution);
           const isDragging = draggingId === node.id;
           const dragTransform = isDragging ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined;
+          const update = proposalPreview.find(({ op }) => op.nodeId === node.id && (op.op === 'update_node' || op.op === 'move_node'));
           return (
             <div
               key={node.id}
@@ -677,7 +706,7 @@ export function EventCanvas({
                 <button
                   type="button"
                   onClick={(e) => { if (didDragRef.current) { e.preventDefault(); return; } e.stopPropagation(); onActivate(node.id); }}
-                  className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${isActive ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : isTaskNode ? 'border-[#23877B]/40 bg-[#23877B]/[0.04] hover:border-[#23877B]/60 dark:bg-[#23877B]/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
+                  className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${update ? (proposal?.riskLevel === 'high' ? 'border-red-500 ring-2 ring-red-400/20' : 'border-amber-400 ring-2 ring-amber-300/20') : isActive ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : isTaskNode ? 'border-[#23877B]/40 bg-[#23877B]/[0.04] hover:border-[#23877B]/60 dark:bg-[#23877B]/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
                   aria-pressed={isActive}
                   data-task-node={isTaskNode || undefined}
                 >
@@ -814,6 +843,10 @@ export function EventCanvas({
             </div>
           );
         })}
+
+        {proposalPreview.filter(({ op }) => op.op === 'add_node').map(({ op, x, y }) => (
+          <ProposalNode key={op.changeId} op={op} x={x} y={y} selected={proposalSelection.has(op.changeId)} active={activeProposalChangeId === op.changeId} highRisk={proposal?.riskLevel === 'high'} onSelect={() => onSelectProposalChange?.(op.changeId)} />
+        ))}
       </div>
       </div>
 
@@ -893,6 +926,12 @@ export function EventCanvas({
       )}
     </div>
   );
+}
+
+function ProposalNode({ op, x, y, selected, active, highRisk, onSelect }: { op: GraphOperation; x: number; y: number; selected: boolean; active: boolean; highRisk: boolean; onSelect: () => void }) {
+  return <button type="button" onClick={(event) => { event.stopPropagation(); onSelect(); }} className={`absolute min-h-[58px] rounded-xl border-2 border-dashed px-3 py-2 text-left shadow-lg backdrop-blur-sm transition ${highRisk ? 'border-red-500 bg-red-50/80 text-red-900' : selected ? 'border-emerald-500 bg-violet-100/85 text-violet-950' : 'border-violet-400 bg-violet-50/60 text-violet-900 opacity-55'} ${active ? 'ring-4 ring-violet-300/40' : ''}`} style={{ left: x, top: y, width: NODE_W }} data-testid={`proposal-node-${op.changeId}`}>
+    <span className="block truncate text-[10px] font-semibold uppercase tracking-wide">AI · {op.node?.kind ?? op.op}</span><span className="mt-0.5 block text-sm leading-5">{op.node?.text ?? op.patch?.text ?? op.reason}</span>
+  </button>;
 }
 
 function ToolbarButton({ icon, label, onClick, trailing }: { icon: React.ReactNode; label: string; onClick: () => void; trailing?: React.ReactNode }) {
