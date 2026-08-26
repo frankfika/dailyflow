@@ -30,7 +30,8 @@ test('packaged Node boots ACP and resolves exactly the DailyFlow toolset', { tim
   const projection = path.join(work, 'projection.json');
   const toolset = path.join(work, 'toolset.json');
   await writeFile(projection, JSON.stringify({ baseRevision: 'packaged', event: {}, mindmap: { nodes: [], edges: [] } }));
-  const child = spawn(path.join(root, '..', 'node'), [
+  const bundledNode = path.join(root, '..', process.platform === 'win32' ? 'node.exe' : 'node');
+  const child = spawn(bundledNode, [
     path.join(root, 'node_modules', '@deepseek-ai', 'dsh-acp-demo', 'lib', 'bin.js'),
     '--config', path.join(root, 'profile', 'cordis.yml'),
   ], {

@@ -5,7 +5,7 @@
  * on the build machine's Node installation (e.g. Homebrew builds link against
  * libnode.dylib and are not portable).
  */
-import { createWriteStream, existsSync, mkdirSync, chmodSync, rmSync, renameSync, copyFileSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, chmodSync, rmSync, copyFileSync } from 'fs';
 import { get } from 'https';
 import { execFileSync } from 'child_process';
 import { dirname, join } from 'path';
@@ -129,18 +129,6 @@ async function main() {
   } catch (e) {
     console.error(`Failed to copy Node binary to ${outputPath}:`, e.message);
     process.exit(1);
-  }
-
-  // On Windows, rename node.exe to node (no extension) so Tauri's resources
-  // config can reference a single cross-platform path.
-  if (platform === 'win32') {
-    const nodePath = join(distServerDir, 'node');
-    try {
-      renameSync(outputPath, nodePath);
-    } catch (e) {
-      console.error(`Failed to rename node.exe to node:`, e.message);
-      process.exit(1);
-    }
   }
 
   if (platform !== 'win32') {
