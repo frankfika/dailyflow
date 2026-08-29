@@ -39,9 +39,23 @@ const ALLOWED_ORIGINS = [
   'http://tauri.localhost',
   'https://tauri.localhost',
 ];
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (IS_PROD) return false;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return (url.protocol === 'http:' || url.protocol === 'https:')
+      && (host === 'localhost' || host === '127.0.0.1' || host === '::1');
+  } catch {
+    return false;
+  }
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    if (!origin || isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));
