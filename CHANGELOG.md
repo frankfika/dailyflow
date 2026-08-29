@@ -5,6 +5,22 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0](https://github.com/frankfika/dailyflow/compare/v2.3.1...v2.4.0) (2026-08-29)
+
+
+### Features
+
+* **ai:** harden provider proxy & connection handling ([a767cc3](https://github.com/frankfika/dailyflow/commit/a767cc3e815a4fcc15a527a92a599757e48421ab))
+* **events:** project action commitments from meeting notes ([131e514](https://github.com/frankfika/dailyflow/commit/131e51402075211c734bc3646015e370071e8f36))
+* **notes:** rich-text editor, resizable panes & focus mode ([3d47e4c](https://github.com/frankfika/dailyflow/commit/3d47e4ca8a90baa4fb2cecb1e48bc56cc27b1692))
+* **privacy:** reflect real control locations in PrivacyPanel ([766e262](https://github.com/frankfika/dailyflow/commit/766e262e25a71c56ccec1a264edf7698cab8e7af))
+
+
+### Bug Fixes
+
+* **harness:** harden DSH runtime process manager ([da2d758](https://github.com/frankfika/dailyflow/commit/da2d758293b4b58eed9b74e2bfe5c6a2e340de0a))
+* **server:** allow loopback origins in dev CORS allowlist ([dee4b5e](https://github.com/frankfika/dailyflow/commit/dee4b5ebdab76338cb630c79a30b5f0cb77619ef))
+
 ## [2.3.1](https://github.com/frankfika/dailyflow/compare/v2.3.0...v2.3.1) (2026-08-26)
 
 
