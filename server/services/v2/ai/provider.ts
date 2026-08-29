@@ -19,6 +19,9 @@
  */
 import type { SourceItem } from '../../../domain/v2/types.js';
 import { loadConfig } from '../../config.js';
+import { assertSafeModelBaseUrl } from '../../harness/aiTargetPolicy.js';
+
+const MAX_PROVIDER_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export interface ModelMessage {
   role: 'system' | 'user' | 'assistant';
@@ -158,6 +161,9 @@ class OpenAICompatibleProvider implements AIProvider {
     const timeout = AbortSignal.timeout(req.timeoutMs ?? 120_000);
     const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
     try {
+      // Resolve immediately before fetch so a hostname cannot bypass the
+      // internal/reserved-address policy through DNS rebinding.
+      await assertSafeModelBaseUrl(this.opts.baseUrl);
       const resp = await fetch(url, {
         method: 'POST',
         headers: {
@@ -168,19 +174,22 @@ class OpenAICompatibleProvider implements AIProvider {
         },
         body: JSON.stringify(body),
         signal,
+        redirect: 'error',
       });
       if (!resp.ok) {
-        const text = await resp.text().catch(() => '');
+        await resp.body?.cancel().catch(() => {});
         return {
           data: null,
-          text: text.slice(0, 500),
+          // Provider bodies can echo prompts, request metadata, or hidden
+          // reasoning. Runtime events receive only a stable local message.
+          text: `Model provider request failed (${resp.status}).`,
           provider: this.name,
           model: this.opts.model,
           fallback: true,
           fallbackReason: resp.status === 401 || resp.status === 403 ? 'no_api_key' : 'network_error',
         };
       }
-      const json = await resp.json();
+      const json = JSON.parse(await readBoundedResponse(resp, MAX_PROVIDER_RESPONSE_BYTES));
       const raw =
         this.opts.format === 'anthropic'
           ? (json?.content?.[0]?.text ?? '')
@@ -205,7 +214,7 @@ class OpenAICompatibleProvider implements AIProvider {
       const aborted = signal.aborted;
       return {
         data: null,
-        text: err instanceof Error ? err.message : String(err),
+        text: aborted ? 'Model provider request timed out.' : 'Model provider request failed.',
         provider: this.name,
         model: this.opts.model,
         fallback: true,
@@ -213,6 +222,25 @@ class OpenAICompatibleProvider implements AIProvider {
       };
     }
   }
+}
+
+async function readBoundedResponse(response: Response, limit: number): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw Object.assign(new Error('Model provider response is too large.'), { code: 'AI_RESPONSE_TOO_LARGE' });
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
 }
 
 export interface V2AIConfig {

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { generateShortId } from '../utils/idGenerator';
+
 export type ContextItemType = 'today-tasks' | 'date-tasks' | 'note' | 'project' | 'custom-text';
 
 export interface ContextItem {
@@ -56,11 +58,20 @@ export function loadChatStore(): ChatStore {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as Partial<ChatStore>;
+      const seenSessionIds = new Set<string>();
       const sessions = Array.isArray(parsed.sessions)
         ? parsed.sessions
             .filter((session): session is ChatSession =>
               Boolean(session && typeof session.id === 'string' && Array.isArray(session.messages))
             )
+            // Older builds used `chat_${Date.now()}` and could create two
+            // sessions with the same id in one millisecond. Keep the first
+            // stored occurrence so one action can never mutate two rows.
+            .filter(session => {
+              if (seenSessionIds.has(session.id)) return false;
+              seenSessionIds.add(session.id);
+              return true;
+            })
             .map(session => ({
               ...session,
               workspaceId: session.workspaceId || 'default',
@@ -99,7 +110,7 @@ export function saveChatStore(store: ChatStore): void {
 export function createNewSession(workspaceId = 'default'): ChatSession {
   const now = new Date().toISOString();
   return {
-    id: `chat_${Date.now()}`,
+    id: generateShortId('chat'),
     workspaceId,
     title: 'New Chat',
     messages: [],

@@ -1,17 +1,22 @@
 import { Router } from 'express';
 import { lookup } from 'node:dns/promises';
 import net from 'node:net';
+import { z } from 'zod';
 
 const router = Router();
 
-interface SummarizeBody {
-  apiKey: string;
-  model?: string;
-  baseUrl: string;
-  systemPrompt: string;
-  userPrompt: string;
-  maxTokens?: number;
-}
+const MAX_PROMPT_BYTES = 2 * 1024 * 1024;
+const MAX_UPSTREAM_BYTES = 2 * 1024 * 1024;
+const UPSTREAM_TIMEOUT_MS = 120_000;
+
+const SummarizeBodySchema = z.object({
+  apiKey: z.string().trim().min(1).max(8_192),
+  model: z.string().trim().min(1).max(256).optional(),
+  baseUrl: z.string().trim().min(1).max(2_048),
+  systemPrompt: z.string().max(MAX_PROMPT_BYTES).optional(),
+  userPrompt: z.string().min(1).max(MAX_PROMPT_BYTES),
+  maxTokens: z.number().int().min(1).max(16_384).optional(),
+}).strict();
 
 // All providers expose an OpenAI-compatible /chat/completions endpoint.
 // baseUrl is the provider's base (e.g. "https://api.openai.com/v1",
@@ -94,12 +99,18 @@ export function resolveAiUrl(baseUrl: string): string {
     throw new Error('Invalid URL format');
   }
 
+  if (parsed.username || parsed.password) {
+    throw new Error('Invalid URL: embedded credentials are not allowed');
+  }
   // SSRF prevention: block internal / metadata endpoints
   // DailyFlow is a local desktop app, so exact loopback endpoints are a
   // supported provider boundary (Ollama, LM Studio, etc.). Keep blocking LAN,
   // link-local, and wildcard addresses to avoid turning the proxy into SSRF.
   if (isBlockedHost(parsed) && !isLoopbackHost(parsed)) {
     throw new Error('Invalid URL: internal addresses are not allowed');
+  }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed))) {
+    throw new Error('Invalid URL: remote providers must use HTTPS');
   }
 
   if (/\/chat\/completions$/.test(trimmed)) return trimmed;
@@ -108,9 +119,14 @@ export function resolveAiUrl(baseUrl: string): string {
 
 router.post('/summarize', async (req, res) => {
   try {
-    const body = req.body as SummarizeBody;
-    if (!body || !body.apiKey || !body.userPrompt || !body.baseUrl) {
-      return res.status(400).json({ error: 'Missing required fields: apiKey, baseUrl, userPrompt' });
+    const parsedBody = SummarizeBodySchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ error: 'Invalid AI request' });
+    }
+    const body = parsedBody.data;
+    if (Buffer.byteLength(body.userPrompt, 'utf8') > MAX_PROMPT_BYTES
+      || Buffer.byteLength(body.systemPrompt ?? '', 'utf8') > MAX_PROMPT_BYTES) {
+      return res.status(413).json({ error: 'AI prompt exceeds the 2 MiB limit' });
     }
 
     const url = resolveAiUrl(body.baseUrl);
@@ -119,6 +135,11 @@ router.post('/summarize', async (req, res) => {
     const systemPrompt = body.systemPrompt || 'You are a helpful assistant that summarizes notes concisely in Markdown.';
     const maxTokens = body.maxTokens ?? 4096;
 
+    const clientAbort = new AbortController();
+    res.once('close', () => {
+      if (!res.writableEnded) clientAbort.abort(new Error('Client disconnected'));
+    });
+    const signal = AbortSignal.any([clientAbort.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]);
     const upstream = await fetch(url, {
       method: 'POST',
       headers: {
@@ -134,30 +155,55 @@ router.post('/summarize', async (req, res) => {
         ],
       }),
       redirect: 'error',
+      signal,
     });
 
     if (!upstream.ok) {
-      const errText = await upstream.text();
+      // Never pass a provider's raw response to the UI: it can contain echoed
+      // prompts, internal request ids, or reasoning traces.
+      await upstream.body?.cancel().catch(() => {});
       return res.status(upstream.status).json({
         error: `Upstream AI error (${upstream.status})`,
-        detail: errText.slice(0, 500),
       });
     }
 
-    const data = await upstream.json() as any;
+    const data = JSON.parse(await readBoundedText(upstream, MAX_UPSTREAM_BYTES)) as any;
     let summary = data?.choices?.[0]?.message?.content?.trim() || '';
     // Some reasoning models (e.g. MiniMax-M2) emit <think>…</think> inline.
     summary = summary.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
 
     if (!summary) {
-      return res.status(502).json({ error: 'Empty response from AI provider', detail: JSON.stringify(data).slice(0, 500) });
+      return res.status(502).json({ error: 'Empty response from AI provider' });
     }
 
     res.json({ summary, model });
   } catch (error: any) {
-    console.error('AI summarize failed:', error);
-    res.status(500).json({ error: error.message || String(error) });
+    const aborted = error?.name === 'AbortError' || error?.name === 'TimeoutError';
+    const message = aborted ? 'AI provider request timed out' : (error?.message || String(error));
+    // Log only a bounded class/message. Request bodies, credentials and raw
+    // provider payloads are deliberately excluded.
+    console.error('AI summarize failed:', String(message).slice(0, 300));
+    res.status(aborted ? 504 : 500).json({ error: message });
   }
 });
+
+async function readBoundedText(response: Response, limit: number): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw Object.assign(new Error('AI provider response exceeds the 2 MiB limit'), { code: 'AI_RESPONSE_TOO_LARGE' });
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
 
 export default router;

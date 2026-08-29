@@ -61,6 +61,10 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
 
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // React state is not a synchronous lock: two clicks in the same render can
+  // both observe `isStreaming === false`. Keep a ref gate for the full request
+  // lifetime so one pipeline can never append/send twice concurrently.
+  const inFlightRef = useRef(false);
 
   const resolveSlashCommand = useCallback((text: string, skills: PromptTemplateData[]) => {
     if (!text.startsWith('/')) return { content: text, matchedSkill: null };
@@ -105,7 +109,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
     contextSnapshot: suppliedContext,
   }: RunMessageOptions) => {
     const content = rawContent.trim();
-    if (!content || isStreaming) return;
+    if (!content || inFlightRef.current) return;
 
     const live = getStore();
     const scopedSessions = live.sessions.filter(
@@ -122,62 +126,63 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       return;
     }
 
-    const activeSkill = live.pendingSkillId
-      ? live.skills.find(candidate => candidate.id === live.pendingSkillId) || null
-      : null;
-    const resolved = reuseUserMessage
-      ? { content, matchedSkill: null }
-      : resolveSlashCommand(content, live.skills);
-    const skillForThisMessage = resolved.matchedSkill || activeSkill;
-    if (resolved.matchedSkill) setStore({ pendingSkillId: resolved.matchedSkill.id });
-
-    const userMessage: ChatMessage = reuseUserMessage || {
-      id: generateShortId('msg'),
-      role: 'user',
-      content: resolved.content,
-      timestamp: new Date().toISOString(),
-    };
-    const contextSnapshot = suppliedContext || [...session.contextItems];
-    if (!reuseUserMessage) {
-      appendMessageToSession(session.id, userMessage, { retitle: true });
-    }
-
+    inFlightRef.current = true;
     setIsStreaming(true);
-    if (!resolved.matchedSkill) setStore({ pendingSkillId: null });
-    if (skillForThisMessage) updateSkillUsage(skillForThisMessage);
-
-    const contextArgs = { language, tasks, notes, filesMap };
-    const contexts: string[] = [];
-    const autoContextText = buildAutoContextText(focusedContext, contextArgs);
-    const selectedContextText = buildContextText(contextSnapshot, contextArgs);
-    if (autoContextText) contexts.push(autoContextText);
-    if (selectedContextText) contexts.push(selectedContextText);
-    if (skillForThisMessage?.type === 'agent') {
-      contexts.push(
-        `${language === 'zh' ? '参考以下知识库：' : 'Reference knowledge base:'}\n\n${
-          skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''
-        }`
-      );
-    }
-
-    let userPrompt = resolved.content;
-    if (contexts.length > 0) {
-      userPrompt = `${userPrompt}\n\n---\n${
-        language === 'zh' ? '参考以下上下文：' : 'Reference context:'
-      }\n\n${contexts.join('\n\n---\n')}`;
-    }
-
-    const defaultSystemPrompt = language === 'zh'
-      ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
-      : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.';
-    const baseSystemPrompt = skillForThisMessage && skillForThisMessage.type !== 'agent'
-      ? skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''
-      : defaultSystemPrompt;
-    const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
-
     const controller = new AbortController();
     abortRef.current = controller;
+    const contextSnapshot = suppliedContext || [...session.contextItems];
     try {
+      const activeSkill = live.pendingSkillId
+        ? live.skills.find(candidate => candidate.id === live.pendingSkillId) || null
+        : null;
+      const resolved = reuseUserMessage
+        ? { content, matchedSkill: null }
+        : resolveSlashCommand(content, live.skills);
+      const skillForThisMessage = resolved.matchedSkill || activeSkill;
+      if (resolved.matchedSkill) setStore({ pendingSkillId: resolved.matchedSkill.id });
+
+      const userMessage: ChatMessage = reuseUserMessage || {
+        id: generateShortId('msg'),
+        role: 'user',
+        content: resolved.content,
+        timestamp: new Date().toISOString(),
+      };
+      if (!reuseUserMessage) {
+        appendMessageToSession(session.id, userMessage, { retitle: true });
+      }
+
+      if (!resolved.matchedSkill) setStore({ pendingSkillId: null });
+      if (skillForThisMessage) updateSkillUsage(skillForThisMessage);
+
+      const contextArgs = { language, tasks, notes, filesMap };
+      const contexts: string[] = [];
+      const autoContextText = buildAutoContextText(focusedContext, contextArgs);
+      const selectedContextText = buildContextText(contextSnapshot, contextArgs);
+      if (autoContextText) contexts.push(autoContextText);
+      if (selectedContextText) contexts.push(selectedContextText);
+      if (skillForThisMessage?.type === 'agent') {
+        contexts.push(
+          `${language === 'zh' ? '参考以下知识库：' : 'Reference knowledge base:'}\n\n${
+            skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''
+          }`
+        );
+      }
+
+      let userPrompt = resolved.content;
+      if (contexts.length > 0) {
+        userPrompt = `${userPrompt}\n\n---\n${
+          language === 'zh' ? '参考以下上下文：' : 'Reference context:'
+        }\n\n${contexts.join('\n\n---\n')}`;
+      }
+
+      const defaultSystemPrompt = language === 'zh'
+        ? '你是一位专业、友好的 AI 助手，帮助用户管理日常工作和任务。回复简洁清晰，使用 Markdown 格式。'
+        : 'You are a professional, friendly AI assistant helping with daily work and tasks. Reply concisely and clearly using Markdown.';
+      const baseSystemPrompt = skillForThisMessage && skillForThisMessage.type !== 'agent'
+        ? skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''
+        : defaultSystemPrompt;
+      const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
+
       const { summary } = await aiApi.summarize({
         apiKey: provider.apiKey,
         model: provider.model,
@@ -234,13 +239,13 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      inFlightRef.current = false;
       setIsStreaming(false);
     }
   }, [
     activeContext,
     filesMap,
     focusedContext,
-    isStreaming,
     language,
     notes,
     resolveSlashCommand,
@@ -262,7 +267,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
   }, []);
 
   const retryMessage = useCallback((messageIndex: number) => {
-    if (isStreaming) return;
+    if (inFlightRef.current) return;
     const live = getStore();
     const scopedSessions = live.sessions.filter(
       session => (session.workspaceId || 'default') === workspaceId
@@ -309,7 +314,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       reuseUserMessage: userMessage,
       contextSnapshot: target.contextSnapshot,
     });
-  }, [isStreaming, language, runMessage, workspaceId]);
+  }, [language, runMessage, workspaceId]);
 
   return { isStreaming, sendMessage, stopMessage, retryMessage };
 }

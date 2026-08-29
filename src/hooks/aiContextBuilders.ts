@@ -56,7 +56,7 @@ export function buildContextText(items: ContextItem[], args: BuildContextTextArg
         const projectName = item.data.projectName!;
         const projectTasks = tasks.filter((t: any) => t.project === projectName || t.tags?.includes(projectName));
         parts.push(`## ${language === 'zh' ? '项目' : 'Project'}: ${projectName}\n${
-          projectTasks.map((t: any) => `- [${t.status === 'done' ? 'x' : ' '}] ${t.title}`).join('\n') || '(empty)'
+          projectTasks.map((t: any) => `- [${t.status === 'done' ? 'x' : ' '}] ${t.title}`).join('\n') || (language === 'zh' ? '（空）' : '(empty)')
         }`);
         break;
       }
