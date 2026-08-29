@@ -1,10 +1,9 @@
 import { test, expect, request } from '@playwright/test';
 
 /**
- * Focus mode is the default layout for the Notes tab. The list
- * collapses to a 56px icon strip so the editor gets the full pane
- * width for long-form writing. The user can switch back to the 280px
- * split view via the "Show list" button on the strip, the
+ * Split mode is the default layout for the Notes tab. Focus mode collapses
+ * the list to a 56px icon strip so the editor gets the full pane width for
+ * long-form writing. The user can toggle it via the "Show list" button, the
  * `note-toggle-layout` button in the editor header, or the
  * `mod+\` keyboard shortcut.
  */
@@ -44,12 +43,12 @@ test.describe('Notes focus mode (default layout)', () => {
     await ctx.dispose();
   }
 
-  async function seedNote(baseURL: string | undefined, marker: string): Promise<string> {
+  async function seedNote(baseURL: string | undefined, marker: string, body?: string): Promise<string> {
     if (!baseURL) throw new Error('baseURL is required');
     const ctx = await request.newContext({ baseURL });
     const res = await ctx.post('/api/v2/notes', {
       data: {
-        body: `# ${marker}\n\nThis note exists to prove the layout reflects the seed.`,
+        body: body ?? `# ${marker}\n\nThis note exists to prove the layout reflects the seed.`,
         title: marker,
         kind: 'general',
         state: 'active',
@@ -67,12 +66,16 @@ test.describe('Notes focus mode (default layout)', () => {
    * test starts from a known default.
    */
   async function openNotesTab(page: import('@playwright/test').Page): Promise<void> {
-    await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
+    // DailyFlow performs background API work after mounting, so network-idle
+    // is not a reliable readiness signal. The visible Notes view below is.
+    // Stay on Playwright's isolated baseURL. Hard-coding the development port
+    // would seed the temporary API but render a user's real workspace.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     // Wipe any stored layout so the test starts from the actual
     // loadLayout() default, not whatever a previous test / dev
     // session left in localStorage.
     await page.evaluate(() => localStorage.removeItem('df_notes_layout'));
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /^notes$/i }).first().click();
     await expect(page.getByTestId('v2-notes-view')).toBeVisible({ timeout: 10000 });
   }
@@ -124,6 +127,120 @@ test.describe('Notes focus mode (default layout)', () => {
     await expect(page.getByTestId('notes-strip')).toBeVisible();
     await expect(page.getByTestId('note-editor')).toBeVisible();
     await expect(page.getByTestId('note-body')).toContainText('Keyboard shortcut test');
+  });
+
+  test('Ctrl+S saves the current Note and never falls through to browser page-save', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    const noteId = await seedNote(baseURL, 'Platform save shortcut test');
+    await openNotesTab(page);
+    await page.getByTestId(`notes-item-${noteId}`).click();
+
+    const body = page.getByTestId('note-body');
+    const latestHeading = `Saved immediately ${Date.now()}`;
+    await body.fill(latestHeading);
+    await page.evaluate(() => {
+      (window as typeof window & { __noteSavePrevented?: boolean }).__noteSavePrevented = false;
+      document.addEventListener('keydown', (event) => {
+        if (event.ctrlKey && event.key.toLowerCase() === 's') {
+          (window as typeof window & { __noteSavePrevented?: boolean }).__noteSavePrevented = event.defaultPrevented;
+        }
+      });
+    });
+
+    const persisted = page.waitForResponse((response) =>
+      response.request().method() === 'PATCH'
+      && response.url().includes(`/api/v2/notes/${noteId}`)
+    );
+    await body.press('Control+s');
+    const saveResponse = await persisted;
+    expect(saveResponse.ok(), await saveResponse.text()).toBeTruthy();
+
+    await expect.poll(() => page.evaluate(
+      () => (window as typeof window & { __noteSavePrevented?: boolean }).__noteSavePrevented,
+    )).toBe(true);
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/v2/notes/${noteId}`);
+      return (await response.json()).note.body.trim();
+    }).toBe(`# ${latestHeading}`);
+  });
+
+  test('Markdown shortcuts render in place and persist as Markdown', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    const noteId = await seedNote(baseURL, 'Live Markdown shortcuts', '');
+    await openNotesTab(page);
+    await page.getByTestId(`notes-item-${noteId}`).click();
+    const editor = page.getByTestId('note-body');
+
+    await editor.click();
+    await page.keyboard.type('## ');
+    await page.keyboard.type('Roadmap');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('- ');
+    await page.keyboard.type('First item');
+
+    await expect(editor.locator('h2')).toHaveText('Roadmap');
+    await expect(editor.locator('ul li')).toContainText('First item');
+    await editor.press('Control+a');
+    await expect(page.getByLabel('Text formatting')).toBeVisible();
+    const persisted = page.waitForResponse((response) =>
+      response.request().method() === 'PATCH'
+      && response.url().includes(`/api/v2/notes/${noteId}`)
+    );
+    await editor.press('Control+s');
+    expect((await persisted).ok()).toBeTruthy();
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/v2/notes/${noteId}`);
+      return (await response.json()).note.body.trim();
+    }).toBe('## Roadmap\n\n- First item');
+  });
+
+  test('tags and task relations are visible, editable, and durable from the note', async ({ page, baseURL }) => {
+    await bootstrapWorkspace(baseURL);
+    const marker = `Note relations ${Date.now()}`;
+    const noteId = await seedNote(baseURL, marker);
+    await openNotesTab(page);
+    await page.getByTestId(`notes-item-${noteId}`).click();
+
+    const properties = page.getByTestId('note-primary-properties');
+    await expect(properties).toBeVisible();
+    await expect(page.getByTestId('note-tags')).toBeVisible();
+    await expect(page.getByTestId('note-linked-tasks')).toBeVisible();
+
+    const tagPatch = page.waitForResponse((response) =>
+      response.request().method() === 'PATCH'
+      && response.url().includes(`/api/v2/notes/${noteId}`)
+    );
+    await page.getByTestId('note-tag-input').fill('research');
+    await page.getByTestId('note-tag-input').press('Enter');
+    expect((await tagPatch).ok()).toBeTruthy();
+    await expect(page.getByTestId('note-tags')).toContainText('#research');
+
+    const taskTitle = `Follow up ${Date.now()}`;
+    const createdTask = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().endsWith('/api/v2/commitments')
+    );
+    await page.getByTestId('note-create-task-input').fill(taskTitle);
+    await page.getByTestId('note-create-task-input').press('Enter');
+    const taskResponse = await createdTask;
+    expect(taskResponse.ok(), await taskResponse.text()).toBeTruthy();
+    const commitmentId = (await taskResponse.json()).commitment.id as string;
+
+    await expect(page.getByTestId('note-linked-tasks')).toContainText(taskTitle);
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/v2/notes/${noteId}`);
+      const note = (await response.json()).note;
+      return {
+        tags: note.tagIds,
+        tasks: note.commitmentIds,
+      };
+    }).toEqual({ tags: ['research'], tasks: [commitmentId] });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: /^notes$/i }).first().click();
+    await page.getByTestId(`notes-item-${noteId}`).click();
+    await expect(page.getByTestId('note-tags')).toContainText('#research');
+    await expect(page.getByTestId('note-linked-tasks')).toContainText(taskTitle);
   });
 
   test('editor-header toggle switches split → focus', async ({ page, baseURL }) => {

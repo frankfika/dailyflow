@@ -343,11 +343,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (t && !tags.includes(t)) setTags([...tags, t]);
   };
 
-  // Keyboard shortcuts: ⌘/Ctrl+Enter to save, Esc to close (matches the Back button)
+  // Keyboard shortcuts: ⌘/Ctrl+S and ⌘/Ctrl+Enter save the Note. Always
+  // prevent the browser's "Save page" dialog for the platform save shortcut.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey;
-      if (isMod && e.key === 'Enter') {
+      if (isMod && !e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (!e.repeat && title.trim()) handleSave();
+      } else if (isMod && e.key === 'Enter') {
         e.preventDefault();
         if (title.trim()) handleSave();
       } else if (e.key === 'Escape') {

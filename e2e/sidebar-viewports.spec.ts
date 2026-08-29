@@ -17,7 +17,7 @@ const VIEWPORTS = [
 test.describe('Sidebar viewport behavior (audit #11)', () => {
   test('desktop collapses to a persistent icon rail and expands again', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => localStorage.setItem('df_sidebar_collapsed', 'true'));
     await page.reload({ waitUntil: 'domcontentloaded' });
 
@@ -41,9 +41,9 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     test(`closed default @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       // Clear any persisted sidebar preference from a prior test run.
-      await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => localStorage.removeItem('df_sidebar_collapsed'));
-      await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1500);
       // Today view should be the default
       const sidebar = page.locator('[data-testid="nav-today"]').first();
@@ -59,9 +59,9 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     test(`open overlay @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       // Clear any persisted sidebar preference from a prior test run.
-      await page.goto('http://localhost:47831', { waitUntil: 'domcontentloaded' });
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => localStorage.removeItem('df_sidebar_collapsed'));
-      await page.goto('http://localhost:47831', { waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
       // Wait for the workspace to load and the sidebar to be ready. The
       // bootstrap call (POST /api/config/workspaces + activate) is async,
       // and the check-first-run flip from true→false happens after the

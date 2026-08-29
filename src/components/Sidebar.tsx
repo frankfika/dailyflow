@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
+import { ResizeHandle } from './ResizeHandle';
 
 declare const __APP_VERSION__: string;
 
@@ -43,6 +44,19 @@ const MOBILE_MAX = 640;
 const TABLET_MAX = 1024;
 const COMPACT_WIDTH = 60;
 const FULL_WIDTH = 230;
+const SIDEBAR_WIDTH_KEY = 'df_sidebar_width';
+const SIDEBAR_MIN_WIDTH = 210;
+const SIDEBAR_MAX_WIDTH = 420;
+
+function readStoredWidth(): number {
+  if (typeof window === 'undefined') return FULL_WIDTH;
+  const raw = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+  if (raw === null) return FULL_WIDTH;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed)
+    ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, parsed))
+    : FULL_WIDTH;
+}
 
 type ViewportMode = 'mobile' | 'tablet' | 'desktop';
 
@@ -115,6 +129,8 @@ export function Sidebar({
   onOpenSettings,
   onOpenNotesSurface,
 }: SidebarProps) {
+  const [desktopWidth, setDesktopWidth] = useState(readStoredWidth);
+  const [isResizing, setIsResizing] = useState(false);
   // --- Viewport detection ---
   const [viewport, setViewport] = useState<ViewportMode>(() =>
     typeof window === 'undefined' ? 'desktop' : getViewportMode(window.innerWidth)
@@ -254,7 +270,10 @@ export function Sidebar({
   // Tablet: width 60 ↔ 230 (icon strip ↔ overlay).
   // Desktop: width 60 ↔ 230 in flow; it never reaches zero.
   const motionInitial = false; // don't replay on every prop change
-  const motionTransition = { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] as const };
+  const motionTransition = isResizing
+    ? { duration: 0 }
+    : { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] as const };
+  const expandedWidth = isDesktop ? desktopWidth : FULL_WIDTH;
 
   let motionAnimate: { x?: string; width?: number; marginLeft?: string };
   if (isMobile) {
@@ -267,7 +286,7 @@ export function Sidebar({
   } else {
     // desktop: retain the compact rail instead of hiding navigation entirely
     motionAnimate = {
-      width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH,
+      width: showExpandedWidth ? expandedWidth : COMPACT_WIDTH,
       marginLeft: '0px',
     };
   }
@@ -327,10 +346,29 @@ export function Sidebar({
           }
         }}
       >
+        {isDesktop && isExpanded && (
+          <ResizeHandle
+            label={language === 'zh' ? '调整侧边栏宽度' : 'Resize sidebar'}
+            value={desktopWidth}
+            min={SIDEBAR_MIN_WIDTH}
+            max={SIDEBAR_MAX_WIDTH}
+            defaultValue={FULL_WIDTH}
+            onResize={(delta) => {
+              setDesktopWidth((current) => {
+                const next = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, current + delta));
+                try { window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next)); } catch { /* optional preference */ }
+                return next;
+              });
+            }}
+            onResizeStart={() => setIsResizing(true)}
+            onResizeEnd={() => setIsResizing(false)}
+            testId="sidebar-resize-handle"
+          />
+        )}
         <div
           data-testid="sidebar-inner"
           className="px-2.5 py-4 flex flex-col h-full"
-          style={{ width: showExpandedWidth ? FULL_WIDTH : COMPACT_WIDTH }}
+          style={{ width: showExpandedWidth ? expandedWidth : COMPACT_WIDTH }}
         >
           {/* Logo + collapse */}
           <div

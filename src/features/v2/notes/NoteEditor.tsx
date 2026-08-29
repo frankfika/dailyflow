@@ -15,19 +15,30 @@
  *   - flush() on unmount prevents the "edited → navigated → lost"
  *     race that the spec calls out.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Maximize2, Minimize2, FileText, Calendar, ArrowRight, Trash2, Pencil, BookOpen, Tag, Link2, Settings2, X } from 'lucide-react';
+import { Maximize2, Minimize2, FileText, Calendar, ArrowRight, Trash2, Pencil, Tag, Link2, Settings2, X, Plus } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
-import { listCommitments, type Commitment, type NoteBacklinks, type NoteKind } from '../api/client';
+import {
+  createCommitment,
+  listCommitments,
+  listLegacyTasks,
+  migrateLegacyTask,
+  type Commitment,
+  type NoteBacklinks,
+  type NoteKind,
+} from '../api/client';
 import { relativeTime } from './relativeTime';
 import { useWorkspaceScope } from '../../../workspaceScope';
 import { queryKeys } from '../../../queryKeys';
 import { MeetingNotePanel } from './MeetingNotePanel';
 import { MeetingEventLauncher } from './MeetingEventLauncher';
+import type { LiveMarkdownEditorHandle } from './LiveMarkdownEditor';
+
+const LiveMarkdownEditor = lazy(async () => ({
+  default: (await import('./LiveMarkdownEditor')).LiveMarkdownEditor,
+}));
 
 export interface NoteEditorProps {
   /** The note id to edit. Pass `null` for an empty editor placeholder. */
@@ -96,6 +107,11 @@ const COPY = {
     linkedTasks: '关联任务',
     linkTask: '关联一个任务…',
     noTasks: '暂无可关联任务',
+    createTask: '新建关联任务，回车创建',
+    dailyTasks: 'Today / 每日任务（选择后迁移并关联）',
+    workItems: '任务',
+    relationError: '任务关联失败，请重试',
+    moreProperties: '更多属性',
     removeTag: '移除标签',
     unlinkTask: '取消关联任务',
     emptyPreview: '还没有可预览的 Markdown 内容。',
@@ -140,6 +156,11 @@ const COPY = {
     linkedTasks: 'Linked tasks',
     linkTask: 'Link a task…',
     noTasks: 'No tasks available',
+    createTask: 'Create a linked task, then press Enter',
+    dailyTasks: 'Today / daily tasks (migrate & link)',
+    workItems: 'Tasks',
+    relationError: 'Could not link the task. Please try again.',
+    moreProperties: 'More properties',
     removeTag: 'Remove tag',
     unlinkTask: 'Unlink task',
     emptyPreview: 'There is no Markdown content to preview yet.',
@@ -187,6 +208,12 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     staleTime: 30_000,
     enabled: Boolean(noteId),
   });
+  const legacyTasks = useQuery({
+    queryKey: ['v2', workspaceId, 'legacy-tasks', 'note-linker'],
+    queryFn: () => listLegacyTasks(),
+    staleTime: 30_000,
+    enabled: Boolean(noteId),
+  });
   const commitmentById = useMemo(
     () => new Map((commitments.data?.items ?? []).map((item) => [item.id, item])),
     [commitments.data?.items],
@@ -201,10 +228,12 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // editor, metadata, backlinks and meeting recorder on every keystroke.
   const [renderedBody, setRenderedBody] = useState<string>(note?.body ?? '');
   const bodyRef = useRef(note?.body ?? '');
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const markdownEditorRef = useRef<LiveMarkdownEditorHandle | null>(null);
   const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [tagDraft, setTagDraft] = useState('');
+  const [taskDraft, setTaskDraft] = useState('');
+  const [isLinkingTask, setIsLinkingTask] = useState(false);
+  const [relationError, setRelationError] = useState<string | null>(null);
   const seededNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!note) {
@@ -215,8 +244,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     seededNoteIdRef.current = note.id;
     bodyRef.current = note.body ?? '';
     setRenderedBody(note.body ?? '');
-    setViewMode('edit');
     setTagDraft('');
+    setTaskDraft('');
+    setRelationError(null);
   }, [note, noteId]);
 
   const autosave = useNoteAutosave(note ?? null);
@@ -248,6 +278,29 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       latestFlushRef.current().catch(() => undefined);
     };
   }, [noteId]);
+
+  // A Note is an application document, so the platform save shortcut must
+  // flush the Note instead of falling through to the browser's "Save page"
+  // dialog. Register in capture phase to own the shortcut regardless of
+  // whether focus is in the title, body, metadata controls, or preview.
+  useEffect(() => {
+    const saveCurrentNote = (event: globalThis.KeyboardEvent) => {
+      if (!noteId || event.altKey || !(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (event.repeat) return;
+      void latestFlushRef.current().then((saved) => {
+        onNotice?.(
+          saved
+            ? (language === 'zh' ? '笔记已保存' : 'Note saved')
+            : (language === 'zh' ? '保存失败，本地修改仍保留在编辑器中' : 'Save failed. Local edits remain in the editor.'),
+          saved ? 'success' : 'error',
+        );
+      });
+    };
+    document.addEventListener('keydown', saveCurrentNote, { capture: true });
+    return () => document.removeEventListener('keydown', saveCurrentNote, { capture: true });
+  }, [language, noteId, onNotice]);
 
   if (!noteId) {
     // No note selected — render a full-bleed onboarding composition
@@ -320,7 +373,11 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   const tags = note.tagIds ?? [];
   const linkedCommitmentIds = note.commitmentIds ?? [];
   const availableCommitments = (commitments.data?.items ?? []).filter(
-    (item) => !linkedCommitmentIds.includes(item.id),
+    (item) => !linkedCommitmentIds.includes(item.id)
+      && !['completed', 'cancelled', 'archived'].includes(item.state),
+  );
+  const availableLegacyTasks = (legacyTasks.data?.items ?? []).filter(
+    (item) => item.status === 'todo',
   );
   const addTag = async () => {
     const value = tagDraft.trim().replace(/^#/, '');
@@ -336,10 +393,66 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     event.preventDefault();
     void addTag();
   };
+  const linkCommitment = async (id: string) => {
+    if (!id || linkedCommitmentIds.includes(id)) return;
+    setRelationError(null);
+    const saved = await saveMetadata({ commitmentIds: [...linkedCommitmentIds, id] });
+    if (!saved) setRelationError(t.relationError);
+  };
+  const createAndLinkTask = async () => {
+    const title = taskDraft.trim();
+    if (!title || isLinkingTask) return;
+    setIsLinkingTask(true);
+    setRelationError(null);
+    try {
+      const { commitment } = await createCommitment({
+        title,
+        outcome: title,
+        state: 'active',
+        createdBy: 'user',
+      });
+      setTaskDraft('');
+      queryClient.setQueryData<{ items: Commitment[]; total: number }>(
+        queryKeys.commitments(workspaceId),
+        (current) => current
+          ? { items: [commitment, ...current.items], total: current.total + 1 }
+          : { items: [commitment], total: 1 },
+      );
+      await linkCommitment(commitment.id);
+    } catch {
+      setRelationError(t.relationError);
+    } finally {
+      setIsLinkingTask(false);
+    }
+  };
+  const linkSelectedTask = async (value: string) => {
+    if (!value || isLinkingTask) return;
+    setIsLinkingTask(true);
+    setRelationError(null);
+    try {
+      if (value.startsWith('legacy:')) {
+        const legacyId = value.slice('legacy:'.length);
+        const task = availableLegacyTasks.find((item) => item.id === legacyId);
+        if (!task) return;
+        const migrated = await migrateLegacyTask(task.date, task.line, {
+          title: task.title,
+          outcome: task.title,
+          state: 'active',
+        });
+        await Promise.all([commitments.refetch(), legacyTasks.refetch()]);
+        await linkCommitment(migrated.commitmentId);
+      } else {
+        await linkCommitment(value);
+      }
+    } catch {
+      setRelationError(t.relationError);
+    } finally {
+      setIsLinkingTask(false);
+    }
+  };
   const insertTranscriptIntoNote = async (text: string) => {
     const transcript = text.trim();
     if (!transcript) return;
-    setViewMode('edit');
     const currentBody = bodyRef.current;
     if (currentBody.includes(transcript)) return;
     const heading = language === 'zh' ? '## 录音转写' : '## Recording transcript';
@@ -347,7 +460,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       ? `${currentBody.trimEnd()}\n\n${heading}\n\n${transcript}\n`
       : `${heading}\n\n${transcript}\n`;
     bodyRef.current = nextBody;
-    if (textareaRef.current) textareaRef.current.value = nextBody;
+    markdownEditorRef.current?.setMarkdown(nextBody);
     setRenderedBody(nextBody);
     autosave.schedule({ body: nextBody });
     await autosave.flush();
@@ -389,39 +502,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
           </div>
           <div className="flex items-center gap-1">
-            <div
-              className="inline-flex items-center rounded-md border border-border bg-background/60 p-0.5"
-              role="group"
-              aria-label={language === 'zh' ? '笔记显示方式' : 'Note display mode'}
-            >
-              <button
-                type="button"
-                onClick={() => setViewMode('edit')}
-                className={`inline-flex min-h-[44px] items-center gap-1 rounded px-3 py-1 transition-colors sm:min-h-0 sm:px-2 ${
-                  viewMode === 'edit' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
-                }`}
-                data-testid="note-mode-edit"
-                aria-pressed={viewMode === 'edit'}
-              >
-                <Pencil size={12} />
-                {t.edit}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRenderedBody(bodyRef.current);
-                  setViewMode('preview');
-                }}
-                className={`inline-flex min-h-[44px] items-center gap-1 rounded px-3 py-1 transition-colors sm:min-h-0 sm:px-2 ${
-                  viewMode === 'preview' ? 'bg-surface-elevated text-text-heading shadow-sm' : 'text-text-muted'
-                }`}
-                data-testid="note-mode-preview"
-                aria-pressed={viewMode === 'preview'}
-              >
-                <BookOpen size={12} />
-                {t.preview}
-              </button>
-            </div>
             {onToggleLayout && (
               <button
                 onClick={onToggleLayout}
@@ -439,14 +519,122 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
           </div>
         </div>
-        <details className="group mx-auto w-full max-w-[760px] border-t border-border/60 pt-2 text-xs">
+        <div
+          className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5 border-t border-border/60 pt-2 text-xs"
+          data-testid="note-primary-properties"
+        >
+          <div className="flex min-w-0 items-start gap-2 py-0.5" data-testid="note-tags">
+            <span className="inline-flex h-6 w-24 shrink-0 items-center gap-1.5 text-[11px] font-medium text-text-muted">
+              <Tag size={12} />
+              {t.tags}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {tags.map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-accent/8 px-2 py-1 text-[11px] text-accent">
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => void saveMetadata({ tagIds: tags.filter((item) => item !== tag) })}
+                    className="rounded p-0.5 hover:bg-accent/10"
+                    aria-label={`${t.removeTag} ${tag}`}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={onTagKeyDown}
+                onBlur={() => void addTag()}
+                placeholder={tags.length === 0 ? t.addTag : '+ tag'}
+                className="h-6 min-w-36 flex-1 bg-transparent text-[11px] text-text-heading outline-none placeholder:text-text-muted"
+                data-testid="note-tag-input"
+              />
+            </div>
+          </div>
+
+          <div className="flex min-w-0 items-start gap-2 py-0.5" data-testid="note-linked-tasks">
+            <span className="inline-flex h-7 w-24 shrink-0 items-center gap-1.5 text-[11px] font-medium text-text-muted">
+              <Link2 size={12} />
+              {t.linkedTasks}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {linkedCommitmentIds.map((id) => {
+                const task = commitmentById.get(id);
+                return (
+                  <LinkedTaskChip
+                    key={id}
+                    id={id}
+                    task={task}
+                    unlinkLabel={t.unlinkTask}
+                    onRemove={() => void saveMetadata({
+                      commitmentIds: linkedCommitmentIds.filter((item) => item !== id),
+                    })}
+                  />
+                );
+              })}
+              <select
+                value=""
+                disabled={isLinkingTask}
+                onChange={(event) => void linkSelectedTask(event.target.value)}
+                className="h-7 min-w-40 max-w-full rounded-md border border-transparent bg-transparent px-1 text-[11px] text-text-muted outline-none hover:border-border hover:bg-surface/60 disabled:opacity-50"
+                aria-label={t.linkTask}
+                data-testid="note-task-picker"
+              >
+                <option value="">
+                  {commitments.isLoading || legacyTasks.isLoading
+                    ? '…'
+                    : availableCommitments.length || availableLegacyTasks.length
+                      ? t.linkTask
+                      : t.noTasks}
+                </option>
+                {availableCommitments.length > 0 && (
+                  <optgroup label={t.workItems}>
+                    {availableCommitments.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {availableLegacyTasks.length > 0 && (
+                  <optgroup label={t.dailyTasks}>
+                    {availableLegacyTasks.map((item) => (
+                      <option key={item.id} value={`legacy:${item.id}`}>
+                        {item.title} · {item.date}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <label className="flex h-7 min-w-44 flex-1 items-center gap-1 rounded-md border border-transparent px-1 text-text-muted transition-colors focus-within:border-border focus-within:bg-surface/60">
+                <Plus size={11} className="shrink-0" />
+                <input
+                  value={taskDraft}
+                  disabled={isLinkingTask}
+                  onChange={(event) => setTaskDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    void createAndLinkTask();
+                  }}
+                  placeholder={t.createTask}
+                  className="min-w-0 flex-1 bg-transparent text-[11px] text-text-heading outline-none placeholder:text-text-muted"
+                  data-testid="note-create-task-input"
+                />
+              </label>
+            </div>
+          </div>
+          {relationError && <p className="pl-[104px] text-[11px] text-danger" role="alert">{relationError}</p>}
+        </div>
+
+        <details className="group mx-auto w-full max-w-[760px] text-xs">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-[11px] font-medium text-text-muted transition-colors hover:text-text-heading">
             <Settings2 size={12} />
-            {language === 'zh' ? '属性与关联' : 'Properties & links'}
+            {t.moreProperties}
             <span className="ml-auto transition-transform group-open:rotate-180">⌄</span>
           </summary>
           <div className="mt-2 flex flex-col gap-2 rounded-lg bg-surface/45 px-3 py-2.5">
-          <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               aria-label={language === 'zh' ? '笔记类型' : 'Note type'}
               value={note.kind}
@@ -494,69 +682,6 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
               <Trash2 size={13} /> {t.delete}
             </button>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="note-tags">
-            <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
-              <Tag size={12} />
-              {t.tags}
-            </span>
-            {tags.map((tag) => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-accent/15 bg-accent/5 px-2 py-0.5 text-[11px] text-accent">
-                #{tag}
-                <button
-                  type="button"
-                  onClick={() => void saveMetadata({ tagIds: tags.filter((item) => item !== tag) })}
-                  className="rounded-full p-0.5 hover:bg-accent/10"
-                  aria-label={`${t.removeTag} ${tag}`}
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-            <input
-              value={tagDraft}
-              onChange={(event) => setTagDraft(event.target.value)}
-              onKeyDown={onTagKeyDown}
-              onBlur={() => void addTag()}
-              placeholder={tags.length === 0 ? t.addTag : '+ tag'}
-              className="min-w-32 flex-1 bg-transparent py-0.5 text-[11px] text-text-heading outline-none placeholder:text-text-muted"
-              data-testid="note-tag-input"
-            />
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="note-linked-tasks">
-            <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
-              <Link2 size={12} />
-              {t.linkedTasks}
-            </span>
-            {linkedCommitmentIds.map((id) => {
-              const task = commitmentById.get(id);
-              return (
-                <LinkedTaskChip
-                  key={id}
-                  id={id}
-                  task={task}
-                  unlinkLabel={t.unlinkTask}
-                  onRemove={() => void saveMetadata({
-                    commitmentIds: linkedCommitmentIds.filter((item) => item !== id),
-                  })}
-                />
-              );
-            })}
-            <select
-              value=""
-              onChange={(event) => {
-                const id = event.target.value;
-                if (id) void saveMetadata({ commitmentIds: [...linkedCommitmentIds, id] });
-              }}
-              className="min-w-36 flex-1 bg-transparent py-0.5 text-[11px] text-text-muted outline-none"
-              aria-label={t.linkTask}
-              data-testid="note-task-picker"
-            >
-              <option value="">{commitments.isLoading ? '…' : availableCommitments.length ? t.linkTask : t.noTasks}</option>
-              {availableCommitments.map((item) => (
-                <option key={item.id} value={item.id}>{item.title}</option>
-              ))}
-            </select>
-          </div>
           </div>
         </details>
       </header>
@@ -589,28 +714,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           a second "Just start typing" action. Templates belong to the
           no-selection state; a created note should be immediately writable. */}
       <div className="flex-1 min-h-0 overflow-y-auto bg-background">
-        {viewMode === 'edit' ? (
-          <div className="mx-auto min-h-full w-full max-w-[760px] px-5 sm:px-8">
-            <textarea
-              key={`${note.id}-body`}
-              ref={textareaRef}
-              autoFocus
-              defaultValue={seededNoteIdRef.current === note.id ? bodyRef.current : (note.body ?? '')}
-              onChange={(e) => onBodyChange(e.target.value)}
+        <div className="mx-auto min-h-full w-full max-w-[760px] px-5 sm:px-8">
+          <Suspense fallback={<div className="min-h-[60vh] py-8 text-sm text-text-muted">{language === 'zh' ? '正在打开编辑器…' : 'Opening editor…'}</div>}>
+            <LiveMarkdownEditor
+              key={note.id}
+              ref={markdownEditorRef}
+              initialMarkdown={seededNoteIdRef.current === note.id ? bodyRef.current : (note.body ?? '')}
               placeholder={t.placeholder}
-              className="note-document-body block min-h-[60vh] w-full resize-none border-0 bg-transparent py-7 text-[16px] leading-8 text-text-heading outline-none ring-0 placeholder:text-text-muted focus:outline-none focus:ring-0 sm:py-8"
-              data-testid="note-body"
+              onChange={onBodyChange}
             />
-          </div>
-        ) : (
-          <article className="note-markdown mx-auto min-h-full w-full max-w-[760px] px-5 py-7 text-text-heading sm:px-8 sm:py-8" data-testid="note-markdown-preview">
-            {renderedBody.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedBody}</ReactMarkdown>
-            ) : (
-              <p className="text-sm text-text-muted">{t.emptyPreview}</p>
-            )}
-          </article>
-        )}
+          </Suspense>
+        </div>
       </div>
 
       {/* Statusbar — word/char/read stats, right-aligned to the

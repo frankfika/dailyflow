@@ -16,11 +16,38 @@ const mocks = vi.hoisted(() => ({
     }],
     total: 1,
   })),
+  listLegacyTasks: vi.fn(async () => ({
+    items: [{
+      id: '2026-07-29#3',
+      date: '2026-07-29',
+      title: 'Daily checklist task',
+      status: 'todo' as const,
+      filePath: '/tmp/2026-07-29.md',
+      line: 3,
+    }],
+  })),
+  createCommitment: vi.fn(async () => ({
+    commitment: {
+      id: 'com_01KBBBBBBBBBBBBBBBB',
+      title: 'Draft launch email',
+      state: 'active',
+    },
+  })),
+  migrateLegacyTask: vi.fn(async () => ({
+    commitmentId: 'com_01KCCCCCCCCCCCCCCCC',
+    legacyTaskId: '2026-07-29#3',
+  })),
 }));
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, listCommitments: mocks.listCommitments };
+  return {
+    ...actual,
+    listCommitments: mocks.listCommitments,
+    listLegacyTasks: mocks.listLegacyTasks,
+    createCommitment: mocks.createCommitment,
+    migrateLegacyTask: mocks.migrateLegacyTask,
+  };
 });
 
 vi.mock('../hooks/useNotes', () => ({
@@ -62,7 +89,7 @@ vi.mock('../hooks/useNotes', () => ({
   useDeleteNote: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
-function renderEditor(onDeleted?: (id: string) => void) {
+function renderEditor(onDeleted?: (id: string) => void, onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -72,6 +99,7 @@ function renderEditor(onDeleted?: (id: string) => void) {
         noteId="note_01KAAAAAAAAAAAAAAAA"
         language="en"
         onDeleted={onDeleted}
+        onNotice={onNotice}
       />
     </QueryClientProvider>,
   );
@@ -85,33 +113,69 @@ describe('NoteEditor Markdown and metadata', () => {
     mocks.lastError = undefined;
   });
 
-  it('switches from source editing to rendered GFM preview', () => {
+  it('renders Markdown as editable semantic content in one continuous surface', async () => {
     renderEditor();
-    expect(screen.getByTestId('note-body')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('note-mode-preview'));
-
-    const preview = screen.getByTestId('note-markdown-preview');
-    expect(preview).toHaveTextContent('Heading');
-    expect(preview.querySelector('h1')).toHaveTextContent('Heading');
-    expect(preview.querySelector('input[type="checkbox"]')).toBeChecked();
-    expect(preview.querySelector('table')).toBeInTheDocument();
-    expect(screen.queryByTestId('note-body')).not.toBeInTheDocument();
+    const editor = await screen.findByTestId('note-body');
+    expect(editor).toHaveAttribute('contenteditable', 'true');
+    expect(editor.querySelector('h1')).toHaveTextContent('Heading');
+    expect(editor.querySelector('input[type="checkbox"]')).toBeChecked();
+    expect(editor.querySelector('table')).toBeInTheDocument();
+    expect(screen.queryByTestId('note-mode-preview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('note-mode-edit')).not.toBeInTheDocument();
   });
 
-  it('keeps typing responsive while previewing the latest unsaved draft', () => {
+  it('keeps the live Markdown canvas mounted without a detached preview', async () => {
     renderEditor();
-    const editor = screen.getByTestId('note-body');
+    const editor = await screen.findByTestId('note-body');
+    expect(editor).toBeVisible();
+    expect(screen.getByTestId('note-live-markdown-editor')).toContainElement(editor);
+    expect(screen.queryByTestId('note-markdown-preview')).not.toBeInTheDocument();
+  });
 
-    fireEvent.change(editor, { target: { value: 'A newly typed **draft**' } });
-    expect(mocks.schedule).toHaveBeenLastCalledWith({ body: 'A newly typed **draft**' });
+  it('owns Ctrl+S and flushes the current Note instead of saving the web page', async () => {
+    const onNotice = vi.fn();
+    renderEditor(undefined, onNotice);
+    const shortcut = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
 
-    fireEvent.click(screen.getByTestId('note-mode-preview'));
-    expect(screen.getByTestId('note-markdown-preview')).toHaveTextContent('A newly typed draft');
+    document.dispatchEvent(shortcut);
+
+    expect(shortcut.defaultPrevented).toBe(true);
+    await waitFor(() => expect(mocks.flush).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith('Note saved', 'success'));
+  });
+
+  it('owns Cmd+S and reports a failed flush without losing the local draft', async () => {
+    const onNotice = vi.fn();
+    mocks.flush.mockResolvedValue(false);
+    renderEditor(undefined, onNotice);
+    const shortcut = new KeyboardEvent('keydown', {
+      key: 'S',
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    document.dispatchEvent(shortcut);
+
+    expect(shortcut.defaultPrevented).toBe(true);
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(
+      'Save failed. Local edits remain in the editor.',
+      'error',
+    ));
   });
 
   it('saves tags and linked tasks through the versioned autosave queue', async () => {
     renderEditor();
+
+    expect(screen.getByTestId('note-primary-properties')).toBeVisible();
+    expect(screen.getByTestId('note-tags').closest('details')).toBeNull();
+    expect(screen.getByTestId('note-linked-tasks').closest('details')).toBeNull();
 
     fireEvent.change(screen.getByTestId('note-tag-input'), { target: { value: '#planning' } });
     fireEvent.keyDown(screen.getByTestId('note-tag-input'), { key: 'Enter' });
@@ -125,6 +189,46 @@ describe('NoteEditor Markdown and metadata', () => {
     expect(mocks.schedule).toHaveBeenCalledWith({
       commitmentIds: ['com_01KAAAAAAAAAAAAAAAA'],
     });
+  });
+
+  it('creates a task from the note and links it immediately', async () => {
+    renderEditor();
+
+    const input = screen.getByTestId('note-create-task-input');
+    fireEvent.change(input, { target: { value: 'Draft launch email' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(mocks.createCommitment).toHaveBeenCalledWith({
+      title: 'Draft launch email',
+      outcome: 'Draft launch email',
+      state: 'active',
+      createdBy: 'user',
+    }));
+    await waitFor(() => expect(mocks.schedule).toHaveBeenCalledWith({
+      commitmentIds: ['com_01KBBBBBBBBBBBBBBBB'],
+    }));
+  });
+
+  it('offers Today tasks and migrates the selected task before linking it', async () => {
+    renderEditor();
+
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Daily checklist task · 2026-07-29' })).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('note-task-picker'), {
+      target: { value: 'legacy:2026-07-29#3' },
+    });
+
+    await waitFor(() => expect(mocks.migrateLegacyTask).toHaveBeenCalledWith(
+      '2026-07-29',
+      3,
+      {
+        title: 'Daily checklist task',
+        outcome: 'Daily checklist task',
+        state: 'active',
+      },
+    ));
+    await waitFor(() => expect(mocks.schedule).toHaveBeenCalledWith({
+      commitmentIds: ['com_01KCCCCCCCCCCCCCCCC'],
+    }));
   });
 
   it('queues archive and restore with pending autosaves', async () => {
