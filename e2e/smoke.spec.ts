@@ -5,7 +5,7 @@ const initialLoadHealthTest = 'no unexpected console or HTTP errors on initial l
 test.describe('DailyFlow Smoke Tests', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     if (testInfo.title !== initialLoadHealthTest) {
-      await page.goto('http://localhost:47831');
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
     }
   });
 
@@ -61,8 +61,12 @@ test.describe('DailyFlow Smoke Tests', () => {
 
     // Install listeners before the only navigation so no in-flight requests are
     // aborted by a reload and every initial response remains observable.
-    await page.goto('http://localhost:47831');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // Background API work can keep the connection active indefinitely. Use
+    // the navigation surface as the readiness signal, then leave a bounded
+    // observation window for late console/HTTP failures.
+    await page.getByRole('navigation', { name: 'Main navigation' }).waitFor({ state: 'visible' });
+    await page.waitForTimeout(2000);
 
     // Chromium emits a generic console error for every failed HTTP response. The
     // response assertion below retains the URL and status, so it is more precise.
@@ -71,7 +75,7 @@ test.describe('DailyFlow Smoke Tests', () => {
       !error.includes('Failed to load resource'),
     );
     const unexpectedHttpErrors = httpErrors.filter(error =>
-      !/^404 http:\/\/localhost:47831\/api\/files\/\d{4}-\d{2}-\d{2}$/.test(error),
+      !/^404 http:\/\/localhost:\d+\/api\/files\/\d{4}-\d{2}-\d{2}$/.test(error),
     );
 
     expect(realConsoleErrors).toHaveLength(0);
