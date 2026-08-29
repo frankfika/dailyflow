@@ -46,7 +46,9 @@ export class RuntimeProcessManager {
     if (this.alive) return;
     const child = spawn(this.opts.command, this.opts.args ?? [], {
       cwd: this.opts.cwd,
-      env: { ...process.env, ...this.opts.env },
+      // Do not leak the host application's unrelated credentials into the
+      // model runtime. Callers must explicitly pass every DSH/provider value.
+      env: { ...safeInheritedEnvironment(), ...this.opts.env },
       detached: process.platform !== 'win32',
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -54,7 +56,10 @@ export class RuntimeProcessManager {
     this.child = child;
     const stderrLimit = this.opts.maxStderrBytes ?? 32 * 1024;
     child.stderr.on('data', (chunk: Buffer) => {
-      this.stderr = `${this.stderr}${chunk.toString('utf8')}`.slice(-stderrLimit);
+      this.stderr = redactSidecarDiagnostic(
+        `${this.stderr}${chunk.toString('utf8')}`,
+        this.opts.env,
+      ).slice(-stderrLimit);
     });
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       try {
@@ -132,6 +137,31 @@ export class RuntimeProcessManager {
     for (const waiter of this.waiters) waiter();
     this.waiters.clear();
   }
+}
+
+const SAFE_INHERITED_ENV = [
+  'PATH', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ',
+  'SystemRoot', 'WINDIR', 'PATHEXT', '__CF_USER_TEXT_ENCODING', 'NODE_EXTRA_CA_CERTS',
+] as const;
+
+function safeInheritedEnvironment(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of SAFE_INHERITED_ENV) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
+  }
+  return env;
+}
+
+function redactSidecarDiagnostic(input: string, explicitEnv?: NodeJS.ProcessEnv): string {
+  let output = input;
+  for (const [key, value] of Object.entries(explicitEnv ?? {})) {
+    if (!value || !/api.?key|authorization|token|secret|password/i.test(key)) continue;
+    output = output.split(value).join('[REDACTED]');
+  }
+  return output
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer [REDACTED]')
+    .replace(/\b(?:sk|key)-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '<think>[REDACTED]</think>');
 }
 
 export interface AcpNotification {

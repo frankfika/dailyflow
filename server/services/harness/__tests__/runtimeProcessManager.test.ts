@@ -44,6 +44,37 @@ describe('RuntimeProcessManager', () => {
     await expect(manager.nextMessage(2_000)).rejects.toMatchObject({ code: 'SIDECAR_CRASHED' });
   });
 
+  it('does not inherit unrelated host secrets and redacts explicit credentials from stderr', async () => {
+    process.env.DAILYFLOW_TEST_PARENT_SECRET = 'host-secret-must-not-leak';
+    const manager = new RuntimeProcessManager({
+      command: process.execPath,
+      args: ['-e', `
+        process.stderr.write('key=' + process.env.DAILYFLOW_DSH_API_KEY + ' <think>hidden chain</think>');
+        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {
+          inherited: process.env.DAILYFLOW_TEST_PARENT_SECRET,
+          explicit: process.env.DAILYFLOW_EXPLICIT_TEST,
+        } }) + '\\n');
+        setTimeout(() => {}, 5000);
+      `],
+      cwd: os.tmpdir(),
+      env: {
+        DAILYFLOW_DSH_API_KEY: 'sk-explicit-secret-12345',
+        DAILYFLOW_EXPLICIT_TEST: 'present',
+      },
+    });
+    try {
+      await manager.start();
+      const message = await manager.nextMessage(2_000);
+      expect(message.result).toEqual({ explicit: 'present' });
+      expect(manager.safeStderr).not.toContain('sk-explicit-secret-12345');
+      expect(manager.safeStderr).not.toContain('hidden chain');
+      expect(manager.safeStderr).toContain('[REDACTED]');
+    } finally {
+      delete process.env.DAILYFLOW_TEST_PARENT_SECRET;
+      await manager.stop();
+    }
+  });
+
   it('boots the pinned DailyFlow ACP profile and creates a keyless fresh session', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dailyflow-acp-smoke-'));
     const projection = path.join(root, 'projection.json');
