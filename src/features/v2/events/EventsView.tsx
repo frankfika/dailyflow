@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles, X } from 'lucide-react';
 import { ulid } from 'ulid';
 import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
@@ -22,6 +22,7 @@ import {
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
 import { AgentRunPanel } from './AgentRunPanel';
+import { ResizeHandle } from '../../../components/ResizeHandle';
 import { EventOperatorContextPreview, type ContextRef } from './EventOperatorContextPreview';
 import { getPendingGraphProposal, listEventOperatorRuns, type EventGraphProposal, type EventOperatorRun } from '../api/client';
 
@@ -44,6 +45,16 @@ const TEXT = {
 } as const;
 
 const OUTLINE_VISIBILITY_KEY = 'dailyflow:events:outlineVisible';
+const OUTLINE_WIDTH_KEY = 'dailyflow:events:outlineWidth';
+const OUTLINE_DEFAULT_WIDTH = 384;
+const OUTLINE_MIN_WIDTH = 260;
+const CANVAS_MIN_WIDTH = 320;
+
+function readOutlineWidth(): number {
+  if (typeof window === 'undefined') return OUTLINE_DEFAULT_WIDTH;
+  const parsed = Number(window.localStorage.getItem(OUTLINE_WIDTH_KEY));
+  return Number.isFinite(parsed) && parsed >= OUTLINE_MIN_WIDTH ? parsed : OUTLINE_DEFAULT_WIDTH;
+}
 export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -166,8 +177,38 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     const raw = window.localStorage.getItem(OUTLINE_VISIBILITY_KEY);
     return raw === null ? true : raw === 'true';
   });
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [outlineWidth, setOutlineWidth] = useState(readOutlineWidth);
+  const [outlineResizing, setOutlineResizing] = useState(false);
   const event = detailQ.data?.event;
   const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
+
+  // A saved outline width can become invalid when the app window or the main
+  // sidebar changes size. Re-clamp it whenever the split container is resized
+  // so the canvas always retains a useful working area.
+  useEffect(() => {
+    const split = splitRef.current;
+    if (!split) return;
+    const clampToContainer = () => {
+      const containerWidth = split.clientWidth || window.innerWidth;
+      const max = Math.max(OUTLINE_MIN_WIDTH, containerWidth - CANVAS_MIN_WIDTH);
+      setOutlineWidth((current) => {
+        const next = Math.min(max, Math.max(OUTLINE_MIN_WIDTH, current));
+        if (next !== current) {
+          try { window.localStorage.setItem(OUTLINE_WIDTH_KEY, String(next)); } catch { /* optional preference */ }
+        }
+        return next;
+      });
+    };
+    clampToContainer();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(clampToContainer);
+      observer.observe(split);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', clampToContainer);
+    return () => window.removeEventListener('resize', clampToContainer);
+  }, []);
 
   useEffect(() => {
     if (!event) return;
@@ -345,9 +386,10 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
       <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
     </header>
-    <div className="min-h-0 flex-1 flex">
+    <div ref={splitRef} className="min-h-0 flex-1 flex" data-testid="event-split-view">
       <div
-        className={`shrink-0 transition-[width] duration-200 ${outlineVisible ? 'w-96' : 'w-0 overflow-hidden border-r-0'}`}
+        className={`relative shrink-0 ${outlineResizing ? '' : 'transition-[width] duration-200'} ${outlineVisible ? '' : 'w-0 overflow-hidden border-r-0'}`}
+        style={outlineVisible ? { width: outlineWidth } : undefined}
         data-testid="event-outline-pane"
         data-visible={outlineVisible}
       >
@@ -370,8 +412,30 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onReorderNode={handleReorderNode}
           onScheduleTask={handleSchedule}
         />
+        {outlineVisible && (
+          <ResizeHandle
+            label={language === 'zh' ? '调整大纲宽度' : 'Resize outline'}
+            value={outlineWidth}
+            min={OUTLINE_MIN_WIDTH}
+            max={Math.max(OUTLINE_MIN_WIDTH, (splitRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024)) - CANVAS_MIN_WIDTH)}
+            defaultValue={OUTLINE_DEFAULT_WIDTH}
+            onResize={(delta) => {
+              setOutlineWidth((current) => {
+                const containerWidth = splitRef.current?.clientWidth || window.innerWidth;
+                const max = Math.max(OUTLINE_MIN_WIDTH, containerWidth - CANVAS_MIN_WIDTH);
+                const next = Math.min(max, Math.max(OUTLINE_MIN_WIDTH, current + delta));
+                try { window.localStorage.setItem(OUTLINE_WIDTH_KEY, String(next)); } catch { /* optional preference */ }
+                return next;
+              });
+            }}
+            onResizeStart={() => setOutlineResizing(true)}
+            onResizeEnd={() => setOutlineResizing(false)}
+            className="hidden md:block"
+            testId="event-outline-resize-handle"
+          />
+        )}
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1">
         <EventCanvas
           event={event}
           language={language}

@@ -103,6 +103,38 @@ describe('Meeting service (Phase 3)', () => {
     expect(evidence?.locator).toEqual({ kind: 'text', start: 0, end: '决定：采用两档定价。'.length });
   });
 
+  it('keeps high-confidence Commitments review-only when auto-accept is omitted', async () => {
+    const { source } = await capture(repo, {
+      kind: 'meeting_transcript',
+      title: 'Action sync',
+      body: 'I will publish the release note tomorrow.',
+    });
+    const provider: AIProvider = {
+      name: 'scripted',
+      available: async () => ({ ready: true }),
+      complete: async () => ({
+        data: {
+          items: [{
+            kind: 'explicit_commitment',
+            title: 'Publish the release note',
+            quote: 'I will publish the release note tomorrow.',
+            confidence: 0.99,
+          }],
+        },
+        provider: 'scripted',
+        model: 'fixture',
+        fallback: false,
+      }),
+    };
+
+    const result = await processMeeting(repo, { source, workspaceId, provider });
+
+    expect(result.commitmentCount).toBe(0);
+    expect(result.proposal.status).toBe('pending');
+    expect(result.proposal.changes).toHaveLength(1);
+    expect(await repo.listCommitments()).toHaveLength(0);
+  });
+
   it('getMeetingStats returns counts', async () => {
     await capture(repo, { kind: 'meeting_transcript', title: 'a', body: 'x' });
     await recordDecision(repo, workspaceId, { title: 'D1', decision: 'D1' });

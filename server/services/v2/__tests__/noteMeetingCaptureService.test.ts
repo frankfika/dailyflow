@@ -7,6 +7,7 @@ import { NoteService } from '../noteService';
 import { captureNoteMeeting } from '../noteMeetingCaptureService';
 import { resolveNoteMeetingAudio } from '../noteMeetingCaptureService';
 import { transcribeStoredMeetingAudio } from '../noteMeetingCaptureService';
+import { assertSafeModelBaseUrl } from '../../harness/aiTargetPolicy';
 
 describe('note meeting capture service', () => {
   let root: string;
@@ -262,6 +263,30 @@ describe('note meeting capture service', () => {
     expect(result.transcriptionError).toContain('private');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await fs.readFile(path.join(root, result.audioSource.filePath!), 'utf8')).toBe('private');
+  });
+
+  it('rejects insecure or credential-bearing remote transcription endpoints', async () => {
+    const note = await new NoteService(repo).create({ body: '', kind: 'meeting' });
+    for (const baseUrl of ['http://speech.example.test/v1', 'https://user:pass@speech.example.test/v1']) {
+      const fetchMock = vi.fn();
+      const result = await captureNoteMeeting(repo, note.id, {
+        audio: { data: Buffer.from(baseUrl).toString('base64'), mimeType: 'audio/webm' },
+        transcription: {
+          mode: 'remote', provider: 'openai-compatible', apiKey: 'secret',
+          baseUrl, model: 'whisper-1', diarize: false,
+        },
+      }, fetchMock as unknown as typeof fetch);
+      expect(result.transcriptionMode).toBe('saved-only');
+      expect(result.transcriptionError).toMatch(/HTTPS|credentials/i);
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it('uses the shared target policy to reject DNS rebinding to a private address', async () => {
+    await expect(assertSafeModelBaseUrl(
+      'https://speech.example.test/v1/audio/transcriptions',
+      async () => [{ address: '10.0.0.8', family: 4 }] as never,
+    )).rejects.toMatchObject({ code: 'PROVIDER_URL_UNSAFE' });
   });
 
   it('transcribes through a loopback OpenAI-compatible local endpoint', async () => {

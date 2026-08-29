@@ -40,7 +40,7 @@ import { createCommitment } from './commitmentService.js';
 export interface MeetingProcessInput {
   source: SourceItem;
   workspaceId: string;
-  /** Legacy test-only path. User-facing routes always require review. */
+  /** Legacy test-only path. Must be explicitly true; user-facing routes require review. */
   autoAcceptDecisions?: boolean;
   provider?: AIProvider;
 }
@@ -95,13 +95,13 @@ export async function processMeeting(
   // are persisted only when the user accepts the corresponding change.
   const decisionCount = proposal.changes.filter(change => change.entity === 'decision').length;
 
-  // If auto-accept is on, apply non-decision changes immediately.
+  // Fail closed: AI output remains review-only unless a legacy/test caller
+  // explicitly opts into auto-accept. Omitting the flag must never write a
+  // Commitment, even when confidence is high.
   let commitmentCount = 0;
   let waitingCount = 0;
   let questionCount = 0;
-  if (input.autoAcceptDecisions === false) {
-    // skip
-  } else if (proposal.changes.length > 0) {
+  if (input.autoAcceptDecisions === true && proposal.changes.length > 0) {
     try {
       const r = await applyProposal(repo, proposal.id, {
         idempotencyKey: `meeting-auto-apply:${proposal.id}`,

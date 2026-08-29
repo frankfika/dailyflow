@@ -24,6 +24,7 @@ import {
 } from '../../repositories/v2/atomicWrite.js';
 import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
+import { assertSafeModelBaseUrl } from '../harness/aiTargetPolicy.js';
 
 const AudioMetadataSchema = z.object({
   mimeType: z.string().trim().min(1).max(100),
@@ -254,12 +255,18 @@ function transcriptionUrl(baseUrl: string, allowLoopback = false): string {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('Transcription base URL must use http or https.');
   }
+  if (parsed.username || parsed.password) {
+    throw new Error('Transcription base URL must not contain credentials.');
+  }
   const loopback = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsed.hostname.toLowerCase());
   if (allowLoopback && !loopback) {
     throw new Error('Local transcription endpoint must use localhost, 127.0.0.1, or ::1.');
   }
   if (!allowLoopback && isBlockedHost(parsed)) {
     throw new Error('Transcription base URL must not target localhost, private, or link-local networks.');
+  }
+  if (!allowLoopback && parsed.protocol !== 'https:') {
+    throw new Error('Remote transcription providers must use HTTPS.');
   }
   const clean = baseUrl.replace(/\/+$/, '');
   if (/\/audio\/transcriptions$/i.test(clean)) return clean;
@@ -280,7 +287,7 @@ function providerUrl(config: TranscriptionConfig, allowLoopback: boolean): strin
   } catch {
     throw new Error('Transcription base URL is invalid.');
   }
-  if (parsed.protocol !== 'https:' || isBlockedHost(parsed)) {
+  if (parsed.username || parsed.password || parsed.protocol !== 'https:' || isBlockedHost(parsed)) {
     throw new Error('Remote transcription providers must use a public HTTPS endpoint.');
   }
   const clean = config.baseUrl.replace(/\/+$/, '');
@@ -391,6 +398,11 @@ async function transcribe(
 ): Promise<{ text: string; segments: TranscriptSegment[] }> {
   const provider = config.provider ?? 'openai-compatible';
   const url = providerUrl(config, allowLoopback);
+  // Unit tests inject a closed fetch seam and validate URL construction
+  // separately. Production uses global fetch and must resolve the hostname
+  // immediately before upload so private/reserved DNS answers fail closed.
+  if (!allowLoopback && fetchImpl === fetch) await assertSafeModelBaseUrl(url);
+  const signal = AbortSignal.timeout(120_000);
   if (provider === 'deepgram') {
     const response = await fetchImpl(url, {
       method: 'POST',
@@ -399,10 +411,11 @@ async function transcribe(
         'Content-Type': mimeType,
       },
       body: Uint8Array.from(bytes),
+      signal,
     });
     if (!response.ok) {
-      const detail = (await response.text()).slice(0, 300).replace(/\s+/g, ' ').trim();
-      throw new Error(`Transcription provider returned ${response.status}${detail ? `: ${detail}` : ''}`);
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`Transcription provider returned ${response.status}`);
     }
     const result = normalizeDeepgram(await response.json());
     if (!result.text) throw new Error('Transcription provider returned no text.');
@@ -430,10 +443,11 @@ async function transcribe(
       ? (provider === 'elevenlabs' ? { 'xi-api-key': config.apiKey } : { Authorization: `Bearer ${config.apiKey}` })
       : undefined,
     body: form,
+    signal,
   });
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300).replace(/\s+/g, ' ').trim();
-    throw new Error(`Transcription provider returned ${response.status}${detail ? `: ${detail}` : ''}`);
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`Transcription provider returned ${response.status}`);
   }
   const payload = await response.json() as TranscriptionResponse;
   if (provider === 'elevenlabs') {

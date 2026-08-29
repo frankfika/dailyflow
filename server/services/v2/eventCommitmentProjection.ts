@@ -22,7 +22,10 @@ export async function projectCommitmentsIntoEventDetail(
       execution: {
         taskId: commitment.id,
         status: commitment.state === 'completed' ? 'done' as const : 'todo' as const,
-        scheduledDate: commitment.dueAt?.slice(0, 10) ?? commitment.completedAt?.slice(0, 10) ?? today,
+        // `today` is the date whose Event/Today projection is being built.
+        // Keep that schedule stable after completion; `completedAt` records
+        // when work finished, not which Today's list owns the task.
+        scheduledDate: commitment.dueAt?.slice(0, 10) ?? today,
         deadline: commitment.dueAt?.slice(0, 10),
         priority: importanceToPriority(commitment.importance),
         completedAt: commitment.completedAt,
@@ -55,7 +58,13 @@ export async function listCommitmentTodayItems(
       const ref = node.entityRefs?.find((item) => item.type === 'commitment');
       if (!ref || seen.has(ref.id)) continue;
       const commitment = commitments.get(ref.id);
-      if (!commitment || !isCommitmentOnDate(commitment, date)) continue;
+      // The Event projection is the scheduling surface for a Commitment
+      // without an explicit due date. Once it is completed, preserve that
+      // projected date instead of replacing it with the wall-clock
+      // completion date: a task completed late must remain visible in the
+      // Today view where it was scheduled, marked done.
+      const scheduledDate = detail.nodes.find((item) => item.id === node.id)?.execution?.scheduledDate;
+      if (!commitment || !isCommitmentOnDate(commitment, date, scheduledDate)) continue;
       seen.add(ref.id);
       items.push({
         kind: 'event-node',
@@ -90,9 +99,15 @@ export async function completeCommitmentTodayItem(
   return { completed: true, alreadyDone: false, completedAt: updated.completedAt };
 }
 
-function isCommitmentOnDate(commitment: Awaited<ReturnType<V2Repository['listCommitments']>>[number], date: string): boolean {
+function isCommitmentOnDate(
+  commitment: Awaited<ReturnType<V2Repository['listCommitments']>>[number],
+  date: string,
+  scheduledDate?: string,
+): boolean {
   if (commitment.state === 'waiting' || commitment.state === 'cancelled' || commitment.state === 'archived' || commitment.state === 'someday') return false;
-  if (commitment.state === 'completed') return commitment.completedAt?.slice(0, 10) === date;
+  if (commitment.state === 'completed') {
+    return scheduledDate === date || (!scheduledDate && commitment.completedAt?.slice(0, 10) === date);
+  }
   if (commitment.dueAt) return commitment.dueAt.slice(0, 10) <= date;
   // AI-accepted task nodes become active Commitments and are immediately
   // actionable; they enter Today until scheduled/completed.

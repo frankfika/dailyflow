@@ -33,7 +33,12 @@ const EVENT = {
 };
 
 describe('EventsView Event-first surface', () => {
-  beforeEach(() => { mocks.events = []; mocks.detail = null; mocks.create.mockClear(); });
+  beforeEach(() => {
+    mocks.events = [];
+    mocks.detail = null;
+    mocks.create.mockClear();
+    window.localStorage.removeItem('dailyflow:events:outlineWidth');
+  });
 
   it('shows only the Events index and a single New Event action', () => {
     mocks.events = [EVENT];
@@ -88,5 +93,28 @@ describe('EventsView Event-first surface', () => {
     fireEvent.click(screen.getByTestId('event-outline-toggle'));
     expect(pane).toHaveAttribute('data-visible', 'true');
     expect(window.localStorage.getItem('dailyflow:events:outlineVisible')).toBe('true');
+  });
+
+  it('resizes the outline with the accessible separator and remembers it', async () => {
+    const detail = {
+      id: 'event-1', title: 'Resize me', context: 'work', status: 'active', progress: { done: 0, total: 0 },
+      effectiveTags: [], createdAt: '2026-08-01', updatedAt: '2026-08-10',
+      mindmapId: 'map-1', rootNodeId: 'root', manualTags: [], aiTags: [],
+      nodes: [{ id: 'root', eventId: 'event-1', text: 'Resize me', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] }],
+      edges: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    mocks.events = [detail];
+    mocks.detail = detail;
+    render(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+
+    const pane = await screen.findByTestId('event-outline-pane');
+    const handle = screen.getByRole('separator', { name: 'Resize outline' });
+    expect(pane).toHaveStyle({ width: '384px' });
+    expect(handle).toHaveAttribute('aria-valuenow', '384');
+
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(pane).toHaveStyle({ width: '392px' });
+    expect(window.localStorage.getItem('dailyflow:events:outlineWidth')).toBe('392');
   });
 });

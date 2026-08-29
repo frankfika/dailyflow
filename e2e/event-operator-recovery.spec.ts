@@ -12,12 +12,15 @@ test('waiting_review survives refresh and SSE resumes from the saved cursor', as
   await page.route(`**/api/v2/events/${event.id}/graph-proposals/pending`, route => route.fulfill({ json: { proposal } }));
   await page.route(`**/api/v2/agent-runs/${run.id}/events**`, route => { streamUrls.push(route.request().url()); return route.fulfill({ status: 200, contentType: 'text/event-stream', body: `id: 3\nevent: proposal.ready\ndata: ${JSON.stringify({ schemaVersion: 1, workspaceId: run.workspaceId, runId: run.id, cursor: '3', fingerprint: 'fp3', type: 'proposal.ready', at: new Date().toISOString(), payload: { proposalId: proposal.id } })}\n\n` }); });
   await page.route(`**/api/v2/agent-runs/${run.id}`, route => route.fulfill({ json: { run } }));
-  await page.goto('/'); await page.getByTestId('nav-events').click(); await page.getByTestId(`event-card-${event.id}`).click();
+  // The page opens an EventSource while the recovered run is active. Waiting
+  // for the full `load` lifecycle makes navigation timing depend on that
+  // long-lived stream instead of on the UI being ready.
+  await page.goto('/', { waitUntil: 'domcontentloaded' }); await page.getByTestId('nav-events').click(); await page.getByTestId(`event-card-${event.id}`).click();
   await expect(page.getByTestId('agent-run-recovery-banner')).toBeVisible();
   await page.getByTestId('agent-run-recovery-banner').click();
   await expect(page.getByTestId('agent-run-panel')).toBeVisible();
   await expect.poll(() => streamUrls.length).toBeGreaterThan(0);
-  await page.reload(); await page.getByTestId('nav-events').click(); await page.getByTestId(`event-card-${event.id}`).click(); await page.getByTestId('agent-run-recovery-banner').click();
+  await page.reload({ waitUntil: 'domcontentloaded' }); await page.getByTestId('nav-events').click(); await page.getByTestId(`event-card-${event.id}`).click(); await page.getByTestId('agent-run-recovery-banner').click();
   await expect.poll(() => streamUrls.some(url => url.includes('cursor=3'))).toBeTruthy();
 });
 
