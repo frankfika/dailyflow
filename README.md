@@ -144,7 +144,7 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 
 ### 隐私与 0 字节上传
 
-- **🆕** 设置 → 隐私 Tab：`PrivacyPanel` 列出全部 5 类外发请求（AI Chat / 会议转写 / IPFS / OAuth / 升级检查），每类都有显式开关。
+- **🆕** 设置 → 隐私 Tab：`PrivacyPanel` 列出全部 5 类外发请求（AI Chat / 会议转写 / IPFS / OAuth / 升级检查），并标明各自真实的控制位置或触发动作。
 - 详细审计：[`docs/ZERO_UPLOAD_AUDIT.md`](./docs/ZERO_UPLOAD_AUDIT.md)。
 
 ### 会议转写

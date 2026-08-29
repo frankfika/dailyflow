@@ -29,4 +29,14 @@ describe('PrivacyPanel', () => {
     render(<PrivacyPanel language="zh" />);
     expect(screen.getByText(/ZERO_UPLOAD_AUDIT\.md/)).toBeInTheDocument();
   });
+
+  it('names the real control point instead of claiming there are switches on this page', () => {
+    render(<PrivacyPanel language="en" />);
+    expect(screen.getByText('Model setup + Send')).toBeInTheDocument();
+    expect(screen.getByText('Meeting recorder')).toBeInTheDocument();
+    expect(screen.getByText('Sync settings')).toBeInTheDocument();
+    expect(screen.getByText('Integration consent')).toBeInTheDocument();
+    expect(screen.getByText('Manual check only')).toBeInTheDocument();
+    expect(screen.queryByText('Toggle here')).not.toBeInTheDocument();
+  });
 });
