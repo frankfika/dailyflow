@@ -88,7 +88,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onCompletionPromptClosed,
 }) => {
   const isDone = task.status === 'done';
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingContent, setEditingContent] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showComment, setShowComment] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -106,17 +106,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [showCompletionPrompt, task.comment, task.comments]);
 
   useEffect(() => {
-    if (isEditing) return;
+    if (editingContent) return;
     setEditContent(task.title + (task.description ? `\n${task.description}` : ''));
     setEditTags(task.tags || []);
     setEditDeadline(task.deadline || '');
-  }, [task, isEditing]);
+  }, [task, editingContent]);
 
   const cancelEdit = () => {
     setEditContent(task.title + (task.description ? `\n${task.description}` : ''));
     setEditTags(task.tags || []);
     setEditDeadline(task.deadline || '');
-    setIsEditing(false);
+    setEditingContent(false);
   };
 
   const submitEdit = () => {
@@ -131,7 +131,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       tags: editTags,
       deadline: editDeadline || undefined,
     });
-    setIsEditing(false);
+    setEditingContent(false);
   };
 
   const closeComment = () => {
@@ -154,10 +154,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     : (task.spaceId || task.originMindmapId
     ? (language === 'zh' ? '来自事件' : 'From event')
     : (language === 'zh' ? '独立任务' : 'Standalone'));
-  const hasAdvancedContent = Boolean(
-    task.description || task.comment || task.comments?.length || task.tags?.length || task.project ||
-    task.priority || linkedNotesCount || onCreateLinkedNote || !isDone,
-  );
   const isOverdue = Boolean(task.deadline && !isDone && task.deadline < getTodayStr());
   const deadlineLabel = task.deadline ? formatTaskDeadline(task.deadline, language) : '';
 
@@ -247,7 +243,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       {showDetails && (
         <div className="border-t border-border/50 px-3 pb-3 pt-2.5" data-testid={`task-details-${task.id}`}>
-          {isEditing ? (
+          {/* Attribute bar (S3): deadline and tags edit inline, changes commit immediately. */}
+          <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-border/40 pb-2">
+            <label className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[11px] text-text-muted">
+              <Calendar className="h-3 w-3" />
+              <input
+                type="date"
+                aria-label={language === 'zh' ? '截止日期' : 'Deadline'}
+                className="border-0 bg-transparent outline-none"
+                value={task.deadline || ''}
+                onChange={event => onEdit({ deadline: event.target.value || undefined })}
+              />
+            </label>
+            <TagInput tags={task.tags || []} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />
+          </div>
+
+          {editingContent ? (
             <div className="space-y-3">
               <textarea
                 autoFocus
@@ -260,18 +271,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 placeholder={language === 'zh' ? '任务标题…' : 'Task title…'}
                 className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text-heading outline-none focus:border-accent"
               />
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[12px] text-text-muted">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <input
-                    type="date"
-                    className="border-0 bg-transparent outline-none"
-                    value={editDeadline}
-                    onChange={event => setEditDeadline(event.target.value)}
-                  />
-                </label>
-                <TagInput tags={editTags} onChange={setEditTags} availableTags={categories} language={language} />
-              </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={cancelEdit} className="rounded-lg px-3 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03]">
                   {language === 'zh' ? '取消' : 'Cancel'}
@@ -375,8 +374,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
               )}
 
-              {hasAdvancedContent && (
-                <div className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-2">
+              <div className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowComment(true)}
@@ -398,11 +396,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     </button>
                   )}
                   {!isDone && (
-                    <button type="button" onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading" aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}>
+                    <button type="button" onClick={() => setEditingContent(true)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading" aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}>
                       <Edit2 className="h-3.5 w-3.5" />
                       {language === 'zh' ? '编辑' : 'Edit'}
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={onToggle}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
+                    data-testid={`task-card-complete-${task.id}`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {isDone
+                      ? (language === 'zh' ? '标记未完成' : 'Mark as todo')
+                      : (language === 'zh' ? '标记完成' : 'Mark done')}
+                  </button>
                   {confirmingDelete ? (
                     <div className="ml-auto flex items-center gap-1">
                       <button type="button" onClick={() => { onDelete(); setConfirmingDelete(false); }} className="rounded-md bg-[var(--color-danger)] px-2.5 py-1 text-[11px] font-semibold text-white">
@@ -419,7 +428,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     </button>
                   )}
                 </div>
-              )}
             </>
           )}
         </div>

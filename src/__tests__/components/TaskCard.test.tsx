@@ -339,3 +339,26 @@ describe('formatTaskDeadline', () => {
     expect(formatTaskDeadline('2026-08-15', 'en', '2026-08-11')).toBe('Due in 4d');
   });
 });
+
+describe('TaskCard inline attribute bar (UX S3)', () => {
+  it('commits a deadline change immediately without an edit mode', async () => {
+    const onEdit = vi.fn();
+    render(<TaskCard {...createProps({ onEdit })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '2024-01-05' } });
+
+    await waitFor(() => {
+      expect(onEdit).toHaveBeenCalledWith({ deadline: '2024-01-05' });
+    });
+  });
+
+  it('marks a task done from the expanded panel', async () => {
+    const onToggle = vi.fn();
+    render(<TaskCard {...createProps({ onToggle })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+
+    fireEvent.click(screen.getByTestId('task-card-complete-task-1'));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+});
