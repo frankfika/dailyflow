@@ -362,3 +362,53 @@ describe('TaskCard inline attribute bar (UX S3)', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('TaskCard convert to project (UX S7)', () => {
+  const baseTask = {
+    id: 't_conv',
+    title: 'Finish DSH integration',
+    status: 'todo',
+    source_date: '2026-09-01',
+  };
+
+  function renderCard(overrides: Partial<Parameters<typeof TaskCard>[0]> = {}) {
+    return render(
+      <TaskCard
+        task={baseTask as never}
+        language="en"
+        categories={[]}
+        currentFileDate="2026-09-01"
+        onToggle={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        {...overrides}
+      />,
+    );
+  }
+
+  it('hides the convert button for tasks that already live on a canvas', () => {
+    renderCard({ task: { ...baseTask, originMindmapId: 'mm_1' } as never, onConvertToProject: vi.fn() });
+    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
+    expect(screen.queryByTestId('task-convert-project-t_conv')).not.toBeInTheDocument();
+  });
+
+  it('opens the confirm dialog and submits title plus extra nodes', async () => {
+    const onConvertToProject = vi.fn(async () => {});
+    renderCard({ onConvertToProject });
+    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
+    fireEvent.click(screen.getByTestId('task-convert-project-t_conv'));
+
+    const dialog = screen.getByTestId('task-convert-dialog-t_conv');
+    expect(dialog).toHaveTextContent(/Convert this task into a project/i);
+    expect((screen.getByTestId('task-convert-title-t_conv') as HTMLInputElement).value).toBe('Finish DSH integration');
+
+    fireEvent.change(screen.getByTestId('task-convert-nodes-t_conv'), { target: { value: 'Write tests\nReview\n' } });
+    fireEvent.click(screen.getByTestId('task-convert-confirm-t_conv'));
+
+    await vi.waitFor(() => expect(onConvertToProject).toHaveBeenCalledWith(expect.objectContaining({ id: 't_conv' }), {
+      title: 'Finish DSH integration',
+      extraNodes: ['Write tests', 'Review'],
+    }));
+    await vi.waitFor(() => expect(screen.queryByTestId('task-convert-dialog-t_conv')).not.toBeInTheDocument());
+  });
+});

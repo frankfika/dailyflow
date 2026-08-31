@@ -67,6 +67,8 @@ interface TodayBacklogProps {
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
   onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
+  /** UX S7: convert the task into a new project event. */
+  onConvertToProject?: (task: TodayTask, opts: { title: string; extraNodes: string[] }) => Promise<void>;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
   language: 'en' | 'zh';
@@ -105,6 +107,7 @@ export function TodayBacklog({
   onShowLinkedNotes,
   onUnlinkFromSpace,
   onAiAction,
+  onConvertToProject,
   linkedNotesCount,
   onAddTask,
   language,
@@ -183,6 +186,7 @@ export function TodayBacklog({
           ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
           : undefined}
         onAiAction={onAiAction}
+        onConvertToProject={onConvertToProject}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />

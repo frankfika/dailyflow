@@ -51,6 +51,8 @@ interface TaskCardProps {
   onShowLinkedNotes?: () => void;
   /** UX S6 AI actions: decompose / rewrite / summarize. Omit to hide the row. */
   onAiAction?: (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
+  /** UX S7: convert the task into a new project event and open its canvas. */
+  onConvertToProject?: (task: Task, opts: { title: string; extraNodes: string[] }) => Promise<void>;
   showCompletionPrompt?: boolean;
   onCompletionPromptClosed?: () => void;
 }
@@ -86,6 +88,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onEdit,
   onDelete,
   onAiAction,
+  onConvertToProject,
   onCreateLinkedNote,
   onShowLinkedNotes,
   showCompletionPrompt,
@@ -98,6 +101,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [commentText, setCommentText] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [aiBusy, setAiBusy] = useState<'decompose' | 'rewrite' | 'summarize' | null>(null);
+  const [showConvert, setShowConvert] = useState(false);
+  const [convertTitle, setConvertTitle] = useState('');
+  const [convertNodes, setConvertNodes] = useState('');
+  const [converting, setConverting] = useState(false);
   const [editContent, setEditContent] = useState(task.title + (task.description ? `\n${task.description}` : ''));
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState(task.deadline || '');
@@ -379,12 +386,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
               )}
 
-              {onAiAction && (
+              {(onAiAction || onConvertToProject) && (
                 <div className="mb-2 flex flex-wrap items-center gap-1 border-t border-border/40 pt-2" data-testid={`task-ai-row-${task.id}`}>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                    <Sparkles className="h-3 w-3" />
-                    {language === 'zh' ? 'AI 帮你' : 'AI'}
-                  </span>
+                  {onAiAction && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                      <Sparkles className="h-3 w-3" />
+                      {language === 'zh' ? 'AI 帮你' : 'AI'}
+                    </span>
+                  )}
+                  {onConvertToProject && !task.originMindmapId && !task.spaceId && (
+                    <button
+                      type="button"
+                      disabled={converting}
+                      onClick={() => {
+                        setConvertTitle(task.title);
+                        setConvertNodes('');
+                        setShowConvert(true);
+                      }}
+                      className="rounded-md border border-border/70 px-2 py-1 text-[11px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      data-testid={`task-convert-project-${task.id}`}
+                    >
+                      {language === 'zh' ? '转成项目' : 'To project'}
+                    </button>
+                  )}
                   {([
                     ['decompose', language === 'zh' ? '拆解成子任务' : 'Subtasks'],
                     ['rewrite', language === 'zh' ? '改写更清晰' : 'Rewrite'],
@@ -463,6 +487,71 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
             </>
           )}
+        </div>
+      )}
+
+      {showConvert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4" data-testid={`task-convert-dialog-${task.id}`}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-background p-5 shadow-2xl">
+            <p className="text-sm font-semibold text-text-heading">
+              {language === 'zh' ? '把这个任务转成项目' : 'Convert this task into a project'}
+            </p>
+            <p className="mt-1 text-xs text-text-muted">
+              {language === 'zh'
+                ? '会新建一个事件画布，这个任务成为画布里的第一个任务节点。'
+                : 'Creates a new event canvas; this task becomes its first task node.'}
+            </p>
+            <label className="mt-4 block text-[11px] font-medium text-text-muted">
+              {language === 'zh' ? '项目名称' : 'Project title'}
+              <input
+                autoFocus
+                value={convertTitle}
+                onChange={event => setConvertTitle(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text-heading outline-none focus:border-accent"
+                data-testid={`task-convert-title-${task.id}`}
+              />
+            </label>
+            <label className="mt-3 block text-[11px] font-medium text-text-muted">
+              {language === 'zh' ? '初始步骤（每行一个，可留空）' : 'Initial steps (one per line, optional)'}
+              <textarea
+                value={convertNodes}
+                onChange={event => setConvertNodes(event.target.value)}
+                rows={3}
+                placeholder={language === 'zh' ? '写测试\n评审\n部署' : 'Write tests\nReview\nDeploy'}
+                className="mt-1 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-text-heading outline-none focus:border-accent"
+                data-testid={`task-convert-nodes-${task.id}`}
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConvert(false)}
+                className="rounded-lg px-3 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03]"
+              >
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                disabled={!convertTitle.trim() || converting}
+                onClick={() => {
+                  setConverting(true);
+                  void onConvertToProject!(task, {
+                    title: convertTitle.trim(),
+                    extraNodes: convertNodes.split('\n').map(line => line.trim()).filter(Boolean),
+                  }).finally(() => {
+                    setConverting(false);
+                    setShowConvert(false);
+                  });
+                }}
+                className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                data-testid={`task-convert-confirm-${task.id}`}
+              >
+                {converting
+                  ? (language === 'zh' ? '创建中…' : 'Creating…')
+                  : (language === 'zh' ? '建项目 + 进画布 →' : 'Create + open canvas →')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </motion.article>

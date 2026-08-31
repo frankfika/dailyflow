@@ -1348,6 +1348,26 @@ export default function App() {
     }
   };
 
+  /** UX S7: task → new project event, then jump into its canvas. */
+  const handleConvertTaskToProject = async (task: Task, opts: { title: string; extraNodes: string[] }) => {
+    try {
+      const result = await eventsApi.convertTaskToEvent({
+        taskId: task.id,
+        scheduledDate: task.host_date || currentFileDate,
+        title: opts.title,
+        context: (activeContext as 'work' | 'life'),
+        extraNodes: opts.extraNodes,
+      });
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
+      setRequestedEventId(result.eventId);
+      setActiveTab('events');
+    } catch (e: any) {
+      console.error('Convert to project failed', e);
+      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to convert to project'), 'error');
+    }
+  };
+
   const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
     try {
@@ -1901,6 +1921,7 @@ export default function App() {
                     }}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
                     onAiAction={handleTaskAiAction}
+                    onConvertToProject={handleConvertTaskToProject}
                     onShowLinkedNotes={(taskId) => {
                       setNotesFilterByTaskId(taskId);
                       setActiveOverlay('notes');

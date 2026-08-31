@@ -382,6 +382,15 @@ export interface EditNodeTaskInput {
 }
 export interface CompleteNodeTaskInput { taskId: string; scheduledDate: string; }
 export interface UndoCompleteNodeTaskInput { taskId: string; scheduledDate: string; }
+/** UX S7: task → new project event (with undo-recorded conversion). */
+export interface ConvertTaskToEventInput {
+  taskId: string;
+  scheduledDate: string;
+  title: string;
+  context?: EventContext;
+  extraNodes?: string[];
+}
+
 export interface ConvertStandaloneToEventNodeTaskInput {
   taskId: string;
   scheduledDate: string;
@@ -487,6 +496,16 @@ export const eventsApi = {
     if (!res.ok) throw await httpError(res, 'Failed to undo complete node task');
     return res.json();
   },
+  async convertTaskToEvent(input: ConvertTaskToEventInput): Promise<{ eventId: string; mindmapId: string; nodeId: string; conversionId: string; converted: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/convert-task-to-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to convert task to event');
+    return res.json();
+  },
+
   async convertStandaloneToEventNodeTask(input: ConvertStandaloneToEventNodeTaskInput): Promise<{ converted: boolean; alreadyConverted: boolean; spaceLinked: boolean }> {
     const res = await fetch(`${API_BASE}/events/actions/convert-standalone-to-event-node-task`, {
       method: 'POST',
