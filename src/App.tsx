@@ -5,7 +5,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
+import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
@@ -14,7 +14,8 @@ import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
-import { TaskInputPanel } from './components/TaskInputPanel';
+import { TaskInputPanel } from './components/TaskInputPanel'; // kept for rollback; no longer mounted
+import { TodayInputBar, type QuickTaskDraft } from './components/TodayInputBar';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
@@ -124,6 +125,8 @@ export default function App() {
     return () => window.removeEventListener('df:open-event-operator', openEventOperator);
   }, []);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
+  // Registered by TodayInputBar so Cmd+N and CTAs can focus the input.
+  const taskInputFocusRef = useRef<(() => void) | null>(null);
   // Meeting capture has one canonical owner: a v2 NoteDocument. Every entry
   // point creates and opens a meeting note instead of mounting the retired
   // standalone meeting modal, which used a different API and storage tree.
@@ -142,8 +145,6 @@ export default function App() {
   // writes. Saving a captured date/content pair on a timer can overwrite a
   // different date after the user navigates.
   const [showSettings, setShowSettings] = useState(false);
-  const [showBrainDump, setShowBrainDump] = useState(false);
-  const [showTaskInput, setShowTaskInput] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [entityDrawerRef, setEntityDrawerRef] = useState<EntityRef | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,10 +161,6 @@ export default function App() {
 
   const [brainDumpText, setBrainDumpText] = useState('');
   const brainDumpProgressRef = useRef<{ source: string; date: string; pending: Task[] } | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
-  const [tagInputValue, setTagInputValue] = useState('');
-  const [newTaskDeadline, setNewTaskDeadline] = useState<string>('');
   const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
 
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
@@ -792,8 +789,6 @@ export default function App() {
       // default to Notes and could leak stale filters or drafts across it.
       setActiveTab('today');
       setCurrentFileDate(getTodayStr());
-      setShowTaskInput(false);
-      setShowBrainDump(false);
       setShowQuickNoteEditor(false);
       setIsNoteEditorMaximized(false);
       setEditingDailyNote(null);
@@ -840,7 +835,7 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         setActiveTab('today');
-        setShowTaskInput(true);
+        taskInputFocusRef.current?.();
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
@@ -854,8 +849,6 @@ export default function App() {
         return;
       }
       if (e.key === 'Escape') {
-        setShowTaskInput(false);
-        setShowBrainDump(false);
         const target = e.target as HTMLElement | null;
         const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
         if (!typing && activeTab === 'events') {
@@ -964,8 +957,6 @@ export default function App() {
         throw new Error(`${failed.length} extracted tasks could not be created`);
       }
       setBrainDumpText('');
-      setShowBrainDump(false);
-      setShowTaskInput(false);
     } catch (e) {
       console.error(e);
       showToast(language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.', 'error');
@@ -1128,6 +1119,54 @@ export default function App() {
       }
     } catch {}
     showToast(language === 'zh' ? '更新失败，请重试' : 'Failed to update task — please retry', 'error');
+  };
+
+  // S2: bottom input bar submits here — optimistic row, server create,
+  // re-read for stable ids, optional recurrence rule, projection refetch.
+  const handleQuickAddTask = async (draft: QuickTaskDraft) => {
+    const newTask: Task = {
+      id: `t_${Date.now()}`,
+      title: draft.title,
+      description: draft.description,
+      status: 'todo',
+      tags: draft.tags,
+      deadline: draft.deadline,
+      source_date: currentFileDate,
+    };
+    // Optimistic UI update
+    setTasks(prev => [...prev, newTask]);
+    const newCategory = draft.tags.filter(t => !['work', 'life', 'tasks'].includes(t))[0];
+    if (newCategory) setLastAddedCategory(newCategory);
+    try {
+      await tasksApi.create(currentFileDate, newTask);
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+      if (draft.recurrence) {
+        try {
+          await recurringApi.create({
+            title: draft.title,
+            description: draft.description,
+            tags: draft.tags,
+            recurrence: draft.recurrence,
+          });
+        } catch (e) {
+          console.error('Failed to create recurring task', e);
+          showToast(language === 'zh' ? '任务已添加，但重复规则保存失败' : 'Task added, but recurrence could not be saved', 'error');
+        }
+      }
+      showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
+      await todayItemsQuery.refetch();
+    } catch (e) {
+      console.error('Failed to add task', e);
+      // Roll back the optimistic row on failure.
+      setTasks(prev => prev.filter(task => task.id !== newTask.id));
+      showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
+    }
   };
 
   const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
@@ -1679,7 +1718,7 @@ export default function App() {
                       setActiveTab('notes');
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
-                    onAddTask={() => setShowTaskInput(true)}
+                    onAddTask={() => taskInputFocusRef.current?.()}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     completionPromptTaskIds={completionPromptTaskIds}
@@ -1690,6 +1729,18 @@ export default function App() {
                         return next;
                       });
                     }}
+                  />
+
+                  <TodayInputBar
+                    language={language}
+                    activeContext={activeContext}
+                    categories={categories}
+                    brainDumpText={brainDumpText}
+                    setBrainDumpText={setBrainDumpText}
+                    isProcessingBrainDump={isProcessingBrainDump}
+                    processBrainDump={processBrainDump}
+                    onAddTask={handleQuickAddTask}
+                    onRegisterFocus={(focus) => { taskInputFocusRef.current = focus; }}
                   />
                   </motion.div>
                 </div>
@@ -1804,38 +1855,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Task Input Panel */}
-        {activeTab === 'today' && (
-          <TaskInputPanel
-            showTaskInput={showTaskInput}
-            setShowTaskInput={setShowTaskInput}
-            showBrainDump={showBrainDump}
-            setShowBrainDump={setShowBrainDump}
-            language={language}
-            newTaskTitle={newTaskTitle}
-            setNewTaskTitle={setNewTaskTitle}
-            newTaskTagsList={newTaskTagsList}
-            setNewTaskTagsList={setNewTaskTagsList}
-            tagInputValue={tagInputValue}
-            setTagInputValue={setTagInputValue}
-            newTaskDeadline={newTaskDeadline}
-            setNewTaskDeadline={setNewTaskDeadline}
-            brainDumpText={brainDumpText}
-            setBrainDumpText={setBrainDumpText}
-            isProcessingBrainDump={isProcessingBrainDump}
-            processBrainDump={processBrainDump}
-            currentFileDate={currentFileDate}
-            activeContext={activeContext}
-            categories={categories}
-            systemTags={systemTags}
-            setTasks={setTasks}
-            setMarkdown={setMarkdown}
-            setLastSyncedMD={setLastSyncedMD}
-            setFilesMap={setFilesMap}
-            showToast={showToast}
-            setLastAddedCategory={setLastAddedCategory}
-          />
-        )}
+
       </main>
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
