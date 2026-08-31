@@ -1247,7 +1247,7 @@ export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warn
  * "Change Type" menu can re-classify nodes beyond just tag/branch.
  * All four Phase-2 kinds (tag, task, question, resource, risk) are
  * `mindmapsApi.updateNodeKind`-writable; `'root'` and `'branch'` are
- * not (the menu hides those entries, see NodeContextMenu).
+ * not.
  */
 export type MindMapNodeKind =
   | 'root'

@@ -1,7 +1,7 @@
 /**
  * DailyReflectionModal — Today 视图的"今日复盘"对话框 (Sprint 1 Gap 5).
  *
- * The user opens this from the "今日复盘" button in TodayScopeTabs. The
+ * The user opens this via ⌘J / ⌘K or the quiet reflection bar. The
  * modal pre-fills today's completed / in-progress / postponed tasks (so
  * they don't have to retype what they just did), and lets them write a
  * free-form reflection. On confirm we POST to `/api/v2/reports/daily`,

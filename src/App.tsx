@@ -14,7 +14,6 @@ import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
-import { TaskInputPanel } from './components/TaskInputPanel'; // kept for rollback; no longer mounted
 import { TodayInputBar, type AiAnswer, type BrainPreviewTask, type QuickTaskDraft } from './components/TodayInputBar';
 import type { AiActionKind } from './api/client';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
@@ -1439,7 +1438,7 @@ export default function App() {
   //
   // Splits the in-memory tasks by status so the modal can pre-fill today's
   // completed / in-progress / postponed lists. Auto-triggered after the
-  // day rolls over; also reachable from the "今日复盘" button in TodayScopeTabs.
+  // day rolls over; also reachable from the reflection bar / ⌘J.
   // ---------------------------------------------------------------------
 
   const buildReflectionTasks = (): {
