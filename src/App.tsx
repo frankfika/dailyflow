@@ -1760,6 +1760,7 @@ export default function App() {
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
         onOpenNotesSurface={(surface) => { setActiveOverlay('notes'); setNotesSurface(surface); }}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
       />
 
       {/* Main Content Area */}

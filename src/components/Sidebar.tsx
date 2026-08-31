@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   CalendarDays,
   ChevronDown,
+  Command,
   X,
   FileText,
   ListTodo,
@@ -109,6 +110,8 @@ interface SidebarProps {
   onContextChange?: (ctx: 'work' | 'life') => void;
   onOpenSettings?: () => void;
   onOpenNotesSurface?: (surface: 'notes' | 'inbox') => void;
+  /** UX S10: open the ⌘K command palette from the icon rail. */
+  onOpenCommandPalette?: () => void;
 }
 
 export function Sidebar({
@@ -128,6 +131,7 @@ export function Sidebar({
   onContextChange,
   onOpenSettings,
   onOpenNotesSurface,
+  onOpenCommandPalette,
 }: SidebarProps) {
   const [desktopWidth, setDesktopWidth] = useState(readStoredWidth);
   const [isResizing, setIsResizing] = useState(false);
@@ -428,6 +432,29 @@ export function Sidebar({
               select element is too cramped to be usable). */}
           {workspaceSwitcher && !isCompact && (
             <div className="mb-3 px-1.5">{workspaceSwitcher}</div>
+          )}
+
+          {/* UX S10: ⌘K sits at the top of the icon rail — the design's
+              "│ ⌘K │ 今 │ 事 │ 笔 │ AI │" order. Calendar / memory / team /
+              settings stay one keystroke away via the palette; the More
+              disclosure below remains the visible fallback. */}
+          {onOpenCommandPalette && (
+            <button
+              type="button"
+              onClick={onOpenCommandPalette}
+              data-testid="sidebar-command-palette"
+              className={`mb-2 mx-1 flex items-center rounded-lg border border-border/80 bg-background/60 text-text-muted transition-colors hover:border-border-strong hover:text-text-heading ${isCompact ? 'justify-center p-2' : 'gap-2 px-2.5 py-2'} ${isMobile ? 'min-h-[44px]' : ''}`}
+              title={isCompact ? (language === 'zh' ? '搜索 / 命令 ⌘K' : 'Search / commands ⌘K') : undefined}
+              aria-label={language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
+            >
+              <Command className="w-4 h-4 shrink-0" aria-hidden="true" />
+              {!isCompact && (
+                <span className="flex-1 overflow-hidden whitespace-nowrap text-left">
+                  {language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
+                </span>
+              )}
+              {!isCompact && <kbd className="rounded border border-border/70 bg-black/[0.03] px-1 py-0.5 text-[10px] text-text-muted">⌘K</kbd>}
+            </button>
           )}
 
           {/* The default path stays intentionally small. Secondary workspaces

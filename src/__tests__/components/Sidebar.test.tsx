@@ -25,6 +25,7 @@ vi.mock('lucide-react', () => {
     CalendarDays: Icon,
     ChevronDown: Icon,
     Clock3: Icon,
+    Command: Icon,
     X: Icon,
     FileText: Icon,
     ListTodo: Icon,
@@ -44,7 +45,7 @@ vi.mock('../../api/client', () => ({
   filesApi: { create: vi.fn() },
 }));
 
-function SidebarHarness({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
+function SidebarHarness({ onOpenSettings, onOpenCommandPalette }: { onOpenSettings?: () => void; onOpenCommandPalette?: () => void } = {}) {
   const [open, setOpen] = useState(false);
   return (
     <Sidebar
@@ -63,6 +64,7 @@ function SidebarHarness({ onOpenSettings }: { onOpenSettings?: () => void } = {}
       toggleArchiveMonth={vi.fn()}
       showToast={vi.fn()}
       onOpenSettings={onOpenSettings}
+      onOpenCommandPalette={onOpenCommandPalette}
     />
   );
 }
@@ -107,5 +109,15 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.queryByText('Mind maps')).not.toBeInTheDocument();
     expect(screen.getByTestId('nav-events')).toBeInTheDocument();
     expect(screen.queryByTestId('nav-mindmap')).not.toBeInTheDocument();
+  });
+
+  it('UX S10: exposes the ⌘K palette trigger at the top of the rail', () => {
+    const onOpenCommandPalette = vi.fn();
+    render(<SidebarHarness onOpenCommandPalette={onOpenCommandPalette} />);
+
+    const trigger = screen.getByTestId('sidebar-command-palette');
+    expect(trigger).toBeVisible();
+    fireEvent.click(trigger);
+    expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });
 });
