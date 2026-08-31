@@ -25,6 +25,7 @@ import { TodayBacklog, type TodayPlanningGroup } from './components/TodayBacklog
 import { TodayFocusBar } from './components/TodayFocusBar';
 import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
 import { TodayProactiveBanner } from './components/TodayProactiveBanner';
+import { TodayReflectionBar, isReflectionPromptOptedOut } from './components/TodayReflectionBar';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -184,6 +185,9 @@ export default function App() {
   const [savingDailyReflection, setSavingDailyReflection] = useState(false);
   const [lastDailySummary, setLastDailySummary] = useState<import('./api/client').DailyReportSummary | null>(null);
   const [reflectionDate, setReflectionDate] = useState<string>(todayStr);
+
+  // S12: quiet prompt bar instead of the auto-opened reflection modal.
+  const [reflectionBar, setReflectionBar] = useState<{ date: string; completedCount: number } | null>(null);
 
   const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
@@ -1516,10 +1520,12 @@ export default function App() {
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
       await refreshEarlierOpenTasks();
-      // Auto-open the reflection modal for the day that was just archived.
-      // The user can dismiss it if they don't want to write a journal entry.
-      setReflectionDate(currentFileDate);
-      setShowDailyReflection(true);
+      // S12: offer a quiet prompt bar for the day that was just archived
+      // instead of interrupting with an auto-opened modal.
+      if (!isReflectionPromptOptedOut()) {
+        const doneCount = (data?.tasks as Task[] ?? []).filter(t => t.status === 'done').length;
+        setReflectionBar({ date: currentFileDate, completedCount: doneCount });
+      }
     } catch (e) {
       console.error('Rollover failed', e);
       showToast(language === 'zh' ? '迁移失败' : 'Rollover failed', 'error');
@@ -1894,6 +1900,24 @@ export default function App() {
                     onApplySuggestion={handleApplySuggestion}
                     onDismissAll={() => setProactiveRefreshKey(k => k + 1)}
                   />
+
+                  {reflectionBar && (
+                    <TodayReflectionBar
+                      date={reflectionBar.date}
+                      completedCount={reflectionBar.completedCount}
+                      language={language}
+                      onWrite={() => {
+                        setReflectionDate(reflectionBar.date);
+                        setShowDailyReflection(true);
+                        setReflectionBar(null);
+                      }}
+                      onDismiss={() => setReflectionBar(null)}
+                      onOptOut={() => {
+                        try { localStorage.setItem('dailyflow:reflection:promptOptOut', '1'); } catch { /* private mode */ }
+                        setReflectionBar(null);
+                      }}
+                    />
+                  )}
 
                   <TodayFocusBar
                     tasks={todayTasks}
