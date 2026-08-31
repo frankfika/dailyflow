@@ -1611,3 +1611,82 @@ button.today-event-head-main:hover { background: rgba(35, 120, 110, 0.13); }
 }
 .today-input-brain-text:focus { border-color: var(--color-accent); }
 .today-input-brain-foot { display: flex; justify-content: flex-end; }
+
+/* S4: command palette */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 1rem 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+}
+.cmdk-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: 70vh;
+  overflow: hidden;
+  background: var(--color-surface-white);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.9rem;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
+}
+.cmdk-inputrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.cmdk-searchicon { height: 1rem; width: 1rem; color: var(--color-text-muted); flex-shrink: 0; }
+.cmdk-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 0.9rem;
+  color: var(--color-text-main);
+}
+.cmdk-input::placeholder { color: var(--color-text-muted); }
+.cmdk-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0.35rem 0.45rem 0.6rem; }
+.cmdk-section { margin-bottom: 0.3rem; }
+.cmdk-sectiontitle {
+  padding: 0.3rem 0.5rem 0.15rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.82rem;
+  color: var(--color-text-main);
+  cursor: pointer;
+  text-align: left;
+}
+.cmdk-item.is-active { background: var(--color-accent-light); color: var(--color-accent); }
+.cmdk-item-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-item-hint { flex-shrink: 0; font-size: 0.68rem; color: var(--color-text-muted); }
+.cmdk-item.is-active .cmdk-item-hint { color: var(--color-accent); }
+.cmdk-empty { padding: 1rem; text-align: center; font-size: 0.78rem; color: var(--color-text-muted); }
+.cmdk-foot {
+  padding: 0.45rem 0.9rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.66rem;
+  color: var(--color-text-muted);
+}

@@ -39,6 +39,7 @@ import { filterTasksByContext, filterNotesByContext } from './utils/contextFilte
 import { createNote as createV2Note, patchCommitment as v2PatchCommitment, completeCommitment as v2CompleteCommitment } from './features/v2/api/client';
 import type { ProactiveProposal, ProactiveSuggestion } from './api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
+import { CommandPalette, type CommandId } from './components/CommandPalette';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
 import { useQueryClient } from '@tanstack/react-query';
@@ -832,6 +833,32 @@ export default function App() {
         void openMeetingNote();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '!') {
+        e.preventDefault();
+        setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        const singleKeyActions: Record<string, () => void> = {
+          j: () => kbActionsRef.current.reflection(),
+          r: () => kbActionsRef.current.rollover(),
+          '5': () => setActiveTab('calendar'),
+          '6': () => setActiveTab('memory'),
+          '7': () => setActiveTab('team'),
+          ',': () => setShowSettings(true),
+        };
+        const action = singleKeyActions[e.key.toLowerCase()];
+        if (action) {
+          e.preventDefault();
+          action();
+          return;
+        }
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         setActiveTab('today');
@@ -861,6 +888,13 @@ export default function App() {
   }, [openMeetingNote, activeTab]);
 
   const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  // Keyboard handlers defined later in the component; the keydown effect
+  // reads them through this ref.
+  const kbActionsRef = useRef<{ reflection: () => void; rollover: () => void }>({
+    reflection: () => {},
+    rollover: () => {},
+  });
 
   // Suggestions from the proactive scan target v2 commitments, not daily
   // tasks — apply them through the v2 API so the buttons do real work
@@ -1266,6 +1300,10 @@ export default function App() {
     setReflectionDate(todayStr);
     setShowDailyReflection(true);
   }, [todayStr]);
+
+  useEffect(() => {
+    kbActionsRef.current = { reflection: handleOpenReflection, rollover: handleManualRollover };
+  }, [handleOpenReflection, handleManualRollover]);
 
   const handleSaveReflection = useCallback(
     async (params: {
@@ -1858,6 +1896,45 @@ export default function App() {
 
       </main>
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
+
+      <CommandPalette
+        open={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        language={language}
+        tasks={todayTasks}
+        notes={dailyNotes}
+        events={(eventsQuery.data?.events ?? []).map(event => ({ id: event.id, title: event.title }))}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectTask={() => setActiveTab('today')}
+        onSelectNote={(id) => {
+          setActiveTab('notes');
+          setNotesSurface('notes');
+          window.setTimeout(() => window.dispatchEvent(new CustomEvent('df:select-note', { detail: { id } })), 0);
+        }}
+        onSelectEvent={(id) => {
+          setRequestedEventId(id);
+          setActiveTab('events');
+        }}
+        onSelectWorkspace={(id) => void handleSwitchWorkspace(id)}
+        onCommand={(command: CommandId) => {
+          if (command === 'reflection') handleOpenReflection();
+          else if (command === 'rollover') void handleManualRollover();
+          else if (command === 'calendar') setActiveTab('calendar');
+          else if (command === 'memory') setActiveTab('memory');
+          else if (command === 'team') setActiveTab('team');
+          else if (command === 'settings') setShowSettings(true);
+          else if (command === 'toggle-context') setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
+          else if (command === 'check-updates') void checkForUpdates().then(info => {
+            if (info.hasUpdate) {
+              setUpdateInfo(info);
+              setShowUpdateModal(true);
+            } else {
+              showToast(language === 'zh' ? '已是最新版本' : 'Already up to date', 'info');
+            }
+          }).catch(err => console.error('Update check failed', err));
+        }}
+      />
 
       <SettingsModal
         showSettings={showSettings}
