@@ -35,7 +35,8 @@ import { useEvents, useTodayItems } from './features/v2/hooks/useEvents';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
-import { createNote as createV2Note } from './features/v2/api/client';
+import { createNote as createV2Note, patchCommitment as v2PatchCommitment, completeCommitment as v2CompleteCommitment } from './features/v2/api/client';
+import type { ProactiveProposal, ProactiveSuggestion } from './api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
@@ -838,17 +839,64 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        setShowTaskInput(prev => !prev);
+        setActiveTab('today');
+        setShowTaskInput(true);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        setActiveTab('today');
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '2') {
+        e.preventDefault();
+        setActiveTab('events');
         return;
       }
       if (e.key === 'Escape') {
         setShowTaskInput(false);
         setShowBrainDump(false);
+        const target = e.target as HTMLElement | null;
+        const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (!typing && activeTab === 'events') {
+          setActiveTab('today');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openMeetingNote]);
+  }, [openMeetingNote, activeTab]);
+
+  const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
+
+  // Suggestions from the proactive scan target v2 commitments, not daily
+  // tasks — apply them through the v2 API so the buttons do real work
+  // instead of just hiding the card (design v3.1: no dead buttons).
+  const handleApplySuggestion = async (proposal: ProactiveProposal, suggestion: ProactiveSuggestion) => {
+    try {
+      if (suggestion.action === 'move_to_today') {
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 0);
+        await v2PatchCommitment(proposal.entityId, { dueAt: endOfToday.toISOString() });
+        showToast(language === 'zh' ? '已排进今天' : 'Moved to today', 'success');
+      } else if (suggestion.action === 'mark_done') {
+        await v2CompleteCommitment(proposal.entityId, {
+          outcomeKind: 'delivered',
+          outcomeSummary: proposal.title,
+        });
+        showToast(language === 'zh' ? '已标记完成' : 'Marked as done', 'success');
+      } else {
+        // regroup has no single-click server action yet; point the user at
+        // the canvas instead of pretending the card action did it.
+        showToast(language === 'zh' ? '请在事件画布中重新整理该事项' : 'Regroup this item from the event canvas', 'info');
+      }
+    } catch (err) {
+      console.error('Failed to apply proactive suggestion', err);
+      showToast(language === 'zh' ? '操作失败，建议已恢复' : 'Action failed; suggestion restored', 'error');
+    } finally {
+      setProactiveRefreshKey(k => k + 1);
+    }
+  };
 
   const processBrainDump = async () => {
     const sourceText = brainDumpText.trim();
@@ -1082,6 +1130,27 @@ export default function App() {
     showToast(language === 'zh' ? '更新失败，请重试' : 'Failed to update task — please retry', 'error');
   };
 
+  const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
+    const targetDate = hostDate ?? currentFileDate;
+    try {
+      await tasksApi.updateSpace(id, null, targetDate);
+      const data = await filesApi.get(targetDate);
+      if (data) {
+        if (targetDate === currentFileDate) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+        }
+        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
+      }
+      showToast(language === 'zh' ? '已移出事件' : 'Removed from event', 'success');
+      await todayItemsQuery.refetch();
+    } catch (e) {
+      console.error('Failed to remove task from event', e);
+      showToast(language === 'zh' ? '移出事件失败' : 'Failed to remove from event', 'error');
+    }
+  };
+
   const handleDeleteTask = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
     try {
@@ -1229,6 +1298,17 @@ export default function App() {
   // source Event, node breadcrumb and inherited category tags even after a
   // reload. Keep the legacy task parse only as a resilient loading fallback.
   const todayTasks = [...(projectedTodayTasks ?? currentVisibleTasks), ...earlierVisibleTasks];
+
+  // Prune focus picks whose tasks are no longer open so stale ids cannot
+  // occupy the 3 slots (design v3.1 focus row stays usable all day).
+  const openTodayTaskIds = useMemo(
+    () => new Set(todayTasks.filter(task => task.status === 'todo').map(task => task.id)),
+    [todayTasks],
+  );
+  useEffect(() => {
+    const kept = focusTaskIds.filter(id => openTodayTaskIds.has(id));
+    if (kept.length !== focusTaskIds.length) updateFocusTaskIds(kept);
+  }, [focusTaskIds, openTodayTaskIds, updateFocusTaskIds]);
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
@@ -1563,6 +1643,9 @@ export default function App() {
                     activeTab={activeTab}
                     currentFileDate={currentFileDate}
                     isToday={currentFileDate === getTodayStr()}
+                    refreshKey={proactiveRefreshKey}
+                    onApplySuggestion={handleApplySuggestion}
+                    onDismissAll={() => setProactiveRefreshKey(k => k + 1)}
                   />
 
                   <TodayFocusBar
@@ -1590,6 +1673,7 @@ export default function App() {
                       setPrefillLinkedTaskId(taskId);
                       setShowQuickNoteEditor(true);
                     }}
+                    onUnlinkFromSpace={handleUnlinkFromSpace}
                     onShowLinkedNotes={(taskId) => {
                       setNotesFilterByTaskId(taskId);
                       setActiveTab('notes');

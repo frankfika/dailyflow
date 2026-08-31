@@ -64,6 +64,7 @@ interface TodayBacklogProps {
   onDeleteTask: (id: string, hostDate?: string) => void;
   onCreateLinkedNote: (taskId: string) => void;
   onShowLinkedNotes: (taskId: string) => void;
+  onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
   language: 'en' | 'zh';
@@ -100,6 +101,7 @@ export function TodayBacklog({
   onDeleteTask,
   onCreateLinkedNote,
   onShowLinkedNotes,
+  onUnlinkFromSpace,
   linkedNotesCount,
   onAddTask,
   language,
@@ -174,6 +176,9 @@ export function TodayBacklog({
         onDelete={() => onDeleteTask(task.id, task.host_date)}
         onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
         onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+        onUnlinkFromSpace={onUnlinkFromSpace
+          ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
+          : undefined}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />

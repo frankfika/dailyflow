@@ -194,17 +194,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.title}
           </h3>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-text-muted">
-            <button
-              type="button"
-              onClick={onOpenSpace}
-              disabled={!onOpenSpace}
-              className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'} ${onOpenSpace ? 'cursor-pointer hover:border-accent/30 hover:bg-accent/15' : 'cursor-default'}`}
-              data-testid={`task-card-event-${task.id}`}
-              title={eventLabel}
-            >
-              {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
-              <span className="truncate">{eventLabel}</span>
-            </button>
+            {onOpenSpace ? (
+              <button
+                type="button"
+                onClick={onOpenSpace}
+                className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium cursor-pointer hover:border-accent/30 hover:bg-accent/15 ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'}`}
+                data-testid={`task-card-event-${task.id}`}
+                title={eventLabel}
+              >
+                {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                <span className="truncate">{eventLabel}</span>
+              </button>
+            ) : (
+              <span
+                className="inline-flex min-w-0 items-center gap-1 border border-transparent px-1.5 py-0.5 font-medium text-text-muted"
+                data-testid={`task-card-event-${task.id}`}
+                title={eventLabel}
+              >
+                <span className="truncate">{eventLabel}</span>
+              </span>
+            )}
             {task.sourcePath && task.sourcePath.length > 0 && (
               <span className="inline-flex min-w-0 items-center gap-0.5 text-text-muted/80" data-testid={`task-card-path-${task.id}`}>
                 {task.sourcePath.map((segment, index) => (

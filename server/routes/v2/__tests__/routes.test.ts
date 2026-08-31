@@ -109,12 +109,18 @@ describe('v2 routes — full spec section 26 acceptance scenario', () => {
       const saveProbeNote = await post('/notes', { body: 'autosave probe' });
       expect(saveProbeNote.status).toBe(201);
       const saveProbeCreatedAt = saveProbeNote.body.note.createdAt as string;
+      // The repository partitions note files by LOCAL date, while createdAt
+      // is a UTC ISO string — derive the directory from the local date of
+      // createdAt so this test also passes across UTC/local day boundaries.
+      const saveProbeCreated = new Date(saveProbeCreatedAt);
+      const saveProbeYear = String(saveProbeCreated.getFullYear());
+      const saveProbeMonth = String(saveProbeCreated.getMonth() + 1).padStart(2, '0');
       const saveProbePath = path.join(
         workspace,
         '.dailyflow',
         'notes',
-        saveProbeCreatedAt.slice(0, 4),
-        saveProbeCreatedAt.slice(5, 7),
+        saveProbeYear,
+        saveProbeMonth,
         `${saveProbeNote.body.note.id}.md`,
       );
       const noteBeforeRead = await fs.readFile(saveProbePath, 'utf8');
