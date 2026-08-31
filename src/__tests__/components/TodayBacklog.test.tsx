@@ -12,6 +12,7 @@ function renderBacklog(tasks: Array<{
   host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
+  originNodeId?: string;
   sourcePath?: string[];
 }>, withPlanning = false, planningGroups?: TodayPlanningGroup[], extraProps?: Record<string, unknown>) {
   const groups: TodayPlanningGroup[] = planningGroups ?? (withPlanning ? [{

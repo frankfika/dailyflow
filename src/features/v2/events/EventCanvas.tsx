@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Focus, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
-import type { EventDetail, EventNode } from '../../../api/client';
+import { CalendarDays, Check, ChevronDown, Focus, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import type { EventDetail, EventNode, OrganizeStrategy } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
 import type { EventGraphProposal, GraphOperation } from '../api/client';
@@ -32,6 +32,10 @@ type Copy = {
   fitAll: string;
   layoutTree: string;
   layoutTreeTitle: string;
+  organize: string;
+  organizeByTopic: string;
+  organizeByPriority: string;
+  organizeByTime: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -62,6 +66,10 @@ const COPY: Record<'en' | 'zh', Copy> = {
     fitAll: 'Fit all',
     layoutTree: 'Layout',
     layoutTreeTitle: 'Arrange nodes as a tree',
+    organize: 'AI organize',
+    organizeByTopic: 'By topic',
+    organizeByPriority: 'By execution status',
+    organizeByTime: 'By time tag',
   },
   zh: {
     child: '子节点',
@@ -90,6 +98,10 @@ const COPY: Record<'en' | 'zh', Copy> = {
     fitAll: '适应全部',
     layoutTree: '整理',
     layoutTreeTitle: '整理为树形布局',
+    organize: 'AI 整理',
+    organizeByTopic: '按主题分类',
+    organizeByPriority: '按执行状态分类',
+    organizeByTime: '按时间标签分类',
   },
 };
 
@@ -112,6 +124,9 @@ interface EventCanvasProps {
   onMoveNodePosition: (nodeId: string, x: number, y: number) => Promise<void>;
   /** Recompute a tidy tree layout for the whole map. */
   onRequestTreeLayout?: () => void;
+  /** UX S9: run an AI organize strategy (read-only suggestion → modal). */
+  onOrganize?: (strategy: OrganizeStrategy) => void;
+  organizeBusy?: boolean;
   proposal?: EventGraphProposal | null;
   proposalSelection?: Set<string>;
   activeProposalChangeId?: string | null;
@@ -140,6 +155,8 @@ export function EventCanvas({
   onDelete,
   onMoveNodePosition,
   onRequestTreeLayout,
+  onOrganize,
+  organizeBusy,
   proposal,
   proposalSelection = new Set<string>(),
   activeProposalChangeId,
@@ -149,6 +166,7 @@ export function EventCanvas({
   const [addingChild, setAddingChild] = useState(false);
   const [childText, setChildText] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [organizeMenuOpen, setOrganizeMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   // Ref mirror of `zoom` so the native wheel listener (bound once) reads the
   // freshest zoom without re-subscribing on every render.
@@ -672,7 +690,7 @@ export function EventCanvas({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      onClick={() => { setMoreOpen(false); }}
+      onClick={() => { setMoreOpen(false); setOrganizeMenuOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <button type="button" onClick={handleFitAll} className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.fitAll} title={copy.fitAll} data-testid="event-fit-all"><Focus className="h-3.5 w-3.5" /></button>
@@ -681,6 +699,18 @@ export function EventCanvas({
         <button type="button" onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomIn} title={copy.zoomIn}><Plus className="h-4 w-4" /></button>
         {onRequestTreeLayout && (
           <button type="button" onClick={onRequestTreeLayout} className="ml-0.5 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.layoutTree} title={copy.layoutTreeTitle} data-testid="event-layout-tree"><LayoutGrid className="h-3.5 w-3.5" />{copy.layoutTree}</button>
+        )}
+        {onOrganize && (
+          <div className="relative ml-0.5">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setOrganizeMenuOpen((open) => !open); }} disabled={organizeBusy} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.organize} aria-expanded={organizeMenuOpen} data-testid="event-organize-button"><Sparkles className="h-3.5 w-3.5" />{copy.organize}<ChevronDown className="h-3 w-3" /></button>
+            {organizeMenuOpen && (
+              <div className="absolute right-0 top-8 z-20 min-w-40 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-organize-menu">
+                {([['by_topic', copy.organizeByTopic], ['by_priority', copy.organizeByPriority], ['by_time', copy.organizeByTime]] as const).map(([strategy, label]) => (
+                  <button key={strategy} type="button" onClick={() => { setOrganizeMenuOpen(false); onOrganize(strategy); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" data-testid={`event-organize-${strategy}`}>{label}</button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

@@ -233,3 +233,22 @@ describe('EventCanvas node actions', () => {
     expect(onSelectProposalChange).toHaveBeenCalledWith('chg_1');
   });
 });
+
+describe('EventCanvas AI organize (UX S9)', () => {
+  it('exposes the three organize strategies and reports the chosen one', () => {
+    const onOrganize = vi.fn();
+    renderCanvas({ onOrganize });
+    fireEvent.click(screen.getByTestId('event-organize-button'));
+    const menu = screen.getByTestId('event-organize-menu');
+    expect(within(menu).getByTestId('event-organize-by_topic')).toBeInTheDocument();
+    expect(within(menu).getByTestId('event-organize-by_priority')).toBeInTheDocument();
+    expect(within(menu).getByTestId('event-organize-by_time')).toBeInTheDocument();
+    fireEvent.click(within(menu).getByTestId('event-organize-by_topic'));
+    expect(onOrganize).toHaveBeenCalledWith('by_topic');
+  });
+
+  it('disables the trigger while an organize write is in flight', () => {
+    renderCanvas({ onOrganize: vi.fn(), organizeBusy: true });
+    expect(screen.getByTestId('event-organize-button')).toBeDisabled();
+  });
+});

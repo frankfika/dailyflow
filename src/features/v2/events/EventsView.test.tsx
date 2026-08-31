@@ -1,11 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventsView } from './EventsView';
+import { organizeApi } from '../../../api/client';
 
 const mocks = vi.hoisted(() => ({
   events: [] as Array<Record<string, unknown>>,
   detail: null as Record<string, unknown> | null,
   create: vi.fn(async () => ({ id: 'event-new' })),
+  applyOrganize: vi.fn(async () => ({ applied: true })),
 }));
 
 vi.mock('../hooks/useEvents', () => ({
@@ -25,6 +27,8 @@ vi.mock('../hooks/useEvents', () => ({
   useUnscheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useCompleteNodeTask: () => ({ mutateAsync: vi.fn() }),
   useUndoCompleteNodeTask: () => ({ mutateAsync: vi.fn() }),
+  useApplyOrganizeSuggestion: () => ({ mutateAsync: mocks.applyOrganize, isPending: false }),
+  useSeedEventTemplate: () => ({ mutateAsync: vi.fn(async () => ({ seeded: true })), isPending: false }),
 }));
 
 const EVENT = {
@@ -38,6 +42,8 @@ describe('EventsView Event-first surface', () => {
     mocks.events = [];
     mocks.detail = null;
     mocks.create.mockClear();
+    mocks.applyOrganize.mockClear();
+    vi.restoreAllMocks();
     window.localStorage.removeItem('dailyflow:events:outlineWidth');
   });
 
@@ -124,5 +130,43 @@ describe('EventsView Event-first surface', () => {
     for (let i = 0; i < 20; i++) fireEvent.keyDown(handle, { key: 'ArrowLeft' });
     expect(pane).toHaveStyle({ width: '200px' });
     expect(handle).toHaveAttribute('aria-valuenow', '200');
+  });
+
+  it('UX S9: runs AI organize and applies the suggestion through the modal', async () => {
+    const detail = {
+      id: 'event-1', title: 'Organize me', context: 'work', status: 'active', progress: { done: 0, total: 0 },
+      effectiveTags: [], createdAt: '2026-08-01', updatedAt: '2026-08-10',
+      mindmapId: 'map-1', rootNodeId: 'root', manualTags: [], aiTags: [],
+      nodes: [
+        { id: 'root', eventId: 'event-1', text: 'Organize me', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] },
+        { id: 'loose-1', eventId: 'event-1', text: 'Loose one', position: { x: 300, y: 0 }, manualTags: [], aiTags: [] },
+      ],
+      edges: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    mocks.events = [detail];
+    mocks.detail = detail;
+    const notice = vi.fn();
+    const organizeSpy = vi.spyOn(organizeApi, 'organize').mockResolvedValue({
+      strategy: 'by_topic',
+      rationale: 'Group the loose nodes',
+      groups: [{ parentText: 'Group A', parentKind: 'branch', nodeIds: ['loose-1'] }],
+      suggestedEdges: [],
+      groupRationale: {},
+      stats: { looseNodes: 1, organizedNodes: 1, groupCount: 1 },
+    });
+    render(<EventsView language="en" context="work" onNotice={notice} />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+    expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('event-organize-button'));
+    fireEvent.click(screen.getByTestId('event-organize-by_topic'));
+    await waitFor(() => expect(organizeSpy).toHaveBeenCalledWith('map-1', 'by_topic'));
+    const modal = await screen.findByTestId('organize-suggestion-modal');
+    expect(within(modal).getByText('Group A')).toBeInTheDocument();
+
+    fireEvent.click(within(modal).getByTestId('organize-suggestion-apply'));
+    await waitFor(() => expect(mocks.applyOrganize).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'event-1', mindmapId: 'map-1' })));
+    await waitFor(() => expect(notice).toHaveBeenCalledWith(expect.stringContaining('AI organize applied'), 'success'));
+    expect(screen.queryByTestId('organize-suggestion-modal')).not.toBeInTheDocument();
   });
 });

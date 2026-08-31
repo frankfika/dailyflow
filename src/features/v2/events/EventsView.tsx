@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles, X } from 'lucide-react';
 import { ulid } from 'ulid';
-import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
+import type { EventDetail, EventNode, EventSummary, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
+import { organizeApi } from '../../../api/client';
+import { OrganizeSuggestionModal } from '../../../components/MindMap/OrganizeSuggestionModal';
+import { MINDMAP_TEMPLATES } from '../../../components/MindMap/templates';
 import {
   useAddEventChild,
   useAddEventSibling,
+  useApplyOrganizeSuggestion,
+  useSeedEventTemplate,
   useCompleteNodeTask,
   useCreateEvent,
   useDeleteEventNode,
@@ -64,8 +69,11 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  // UX S9: optional built-in mind-map template forked into the new event.
+  const [newTemplateId, setNewTemplateId] = useState<string>('');
   const eventsQ = useEvents();
   const createEvent = useCreateEvent();
+  const seedTemplate = useSeedEventTemplate();
   const events = useMemo(
     () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
     [context, eventsQ.data?.events],
@@ -81,7 +89,12 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
     if (!newTitle.trim()) return;
     try {
       const created = await createEvent.mutateAsync({ title: newTitle.trim(), context });
-      setNewTitle('');
+      if (newTemplateId && created.mindmapId) {
+        try {
+          await seedTemplate.mutateAsync({ eventId: created.id, mindmapId: created.mindmapId, templateId: newTemplateId, language });
+        } catch { /* template seeding is best-effort; the event itself exists */ }
+      }
+      setNewTemplateId('');
       setCreating(false);
       setSelectedEventId(created.id);
       onNotice?.(language === 'zh' ? '事件已创建' : 'Event created', 'success');
@@ -112,6 +125,13 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
             <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t.input} aria-label={t.input} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#23877B] focus:ring-2 focus:ring-[#23877B]/10 dark:border-gray-700 dark:bg-gray-900" />
             <button disabled={!newTitle.trim() || createEvent.isPending} className="rounded-lg bg-[#23877B] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">{createEvent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t.create}</button>
             <button type="button" onClick={() => { setCreating(false); setNewTitle(''); }} className="rounded-lg px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800">{t.cancel}</button>
+          </div>
+          <div className="mx-auto mt-2.5 flex max-w-4xl flex-wrap items-center gap-1.5" data-testid="new-event-templates">
+            <span className="text-[11px] text-gray-400">{language === 'zh' ? '从模板开始：' : 'Start from:'}</span>
+            <button type="button" onClick={() => setNewTemplateId('')} aria-pressed={newTemplateId === ''} className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${newTemplateId === '' ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800'}`} data-testid="new-event-template-blank">{language === 'zh' ? '空白' : 'Blank'}</button>
+            {MINDMAP_TEMPLATES.map((template) => (
+              <button key={template.id} type="button" onClick={() => setNewTemplateId(template.id)} aria-pressed={newTemplateId === template.id} title={language === 'zh' ? template.hint : template.hintEn} className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${newTemplateId === template.id ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800'}`} data-testid={`new-event-template-${template.id}`}>{language === 'zh' ? template.title : template.titleEn}</button>
+            ))}
           </div>
         </form>
       )}
@@ -164,9 +184,14 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const unschedule = useUnscheduleEventNode();
   const complete = useCompleteNodeTask();
   const reopen = useUndoCompleteNodeTask();
+  const applyOrganize = useApplyOrganizeSuggestion();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  // UX S9: AI organize (folded in from the orphan MindMapView).
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  const [organizeStrategy, setOrganizeStrategy] = useState<OrganizeStrategy | null>(null);
+  const [organizeSuggestion, setOrganizeSuggestion] = useState<OrganizeSuggestion | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
@@ -364,6 +389,37 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     }
   }
 
+  async function runOrganize(strategy: OrganizeStrategy) {
+    if (!event) return;
+    setOrganizeStrategy(strategy);
+    try {
+      const suggestion = await organizeApi.organize(event.mindmapId, strategy);
+      setOrganizeSuggestion(suggestion);
+      setOrganizeOpen(true);
+    } catch (error) {
+      onNotice?.(language === 'zh'
+        ? `AI 整理失败：${error instanceof Error ? error.message : '未知错误'}`
+        : `AI organize failed: ${error instanceof Error ? error.message : 'unknown error'}`, 'error');
+    }
+  }
+
+  async function handleApplyOrganize(suggestion: OrganizeSuggestion) {
+    if (!event) return;
+    try {
+      const result = await applyOrganize.mutateAsync({ eventId: event.id, mindmapId: event.mindmapId, suggestion });
+      setOrganizeOpen(false);
+      setOrganizeSuggestion(null);
+      setOrganizeStrategy(null);
+      if (result.applied) {
+        onNotice?.(language === 'zh'
+          ? `AI 整理完成：${suggestion.stats.organizedNodes} 个节点 → ${suggestion.stats.groupCount} 组`
+          : `AI organize applied: ${suggestion.stats.organizedNodes} nodes → ${suggestion.stats.groupCount} groups`, 'success');
+      }
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }
+
   if (detailQ.isLoading) return <CenteredState icon={<Loader2 className="h-5 w-5 animate-spin" />} text={t.loading} />;
   if (!event) return <CenteredState text={t.missing} />;
   if (event.integrity.missingMap) return <CenteredState text={t.missing} />;
@@ -467,6 +523,8 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onToggleDone={handleToggleDone}
           onMoveNodePosition={handleMoveNodePosition}
           onRequestTreeLayout={() => void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).catch(() => {})}
+          onOrganize={(strategy) => void runOrganize(strategy)}
+          organizeBusy={applyOrganize.isPending}
           proposal={graphProposal}
           proposalSelection={proposalSelection}
           activeProposalChangeId={activeProposalChangeId}
@@ -488,6 +546,16 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       />
     )}
     {contextPreviewOpen && <EventOperatorContextPreview event={event} language={language} defaultRefs={runContextRefs} onCancel={() => setContextPreviewOpen(false)} onConfirm={(refs) => { setRunContextRefs(refs); setAutoStartRun(true); setContextPreviewOpen(false); setAgentPanelOpen(true); }} />}
+    {organizeOpen && (
+      <OrganizeSuggestionModal
+        open={organizeOpen}
+        strategy={organizeStrategy}
+        suggestion={organizeSuggestion}
+        language={language}
+        onApply={handleApplyOrganize}
+        onClose={() => { setOrganizeOpen(false); setOrganizeSuggestion(null); setOrganizeStrategy(null); }}
+      />
+    )}
   </section>;
 }
 
