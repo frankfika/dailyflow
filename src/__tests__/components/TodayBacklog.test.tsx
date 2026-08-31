@@ -13,7 +13,7 @@ function renderBacklog(tasks: Array<{
   spaceId?: string;
   originMindmapId?: string;
   sourcePath?: string[];
-}>, withPlanning = false, planningGroups?: TodayPlanningGroup[]) {
+}>, withPlanning = false, planningGroups?: TodayPlanningGroup[], extraProps?: Record<string, unknown>) {
   const groups: TodayPlanningGroup[] = planningGroups ?? (withPlanning ? [{
     id: 'event-1',
     mindmapId: 'map-1',
@@ -37,6 +37,7 @@ function renderBacklog(tasks: Array<{
       onAddTask={noop}
       language="en"
       isToday
+      {...(extraProps ?? {})}
     />,
   );
 }
@@ -66,6 +67,19 @@ describe('TodayBacklog Event-first execution flow', () => {
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Launch');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Marketing');
     expect(screen.getByTestId('task-card-event-standalone')).toHaveTextContent('Standalone');
+  });
+
+  it('S8: clicking the event chip jumps to the canvas with the origin node id', () => {
+    const onOpenPlanningGroup = vi.fn();
+    renderBacklog([
+      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1', originNodeId: 'node-9' },
+    ], true, undefined, { onOpenPlanningGroup });
+
+    fireEvent.click(screen.getByTestId('task-card-event-planned'));
+    expect(onOpenPlanningGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'event-1' }),
+      'node-9',
+    );
   });
 
   it('preserves the quick standalone task action', () => {

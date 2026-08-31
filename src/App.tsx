@@ -117,6 +117,8 @@ export default function App() {
   // permanent home; Esc (or the close button) returns to it.
   const [activeOverlay, setActiveOverlay] = useState<'notes' | 'ai-chat' | 'calendar' | 'memory' | 'team' | null>(null);
   const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
+  // UX S8: node to highlight after a "来自 ↗" chip jump into the canvas.
+  const [requestedNodeId, setRequestedNodeId] = useState<string | null>(null);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   useEffect(() => {
@@ -1905,8 +1907,9 @@ export default function App() {
                   <TodayBacklog
                     tasks={todayTasks}
                     planningGroups={todayPlanningGroups}
-                    onOpenPlanningGroup={(group) => {
+                    onOpenPlanningGroup={(group, nodeId) => {
                       setRequestedEventId(group.spaceId ?? group.id);
+                      setRequestedNodeId(nodeId ?? null);
                       setActiveTab('events');
                     }}
                     selectedDate={currentFileDate}
@@ -1978,6 +1981,8 @@ export default function App() {
                     onNotice={showToast}
                     requestedEventId={requestedEventId}
                     onRequestedEventHandled={() => setRequestedEventId(null)}
+                    requestedNodeId={requestedNodeId}
+                    onRequestedNodeHandled={() => setRequestedNodeId(null)}
                   />
                 </motion.div>
               )

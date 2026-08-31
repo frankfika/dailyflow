@@ -280,6 +280,13 @@ export function EventCanvas({
   useEffect(() => {
     if (focusedNodeId && event.nodes.some((node) => node.id === focusedNodeId)) {
       onActivate(focusedNodeId);
+      // UX S8: bring the focused node into view when jumped to from Today.
+      if (typeof document !== 'undefined') {
+        const el = document.querySelector(`[data-testid="event-node-${focusedNodeId}"]`);
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }
     }
   }, [event.nodes, focusedNodeId, onActivate]);
 

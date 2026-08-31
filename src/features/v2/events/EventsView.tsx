@@ -33,6 +33,9 @@ export interface EventsViewProps {
   sidebarOpen?: boolean;
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
   requestedEventId?: string | null;
+  /** UX S8: node to highlight when the canvas opens via a Today chip. */
+  requestedNodeId?: string | null;
+  onRequestedNodeHandled?: () => void;
   onRequestedEventHandled?: () => void;
 }
 
@@ -56,7 +59,7 @@ function readOutlineWidth(): number {
   const parsed = Number(window.localStorage.getItem(OUTLINE_WIDTH_KEY));
   return Number.isFinite(parsed) && parsed >= OUTLINE_MIN_WIDTH ? parsed : OUTLINE_DEFAULT_WIDTH;
 }
-export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
+export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -88,7 +91,7 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   }
 
   if (selectedEventId) {
-    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} />;
+    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} requestedNodeId={requestedNodeId} onRequestedNodeHandled={onRequestedNodeHandled} />;
   }
 
   const active = events.filter((event) => event.status === 'active');
@@ -145,7 +148,7 @@ function EventCard({ event, language, onOpen, noActions, updated }: { event: Eve
   return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)]" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3><p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}</button>;
 }
 
-function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void }) {
+function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void }) {
   const t = TEXT[language];
   const detailQ = useEventById(eventId);
   const addChild = useAddEventChild();
@@ -211,6 +214,15 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     window.addEventListener('resize', clampToContainer);
     return () => window.removeEventListener('resize', clampToContainer);
   }, []);
+
+  // UX S8: when opened from a Today "来自 ↗" chip, highlight the origin node.
+  useEffect(() => {
+    if (!event || !requestedNodeId) return;
+    if (!event.nodes.some((node) => node.id === requestedNodeId)) return;
+    setActiveNodeId(requestedNodeId);
+    onRequestedNodeHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id, event?.nodes, requestedNodeId]);
 
   useEffect(() => {
     if (!event) return;

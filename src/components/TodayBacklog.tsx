@@ -56,7 +56,7 @@ export interface TodayPlanningGroup {
 interface TodayBacklogProps {
   tasks: TodayTask[];
   planningGroups?: TodayPlanningGroup[];
-  onOpenPlanningGroup?: (group: TodayPlanningGroup) => void;
+  onOpenPlanningGroup?: (group: TodayPlanningGroup, nodeId?: string) => void;
   selectedDate: string;
   categories: string[];
   onToggleTask: (id: string, hostDate?: string) => void;
@@ -171,7 +171,7 @@ export function TodayBacklog({
         task={task}
         spaceTitle={eventByTaskId.get(task.id)?.title}
         onOpenSpace={onOpenPlanningGroup && eventByTaskId.has(task.id)
-          ? () => onOpenPlanningGroup(eventByTaskId.get(task.id)!)
+          ? (nodeId) => onOpenPlanningGroup(eventByTaskId.get(task.id)!, nodeId)
           : undefined}
         language={language}
         categories={categories}

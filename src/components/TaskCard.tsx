@@ -32,8 +32,8 @@ interface TaskCardProps {
   linkedNotesCount?: number;
   /** Event title for tasks created from an Event map. */
   spaceTitle?: string;
-  /** Opens the shared mind note that owns this task. */
-  onOpenSpace?: () => void;
+  /** Opens the shared mind note that owns this task; receives the node id. */
+  onOpenSpace?: (nodeId?: string) => void;
   onUnlinkFromSpace?: (taskId: string) => void;
   onToggle: () => void;
   onEdit: (updates: {
@@ -205,7 +205,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {onOpenSpace ? (
               <button
                 type="button"
-                onClick={onOpenSpace}
+                onClick={() => onOpenSpace(task.originNodeId)}
                 className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium cursor-pointer hover:border-accent/30 hover:bg-accent/15 ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'}`}
                 data-testid={`task-card-event-${task.id}`}
                 title={eventLabel}
@@ -420,7 +420,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       disabled={aiBusy !== null}
                       onClick={() => {
                         setAiBusy(action);
-                        void onAiAction(task, action).finally(() => setAiBusy(null));
+                        void onAiAction?.(task, action).finally(() => setAiBusy(null));
                       }}
                       className="rounded-md border border-border/70 px-2 py-1 text-[11px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
                       data-testid={`task-ai-${action}-${task.id}`}
@@ -535,7 +535,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 disabled={!convertTitle.trim() || converting}
                 onClick={() => {
                   setConverting(true);
-                  void onConvertToProject!(task, {
+                  void onConvertToProject?.(task, {
                     title: convertTitle.trim(),
                     extraNodes: convertNodes.split('\n').map(line => line.trim()).filter(Boolean),
                   }).finally(() => {
