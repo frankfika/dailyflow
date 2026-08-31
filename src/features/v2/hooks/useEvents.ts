@@ -25,7 +25,9 @@ import {
 } from '../../../api/client';
 import { queryKeys } from '../../../queryKeys';
 import { ulid } from 'ulid';
+import { layoutEventTree } from '../events/nodePlacement';
 import { MAP_WRITE_SCOPE, dropEventMap, readEventMap, writeEventMap } from './mindMapCache';
+import { planChildPosition, planSiblingPlacement } from '../events/nodePlacement';
 
 export interface CreateEventInput {
   title: string;
@@ -295,10 +297,17 @@ export function useUndoConvertStandaloneToEventNodeTask(): UseMutationResult<
 
 type EventMapMutationContext = { eventId: string; mindmapId: string; nodeId?: string };
 
+/**
+ * Topology mutations (add child/sibling, rename, delete, move, outdent,
+ * reorder, reposition) all `writeEventMap` the PUT response on success, so
+ * the snapshot is the freshest full map the server just returned. KEEP it:
+ * dropping it here forces the next mutation to re-GET the whole map, which
+ * is exactly the "不丝滑" lag the snapshot cache exists to avoid. The
+ * event/events queries are still invalidated so derived view state refreshes.
+ */
 function invalidateEventMap(qc: ReturnType<typeof useQueryClient>, vars: EventMapMutationContext) {
   qc.invalidateQueries({ queryKey: queryKeys.event(vars.eventId) });
   qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
-  dropEventMap(qc, vars.mindmapId);
 }
 
 function getSubtreeIds(edges: { id: string; source: string; target: string }[], rootId: string): Set<string> {
@@ -329,20 +338,11 @@ export function useAddEventChild(): UseMutationResult<
       const map = await readEventMap(qc, mindmapId, [parentId]);
       const parent = map.nodes.find((node) => node.id === parentId);
       if (!parent) throw new Error('Parent node no longer exists');
-      const siblings = map.edges
-        .filter((edge) => edge.source === parentId)
-        .map((edge) => map.nodes.find((node) => node.id === edge.target))
-        .filter((node): node is NonNullable<typeof node> => Boolean(node));
       const childNodeId = nodeId ?? `node_${ulid()}`;
       const node = {
         id: childNodeId,
         text: text.trim() || 'New step',
-        position: {
-          x: parent.position.x + 300,
-          y: siblings.length
-            ? Math.max(...siblings.map((sibling) => sibling.position.y)) + 104
-            : parent.position.y,
-        },
+        position: planChildPosition(map.nodes, map.edges, parent),
         kind: 'branch' as const,
       };
       const updated = await mindmapsApi.update(mindmapId, {
@@ -360,19 +360,12 @@ export function useAddEventChild(): UseMutationResult<
       if (!prev?.event) return undefined;
       const parent = prev.event.nodes.find((n) => n.id === vars.parentId);
       if (!parent) return undefined;
-      const siblings = prev.event.edges
-        .filter((edge) => edge.source === vars.parentId)
-        .map((edge) => prev.event!.nodes.find((n) => n.id === edge.target))
-        .filter((n): n is EventNode => Boolean(n));
       const newNode: EventNode = {
         id: nodeId,
         eventId: vars.eventId,
         parentId: vars.parentId,
         text: vars.text.trim() || 'New step',
-        position: {
-          x: parent.position.x + 300,
-          y: siblings.length ? Math.max(...siblings.map((s) => s.position.y)) + 104 : parent.position.y,
-        },
+        position: planChildPosition(prev.event.nodes, prev.event.edges, parent),
         manualTags: [],
         aiTags: [],
       };
@@ -411,32 +404,18 @@ export function useAddEventSibling(): UseMutationResult<
       const parentId = parentEdge.source;
 
       const childEdges = map.edges.filter((edge) => edge.source === parentId);
-      const children = childEdges
-        .map((edge) => map.nodes.find((node) => node.id === edge.target))
-        .filter((node): node is NonNullable<typeof node> => Boolean(node))
-        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
-
-      const refIndex = children.findIndex((node) => node.id === referenceId);
+      void childEdges;
       const siblingNodeId = nodeId ?? `node_${ulid()}`;
+      const placement = planSiblingPlacement(map.nodes, map.edges, referenceId);
       const newNode = {
         id: siblingNodeId,
         text: text.trim() || 'New step',
-        position: {
-          x: refNode.position.x,
-          y: refNode.position.y + 104,
-        },
+        position: placement.position,
         kind: 'branch' as const,
       };
 
-      const shiftedNodes = new Map<string, { x: number; y: number }>();
-      for (const laterChild of children.slice(refIndex + 1)) {
-        for (const id of getSubtreeIds(map.edges, laterChild.id)) {
-          shiftedNodes.set(id, { x: map.nodes.find((n) => n.id === id)!.position.x, y: map.nodes.find((n) => n.id === id)!.position.y + 104 });
-        }
-      }
-
       const nextNodes = map.nodes.map((node) => {
-        const shift = shiftedNodes.get(node.id);
+        const shift = placement.shifts.get(node.id);
         return shift ? { ...node, position: shift } : node;
       });
       nextNodes.push(newNode);
@@ -459,30 +438,21 @@ export function useAddEventSibling(): UseMutationResult<
       if (!refNode || !parentEdge) return undefined;
       const parentId = parentEdge.source;
 
-      const childEdges = prev.event.edges.filter((edge) => edge.source === parentId);
-      const children = childEdges
-        .map((edge) => prev.event!.nodes.find((n) => n.id === edge.target))
-        .filter((n): n is EventNode => Boolean(n))
-        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
-      const refIndex = children.findIndex((n) => n.id === vars.referenceId);
-
+      const placement = planSiblingPlacement(prev.event.nodes, prev.event.edges, vars.referenceId);
       const newNode: EventNode = {
         id: nodeId,
         eventId: vars.eventId,
         parentId,
         text: vars.text.trim() || 'New step',
-        position: { x: refNode.position.x, y: refNode.position.y + 104 },
+        position: placement.position,
         manualTags: [],
         aiTags: [],
       };
 
-      const shiftedIds = new Set<string>();
-      for (const later of children.slice(refIndex + 1)) {
-        for (const id of getSubtreeIds(prev.event.edges, later.id)) shiftedIds.add(id);
-      }
-      const nextNodes = prev.event.nodes.map((n) =>
-        shiftedIds.has(n.id) ? { ...n, position: { x: n.position.x, y: n.position.y + 104 } } : n,
-      );
+      const nextNodes = prev.event.nodes.map((n) => {
+        const shift = placement.shifts.get(n.id);
+        return shift ? { ...n, position: shift } : n;
+      });
       nextNodes.push(newNode);
 
       qc.setQueryData<{ event: EventDetail | null }>(key, {
@@ -890,6 +860,36 @@ export function useReorderEventNode(): UseMutationResult<
     onError: (_err, vars, context) => {
       if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
       dropEventMap(qc, vars.mindmapId);
+    },
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
+  });
+}
+
+/**
+ * Recompute a tidy tree layout for the whole event map. Every node's position
+ * is re-zeroed: root at (0,0), each level one step right, siblings stacked
+ * vertically. Useful after the user drags nodes into a pile, or to re-zero a
+ * map seeded without layout. Applies to all nodes in one PUT.
+ */
+export function useLayoutEventTree(): UseMutationResult<
+  { laidOut: boolean },
+  Error,
+  Pick<EventMapMutationContext, 'eventId' | 'mindmapId'>
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: MAP_WRITE_SCOPE,
+    mutationFn: async ({ mindmapId }) => {
+      const map = await readEventMap(qc, mindmapId);
+      if (map.nodes.length === 0) return { laidOut: false };
+      const layout = layoutEventTree(map.nodes, map.edges, map.rootId);
+      const nextNodes = map.nodes.map((node) => {
+        const pos = layout.get(node.id);
+        return pos ? { ...node, position: pos } : node;
+      });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes });
+      writeEventMap(qc, updated);
+      return { laidOut: true };
     },
     onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
   });

@@ -20,6 +20,7 @@ vi.mock('../hooks/useEvents', () => ({
   useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
   useReorderEventNode: () => ({ mutateAsync: vi.fn() }),
   useUpdateNodePosition: () => ({ mutateAsync: vi.fn() }),
+  useLayoutEventTree: () => ({ mutateAsync: vi.fn() }),
   useScheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useUnscheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useCompleteNodeTask: () => ({ mutateAsync: vi.fn() }),
@@ -109,12 +110,19 @@ describe('EventsView Event-first surface', () => {
     fireEvent.click(screen.getByTestId('event-card-event-1'));
 
     const pane = await screen.findByTestId('event-outline-pane');
+    // The resize separator is always available (not hidden on small screens).
     const handle = screen.getByRole('separator', { name: 'Resize outline' });
-    expect(pane).toHaveStyle({ width: '384px' });
-    expect(handle).toHaveAttribute('aria-valuenow', '384');
+    expect(handle).toBeVisible();
+    expect(pane).toHaveStyle({ width: '300px' });
+    expect(handle).toHaveAttribute('aria-valuenow', '300');
 
     fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(pane).toHaveStyle({ width: '392px' });
-    expect(window.localStorage.getItem('dailyflow:events:outlineWidth')).toBe('392');
+    expect(pane).toHaveStyle({ width: '308px' });
+    expect(window.localStorage.getItem('dailyflow:events:outlineWidth')).toBe('308');
+
+    // Narrowing stays above the configured minimum (200).
+    for (let i = 0; i < 20; i++) fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(pane).toHaveStyle({ width: '200px' });
+    expect(handle).toHaveAttribute('aria-valuenow', '200');
   });
 });

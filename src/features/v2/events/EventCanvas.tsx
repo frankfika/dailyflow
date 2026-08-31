@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Focus, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Focus, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
@@ -30,6 +30,8 @@ type Copy = {
   zoomOut: string;
   zoomReset: string;
   fitAll: string;
+  layoutTree: string;
+  layoutTreeTitle: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -58,6 +60,8 @@ const COPY: Record<'en' | 'zh', Copy> = {
     zoomOut: 'Zoom out',
     zoomReset: 'Reset zoom',
     fitAll: 'Fit all',
+    layoutTree: 'Layout',
+    layoutTreeTitle: 'Arrange nodes as a tree',
   },
   zh: {
     child: '子节点',
@@ -84,6 +88,8 @@ const COPY: Record<'en' | 'zh', Copy> = {
     zoomOut: '缩小',
     zoomReset: '还原缩放',
     fitAll: '适应全部',
+    layoutTree: '整理',
+    layoutTreeTitle: '整理为树形布局',
   },
 };
 
@@ -104,6 +110,8 @@ interface EventCanvasProps {
   onToggleDone: (node: EventNode) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
   onMoveNodePosition: (nodeId: string, x: number, y: number) => Promise<void>;
+  /** Recompute a tidy tree layout for the whole map. */
+  onRequestTreeLayout?: () => void;
   proposal?: EventGraphProposal | null;
   proposalSelection?: Set<string>;
   activeProposalChangeId?: string | null;
@@ -131,6 +139,7 @@ export function EventCanvas({
   onToggleDone,
   onDelete,
   onMoveNodePosition,
+  onRequestTreeLayout,
   proposal,
   proposalSelection = new Set<string>(),
   activeProposalChangeId,
@@ -663,6 +672,9 @@ export function EventCanvas({
         <button type="button" onClick={() => setZoom((value) => Math.max(0.4, Number((value - 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomOut} title={copy.zoomOut}><Minus className="h-4 w-4" /></button>
         <button type="button" onClick={() => setZoom(1)} className="min-w-10 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomReset} title={copy.zoomReset}>{Math.round(zoom * 100)}%</button>
         <button type="button" onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomIn} title={copy.zoomIn}><Plus className="h-4 w-4" /></button>
+        {onRequestTreeLayout && (
+          <button type="button" onClick={onRequestTreeLayout} className="ml-0.5 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.layoutTree} title={copy.layoutTreeTitle} data-testid="event-layout-tree"><LayoutGrid className="h-3.5 w-3.5" />{copy.layoutTree}</button>
+        )}
       </div>
 
       {/* Sizer keeps the scrollable area proportional to the zoomed content —
@@ -791,7 +803,7 @@ export function EventCanvas({
                     small date picker so the user can pick when to schedule it
                     (defaults to today; offers Today/Tomorrow/+3d/+1w/custom). */}
                 {!isEventRoot && !node.execution && (
-                  <div className="absolute -top-3 right-1 z-20">
+                  <div className="absolute -top-8 right-1 z-20">
                     <button
                       type="button"
                       onClick={(e) => {

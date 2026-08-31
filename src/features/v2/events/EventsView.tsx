@@ -10,6 +10,7 @@ import {
   useDeleteEventNode,
   useEventById,
   useEvents,
+  useLayoutEventTree,
   useMoveEventNode,
   useOutdentEventNode,
   useReorderEventNode,
@@ -46,8 +47,8 @@ const TEXT = {
 
 const OUTLINE_VISIBILITY_KEY = 'dailyflow:events:outlineVisible';
 const OUTLINE_WIDTH_KEY = 'dailyflow:events:outlineWidth';
-const OUTLINE_DEFAULT_WIDTH = 384;
-const OUTLINE_MIN_WIDTH = 260;
+const OUTLINE_DEFAULT_WIDTH = 300;
+const OUTLINE_MIN_WIDTH = 200;
 const CANVAS_MIN_WIDTH = 320;
 
 function readOutlineWidth(): number {
@@ -155,6 +156,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const moveNode = useMoveEventNode();
   const reorderNode = useReorderEventNode();
   const updateNodePosition = useUpdateNodePosition();
+  const layoutTree = useLayoutEventTree();
   const schedule = useScheduleEventNode();
   const unschedule = useUnscheduleEventNode();
   const complete = useCompleteNodeTask();
@@ -430,7 +432,6 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
             }}
             onResizeStart={() => setOutlineResizing(true)}
             onResizeEnd={() => setOutlineResizing(false)}
-            className="hidden md:block"
             testId="event-outline-resize-handle"
           />
         )}
@@ -453,6 +454,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onUnschedule={handleUnschedule}
           onToggleDone={handleToggleDone}
           onMoveNodePosition={handleMoveNodePosition}
+          onRequestTreeLayout={() => void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).catch(() => {})}
           proposal={graphProposal}
           proposalSelection={proposalSelection}
           activeProposalChangeId={activeProposalChangeId}
