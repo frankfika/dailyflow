@@ -1078,6 +1078,89 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-simple-completed > button:hover { color: var(--color-text-heading); }
 .today-simple-completed .today-simple-list { padding-top: 0.45rem; }
 
+/* Today event groups — v3.1 "任务按事件/脑图分组" (组头 = 画布入口) */
+.today-event-group {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+}
+.today-event-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.35rem 0.25rem 0.25rem;
+  background: var(--color-accent-light);
+  border-bottom: 1px solid var(--color-border);
+}
+.today-event-head-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--color-text-heading);
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+button.today-event-head-main {
+  cursor: pointer;
+  transition: background 0.2s var(--ease-native);
+}
+button.today-event-head-main:hover { background: rgba(35, 120, 110, 0.13); }
+.today-event-icon {
+  height: 0.85rem;
+  width: 0.85rem;
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+.today-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-event-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.today-event-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.today-event-collapse:hover { background: rgba(35, 120, 110, 0.10); }
+.today-event-arrow { height: 1rem; width: 1rem; transition: transform 0.2s var(--ease-native); }
+.today-event-arrow.is-collapsed { transform: rotate(-90deg); }
+.today-standalone-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.today-standalone-label { display: inline-flex; align-items: center; gap: 0.4rem; flex: 1; }
+.today-event-group-standalone {
+  background: transparent;
+  border-style: dashed;
+}
+
 @media (max-width: 768px) {
   .today-simple-section-header { align-items: center; }
   .today-simple-add,
@@ -1224,4 +1307,123 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+}
+
+/* Today focus bar — v3.1 S1 "今天 · 焦点" 折叠行 + 内联选择器 */
+.today-focus-bar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+}
+.today-focus-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--color-text-heading);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.today-focus-main:hover { background: var(--color-accent-highlight); }
+.today-focus-icon { height: 0.85rem; width: 0.85rem; flex-shrink: 0; color: var(--color-accent); }
+.today-focus-label { font-weight: 650; color: var(--color-text-heading); }
+.today-focus-count { color: var(--color-accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.today-focus-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+.today-focus-open { flex-shrink: 0; color: var(--color-accent); font-size: 0.72rem; font-weight: 550; }
+.today-focus-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+}
+.today-focus-meta {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+.today-focus-save {
+  flex-shrink: 0;
+  min-height: 1.7rem;
+  padding: 0.1rem 0.65rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.today-focus-save:hover { opacity: 0.9; }
+.today-focus-list {
+  margin: 0;
+  padding: 0 0.35rem 0.45rem;
+  list-style: none;
+}
+.today-focus-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.1rem;
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-text-main);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.today-focus-item:hover { background: var(--color-accent-highlight); }
+.today-focus-item.is-selected { background: var(--color-accent-light); }
+.today-focus-item.is-capped { opacity: 0.5; }
+.today-focus-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.05rem;
+  width: 1.05rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 0.3rem;
+  color: var(--color-accent);
+  background: var(--color-surface-elevated);
+}
+.today-focus-item.is-selected .today-focus-check { border-color: var(--color-accent); }
+.today-focus-item-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-focus-order {
+  flex-shrink: 0;
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

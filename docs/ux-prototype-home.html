@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>DailyFlow 主页原型 · v3.1 事件/脑图融入版</title>
+<style>
+  :root {
+    --bg: #F3F5F3;
+    --surface: rgba(250,251,250,0.88);
+    --surface-white: #FFFFFF;
+    --elevated: rgba(255,255,255,0.94);
+    --border: rgba(25,45,40,0.09);
+    --border-strong: rgba(25,45,40,0.16);
+    --text-main: #34413E;
+    --text-heading: #17211F;
+    --text-muted: #78827F;
+    --accent: #23786E;
+    --accent-light: rgba(35,120,110,0.09);
+    --danger: #C75B4A;
+    --warning: #D89043;
+    --success: #4FA866;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .app {
+    max-width: 760px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-white);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(23,33,31,0.06);
+  }
+
+  .top { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .rail {
+    width: 60px; border-right: 1px solid var(--border); padding: 10px 8px;
+    display: flex; flex-direction: column; gap: 4px; align-items: center;
+  }
+  .rail .logo {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--accent);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; margin-bottom: 6px;
+  }
+  .rail-item {
+    width: 36px; height: 36px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--text-muted); cursor: pointer;
+  }
+  .rail-item.active { background: var(--accent-light); color: var(--accent); }
+  .rail-item.k { background: var(--border); font-size: 11px; font-weight: 600; color: var(--text-main); }
+  .header {
+    flex: 1; display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+  }
+  .date-title { font-size: 15px; font-weight: 650; color: var(--text-heading); }
+  .date-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+  .ctx-chip {
+    display: flex; align-items: center; gap: 5px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px; font-weight: 550; background: var(--surface-white);
+  }
+  .ctx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+  .body { padding: 16px 20px 8px; display: flex; flex-direction: column; gap: 12px; }
+
+  .suggestion {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid rgba(216,144,67,0.35);
+    background: rgba(216,144,67,0.07);
+    border-radius: 12px; padding: 9px 14px; font-size: 13px;
+  }
+  .suggestion .txt { flex: 1; }
+  .suggestion .txt b { color: var(--text-heading); }
+  .s-btn { border: none; border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-weight: 550; }
+  .s-btn.primary { background: var(--accent); color: #fff; }
+  .s-btn.ghost { background: transparent; color: var(--text-muted); }
+
+  .focus {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 14px; font-size: 13px; background: var(--surface);
+  }
+  .focus .label { font-weight: 650; color: var(--text-heading); }
+  .focus .count { color: var(--accent); font-weight: 700; }
+  .focus .meta { color: var(--text-muted); font-size: 12px; flex: 1; }
+  .focus .open { font-size: 12px; color: var(--accent); font-weight: 550; }
+
+  /* ===== 事件分组 ===== */
+  .event-group { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .event-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 14px; cursor: pointer;
+    background: var(--accent-light);
+    border-bottom: 1px solid var(--border);
+  }
+  .event-head:hover { background: rgba(35,120,110,0.13); }
+  .event-ico { font-size: 14px; }
+  .event-name { font-weight: 650; color: var(--text-heading); font-size: 13px; flex: 1; }
+  .event-count { font-size: 11.5px; color: var(--text-muted); font-weight: 550; }
+  .event-arrow { font-size: 11px; color: var(--text-muted); transition: transform .2s; }
+  .event-head.open .event-arrow { transform: rotate(180deg); }
+
+  .task-list { display: flex; flex-direction: column; }
+  .task { display: flex; align-items: center; gap: 11px; padding: 9px 14px; border-radius: 8px; cursor: pointer; }
+  .task:hover { background: rgba(35,120,110,0.045); }
+  .checkbox {
+    width: 18px; height: 18px; border: 1.5px solid var(--border-strong);
+    border-radius: 5px; flex-shrink: 0;
+  }
+  .task-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-meta { display: flex; align-items: center; gap: 6px; font-size: 11.5px; flex-shrink: 0; }
+  .pill { border-radius: 6px; padding: 2px 7px; font-weight: 550; background: var(--border); color: var(--text-main); }
+  .pill.deadline { background: rgba(35,120,110,0.10); color: var(--accent); }
+  .pill.overdue { background: rgba(199,91,74,0.10); color: var(--danger); }
+  .pill.hot { background: rgba(216,144,67,0.14); color: #B56A22; }
+  .pill.tag { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+  .more { color: var(--text-muted); font-size: 15px; padding: 0 4px; }
+
+  .standalone-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 14px 4px; font-size: 11.5px; font-weight: 650;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em;
+  }
+
+  .completed {
+    border-top: 1px dashed var(--border-strong); margin-top: 4px;
+    padding: 10px 8px; display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--text-muted); font-weight: 550;
+  }
+  .completed .arrow { margin-left: auto; }
+
+  .inputbar {
+    display: flex; align-items: center; gap: 8px;
+    margin: 4px 20px 18px;
+    border: 1.5px solid var(--border-strong); border-radius: 13px;
+    padding: 10px 14px; background: var(--surface-white);
+  }
+  .plus { color: var(--accent); font-size: 16px; font-weight: 600; }
+  .input-ph { flex: 1; color: var(--text-muted); font-size: 13.5px; }
+  .ibtn {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--text-muted);
+    border: 1px solid var(--border); cursor: pointer;
+  }
+  .ibtn.send { background: var(--accent); color: #fff; border-color: var(--accent); font-size: 12px; }
+
+  .note {
+    max-width: 760px; margin: 14px auto 0;
+    font-size: 12px; color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px;
+  }
+  .note b { color: var(--text-heading); }
+  code { background: var(--border); border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="top">
+    <div class="rail">
+      <div class="logo">D</div>
+      <div class="rail-item k">⌘K</div>
+      <div class="rail-item active">📅</div>
+      <div class="rail-item">🧠</div>
+      <div class="rail-item">📝</div>
+      <div class="rail-item">💬</div>
+    </div>
+    <div class="header">
+      <div>
+        <div class="date-title">2026 年 8 月 31 日 · 周一</div>
+        <div class="date-sub">今天 · 8:42</div>
+      </div>
+      <div class="header-right">
+        <span>⌘K 快速命令</span>
+        <div class="ctx-chip"><span class="ctx-dot"></span>Work ▾</div>
+        <span>⋯</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="suggestion">
+      🤖 <div class="txt"><b>保密协议</b> 已逾期 5 天，建议排进今天</div>
+      <button class="s-btn primary">排进今天</button>
+      <button class="s-btn ghost">忽略</button>
+    </div>
+
+    <div class="focus">
+      <span class="label">今天 · 焦点</span>
+      <span class="count">2 / 3</span>
+      <span class="meta">完成 DSH 接入测试 · 同步 Q3 · 写日报</span>
+      <span class="open">选 3 件 →</span>
+    </div>
+
+    <!-- 事件分组 1：DSH 接入项目（脑图） -->
+    <div class="event-group">
+      <div class="event-head open">
+        <span class="event-ico">🧠</span>
+        <span class="event-name">DSH 接入项目</span>
+        <span class="event-count">2 项待办</span>
+        <span class="event-arrow">▾</span>
+      </div>
+      <div class="task-list">
+        <div class="task">
+          <div class="checkbox"></div>
+          <div class="task-title">完成 DSH 接入测试</div>
+          <div class="task-meta"><span class="pill deadline">今天截止</span><span class="pill hot">🔥</span><span class="more">⋯</span></div>
+        </div>
+        <div class="task">
+          <div class="checkbox"></div>
+          <div class="task-title">部署集成环境</div>
+          <div class="task-meta"><span class="pill tag">#dev</span><span class="more">⋯</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 事件分组 2：Q3 路线图（脑图） -->
+    <div class="event-group">
+      <div class="event-head">
+        <span class="event-ico">🧠</span>
+        <span class="event-name">Q3 路线图</span>
+        <span class="event-count">1 项待办</span>
+        <span class="event-arrow">▾</span>
+      </div>
+      <div class="task-list">
+        <div class="task">
+          <div class="checkbox"></div>
+          <div class="task-title">给团队同步 Q3 路线图</div>
+          <div class="task-meta"><span class="pill overdue">已逾期 1 天</span><span class="more">⋯</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 独立任务 -->
+    <div class="standalone-head">📌 独立任务</div>
+    <div class="task-list">
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">写日报</div>
+        <div class="task-meta"><span class="pill deadline">今天</span><span class="more">⋯</span></div>
+      </div>
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">优化 onboarding 文案</div>
+        <div class="task-meta"><span class="pill tag">#academy</span><span class="more">⋯</span></div>
+      </div>
+    </div>
+
+    <div class="completed">
+      <span>✓</span><span>已完成</span><span>9</span>
+      <span class="arrow">▾</span>
+    </div>
+  </div>
+
+  <div class="inputbar">
+    <span class="plus">+</span>
+    <div class="input-ph">写下一件事…（或选一个事件节点，排进今天）</div>
+    <div class="ibtn">📅</div>
+    <div class="ibtn">🏷</div>
+    <div class="ibtn">⋯</div>
+    <div class="ibtn send">➤</div>
+  </div>
+</div>
+
+<div class="note">
+  <b>v3.1 核心变化：Today 按"事件/脑图"分组</b>——这是把脑图融入（而不是降级）的关键。<br><br>
+  ① <b>事件即脑图</b>（代码事实）：每个 Event 绑定一个 mindmap，画布就是脑图（<code>event.mindmapId</code>）。你说的"脑图就是 event 那部分"完全正确。<br>
+  ② <b>Today 任务按事件分组</b>：组头 = 事件名（脑图名），点组头 → 进该事件的全屏画布。用户每天打开就看到"今天的事属于哪几个项目"——脑图成为主页的自然组织结构，而不是图标栏里的第二个页面。<br>
+  ③ <b>每个事件组可独立折叠</b>（▾）：只展开今天真正要推进的事件。<br>
+  ④ <b>独立任务单独一组</b>：无归属的任务不淹没在事件里。<br>
+  ⑤ 点组头进画布、esc 回来——<b>主页状态不丢</b>（两页模型，但 Today 是第一公民）。<br>
+  ⑥ <b>发现问题</b>（代码 review 结论）：独立 MindMapView（7 节点/AI 整理/模板）目前是<b>孤儿组件——没有任何页面渲染它</b>，只有 Events 画布在跑。脑图能力被劈成两半：一半孤儿、一半在 Events。v3.1 建议：<b>把 AI 整理（3 策略）等孤儿能力并进 Events 画布</b>，消灭孤儿，让"脑图"= Events 画布这一个实现。
+</div>
+
+</body>
+</html>

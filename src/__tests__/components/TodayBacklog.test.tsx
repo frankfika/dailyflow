@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { filterTodayTasks, STANDALONE_MINDMAP_FILTER, TodayBacklog } from '../../components/TodayBacklog';
+import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from '../../components/TodayBacklog';
 
 const noop = vi.fn();
 
@@ -13,22 +13,21 @@ function renderBacklog(tasks: Array<{
   spaceId?: string;
   originMindmapId?: string;
   sourcePath?: string[];
-}>, withPlanning = false, options: { hasActiveFilters?: boolean; onClearFilters?: () => void } = {}) {
+}>, withPlanning = false, planningGroups?: TodayPlanningGroup[]) {
+  const groups: TodayPlanningGroup[] = planningGroups ?? (withPlanning ? [{
+    id: 'event-1',
+    mindmapId: 'map-1',
+    spaceId: 'space-1',
+    title: 'Launch event',
+    taskIds: tasks.filter(task => task.spaceId || task.originMindmapId).map(task => task.id),
+    completedTaskIds: tasks.filter(task => task.status === 'done' && (task.spaceId || task.originMindmapId)).map(task => task.id),
+  }] : []);
   return render(
     <TodayBacklog
       tasks={tasks}
-      planningGroups={withPlanning ? [{
-        id: 'event-1',
-        mindmapId: 'map-1',
-        spaceId: 'space-1',
-        title: 'Launch event',
-        taskIds: tasks.filter(task => task.spaceId || task.originMindmapId).map(task => task.id),
-        completedTaskIds: tasks.filter(task => task.status === 'done' && (task.spaceId || task.originMindmapId)).map(task => task.id),
-      }] : []}
+      planningGroups={groups}
       selectedDate="2026-07-28"
       categories={[]}
-      focusTaskIds={[]}
-      onFocusTaskIdsChange={noop}
       onToggleTask={noop}
       onEditTask={noop}
       onDeleteTask={noop}
@@ -36,8 +35,6 @@ function renderBacklog(tasks: Array<{
       onShowLinkedNotes={noop}
       linkedNotesCount={() => 0}
       onAddTask={noop}
-      hasActiveFilters={options.hasActiveFilters}
-      onClearFilters={options.onClearFilters}
       language="en"
       isToday
     />,
@@ -55,7 +52,6 @@ describe('TodayBacklog Event-first execution flow', () => {
 
     const list = screen.getByTestId('today-execution-list');
     expect(within(list).getAllByRole('article')).toHaveLength(2);
-    expect(screen.queryByTestId('today-focus-bar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('today-planning')).not.toBeInTheDocument();
     expect(screen.queryByText('Linked plans')).not.toBeInTheDocument();
   });
@@ -99,28 +95,94 @@ describe('TodayBacklog Event-first execution flow', () => {
     expect(noop).toHaveBeenCalledWith('earlier', '2026-07-26');
   });
 
-  it('groups open work by urgency instead of presenting one undifferentiated wall', () => {
-    renderBacklog([
-      { id: 'late', title: 'Late', status: 'todo', deadline: '2026-07-20' },
-      { id: 'today', title: 'Today', status: 'todo', deadline: '2026-07-28' },
-      { id: 'next', title: 'Next', status: 'todo', deadline: '2026-07-29' },
-      { id: 'someday', title: 'Someday', status: 'todo' },
-    ]);
+  it('groups open tasks under their source event with the event head as canvas entry', () => {
+    const onOpenPlanningGroup = vi.fn();
+    const groups: TodayPlanningGroup[] = [{
+      id: 'event-1',
+      mindmapId: 'map-1',
+      spaceId: 'space-1',
+      title: 'Launch event',
+      taskIds: ['planned-a', 'planned-b'],
+      completedTaskIds: [],
+    }];
+    const tasks = [
+      { id: 'planned-a', title: 'Write launch brief', status: 'todo' as const, spaceId: 'space-1', originMindmapId: 'map-1' },
+      { id: 'planned-b', title: 'Deploy integration env', status: 'todo' as const, spaceId: 'space-1', originMindmapId: 'map-1' },
+      { id: 'standalone', title: 'Buy groceries', status: 'todo' as const },
+    ];
+    render(
+      <TodayBacklog
+        tasks={tasks}
+        planningGroups={groups}
+        onOpenPlanningGroup={onOpenPlanningGroup}
+        selectedDate="2026-07-28"
+        categories={[]}
+        onToggleTask={noop}
+        onEditTask={noop}
+        onDeleteTask={noop}
+        onCreateLinkedNote={noop}
+        onShowLinkedNotes={noop}
+        linkedNotesCount={() => 0}
+        onAddTask={noop}
+        language="en"
+        isToday
+      />,
+    );
 
-    expect(screen.getByRole('heading', { name: 'Overdue' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Due today' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'No due date' })).toBeInTheDocument();
+    const head = screen.getByTestId('today-event-head-map-1');
+    expect(head).toHaveTextContent('Launch event');
+    expect(head).toHaveTextContent('2 open');
+    expect(screen.getByTestId('today-event-group-standalone')).toHaveTextContent('Standalone');
+
+    fireEvent.click(head);
+    expect(onOpenPlanningGroup).toHaveBeenCalledWith(groups[0]);
   });
 
-  it('explains a filtered empty state and clears filters instead of offering a hidden new task', () => {
-    const onClearFilters = vi.fn();
-    renderBacklog([], false, { hasActiveFilters: true, onClearFilters });
+  it('collapses and re-expands an event group without leaving the page', () => {
+    const groups: TodayPlanningGroup[] = [{
+      id: 'event-1',
+      mindmapId: 'map-1',
+      spaceId: 'space-1',
+      title: 'Launch event',
+      taskIds: ['planned-a'],
+      completedTaskIds: [],
+    }];
+    const tasks = [
+      { id: 'planned-a', title: 'Write launch brief', status: 'todo' as const, spaceId: 'space-1' },
+      { id: 'standalone', title: 'Buy groceries', status: 'todo' as const },
+    ];
+    render(
+      <TodayBacklog
+        tasks={tasks}
+        planningGroups={groups}
+        selectedDate="2026-07-28"
+        categories={[]}
+        onToggleTask={noop}
+        onEditTask={noop}
+        onDeleteTask={noop}
+        onCreateLinkedNote={noop}
+        onShowLinkedNotes={noop}
+        linkedNotesCount={() => 0}
+        onAddTask={noop}
+        language="en"
+        isToday
+      />,
+    );
 
-    expect(screen.getByText('No tasks match the current filters.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add one thing' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(onClearFilters).toHaveBeenCalledTimes(1);
+    const group = screen.getByTestId('today-event-group-map-1');
+    expect(group).toHaveTextContent('Write launch brief');
+    fireEvent.click(within(group).getByRole('button', { name: 'Collapse Launch event' }));
+    expect(group).not.toHaveTextContent('Write launch brief');
+    fireEvent.click(within(group).getByRole('button', { name: 'Expand Launch event' }));
+    expect(group).toHaveTextContent('Write launch brief');
+  });
+
+  it('explains an empty day and offers the add action', () => {
+    renderBacklog([]);
+
+    expect(screen.getByText('Nothing here yet. Add one thing to get started.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add one thing' }));
+    expect(noop).toHaveBeenCalledTimes(1);
   });
 });
 

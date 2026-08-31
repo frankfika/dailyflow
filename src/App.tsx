@@ -19,8 +19,8 @@ import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
-import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from './components/TodayBacklog';
-import { TodayScopeTabs } from './components/TodayScopeTabs';
+import { TodayBacklog, type TodayPlanningGroup } from './components/TodayBacklog';
+import { TodayFocusBar } from './components/TodayFocusBar';
 import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
 import { TodayProactiveBanner } from './components/TodayProactiveBanner';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
@@ -140,8 +140,6 @@ export default function App() {
   // Background sync is intentionally disabled until it has version-aware
   // writes. Saving a captured date/content pair on a timer can overwrite a
   // different date after the user navigates.
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedMindmapFilter, setSelectedMindmapFilter] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showTaskInput, setShowTaskInput] = useState(false);
@@ -170,7 +168,7 @@ export default function App() {
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
-  // Daily reflection modal — opened from TodayScopeTabs "今日复盘" button or
+  // Daily reflection modal — S12 will give it a quiet prompt bar on Today;
   // auto-triggered after the day rolls over if the user hasn't written
   // today's Journal entry yet.
   const [showDailyReflection, setShowDailyReflection] = useState(false);
@@ -393,10 +391,6 @@ export default function App() {
       setFocusTaskIds([]);
     }
   }, [focusStorageKey]);
-
-  useEffect(() => {
-    setSelectedCategory(null);
-  }, [currentFileDate, activeContext]);
 
   const updateFocusTaskIds = useCallback((ids: string[]) => {
     const next = ids.slice(0, 3);
@@ -806,7 +800,6 @@ export default function App() {
       setNotesFilterByTaskId(null);
       setQuickNoteDefaultType(undefined);
       setChatDraft(null);
-      setSelectedCategory(null);
 
       // Reset data state for the new workspace.
       setMarkdown('');
@@ -1243,36 +1236,6 @@ export default function App() {
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
-  const todayTaskIds = new Set(todayTasks.map((task) => task.id));
-  const todayMindmapOptions = todayPlanningGroups
-    .map((group) => ({ ...group, taskIds: group.taskIds.filter((taskId) => todayTaskIds.has(taskId)) }))
-    .filter((group) => group.taskIds.length > 0);
-  const hasStandaloneTodayTasks = todayTasks.some((task) =>
-    !todayPlanningGroups.some((group) => group.taskIds.includes(task.id)),
-  );
-  const selectedMindmapFilterIsAvailable = !selectedMindmapFilter
-    || (selectedMindmapFilter === STANDALONE_MINDMAP_FILTER
-      ? hasStandaloneTodayTasks
-      : todayMindmapOptions.some((group) => group.mindmapId === selectedMindmapFilter));
-  const selectedCategoryIsAvailable = !selectedCategory || categories.includes(selectedCategory);
-
-  // Scope filters belong to the currently visible workspace/context. A map or
-  // tag that disappears after switching Work/Life (or deleting a map) must not
-  // keep filtering the next surface invisibly.
-  useEffect(() => {
-    if (!selectedMindmapFilterIsAvailable) setSelectedMindmapFilter(null);
-  }, [selectedMindmapFilterIsAvailable]);
-  useEffect(() => {
-    if (!selectedCategoryIsAvailable) setSelectedCategory(null);
-  }, [selectedCategoryIsAvailable]);
-
-  const filteredTodayTasks = filterTodayTasks(
-    todayTasks,
-    selectedCategory,
-    selectedMindmapFilter,
-    todayPlanningGroups,
-  );
-
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const recentDates = allDates.filter(d => d >= recentThreshold);
@@ -1602,22 +1565,16 @@ export default function App() {
                     isToday={currentFileDate === getTodayStr()}
                   />
 
-                  <TodayScopeTabs
-                    groups={todayMindmapOptions}
-                    hasStandalone={hasStandaloneTodayTasks}
-                    selectedMindmapId={selectedMindmapFilter}
-                    onMindmapChange={setSelectedMindmapFilter}
-                    tags={categories}
-                    selectedTag={selectedCategory}
-                    onTagChange={setSelectedCategory}
+                  <TodayFocusBar
+                    tasks={todayTasks}
+                    focusTaskIds={focusTaskIds}
+                    onChange={updateFocusTaskIds}
                     language={language}
-                    storageKey={`df_today_mindmap_tabs_${activeWorkspaceId || 'default'}`}
-                    onOpenReflection={handleOpenReflection}
-                    reflectionSaving={savingDailyReflection}
+                    isToday={currentFileDate === getTodayStr()}
                   />
 
                   <TodayBacklog
-                    tasks={filteredTodayTasks}
+                    tasks={todayTasks}
                     planningGroups={todayPlanningGroups}
                     onOpenPlanningGroup={(group) => {
                       setRequestedEventId(group.spaceId ?? group.id);
@@ -1625,8 +1582,6 @@ export default function App() {
                     }}
                     selectedDate={currentFileDate}
                     categories={categories}
-                    focusTaskIds={focusTaskIds}
-                    onFocusTaskIdsChange={updateFocusTaskIds}
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
                     onDeleteTask={handleDeleteTask}
@@ -1641,11 +1596,6 @@ export default function App() {
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => setShowTaskInput(true)}
-                    hasActiveFilters={Boolean(selectedCategory || selectedMindmapFilter)}
-                    onClearFilters={() => {
-                      setSelectedCategory(null);
-                      setSelectedMindmapFilter(null);
-                    }}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     completionPromptTaskIds={completionPromptTaskIds}
