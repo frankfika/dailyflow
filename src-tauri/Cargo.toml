@@ -1,6 +1,6 @@
 [package]
 name = "dailyflow"
-version = "2.4.0"
+version = "2.4.1"
 description = "DailyFlow - Daily notes and task management"
 authors = ["DailyFlow"]
 license = "Apache-2.0"
