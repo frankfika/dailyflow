@@ -14,7 +14,16 @@ function renderBar(overrides: Partial<Parameters<typeof TodayInputBar>[0]> = {})
       brainDumpText=""
       setBrainDumpText={noop}
       isProcessingBrainDump={false}
-      processBrainDump={vi.fn(async () => {})}
+      onBrainExtract={vi.fn(async () => [])}
+      brainPreviewTasks={null}
+      onBrainPreviewAdd={noop}
+      onBrainPreviewRewrite={noop}
+      onBrainPreviewRemove={noop}
+      onBrainPreviewCancel={noop}
+      rewritingPreviewId={null}
+      onAsk={noop}
+      aiAnswer={null}
+      onAnswerClose={noop}
       onAddTask={noop}
       {...overrides}
     />,
@@ -76,8 +85,8 @@ describe('TodayInputBar', () => {
     expect(screen.getByTestId('today-input-bar')).toHaveTextContent('Daily');
   });
 
-  it('opens the brainstorm panel and submits through processBrainDump', async () => {
-    const processBrainDump = vi.fn(async () => {});
+  it('opens the brainstorm panel and extracts into the preview list', async () => {
+    const onBrainExtract = vi.fn(async () => [{ id: 'bp_1', title: 'Task one' }]);
     function StatefulBar() {
       const [text, setText] = useState('');
       return (
@@ -88,7 +97,16 @@ describe('TodayInputBar', () => {
           brainDumpText={text}
           setBrainDumpText={setText}
           isProcessingBrainDump={false}
-          processBrainDump={processBrainDump}
+          onBrainExtract={onBrainExtract}
+          brainPreviewTasks={null}
+          onBrainPreviewAdd={noop}
+          onBrainPreviewRewrite={noop}
+          onBrainPreviewRemove={noop}
+          onBrainPreviewCancel={noop}
+          rewritingPreviewId={null}
+          onAsk={noop}
+          aiAnswer={null}
+          onAnswerClose={noop}
           onAddTask={noop}
         />
       );
@@ -101,7 +119,67 @@ describe('TodayInputBar', () => {
     expect(screen.getByTestId('brain-dump-submit')).toBeEnabled();
     fireEvent.click(screen.getByTestId('brain-dump-submit'));
 
-    await vi.waitFor(() => expect(processBrainDump).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(onBrainExtract).toHaveBeenCalledWith('idea one'));
     await vi.waitFor(() => expect(screen.queryByTestId('brain-dump-textarea')).not.toBeInTheDocument());
+  });
+
+  it('shows the brainstorm preview and adds only included tasks', () => {
+    const onAdd = vi.fn();
+    render(
+      <TodayInputBar
+        language="en"
+        activeContext="work"
+        categories={[]}
+        brainDumpText=""
+        setBrainDumpText={noop}
+        isProcessingBrainDump={false}
+        onBrainExtract={vi.fn(async () => [])}
+        brainPreviewTasks={[
+          { id: 'bp_1', title: 'Keep me' },
+          { id: 'bp_2', title: 'Drop me' },
+        ]}
+        onBrainPreviewAdd={onAdd}
+        onBrainPreviewRewrite={noop}
+        onBrainPreviewRemove={noop}
+        onBrainPreviewCancel={noop}
+        rewritingPreviewId={null}
+        onAsk={noop}
+        aiAnswer={null}
+        onAnswerClose={noop}
+        onAddTask={noop}
+      />,
+    );
+    expect(screen.getByTestId('brain-preview-panel')).toHaveTextContent('2 tasks');
+
+    // Exclude the second row, then add — only the included one reaches App.
+    fireEvent.click(screen.getByTestId('brain-preview-row-bp_2').querySelector('.today-input-preview-check') as HTMLElement);
+    fireEvent.click(screen.getByTestId('brain-preview-add'));
+    expect(onAdd).toHaveBeenCalledWith([{ id: 'bp_1', title: 'Keep me' }]);
+
+    // Removing the last row hands removal to App (which closes the preview).
+    fireEvent.click(screen.getByTestId('brain-preview-remove-bp_1'));
+    expect(noop).toHaveBeenCalledWith('bp_1');
+  });
+
+  it('routes ?-prefixed input to the AI ask flow and shows the answer', async () => {
+    const onAsk = vi.fn();
+    const onAdopt = vi.fn();
+    renderBar({
+      onAsk,
+      aiAnswer: { answer: 'Focus on the release first.', suggestedTitle: 'Ship the release' },
+      onAnswerAdopt: onAdopt,
+    });
+
+    // Answer panel renders with an adopt button.
+    expect(screen.getByTestId('ai-answer-panel')).toHaveTextContent('Focus on the release first.');
+    fireEvent.click(screen.getByTestId('ai-answer-adopt'));
+    expect(onAdopt).toHaveBeenCalledWith('Ship the release');
+
+    // Typing a `?` question routes to onAsk instead of adding a task.
+    const input = screen.getByTestId('quick-task-input');
+    fireEvent.change(input, { target: { value: '？今天先做什么' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onAsk).toHaveBeenCalledWith('今天先做什么');
+    expect((input as HTMLTextAreaElement).value).toBe('');
   });
 });

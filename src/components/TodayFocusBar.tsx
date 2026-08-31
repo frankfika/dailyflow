@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Target } from 'lucide-react';
+import { Bot, Check, Target } from 'lucide-react';
 
 interface TodayFocusBarProps {
   tasks: Array<{ id: string; title: string; status: 'todo' | 'done' | 'migrated' }>;
@@ -7,18 +7,20 @@ interface TodayFocusBarProps {
   onChange: (ids: string[]) => void;
   language: 'en' | 'zh';
   isToday: boolean;
+  /** UX S6: AI picks the 3 focus tasks. Omit to hide the button. */
+  onAiPick?: () => Promise<void>;
 }
 
 const MAX_FOCUS = 3;
 
 /**
  * Collapsed focus row (design v3.1 S1): "今天 · 焦点 N/3 · <titles> · 选 3 件 →".
- * Expanding reveals an inline picker over today's open tasks. The "AI 帮我选"
- * action lands in S6 (needs a backend action); until then only manual
- * selection is offered — no dead buttons on the home page.
+ * Expanding reveals an inline picker over today's open tasks, plus an
+ * "AI 帮我选" shortcut (S6) that lets the configured provider pick the three.
  */
-export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday }: TodayFocusBarProps) {
+export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday, onAiPick }: TodayFocusBarProps) {
   const [expanded, setExpanded] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   if (!isToday) return null;
 
@@ -66,9 +68,26 @@ export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday
         <span className="today-focus-label">{t('今天 · 焦点', 'Today · Focus')}</span>
         <span className="today-focus-count">{focusTaskIds.length}/{MAX_FOCUS}</span>
         <span className="today-focus-meta">{t('今天就 3 件，其余自动归入其他任务，明天还能看见。', 'Three items define the day; everything else stays visible tomorrow.')}</span>
-        <button type="button" className="today-focus-save" onClick={() => setExpanded(false)}>
-          {t('保存', 'Save')}
-        </button>
+        <div className="today-focus-head-actions">
+          {onAiPick && (
+            <button
+              type="button"
+              className="today-focus-ai"
+              data-testid="focus-ai-pick"
+              disabled={picking}
+              onClick={() => {
+                setPicking(true);
+                void onAiPick().finally(() => setPicking(false));
+              }}
+            >
+              <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+              {picking ? t('AI 选择中…', 'AI picking…') : t('AI 帮我选', 'AI pick')}
+            </button>
+          )}
+          <button type="button" className="today-focus-save" onClick={() => setExpanded(false)}>
+            {t('保存', 'Save')}
+          </button>
+        </div>
       </div>
       <ul className="today-focus-list">
         {openTasks.map(task => {

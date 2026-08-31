@@ -118,6 +118,7 @@ export function resolveAiUrl(baseUrl: string): string {
 }
 
 router.post('/summarize', async (req, res) => {
+  const clientAbort = new AbortController();
   try {
     const parsedBody = SummarizeBodySchema.safeParse(req.body);
     if (!parsedBody.success) {
@@ -135,47 +136,27 @@ router.post('/summarize', async (req, res) => {
     const systemPrompt = body.systemPrompt || 'You are a helpful assistant that summarizes notes concisely in Markdown.';
     const maxTokens = body.maxTokens ?? 4096;
 
-    const clientAbort = new AbortController();
     res.once('close', () => {
       if (!res.writableEnded) clientAbort.abort(new Error('Client disconnected'));
     });
-    const signal = AbortSignal.any([clientAbort.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]);
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${body.apiKey}`,
-      },
-      body: JSON.stringify({
+
+    let summary: string;
+    try {
+      summary = await callProviderChat({
+        apiKey: body.apiKey,
         model,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: body.userPrompt },
-        ],
-      }),
-      redirect: 'error',
-      signal,
-    });
-
-    if (!upstream.ok) {
-      // Never pass a provider's raw response to the UI: it can contain echoed
-      // prompts, internal request ids, or reasoning traces.
-      await upstream.body?.cancel().catch(() => {});
-      return res.status(upstream.status).json({
-        error: `Upstream AI error (${upstream.status})`,
+        baseUrl: body.baseUrl,
+        systemPrompt,
+        userPrompt: body.userPrompt,
+        maxTokens,
+        abortSignal: clientAbort.signal,
       });
+    } catch (err: any) {
+      if (err?.upstreamStatus) {
+        return res.status(err.upstreamStatus).json({ error: err.message });
+      }
+      throw err;
     }
-
-    const data = JSON.parse(await readBoundedText(upstream, MAX_UPSTREAM_BYTES)) as any;
-    let summary = data?.choices?.[0]?.message?.content?.trim() || '';
-    // Some reasoning models (e.g. MiniMax-M2) emit <think>…</think> inline.
-    summary = summary.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
-
-    if (!summary) {
-      return res.status(502).json({ error: 'Empty response from AI provider' });
-    }
-
     res.json({ summary, model });
   } catch (error: any) {
     const aborted = error?.name === 'AbortError' || error?.name === 'TimeoutError';
@@ -183,6 +164,133 @@ router.post('/summarize', async (req, res) => {
     // Log only a bounded class/message. Request bodies, credentials and raw
     // provider payloads are deliberately excluded.
     console.error('AI summarize failed:', String(message).slice(0, 300));
+    res.status(aborted ? 504 : 500).json({ error: message });
+  }
+});
+
+interface ProviderChatRequest {
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  abortSignal?: AbortSignal;
+}
+
+/** Strip code fences / <think> blocks and return the model's text answer. */
+export function cleanModelText(raw: string): string {
+  let text = raw.trim();
+  // Some reasoning models (e.g. MiniMax-M2) emit <think>…</think> inline.
+  text = text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+  text = text.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '').trim();
+  return text;
+}
+
+async function callProviderChat(req: ProviderChatRequest): Promise<string> {
+  const url = resolveAiUrl(req.baseUrl);
+  await assertSafeAiTarget(url);
+  const signal = AbortSignal.any([
+    req.abortSignal ?? new AbortController().signal,
+    AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  ]);
+  const upstream = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${req.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: req.model,
+      max_tokens: req.maxTokens,
+      messages: [
+        { role: 'system', content: req.systemPrompt },
+        { role: 'user', content: req.userPrompt },
+      ],
+    }),
+    redirect: 'error',
+    signal,
+  });
+
+  if (!upstream.ok) {
+    // Never pass a provider's raw response to the UI: it can contain echoed
+    // prompts, internal request ids, or reasoning traces.
+    await upstream.body?.cancel().catch(() => {});
+    throw Object.assign(new Error(`Upstream AI error (${upstream.status})`), { upstreamStatus: upstream.status });
+  }
+
+  const data = JSON.parse(await readBoundedText(upstream, MAX_UPSTREAM_BYTES)) as any;
+  const content = cleanModelText(String(data?.choices?.[0]?.message?.content ?? ''));
+  if (!content) {
+    throw Object.assign(new Error('Empty response from AI provider'), { upstreamStatus: 502 });
+  }
+  return content;
+}
+
+// --- Structured AI actions (UX S6) -----------------------------------------
+// One endpoint, one schema per action. The server owns the prompts so the UI
+// stays thin; the provider is still the user's own (bring-your-own-key), so
+// the whole feature degrades to a clear error when AI is not configured.
+
+const ActionBodySchema = z.object({
+  action: z.enum(['split_tasks', 'rewrite_task', 'summarize_task', 'ask', 'pick_focus']),
+  apiKey: z.string().trim().min(1).max(8_192),
+  model: z.string().trim().min(1).max(256).optional(),
+  baseUrl: z.string().trim().min(1).max(2_048),
+  input: z.string().min(1).max(MAX_PROMPT_BYTES),
+  context: z.string().max(MAX_PROMPT_BYTES).optional(),
+}).strict();
+
+const ACTION_PROMPTS: Record<string, string> = {
+  split_tasks: 'You decompose a task into small concrete subtasks. Output ONLY a valid JSON array of subtask objects: {"title": string, "deadline": "YYYY-MM-DD" (optional)}. No markdown, no explanation.',
+  rewrite_task: 'You rewrite task titles to be clear and actionable. Output ONLY a valid JSON object: {"title": string, "description": string (optional)}. Keep the user\'s language. No markdown, no explanation.',
+  summarize_task: 'You summarize a task\'s progress in one or two sentences. Output ONLY a valid JSON object: {"summary": string}. Use the user\'s language. No markdown.',
+  ask: 'You answer the user\'s question about their day briefly and concretely. Output ONLY a valid JSON object: {"answer": string, "suggestedTask": {"title": string} (optional — include ONLY if answering implies creating a concrete task, e.g. the user asks to plan something)}. Use the user\'s language. No markdown.',
+  pick_focus: 'You pick the 3 most important tasks to focus on today given deadlines, priorities and context. Output ONLY a valid JSON object: {"ids": string[]} with at most 3 ids chosen from the provided list. No markdown.',
+};
+
+router.post('/action', async (req, res) => {
+  try {
+    const parsedBody = ActionBodySchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ error: 'Invalid AI action request' });
+    }
+    const body = parsedBody.data;
+    const model = body.model || 'default';
+    const clientAbort = new AbortController();
+    res.once('close', () => {
+      if (!res.writableEnded) clientAbort.abort(new Error('Client disconnected'));
+    });
+
+    const contextBlock = body.context ? `\n\nContext:\n${body.context}` : '';
+    let content: string;
+    try {
+      content = await callProviderChat({
+        apiKey: body.apiKey,
+        model,
+        baseUrl: body.baseUrl,
+        systemPrompt: ACTION_PROMPTS[body.action] ?? 'You are a helpful assistant. Output only valid JSON.',
+        userPrompt: `${body.input}${contextBlock}`,
+        maxTokens: 4096,
+        abortSignal: clientAbort.signal,
+      });
+    } catch (err: any) {
+      if (err?.upstreamStatus) {
+        return res.status(err.upstreamStatus).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    try {
+      const result = JSON.parse(content);
+      res.json({ result, model });
+    } catch {
+      res.status(502).json({ error: 'AI response was not valid JSON' });
+    }
+  } catch (error: any) {
+    const aborted = error?.name === 'AbortError' || error?.name === 'TimeoutError';
+    const message = aborted ? 'AI provider request timed out' : (error?.message || String(error));
+    console.error('AI action failed:', String(message).slice(0, 300));
     res.status(aborted ? 504 : 500).json({ error: message });
   }
 });

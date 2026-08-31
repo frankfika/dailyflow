@@ -15,7 +15,8 @@ import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
 import { TaskInputPanel } from './components/TaskInputPanel'; // kept for rollback; no longer mounted
-import { TodayInputBar, type QuickTaskDraft } from './components/TodayInputBar';
+import { TodayInputBar, type AiAnswer, type BrainPreviewTask, type QuickTaskDraft } from './components/TodayInputBar';
+import type { AiActionKind } from './api/client';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
@@ -164,8 +165,12 @@ export default function App() {
   };
 
   const [brainDumpText, setBrainDumpText] = useState('');
-  const brainDumpProgressRef = useRef<{ source: string; date: string; pending: Task[] } | null>(null);
   const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
+  // UX S6: brainstorm preview + `?` answers + Cmd+B signal.
+  const [brainPreviewTasks, setBrainPreviewTasks] = useState<BrainPreviewTask[] | null>(null);
+  const [rewritingPreviewId, setRewritingPreviewId] = useState<string | null>(null);
+  const [aiAnswer, setAiAnswer] = useState<AiAnswer | null>(null);
+  const [brainModeSignal, setBrainModeSignal] = useState(0);
 
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
@@ -880,6 +885,12 @@ export default function App() {
         setActiveTab('events');
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        setActiveTab('today');
+        setBrainModeSignal(value => value + 1);
+        return;
+      }
       if (e.key === 'Escape') {
         const target = e.target as HTMLElement | null;
         const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
@@ -933,79 +944,205 @@ export default function App() {
     }
   };
 
-  const processBrainDump = async () => {
-    const sourceText = brainDumpText.trim();
-    if (!sourceText) return;
+  // --- UX S6: AI actions ----------------------------------------------------
+  // The backend /api/ai/action endpoint owns the prompts and JSON parsing;
+  // this wrapper only carries the user's own provider credentials and turns
+  // "not configured" into a friendly message (design: 后端可关).
+  const runAiAction = async (action: AiActionKind, input: string, context?: string) => {
+    if (!aiApiKey || !aiBaseUrl) {
+      throw new Error(language === 'zh' ? '请先在设置里配置 AI 提供商' : 'Configure an AI provider in Settings first');
+    }
+    const { result } = await aiApi.action({ action, apiKey: aiApiKey, model: aiModel || undefined, baseUrl: aiBaseUrl, input, context });
+    return result;
+  };
+
+  const refreshDayFromServer = async () => {
+    const data = await filesApi.get(currentFileDate);
+    if (data) {
+      setMarkdown(data.content);
+      setTasks(data.tasks as Task[]);
+      setLastSyncedMD(data.content);
+      setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+    }
+  };
+
+  /** Brainstorm extract — returns the preview list instead of creating tasks. */
+  const extractBrainDump = async (text: string): Promise<BrainPreviewTask[]> => {
     setIsProcessingBrainDump(true);
     try {
-      let progress = brainDumpProgressRef.current;
-      if (!progress || progress.source !== sourceText || progress.date !== currentFileDate) {
-        if (!aiApiKey || !aiBaseUrl) {
-          throw new Error('AI provider not configured');
-        }
-
-        const { summary: content } = await aiApi.summarize({
-          apiKey: aiApiKey,
-          model: aiModel || undefined,
-          baseUrl: aiBaseUrl,
-          systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
-          userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${sourceText}"`,
-        });
-
-        const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
-        const extracted = JSON.parse(jsonStr) as any[];
-        const batchId = Date.now();
-        const pending: Task[] = extracted.map((t, idx) => {
-          const tags = Array.isArray(t.tags) && t.tags.length > 0
-            ? t.tags.map((tag: string) => tag.toLowerCase())
-            : [];
-          if (!tags.some((tag: string) => ['work', 'life'].includes(tag))) tags.push(activeContext);
-          return {
-            id: `t_${batchId}_${idx}`,
-            title: t.title,
-            status: 'todo',
-            tags,
-            source_date: currentFileDate,
-            project: t.project,
-            deadline: t.deadline,
-            priority: t.priority as any,
-          };
-        });
-        progress = { source: sourceText, date: currentFileDate, pending };
-        brainDumpProgressRef.current = progress;
+      const result = await runAiAction('split_tasks', text);
+      const arr = Array.isArray(result) ? result : [];
+      const extracted: BrainPreviewTask[] = [];
+      arr.slice(0, 12).forEach((item: any, idx: number) => {
+        const title = String(item?.title ?? '').trim();
+        if (!title) return;
+        const deadline = typeof item?.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.deadline)
+          ? item.deadline
+          : undefined;
+        extracted.push({ id: `bp_${Date.now()}_${idx}`, title, deadline });
+      });
+      if (extracted.length === 0) {
+        showToast(language === 'zh' ? 'AI 没有提取到任务' : 'AI found no tasks', 'info');
       }
-
-      const failed: Task[] = [];
-      for (const task of progress.pending) {
-        try {
-          await tasksApi.create(currentFileDate, task);
-        } catch {
-          failed.push(task);
-        }
-      }
-      brainDumpProgressRef.current = failed.length > 0
-        ? { source: sourceText, date: currentFileDate, pending: failed }
-        : null;
-
-      // Refresh markdown and re-sync tasks with server-side parsed IDs
-      const fileData = await filesApi.get(currentFileDate);
-      if (fileData) {
-        setMarkdown(fileData.content);
-        setTasks(fileData.tasks as Task[]);
-        setLastSyncedMD(fileData.content);
-        setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
-      }
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} extracted tasks could not be created`);
-      }
-      setBrainDumpText('');
-    } catch (e) {
-      console.error(e);
-      showToast(language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.', 'error');
+      return extracted;
+    } catch (e: any) {
+      console.error('Brain dump extraction failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.'), 'error');
+      return [];
     } finally {
       setIsProcessingBrainDump(false);
     }
   };
+
+  const handleBrainPreviewAdd = async (list: BrainPreviewTask[]) => {
+    let created = 0;
+    for (const item of list) {
+      try {
+        await tasksApi.create(currentFileDate, {
+          id: `t_${Date.now()}_${created}`,
+          title: item.title,
+          status: 'todo',
+          tags: [activeContext],
+          source_date: currentFileDate,
+          deadline: /^\d{4}-\d{2}-\d{2}$/.test(item.deadline ?? '') ? item.deadline : undefined,
+        } as Task);
+        created += 1;
+      } catch (err) {
+        console.error('Failed to create brainstorm task', err);
+      }
+    }
+    setBrainPreviewTasks(null);
+    setBrainDumpText('');
+    if (created > 0) {
+      try { await refreshDayFromServer(); } catch { /* non-fatal */ }
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? `已加入 ${created} 个任务` : `Added ${created} tasks`, 'success');
+    } else {
+      showToast(language === 'zh' ? '添加失败' : 'Failed to add tasks', 'error');
+    }
+  };
+
+  const handleBrainPreviewRewrite = async (id: string) => {
+    const item = brainPreviewTasks?.find(task => task.id === id);
+    if (!item || rewritingPreviewId) return;
+    setRewritingPreviewId(id);
+    try {
+      const result = await runAiAction('rewrite_task', item.title) as { title?: string };
+      const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : item.title;
+      setBrainPreviewTasks(prev => (prev ? prev.map(task => (task.id === id ? { ...task, title } : task)) : prev));
+    } catch (e: any) {
+      console.error('Rewrite failed', e);
+      showToast(e?.message || (language === 'zh' ? '改写失败' : 'Rewrite failed'), 'error');
+    } finally {
+      setRewritingPreviewId(null);
+    }
+  };
+
+  const handleBrainPreviewRemove = (id: string) => {
+    setBrainPreviewTasks(prev => {
+      const next = prev ? prev.filter(task => task.id !== id) : null;
+      return next && next.length > 0 ? next : null;
+    });
+  };
+
+  const handleAskAi = async (question: string) => {
+    const openList = todayTasks.filter(task => task.status === 'todo').slice(0, 20);
+    const context = openList.map(task => `- ${task.title}${task.deadline ? ` (due ${task.deadline})` : ''}`).join('\n');
+    try {
+      const result = await runAiAction('ask', question, context) as { answer?: string; suggestedTask?: { title?: string } };
+      setAiAnswer({
+        answer: (result?.answer ?? '').trim() || (language === 'zh' ? '（AI 没有给出回答）' : '(No answer from AI)'),
+        suggestedTitle: result?.suggestedTask?.title?.trim() || undefined,
+      });
+    } catch (e: any) {
+      console.error('AI ask failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 问答失败' : 'AI ask failed'), 'error');
+    }
+  };
+
+  const handleAnswerAdopt = (title: string) => {
+    setAiAnswer(null);
+    void handleQuickAddTask({ title, tags: [activeContext] });
+  };
+
+  const handleAiPickFocus = async () => {
+    const openList = todayTasks.filter(task => task.status === 'todo');
+    if (openList.length <= 3) {
+      updateFocusTaskIds(openList.map(task => task.id));
+      return;
+    }
+    const input = JSON.stringify(openList.map(task => ({
+      id: task.id,
+      title: task.title,
+      deadline: task.deadline,
+      priority: task.priority,
+    })));
+    const result = await runAiAction('pick_focus', input) as { ids?: string[] };
+    const picked = (result?.ids ?? []).filter(id => openList.some(task => task.id === id)).slice(0, 3);
+    if (picked.length === 0) {
+      throw new Error(language === 'zh' ? 'AI 没有选中任何任务' : 'AI picked nothing valid');
+    }
+    updateFocusTaskIds(picked);
+    showToast(language === 'zh' ? 'AI 已选好今天的焦点' : 'AI picked your focus', 'success');
+  };
+
+  const handleTaskAiAction = async (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => {
+    const body = [task.title, task.description].filter(Boolean).join('\n');
+    try {
+      if (action === 'decompose') {
+        const result = await runAiAction('split_tasks', body);
+        const arr = Array.isArray(result) ? result : [];
+        const subtasks = arr
+          .map((item: any) => String(item?.title ?? '').trim())
+          .filter(Boolean)
+          .slice(0, 8);
+        if (subtasks.length === 0) {
+          showToast(language === 'zh' ? 'AI 没有拆出子任务' : 'AI produced no subtasks', 'info');
+          return;
+        }
+        for (const [idx, title] of subtasks.entries()) {
+          try {
+            await tasksApi.create(currentFileDate, {
+              id: `t_${Date.now()}_${idx}`,
+              title,
+              status: 'todo',
+              tags: task.tags?.length ? [...task.tags] : [activeContext],
+              source_date: currentFileDate,
+              parentTaskId: task.id,
+              deadline: task.deadline,
+            } as Task);
+          } catch (err) {
+            console.error('Failed to create subtask', err);
+          }
+        }
+        await refreshDayFromServer();
+        await todayItemsQuery.refetch();
+        showToast(language === 'zh' ? `已拆解出 ${subtasks.length} 个子任务` : `Added ${subtasks.length} subtasks`, 'success');
+      } else if (action === 'rewrite') {
+        const result = await runAiAction('rewrite_task', body) as { title?: string; description?: string };
+        const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : task.title;
+        await handleEditTask(task.id, {
+          title,
+          ...(typeof result?.description === 'string' && result.description.trim() ? { description: result.description.trim() } : {}),
+        }, task.host_date);
+      } else {
+        const comments = (task.comments ?? []).map(comment => comment.text).join('\n');
+        const result = await runAiAction('summarize_task', body, comments || undefined) as { summary?: string };
+        const summary = (result?.summary ?? '').trim();
+        if (!summary) throw new Error(language === 'zh' ? 'AI 没有给出总结' : 'AI produced no summary');
+        const now = new Date();
+        const pad = (value: number) => String(value).padStart(2, '0');
+        const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        await handleEditTask(task.id, {
+          comments: [...(task.comments ?? []), { text: summary, timestamp: stamp }],
+        }, task.host_date);
+      }
+    } catch (e: any) {
+      console.error('Task AI action failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 操作失败' : 'AI action failed'), 'error');
+    }
+  };
+
 
   // When date changes, load tasks
   const handleToggleTask = async (id: string, hostDate?: string) => {
@@ -1742,6 +1879,7 @@ export default function App() {
                     onChange={updateFocusTaskIds}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
+                    onAiPick={() => handleAiPickFocus()}
                   />
 
                   <TodayBacklog
@@ -1762,6 +1900,7 @@ export default function App() {
                       setShowQuickNoteEditor(true);
                     }}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
+                    onAiAction={handleTaskAiAction}
                     onShowLinkedNotes={(taskId) => {
                       setNotesFilterByTaskId(taskId);
                       setActiveOverlay('notes');
@@ -1787,7 +1926,18 @@ export default function App() {
                     brainDumpText={brainDumpText}
                     setBrainDumpText={setBrainDumpText}
                     isProcessingBrainDump={isProcessingBrainDump}
-                    processBrainDump={processBrainDump}
+                    onBrainExtract={extractBrainDump}
+                    brainPreviewTasks={brainPreviewTasks}
+                    onBrainPreviewAdd={(list) => void handleBrainPreviewAdd(list)}
+                    onBrainPreviewRewrite={(id) => void handleBrainPreviewRewrite(id)}
+                    onBrainPreviewRemove={handleBrainPreviewRemove}
+                    onBrainPreviewCancel={() => setBrainPreviewTasks(null)}
+                    rewritingPreviewId={rewritingPreviewId}
+                    onAsk={(question) => void handleAskAi(question)}
+                    aiAnswer={aiAnswer}
+                    onAnswerAdopt={handleAnswerAdopt}
+                    onAnswerClose={() => setAiAnswer(null)}
+                    brainModeSignal={brainModeSignal}
                     onAddTask={handleQuickAddTask}
                     onRegisterFocus={(focus) => { taskInputFocusRef.current = focus; }}
                   />

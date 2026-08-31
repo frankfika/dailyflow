@@ -10,6 +10,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   Network,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -48,6 +49,8 @@ interface TaskCardProps {
   onDelete: () => void;
   onCreateLinkedNote?: () => void;
   onShowLinkedNotes?: () => void;
+  /** UX S6 AI actions: decompose / rewrite / summarize. Omit to hide the row. */
+  onAiAction?: (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   showCompletionPrompt?: boolean;
   onCompletionPromptClosed?: () => void;
 }
@@ -82,6 +85,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onAiAction,
   onCreateLinkedNote,
   onShowLinkedNotes,
   showCompletionPrompt,
@@ -93,6 +97,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [showComment, setShowComment] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [aiBusy, setAiBusy] = useState<'decompose' | 'rewrite' | 'summarize' | null>(null);
   const [editContent, setEditContent] = useState(task.title + (task.description ? `\n${task.description}` : ''));
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState(task.deadline || '');
@@ -371,6 +376,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {onAiAction && (
+                <div className="mb-2 flex flex-wrap items-center gap-1 border-t border-border/40 pt-2" data-testid={`task-ai-row-${task.id}`}>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                    <Sparkles className="h-3 w-3" />
+                    {language === 'zh' ? 'AI 帮你' : 'AI'}
+                  </span>
+                  {([
+                    ['decompose', language === 'zh' ? '拆解成子任务' : 'Subtasks'],
+                    ['rewrite', language === 'zh' ? '改写更清晰' : 'Rewrite'],
+                    ['summarize', language === 'zh' ? '总结' : 'Summarize'],
+                  ] as const).map(([action, label]) => (
+                    <button
+                      key={action}
+                      type="button"
+                      disabled={aiBusy !== null}
+                      onClick={() => {
+                        setAiBusy(action);
+                        void onAiAction(task, action).finally(() => setAiBusy(null));
+                      }}
+                      className="rounded-md border border-border/70 px-2 py-1 text-[11px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      data-testid={`task-ai-${action}-${task.id}`}
+                    >
+                      {aiBusy === action ? (language === 'zh' ? '处理中…' : 'Working…') : label}
+                    </button>
+                  ))}
                 </div>
               )}
 

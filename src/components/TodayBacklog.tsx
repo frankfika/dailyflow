@@ -65,6 +65,8 @@ interface TodayBacklogProps {
   onCreateLinkedNote: (taskId: string) => void;
   onShowLinkedNotes: (taskId: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
+  /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
+  onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
   language: 'en' | 'zh';
@@ -102,6 +104,7 @@ export function TodayBacklog({
   onCreateLinkedNote,
   onShowLinkedNotes,
   onUnlinkFromSpace,
+  onAiAction,
   linkedNotesCount,
   onAddTask,
   language,
@@ -179,6 +182,7 @@ export function TodayBacklog({
         onUnlinkFromSpace={onUnlinkFromSpace
           ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
           : undefined}
+        onAiAction={onAiAction}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />

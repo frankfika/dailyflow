@@ -1582,12 +1582,47 @@ export interface AISummarizeResponse {
   model: string;
 }
 
+// --- Structured AI actions (UX S6) -----------------------------------------
+export type AiActionKind = 'split_tasks' | 'rewrite_task' | 'summarize_task' | 'ask' | 'pick_focus';
+
+export interface AiActionRequest {
+  action: AiActionKind;
+  apiKey: string;
+  model?: string;
+  baseUrl: string;
+  /** The main payload: task text, question, brainstorm text… */
+  input: string;
+  /** Optional supporting data (today's task list, task description…). */
+  context?: string;
+  signal?: AbortSignal;
+}
+
+export interface AiActionResponse {
+  result: unknown;
+  model: string;
+}
+
 /**
  * AI 代理 API（避免前端直接调用 LLM 暴露 key + CORS 问题）
  */
 export const aiApi = {
   async summarize(req: AISummarizeRequest): Promise<AISummarizeResponse> {
     const res = await fetch(`${API_BASE}/ai/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+      signal: req.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `AI request failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  /** Structured AI actions — the server owns the prompts and JSON parsing. */
+  async action(req: AiActionRequest): Promise<AiActionResponse> {
+    const res = await fetch(`${API_BASE}/ai/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),

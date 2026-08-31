@@ -132,6 +132,94 @@ describe('POST /api/ai/summarize', () => {
   });
 });
 
+describe('POST /api/ai/action', () => {
+  let server: Server;
+  let port: number;
+
+  beforeAll(async () => {
+    const app = express();
+    app.use(express.json({ limit: '3mb' }));
+    app.use('/api/ai', aiRouter);
+    await new Promise<void>(resolve => {
+      server = app.listen(0, '127.0.0.1', () => resolve());
+    });
+    port = (server.address() as AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  });
+
+  beforeEach(() => vi.restoreAllMocks());
+
+  function postAction(body: unknown): Promise<{ status: number; body: any }> {
+    return new Promise((resolve, reject) => {
+      const payload = JSON.stringify(body);
+      const req = httpRequest({
+        hostname: '127.0.0.1', port, path: '/api/ai/action', method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) },
+      }, res => {
+        const chunks: Buffer[] = [];
+        res.on('data', chunk => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => resolve({
+          status: res.statusCode || 0,
+          body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+        }));
+      });
+      req.on('error', reject);
+      req.end(payload);
+    });
+  }
+
+  it('returns structured JSON for split_tasks with a server-owned prompt', async () => {
+    const upstream = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '```json\n[{"title":"Sub one"},{"title":"Sub two"}]\n```' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await postAction({
+      action: 'split_tasks',
+      apiKey: 'test-key',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      input: 'Finish the DSH integration',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      result: [{ title: 'Sub one' }, { title: 'Sub two' }],
+      model: 'default',
+    });
+    const requestBody = JSON.parse((upstream.mock.calls[0][1] as RequestInit).body as string);
+    expect(requestBody.messages[0].role).toBe('system');
+    expect(requestBody.messages[0].content).toMatch(/JSON array of subtask/i);
+    expect(requestBody.messages[1].content).toContain('Finish the DSH integration');
+  });
+
+  it('rejects unknown actions and missing credentials before any outbound call', async () => {
+    const upstream = vi.spyOn(globalThis, 'fetch');
+    const badAction = await postAction({
+      action: 'delete_everything', apiKey: 'k', baseUrl: 'http://127.0.0.1:11434/v1', input: 'x',
+    });
+    const missingKey = await postAction({
+      action: 'ask', baseUrl: 'http://127.0.0.1:11434/v1', input: 'x',
+    });
+    expect(badAction.status).toBe(400);
+    expect(missingKey.status).toBe(400);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it('reports a stable 502 when the model answers with prose instead of JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'Here is what you should do, in prose…' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await postAction({
+      action: 'rewrite_task', apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', input: 'vague task',
+    });
+    expect(response.status).toBe(502);
+    expect(response.body.error).toBe('AI response was not valid JSON');
+  });
+});
+
 function postJson(port: number, body: unknown): Promise<{ status: number; body: any }> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);

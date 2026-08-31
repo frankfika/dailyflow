@@ -11,6 +11,18 @@ export interface QuickTaskDraft {
   recurrence?: RecurrenceRule;
 }
 
+/** One task extracted by the AI brainstorm preview (design v3.1 §2.1). */
+export interface BrainPreviewTask {
+  id: string;
+  title: string;
+  deadline?: string;
+}
+
+export interface AiAnswer {
+  answer: string;
+  suggestedTitle?: string;
+}
+
 interface TodayInputBarProps {
   language: 'en' | 'zh';
   activeContext: string;
@@ -18,7 +30,21 @@ interface TodayInputBarProps {
   brainDumpText: string;
   setBrainDumpText: (value: string) => void;
   isProcessingBrainDump: boolean;
-  processBrainDump: () => Promise<void>;
+  /** Extract brainstorm tasks — returns the preview list instead of creating. */
+  onBrainExtract: (text: string) => Promise<BrainPreviewTask[]>;
+  brainPreviewTasks: BrainPreviewTask[] | null;
+  onBrainPreviewAdd: (tasks: BrainPreviewTask[]) => void;
+  onBrainPreviewRewrite: (id: string) => void;
+  onBrainPreviewRemove: (id: string) => void;
+  onBrainPreviewCancel: () => void;
+  rewritingPreviewId: string | null;
+  /** `?`-prefixed input routes here (design v3.1 §5). */
+  onAsk: (question: string) => void;
+  aiAnswer: AiAnswer | null;
+  onAnswerAdopt?: (title: string) => void;
+  onAnswerClose: () => void;
+  /** Increment to flip the bar into brainstorm mode (Cmd+B). */
+  brainModeSignal?: number;
   onAddTask: (draft: QuickTaskDraft) => void;
   onRegisterFocus?: (focus: () => void) => void;
 }
@@ -56,7 +82,18 @@ export function TodayInputBar({
   brainDumpText,
   setBrainDumpText,
   isProcessingBrainDump,
-  processBrainDump,
+  onBrainExtract,
+  brainPreviewTasks,
+  onBrainPreviewAdd,
+  onBrainPreviewRewrite,
+  onBrainPreviewRemove,
+  onBrainPreviewCancel,
+  rewritingPreviewId,
+  onAsk,
+  aiAnswer,
+  onAnswerAdopt,
+  onAnswerClose,
+  brainModeSignal,
   onAddTask,
   onRegisterFocus,
 }: TodayInputBarProps) {
@@ -67,6 +104,8 @@ export function TodayInputBar({
   const [openPop, setOpenPop] = useState<'deadline' | 'tag' | 'more' | null>(null);
   const [brainMode, setBrainMode] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [excludedPreview, setExcludedPreview] = useState<Set<string>>(new Set());
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -78,6 +117,10 @@ export function TodayInputBar({
   useEffect(() => {
     registerRef.current?.(() => inputRef.current?.focus());
   }, []);
+
+  useEffect(() => {
+    if ((brainModeSignal ?? 0) > 0) setBrainMode(true);
+  }, [brainModeSignal]);
 
   useEffect(() => {
     if (!openPop) return;
@@ -105,9 +148,26 @@ export function TodayInputBar({
     return t('每月', 'Monthly');
   };
 
+  const ask = async (question: string) => {
+    if (asking) return;
+    setAsking(true);
+    try {
+      onAsk(question);
+    } finally {
+      setAsking(false);
+    }
+  };
+
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
+    // `?` / `？` prefix asks the AI instead of creating a task (§5).
+    if ((trimmed.startsWith('?') || trimmed.startsWith('？')) && trimmed.length > 1) {
+      const question = trimmed.replace(/^[?？]\s*/, '');
+      setTitle('');
+      void ask(question);
+      return;
+    }
     const lines = trimmed.split('\n');
     const finalTags = [...tags];
     if (!finalTags.some(item => item === 'work' || item === 'life')) finalTags.push(activeContext);
@@ -130,10 +190,14 @@ export function TodayInputBar({
   const submitBrainDump = async () => {
     if (!brainDumpText.trim() || isProcessingBrainDump) return;
     try {
-      await processBrainDump();
-      setBrainMode(false);
+      const extracted = await onBrainExtract(brainDumpText.trim());
+      if (extracted.length > 0) {
+        setBrainMode(false);
+        setExcludedPreview(new Set());
+      }
+      // Zero results keeps the draft in place; App surfaces a toast.
     } catch {
-      // processBrainDump already surfaced the failure; keep the draft for retry.
+      // onBrainExtract already surfaced the failure; keep the draft for retry.
     }
   };
 
@@ -144,6 +208,80 @@ export function TodayInputBar({
     { label: t('本周五', 'Friday'), value: toISODate(nextWeekday(now, 5)) },
     { label: t('下周一', 'Next Mon'), value: toISODate(shiftDays(nextWeekday(now, 1), 7)) },
   ];
+
+  if (brainPreviewTasks) {
+    const included = brainPreviewTasks.filter(item => !excludedPreview.has(item.id));
+    return (
+      <div ref={rootRef} className="today-input-bar today-input-bar-brain" data-testid="brain-preview-panel">
+        <div className="today-input-brain-head">
+          <Sparkles className="today-input-icon" aria-hidden="true" />
+          <span className="today-input-brain-title">
+            {t(`AI 拆解完成 · ${brainPreviewTasks.length} 个任务`, `AI split done · ${brainPreviewTasks.length} tasks`)}
+          </span>
+          <button
+            type="button"
+            className="today-input-close"
+            onClick={onBrainPreviewCancel}
+            aria-label={t('放弃拆解结果', 'Discard results')}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="today-input-preview">
+          {brainPreviewTasks.map(item => {
+            const excluded = excludedPreview.has(item.id);
+            return (
+              <div key={item.id} className={`today-input-preview-row${excluded ? ' is-excluded' : ''}`} data-testid={`brain-preview-row-${item.id}`}>
+                <button
+                  type="button"
+                  className={`today-input-preview-check${excluded ? '' : ' is-on'}`}
+                  aria-label={excluded ? t('加入这项', 'Include this task') : t('不加这项', 'Exclude this task')}
+                  onClick={() => setExcludedPreview(prev => {
+                    const next = new Set(prev);
+                    if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                    return next;
+                  })}
+                >
+                  {excluded ? null : <Check className="h-3 w-3" strokeWidth={2.5} />}
+                </button>
+                <span className="today-input-preview-title">{item.title}</span>
+                <span className="today-input-preview-actions">
+                  <button
+                    type="button"
+                    className="today-input-chipbtn"
+                    data-testid={`brain-preview-rewrite-${item.id}`}
+                    disabled={rewritingPreviewId !== null}
+                    onClick={() => onBrainPreviewRewrite(item.id)}
+                  >
+                    {rewritingPreviewId === item.id ? t('改写中…', 'Rewriting…') : t('改写', 'Rewrite')}
+                  </button>
+                  <button
+                    type="button"
+                    className="today-input-chipbtn"
+                    data-testid={`brain-preview-remove-${item.id}`}
+                    onClick={() => onBrainPreviewRemove(item.id)}
+                  >
+                    {t('删除', 'Delete')}
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="today-input-brain-foot">
+          <button
+            type="button"
+            className="today-input-send is-primary"
+            data-testid="brain-preview-add"
+            disabled={included.length === 0}
+            onClick={() => onBrainPreviewAdd(included)}
+          >
+            {t(`全部加进去（${included.length}）`, `Add all (${included.length})`)}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (brainMode) {
     return (
@@ -189,6 +327,31 @@ export function TodayInputBar({
 
   return (
     <div ref={rootRef} className="today-input-bar" data-testid="today-input-bar">
+      {aiAnswer && (
+        <div className="today-input-aians" data-testid="ai-answer-panel">
+          <Sparkles className="today-input-icon" aria-hidden="true" />
+          <div className="today-input-aians-text">{aiAnswer.answer}</div>
+          {aiAnswer.suggestedTitle && onAnswerAdopt && (
+            <button
+              type="button"
+              className="today-input-send is-primary"
+              data-testid="ai-answer-adopt"
+              onClick={() => onAnswerAdopt(aiAnswer.suggestedTitle!)}
+            >
+              {t('采纳为任务', 'Add as task')}
+            </button>
+          )}
+          <button
+            type="button"
+            className="today-input-close"
+            onClick={onAnswerClose}
+            aria-label={t('关闭回答', 'Close answer')}
+            data-testid="ai-answer-close"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       <div className="today-input-row">
         <Plus className="today-input-icon" aria-hidden="true" />
         <textarea
@@ -204,7 +367,9 @@ export function TodayInputBar({
               submit();
             }
           }}
-          placeholder={t('写下一件事…', 'Write the next thing…')}
+          placeholder={asking
+            ? t('AI 思考中…', 'AI thinking…')
+            : t('写下一件事… 输入 ? 向 AI 提问', 'Write the next thing… type ? to ask AI')}
         />
         <button
           type="button"
@@ -238,7 +403,7 @@ export function TodayInputBar({
           className="today-input-send"
           data-testid="input-send"
           aria-label={t('添加任务', 'Add task')}
-          disabled={!title.trim()}
+          disabled={!title.trim() || asking}
           onClick={submit}
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />
