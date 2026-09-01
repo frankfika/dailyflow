@@ -54,6 +54,8 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmdk-item-task-t1')).toBeInTheDocument();
     expect(screen.queryByTestId('cmdk-item-task-t2')).not.toBeInTheDocument();
     expect(screen.getByTestId('cmdk-item-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('cmdk-item-pick-date')).toBeInTheDocument();
+    expect(screen.getByTestId('cmdk-item-switch-workspace')).toBeInTheDocument();
   });
 
   it('filters items by query', () => {

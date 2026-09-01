@@ -10,7 +10,8 @@ export type CommandId =
   | 'settings'
   | 'toggle-context'
   | 'check-updates'
-  | 'pick-date';
+  | 'pick-date'
+  | 'switch-workspace';
 
 interface PaletteTask { id: string; title: string; status: string }
 interface PaletteNote { id: string; title: string }
@@ -121,6 +122,7 @@ export function CommandPalette({
       { key: 'toggle-context', section: 'command', label: t('切换 Work/Life', 'Toggle Work/Life'), hint: '⌘⇧1', run: () => onCommand('toggle-context') },
       { key: 'check-updates', section: 'command', label: t('检查更新', 'Check for updates'), run: () => onCommand('check-updates') },
       { key: 'pick-date', section: 'command', label: t('历史日期', 'Past dates'), hint: '⌘D', run: () => onCommand('pick-date') },
+      { key: 'switch-workspace', section: 'command', label: t('切工作区', 'Switch workspace'), hint: '⌘⇧W', run: () => onCommand('switch-workspace') },
     ] as PaletteItem[]).filter(item => match(item.label));
 
     for (const workspace of workspaces) {

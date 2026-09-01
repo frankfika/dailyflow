@@ -853,6 +853,11 @@ export default function App() {
         setShowDatePicker(true);
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        setWorkspaceOpenSignal(value => value + 1);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '!') {
         e.preventDefault();
         setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
@@ -920,6 +925,7 @@ export default function App() {
   const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [workspaceOpenSignal, setWorkspaceOpenSignal] = useState(0);
   // Keyboard handlers defined later in the component; the keydown effect
   // reads them through this ref.
   const kbActionsRef = useRef<{ reflection: () => void; rollover: () => void }>({
@@ -1717,6 +1723,7 @@ export default function App() {
               onActivate={handleSwitchWorkspace}
               onAdded={ws => setWorkspaces(prev => [...prev, ws])}
               onRenamed={(id, name) => setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w))}
+              openSignal={workspaceOpenSignal}
               onRemoved={(id, nextActive) => {
                 setWorkspaces(prev => prev.filter(w => w.id !== id));
                 if (!nextActive) {
@@ -2185,6 +2192,7 @@ export default function App() {
           else if (command === 'settings') setShowSettings(true);
           else if (command === 'toggle-context') setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
           else if (command === 'pick-date') setShowDatePicker(true);
+          else if (command === 'switch-workspace') setWorkspaceOpenSignal(value => value + 1);
           else if (command === 'check-updates') void checkForUpdates().then(info => {
             if (info.hasUpdate) {
               setUpdateInfo(info);
