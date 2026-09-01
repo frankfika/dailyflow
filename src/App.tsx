@@ -777,6 +777,15 @@ export default function App() {
     loadContextNotes();
   }, [activeContext, loadContextNotes]);
 
+  // ⌘K palette note search covers every note in the current context
+  // (UX_DESIGN §11), not just the current day.
+  const paletteNotes = useMemo(() => {
+    const byId = new Map<string, NoteData>();
+    for (const note of contextNotes) byId.set(note.id, note);
+    for (const note of dailyNotes) byId.set(note.id, note);
+    return Array.from(byId.values());
+  }, [contextNotes, dailyNotes]);
+
   useEffect(() => {
     if (activeOverlay === 'ai-chat') {
       loadContextNotes();
@@ -2168,7 +2177,7 @@ export default function App() {
         onClose={() => setShowCommandPalette(false)}
         language={language}
         tasks={todayTasks}
-        notes={dailyNotes}
+        notes={paletteNotes}
         events={(eventsQuery.data?.events ?? []).map(event => ({ id: event.id, title: event.title }))}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
