@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Calendar, Check, FileText, Hash, ListTodo, Mic, Plus, Repeat, Send, Sparkles, X } from 'lucide-react';
+import { Calendar, Check, Copy, ExternalLink, FileText, Hash, ListTodo, Mic, Plus, Repeat, Send, Sparkles, X } from 'lucide-react';
 import type { RecurrenceRule } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -42,6 +42,10 @@ interface TodayInputBarProps {
   onAsk: (question: string) => void;
   aiAnswer: AiAnswer | null;
   onAnswerAdopt?: (title: string) => void;
+  /** §5.1 — copy the answer to the clipboard. */
+  onAnswerCopy?: (answer: string) => void;
+  /** §5.1 — save the answer as a note and open the note editor. */
+  onAnswerOpen?: (answer: AiAnswer) => void;
   onAnswerClose: () => void;
   /** Increment to flip the bar into brainstorm mode (Cmd+B). */
   brainModeSignal?: number;
@@ -98,6 +102,8 @@ export function TodayInputBar({
   onAsk,
   aiAnswer,
   onAnswerAdopt,
+  onAnswerCopy,
+  onAnswerOpen,
   onAnswerClose,
   brainModeSignal,
   onLinkNote,
@@ -348,6 +354,30 @@ export function TodayInputBar({
               onClick={() => onAnswerAdopt(aiAnswer.suggestedTitle!)}
             >
               {t('采纳为任务', 'Add as task')}
+            </button>
+          )}
+          {onAnswerCopy && (
+            <button
+              type="button"
+              className="today-input-chipbtn"
+              data-testid="ai-answer-copy"
+              aria-label={t('复制回答', 'Copy answer')}
+              title={t('复制回答', 'Copy answer')}
+              onClick={() => onAnswerCopy(aiAnswer.answer)}
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+          {onAnswerOpen && (
+            <button
+              type="button"
+              className="today-input-chipbtn"
+              data-testid="ai-answer-open"
+              aria-label={t('存为笔记并打开', 'Save as note and open')}
+              title={t('存为笔记并打开', 'Save as note and open')}
+              onClick={() => onAnswerOpen(aiAnswer)}
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
           <button

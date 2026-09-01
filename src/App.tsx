@@ -112,6 +112,8 @@ export default function App() {
   const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
+  const [prefillNoteDraft, setPrefillNoteDraft] = useState<string | null>(null);
+  const [prefillNoteTitle, setPrefillNoteTitle] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'events'>('today');
   // UX S5: notes / AI / calendar / memory / team render as overlays over the
@@ -815,6 +817,8 @@ export default function App() {
       setIsNoteEditorMaximized(false);
       setEditingDailyNote(null);
       setPrefillLinkedTaskId(null);
+      setPrefillNoteDraft(null);
+      setPrefillNoteTitle(null);
       setQuickNoteDefaultType(undefined);
       setChatDraft(null);
 
@@ -1410,6 +1414,20 @@ export default function App() {
       console.error('Failed to save recurrence', e);
       showToast(e?.message || (language === 'zh' ? '重复规则保存失败' : 'Failed to save recurrence'), 'error');
     });
+  };
+
+  /** UX_DESIGN §2: ⋯ menu "转成项目" — create a project event from the draft. */
+  const handleDraftToProject = async (title: string) => {
+    try {
+      const event = await eventsApi.create({ title, context: (activeContext as 'work' | 'life') });
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
+      setRequestedEventId(event.id);
+      setActiveTab('events');
+    } catch (e: any) {
+      console.error('Draft to project failed', e);
+      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to create project'), 'error');
+    }
   };
 
   const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
@@ -2034,8 +2052,29 @@ export default function App() {
                     onAsk={(question) => void handleAskAi(question)}
                     aiAnswer={aiAnswer}
                     onAnswerAdopt={handleAnswerAdopt}
+                    onAnswerCopy={(answer) => {
+                      void navigator.clipboard.writeText(answer)
+                        .then(() => showToast(language === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard', 'success'))
+                        .catch(() => showToast(language === 'zh' ? '复制失败' : 'Copy failed', 'error'));
+                    }}
+                    onAnswerOpen={(answer) => {
+                      setEditingDailyNote(null);
+                      setPrefillLinkedTaskId(null);
+                      setPrefillNoteTitle(answer.suggestedTitle || null);
+                      setPrefillNoteDraft(answer.answer);
+                      setShowQuickNoteEditor(true);
+                    }}
                     onAnswerClose={() => setAiAnswer(null)}
                     brainModeSignal={brainModeSignal}
+                    onLinkNote={(draft) => {
+                      setEditingDailyNote(null);
+                      setPrefillLinkedTaskId(null);
+                      setPrefillNoteDraft(draft || null);
+                      setPrefillNoteTitle(null);
+                      setShowQuickNoteEditor(true);
+                    }}
+                    onDraftToProject={(title) => void handleDraftToProject(title)}
+                    onMeetingCapture={() => void openMeetingNote()}
                     onAddTask={handleQuickAddTask}
                     onRegisterFocus={(focus) => { taskInputFocusRef.current = focus; }}
                   />
@@ -2326,7 +2365,10 @@ export default function App() {
              note={editingDailyNote || undefined}
              defaultDate={currentFileDate}
              defaultLinkedTaskIds={prefillLinkedTaskId ? [prefillLinkedTaskId] : undefined}
-             defaultTitle={prefillLinkedTaskId ? tasks.find(t => t.id === prefillLinkedTaskId)?.title : undefined}
+             defaultTitle={prefillLinkedTaskId
+               ? tasks.find(t => t.id === prefillLinkedTaskId)?.title
+               : (prefillNoteTitle || prefillNoteDraft?.split('\n')[0]?.trim() || undefined)}
+             defaultBody={prefillNoteDraft ?? undefined}
              defaultType={quickNoteDefaultType}
              availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
              availableTags={[]}
@@ -2353,6 +2395,8 @@ export default function App() {
                 setShowQuickNoteEditor(false);
                 setEditingDailyNote(null);
                 setPrefillLinkedTaskId(null);
+                setPrefillNoteDraft(null);
+                setPrefillNoteTitle(null);
                 setQuickNoteDefaultType(undefined);
                 setActiveOverlay('ai-chat');
               }}
