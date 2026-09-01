@@ -1522,8 +1522,10 @@ export default function App() {
       // S12: offer a quiet prompt bar for the day that was just archived
       // instead of interrupting with an auto-opened modal.
       if (!isReflectionPromptOptedOut()) {
+        // UX_DESIGN §6.1: only prompt when the archived day had real
+        // substance (≥3 done tasks) — a 1-2 item day doesn't need one.
         const doneCount = (data?.tasks as Task[] ?? []).filter(t => t.status === 'done').length;
-        setReflectionBar({ date: currentFileDate, completedCount: doneCount });
+        if (doneCount >= 3) setReflectionBar({ date: currentFileDate, completedCount: doneCount });
       }
     } catch (e) {
       console.error('Rollover failed', e);
