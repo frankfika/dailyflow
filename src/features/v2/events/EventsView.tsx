@@ -49,10 +49,10 @@ export interface EventsViewProps {
 
 const TEXT = {
   en: {
-    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks',
   },
   zh: {
-    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务',
   },
 } as const;
 
@@ -606,7 +606,58 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         {outlineVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
       </button>
       {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
-      <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
+      <div className="relative">
+        <button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more} aria-expanded={moreOpen} data-testid="event-more-toggle"><MoreHorizontal className="h-4 w-4" /></button>
+        {moreOpen && (
+          <div className="absolute right-0 top-10 z-30 w-48 rounded-xl border border-gray-200 bg-white p-2 text-xs shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-more-menu">
+            <p className="px-2 py-1 text-[11px] text-gray-400">
+              {event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}
+              <span className="mx-1">·</span>
+              {event.nodes.length} {t.statNodes}
+              <span className="mx-1">·</span>
+              {event.nodes.filter((n) => n.kind === 'task').length} {t.statTasks}
+            </p>
+            <button
+              type="button"
+              className="w-full rounded-lg px-2 py-1.5 text-left text-gray-600 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-800"
+              disabled={layoutTree.isPending}
+              onClick={() => {
+                setMoreOpen(false);
+                void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).then(() => onNotice?.(language === 'zh' ? '布局已整理' : 'Layout updated', 'success')).catch(() => {});
+              }}
+              data-testid="event-more-layout"
+            >
+              {t.autoLayout}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-lg px-2 py-1.5 text-left text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => {
+                setMoreOpen(false);
+                const byId = new Map(event.nodes.map((n) => [n.id, n]));
+                const depthOf = (node: { parentId?: string }): number => {
+                  let depth = 0;
+                  let parent = node.parentId;
+                  while (parent && byId.has(parent)) {
+                    depth += 1;
+                    parent = byId.get(parent)!.parentId;
+                  }
+                  return depth;
+                };
+                const lines = event.nodes
+                  .filter((node) => node.id !== event.rootNodeId)
+                  .map((node) => `${'  '.repeat(Math.max(0, depthOf(node) - 1))}- ${node.text}`);
+                void navigator.clipboard.writeText([event.title, ...lines].join('\n'))
+                  .then(() => onNotice?.(t.outlineCopied, 'success'))
+                  .catch(() => onNotice?.(t.copyFailed, 'error'));
+              }}
+              data-testid="event-more-copy-outline"
+            >
+              {t.copyOutline}
+            </button>
+          </div>
+        )}
+      </div>
     </header>
     <div ref={splitRef} className="min-h-0 flex-1 flex" data-testid="event-split-view">
       <div

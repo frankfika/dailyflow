@@ -139,6 +139,43 @@ describe('EventsView Event-first surface', () => {
     expect(handle).toHaveAttribute('aria-valuenow', '200');
   });
 
+  it('⋯ menu shows stats, offers auto layout and copies the outline', async () => {
+    const detail = {
+      id: 'event-1', title: 'Menu event', context: 'work', status: 'active', progress: { done: 1, total: 2 },
+      effectiveTags: [], createdAt: '2026-08-01', updatedAt: '2026-08-10',
+      mindmapId: 'map-1', rootNodeId: 'root', manualTags: [], aiTags: [],
+      nodes: [
+        { id: 'root', eventId: 'event-1', text: 'Menu event', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] },
+        { id: 'child-1', eventId: 'event-1', parentId: 'root', text: 'First step', kind: 'task', position: { x: 1, y: 1 }, manualTags: [], aiTags: [] },
+        { id: 'child-2', eventId: 'event-1', parentId: 'child-1', text: 'Nested step', position: { x: 2, y: 2 }, manualTags: [], aiTags: [] },
+      ],
+      edges: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    mocks.events = [detail];
+    mocks.detail = detail;
+    const notice = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderView(<EventsView language="en" context="work" onNotice={notice} />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+    expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('event-more-toggle'));
+    const menu = screen.getByTestId('event-more-menu');
+    expect(menu).toHaveTextContent('1 / 2');
+    expect(menu).toHaveTextContent('3 nodes');
+    expect(menu).toHaveTextContent('1 tasks');
+
+    fireEvent.click(screen.getByTestId('event-more-copy-outline'));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain('Menu event');
+    expect(text).toContain('- First step');
+    expect(text).toContain('  - Nested step');
+    await vi.waitFor(() => expect(notice).toHaveBeenCalledWith('Outline copied', 'success'));
+    expect(screen.queryByTestId('event-more-menu')).not.toBeInTheDocument();
+  });
+
   it('UX S9: runs AI organize and applies the suggestion through the modal', async () => {
     const detail = {
       id: 'event-1', title: 'Organize me', context: 'work', status: 'active', progress: { done: 0, total: 0 },
