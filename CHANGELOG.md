@@ -5,6 +5,14 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2](https://github.com/frankfika/dailyflow/compare/v2.5.1...v2.5.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **ux:** responsive density pass ([f6f2ee2](https://github.com/frankfika/dailyflow/commit/f6f2ee2e00ed7eb12ad6b3e08c62c47f811acc22))
+* **ux:** responsive density pass — wider Today column on large screens, bigger micro labels, larger default window ([5601af8](https://github.com/frankfika/dailyflow/commit/5601af88e9d99edb2186e8706f5ded1c39bda786))
+
 ## [2.5.1](https://github.com/frankfika/dailyflow/compare/v2.5.0...v2.5.1) (2026-09-01)
 
 
