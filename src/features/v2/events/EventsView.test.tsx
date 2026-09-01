@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventsView } from './EventsView';
-import { organizeApi } from '../../../api/client';
+import { mindmapsApi, organizeApi } from '../../../api/client';
+import * as mindMapCache from '../hooks/mindMapCache';
 
 const mocks = vi.hoisted(() => ({
   events: [] as Array<Record<string, unknown>>,
@@ -37,6 +39,11 @@ const EVENT = {
   createdAt: '2026-08-01T00:00:00Z', updatedAt: '2026-08-10T00:00:00Z',
 };
 
+function renderView(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 describe('EventsView Event-first surface', () => {
   beforeEach(() => {
     mocks.events = [];
@@ -49,7 +56,7 @@ describe('EventsView Event-first surface', () => {
 
   it('shows only the Events index and a single New Event action', () => {
     mocks.events = [EVENT];
-    render(<EventsView language="en" context="work" />);
+    renderView(<EventsView language="en" context="work" />);
     expect(screen.getByRole('heading', { name: 'Events' })).toBeInTheDocument();
     expect(screen.getByTestId('new-event-button')).toBeInTheDocument();
     expect(screen.getByText('Ship DailyFlow')).toBeInTheDocument();
@@ -66,7 +73,7 @@ describe('EventsView Event-first surface', () => {
       nodes: [{ id: 'root', eventId: 'event-new', text: 'Investor update', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] }],
       edges: [], manualTags: [], aiTags: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
     };
-    render(<EventsView language="en" context="life" />);
+    renderView(<EventsView language="en" context="life" />);
     fireEvent.click(screen.getByTestId('new-event-button'));
     fireEvent.change(screen.getByLabelText('What are you moving forward?'), { target: { value: 'Investor update' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
@@ -87,7 +94,7 @@ describe('EventsView Event-first surface', () => {
     mocks.events = [detail];
     mocks.detail = detail;
     window.localStorage.removeItem('dailyflow:events:outlineVisible');
-    render(<EventsView language="en" context="work" />);
+    renderView(<EventsView language="en" context="work" />);
     fireEvent.click(screen.getByTestId('event-card-event-1'));
     expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
     const pane = screen.getByTestId('event-outline-pane');
@@ -112,7 +119,7 @@ describe('EventsView Event-first surface', () => {
     };
     mocks.events = [detail];
     mocks.detail = detail;
-    render(<EventsView language="en" context="work" />);
+    renderView(<EventsView language="en" context="work" />);
     fireEvent.click(screen.getByTestId('event-card-event-1'));
 
     const pane = await screen.findByTestId('event-outline-pane');
@@ -154,7 +161,7 @@ describe('EventsView Event-first surface', () => {
       groupRationale: {},
       stats: { looseNodes: 1, organizedNodes: 1, groupCount: 1 },
     });
-    render(<EventsView language="en" context="work" onNotice={notice} />);
+    renderView(<EventsView language="en" context="work" onNotice={notice} />);
     fireEvent.click(screen.getByTestId('event-card-event-1'));
     expect(await screen.findByTestId('event-detail')).toBeInTheDocument();
 
@@ -168,5 +175,90 @@ describe('EventsView Event-first surface', () => {
     await waitFor(() => expect(mocks.applyOrganize).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'event-1', mindmapId: 'map-1' })));
     await waitFor(() => expect(notice).toHaveBeenCalledWith(expect.stringContaining('AI organize applied'), 'success'));
     expect(screen.queryByTestId('organize-suggestion-modal')).not.toBeInTheDocument();
+  });
+});
+
+describe('EventsView canvas undo/redo + ⌘F (UX_DESIGN §4.3)', () => {
+  const MAP = {
+    id: 'map-1', title: 'Organize me', rootId: 'root', version: 2 as const,
+    nodes: [
+      { id: 'root', text: 'Organize me', position: { x: 0, y: 0 }, kind: 'root' as const },
+      { id: 'loose-1', text: 'Loose one', position: { x: 300, y: 0 }, kind: 'branch' as const },
+    ],
+    edges: [],
+    createdAt: '2026-08-01T00:00:00Z', updatedAt: '2026-08-10T00:00:00Z',
+  };
+  const detail = {
+    id: 'event-1', title: 'Organize me', context: 'work', status: 'active', progress: { done: 0, total: 0 },
+    effectiveTags: [], createdAt: '2026-08-01', updatedAt: '2026-08-10',
+    mindmapId: 'map-1', rootNodeId: 'root', manualTags: [], aiTags: [],
+    nodes: [
+      { id: 'root', eventId: 'event-1', text: 'Organize me', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] },
+      { id: 'loose-1', eventId: 'event-1', text: 'Loose one', position: { x: 300, y: 0 }, manualTags: [], aiTags: [] },
+    ],
+    edges: [], integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+  };
+  let updateSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mocks.events = [detail];
+    mocks.detail = detail;
+    vi.spyOn(mindMapCache, 'readEventMap').mockResolvedValue(MAP);
+    updateSpy = vi.spyOn(mindmapsApi, 'update').mockResolvedValue(MAP);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function openDetail() {
+    renderView(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+    await screen.findByTestId('event-detail');
+  }
+
+  function runOrganize() {
+    vi.spyOn(organizeApi, 'organize').mockResolvedValue({
+      strategy: 'by_topic',
+      rationale: 'Group the loose nodes',
+      groups: [{ parentText: 'Group A', parentKind: 'branch', nodeIds: ['loose-1'] }],
+      suggestedEdges: [],
+      groupRationale: {},
+      stats: { looseNodes: 1, organizedNodes: 1, groupCount: 1 },
+    });
+    fireEvent.click(screen.getByTestId('event-organize-button'));
+    fireEvent.click(screen.getByTestId('event-organize-by_topic'));
+    return screen.findByTestId('organize-suggestion-modal');
+  }
+
+  it('⌘F opens the in-canvas node search', async () => {
+    await openDetail();
+    fireEvent.keyDown(window, { key: 'f', metaKey: true });
+    expect(screen.getByPlaceholderText('Search nodes')).toBeInTheDocument();
+  });
+
+  it('⌘Z with an empty history is a no-op and undo starts disabled', async () => {
+    await openDetail();
+    expect(screen.getByTestId('event-undo')).toBeDisabled();
+    expect(screen.getByTestId('event-redo')).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('⌘Z after an applied organize restores the pre-edit map, ⇧⌘Z redoes it', async () => {
+    await openDetail();
+    const modal = await runOrganize();
+    fireEvent.click(within(modal).getByTestId('organize-suggestion-apply'));
+    await waitFor(() => expect(mocks.applyOrganize).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('event-undo')).toBeEnabled());
+
+    // Undo → one PUT restoring the pre-organize map.
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith('map-1', expect.objectContaining({ rootId: 'root' }));
+
+    // Redo → second PUT restoring the organized (current) map.
+    fireEvent.keyDown(window, { key: 'Z', metaKey: true, shiftKey: true });
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(2));
   });
 });

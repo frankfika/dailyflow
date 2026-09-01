@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Search, Sparkles, Undo2, X } from 'lucide-react';
 import { ulid } from 'ulid';
-import type { EventDetail, EventNode, EventSummary, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
-import { organizeApi } from '../../../api/client';
+import type { EventDetail, EventNode, EventSummary, MindMap, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
+import { mindmapsApi, organizeApi } from '../../../api/client';
+import { queryKeys } from '../../../queryKeys';
+import { readEventMap, writeEventMap } from '../hooks/mindMapCache';
 import { OrganizeSuggestionModal } from '../../../components/MindMap/OrganizeSuggestionModal';
 import { MINDMAP_TEMPLATES } from '../../../components/MindMap/templates';
 import {
@@ -46,10 +49,10 @@ export interface EventsViewProps {
 
 const TEXT = {
   en: {
-    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo',
   },
   zh: {
-    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做',
   },
 } as const;
 
@@ -240,6 +243,111 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     return () => window.removeEventListener('resize', clampToContainer);
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Undo / redo (UX_DESIGN §4.3 — ⌘Z / ⇧⌘Z, 50 steps). Two stacks of *full*
+  // MindMap snapshots, taken just before each map-writing mutation. Snapshots
+  // come from the lossless mindMapCache — the EventDetail projection drops
+  // kind/taskId/taskDate/planOrder, so restoring from it would strip task
+  // bindings. Undo/redo restore via one PUT /mindmaps/:id each, so a whole
+  // undo step is a single entry in the server's own history too.
+  // ---------------------------------------------------------------------------
+  const qc = useQueryClient();
+  const HISTORY_LIMIT = 50;
+  const pastRef = useRef<MindMap[]>([]);
+  const futureRef = useRef<MindMap[]>([]);
+  const [, setHistoryVersion] = useState(0);
+  useEffect(() => {
+    // Switching events starts a fresh history for the new canvas.
+    pastRef.current = [];
+    futureRef.current = [];
+    setHistoryVersion((v) => v + 1);
+  }, [eventId]);
+
+  const recordHistory = useCallback(async (): Promise<boolean> => {
+    if (!event) return false;
+    try {
+      const map = await readEventMap(qc, event.mindmapId);
+      const top = pastRef.current[pastRef.current.length - 1];
+      if (top && top.rootId === map.rootId
+        && JSON.stringify(top.nodes) === JSON.stringify(map.nodes)
+        && JSON.stringify(top.edges) === JSON.stringify(map.edges)) return false;
+      pastRef.current.push(map);
+      while (pastRef.current.length > HISTORY_LIMIT) pastRef.current.shift();
+      futureRef.current = [];
+      setHistoryVersion((v) => v + 1);
+      return true;
+    } catch { /* snapshot is best-effort — never block the edit itself */ return false; }
+  }, [event, qc]);
+
+  const restoreMap = useCallback(async (snap: MindMap) => {
+    const updated = await mindmapsApi.update(snap.id, {
+      title: snap.title, rootId: snap.rootId, nodes: snap.nodes, edges: snap.edges,
+    });
+    writeEventMap(qc, updated);
+    qc.invalidateQueries({ queryKey: queryKeys.event(eventId) });
+    qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.standaloneTasks() });
+    qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
+  }, [eventId, qc]);
+
+  const undo = useCallback(async () => {
+    const prev = pastRef.current[pastRef.current.length - 1];
+    if (!prev || !event) return;
+    try {
+      const current = await readEventMap(qc, event.mindmapId);
+      pastRef.current.pop();
+      futureRef.current.push(current);
+      setHistoryVersion((v) => v + 1);
+      await restoreMap(prev);
+      onNotice?.(language === 'zh' ? '已撤销' : 'Undone', 'info');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }, [event, qc, language, onNotice, restoreMap, t.loadError]);
+
+  const redo = useCallback(async () => {
+    const next = futureRef.current[futureRef.current.length - 1];
+    if (!next || !event) return;
+    try {
+      const current = await readEventMap(qc, event.mindmapId);
+      futureRef.current.pop();
+      pastRef.current.push(current);
+      setHistoryVersion((v) => v + 1);
+      await restoreMap(next);
+      onNotice?.(language === 'zh' ? '已重做' : 'Redone', 'info');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }, [event, qc, language, onNotice, restoreMap, t.loadError]);
+
+  const canUndo = pastRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
+  // UX_DESIGN §4.3 canvas shortcuts: ⌘F search, ⌘Z undo, ⇧⌘Z / ⌘Y redo.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !typing) {
+        e.preventDefault();
+        if (e.shiftKey) void redo(); else void undo();
+      } else if (key === 'y' && !typing) {
+        e.preventDefault();
+        void redo();
+      } else if (key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
   // UX S8: when opened from a Today "来自 ↗" chip, highlight the origin node.
   useEffect(() => {
     if (!event || !requestedNodeId) return;
@@ -322,13 +430,19 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
 
   const activateNode = (id: string) => setActiveNodeId(id);
 
-  async function safe<T>(action: () => Promise<T>, success?: string): Promise<T | undefined> {
+  async function safe<T>(action: () => Promise<T>, success?: string, history = true): Promise<T | undefined> {
+    let pushed = false;
     try {
+      if (history) pushed = await recordHistory();
       const result = await action();
       if (success) onNotice?.(success, 'success');
       return result;
     }
-    catch (error) { onNotice?.(error instanceof Error ? error.message : t.loadError, 'error'); return undefined; }
+    catch (error) {
+      if (pushed) { pastRef.current.pop(); }
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+      return undefined;
+    }
   }
 
   async function handleAddChild(parentId: string, text: string) {
@@ -383,9 +497,9 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     if (!node.execution) return;
     const input = { taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate, eventId, nodeId: node.id };
     if (node.execution.status === 'done') {
-      await safe(() => reopen.mutateAsync(input));
+      await safe(() => reopen.mutateAsync(input), undefined, false);
     } else {
-      await safe(() => complete.mutateAsync(input));
+      await safe(() => complete.mutateAsync(input), undefined, false);
     }
   }
 
@@ -406,6 +520,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   async function handleApplyOrganize(suggestion: OrganizeSuggestion) {
     if (!event) return;
     try {
+      await recordHistory();
       const result = await applyOrganize.mutateAsync({ eventId: event.id, mindmapId: event.mindmapId, suggestion });
       setOrganizeOpen(false);
       setOrganizeSuggestion(null);
@@ -441,6 +556,28 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       >
         <Sparkles className="h-4 w-4" />
         {language === 'zh' ? 'AI 推进' : 'AI'}
+      </button>
+      <button
+        type="button"
+        onClick={() => void undo()}
+        disabled={!canUndo}
+        title={`${t.undo} (⌘Z)`}
+        aria-label={t.undo}
+        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800"
+        data-testid="event-undo"
+      >
+        <Undo2 className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => void redo()}
+        disabled={!canRedo}
+        title={`${t.redo} (⇧⌘Z)`}
+        aria-label={t.redo}
+        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800"
+        data-testid="event-redo"
+      >
+        <Redo2 className="h-4 w-4" />
       </button>
       <button
         type="button"
@@ -541,6 +678,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         autoStart={autoStartRun}
         onNotice={onNotice}
         onApplied={() => { void detailQ.refetch(); }}
+        onBeforeApply={recordHistory}
         onClose={() => { setAgentPanelOpen(false); setAutoStartRun(false); }}
         onProposalChange={(proposal, selection, activeChangeId) => { setGraphProposal(proposal); setProposalSelection(new Set(selection)); setActiveProposalChangeId(activeChangeId); }}
       />
