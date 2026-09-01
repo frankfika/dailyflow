@@ -29,6 +29,7 @@ vi.mock('lucide-react', () => ({
   MessageSquare: () => React.createElement('span', { 'data-testid': 'icon-msg' }),
   MoreHorizontal: () => React.createElement('span', { 'data-testid': 'icon-more' }),
   Network: () => React.createElement('span', { 'data-testid': 'icon-network' }),
+  Repeat: () => React.createElement('span', { 'data-testid': 'icon-repeat' }),
   Trash2: () => React.createElement('span', { 'data-testid': 'icon-trash' }),
   X: () => React.createElement('span', { 'data-testid': 'icon-x' }),
   BellOff: () => React.createElement('span', { 'data-testid': 'icon-bell-off' }),
@@ -42,7 +43,7 @@ vi.mock('../../utils/tagColors', () => ({
 vi.mock('../../components/TagInput', () => ({
   TagInput: ({ value, onChange }: any) =>
     React.createElement('input', {
-      'data-testid': 'tag-input',
+      'data-testid': 'taginput-field',
       value: value?.join(',') || '',
       onChange: (e: any) => onChange(e.target.value.split(',')),
     }),
@@ -71,6 +72,60 @@ const createProps = (overrides: any = {}) => ({
   showCompletionPrompt: false,
   onCompletionPromptClosed: vi.fn(),
   ...overrides,
+});
+
+describe('TaskCard inline keyboard shortcuts (UX_DESIGN §12)', () => {
+  const detailsProps = (overrides: any = {}) => createProps({ onSetRecurrence: vi.fn(), ...overrides });
+
+  function openDetails() {
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+  }
+
+  function keyOnCard(key: string, init: Record<string, unknown> = {}) {
+    fireEvent.keyDown(screen.getByTestId('task-card-task-1'), { key, ...init });
+  }
+
+  it('⌘⏎ toggles completion even with details closed', () => {
+    const onToggle = vi.fn();
+    render(<TaskCard {...detailsProps({ onToggle })} />);
+    keyOnCard('Enter', { metaKey: true });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('E opens the inline editor, D focuses the deadline input', () => {
+    render(<TaskCard {...detailsProps()} />);
+    openDetails();
+    keyOnCard('e');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    keyOnCard('d');
+    expect(document.activeElement?.getAttribute('type')).toBe('date');
+  });
+
+  it('T focuses the tag input, R opens the recurrence popover and saves a rule', () => {
+    const onSetRecurrence = vi.fn();
+    render(<TaskCard {...detailsProps({ onSetRecurrence })} />);
+    openDetails();
+    keyOnCard('t');
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('taginput-field');
+    keyOnCard('r');
+    expect(screen.getByTestId('task-recurrence-pop-task-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('task-recurrence-weekly-task-1'));
+    fireEvent.click(screen.getByTestId('task-recurrence-save-task-1'));
+    expect(onSetRecurrence).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), { type: 'weekly', weekdays: [1, 2, 3, 4, 5] });
+  });
+
+  it('keys typed inside inputs are ignored', () => {
+    const onToggle = vi.fn();
+    render(<TaskCard {...detailsProps({ onToggle })} />);
+    openDetails();
+    const dateInput = document.querySelector('input[type="date"]');
+    expect(dateInput).not.toBeNull();
+    fireEvent.keyDown(dateInput as HTMLElement, { key: 'e' });
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    keyOnCard('Enter', { metaKey: true });
+    // ⌘⏎ still completes when fired from the card itself
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('TaskCard progressive disclosure', () => {
@@ -337,5 +392,78 @@ describe('formatTaskDeadline', () => {
     expect(formatTaskDeadline('2026-08-11', 'en', '2026-08-11')).toBe('Due today');
     expect(formatTaskDeadline('2026-08-12', 'zh', '2026-08-11')).toBe('明天截止');
     expect(formatTaskDeadline('2026-08-15', 'en', '2026-08-11')).toBe('Due in 4d');
+  });
+});
+
+describe('TaskCard inline attribute bar (UX S3)', () => {
+  it('commits a deadline change immediately without an edit mode', async () => {
+    const onEdit = vi.fn();
+    render(<TaskCard {...createProps({ onEdit })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '2024-01-05' } });
+
+    await waitFor(() => {
+      expect(onEdit).toHaveBeenCalledWith({ deadline: '2024-01-05' });
+    });
+  });
+
+  it('marks a task done from the expanded panel', async () => {
+    const onToggle = vi.fn();
+    render(<TaskCard {...createProps({ onToggle })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+
+    fireEvent.click(screen.getByTestId('task-card-complete-task-1'));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TaskCard convert to project (UX S7)', () => {
+  const baseTask = {
+    id: 't_conv',
+    title: 'Finish DSH integration',
+    status: 'todo',
+    source_date: '2026-09-01',
+  };
+
+  function renderCard(overrides: Partial<Parameters<typeof TaskCard>[0]> = {}) {
+    return render(
+      <TaskCard
+        task={baseTask as never}
+        language="en"
+        categories={[]}
+        currentFileDate="2026-09-01"
+        onToggle={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        {...overrides}
+      />,
+    );
+  }
+
+  it('hides the convert button for tasks that already live on a canvas', () => {
+    renderCard({ task: { ...baseTask, originMindmapId: 'mm_1' } as never, onConvertToProject: vi.fn() });
+    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
+    expect(screen.queryByTestId('task-convert-project-t_conv')).not.toBeInTheDocument();
+  });
+
+  it('opens the confirm dialog and submits title plus extra nodes', async () => {
+    const onConvertToProject = vi.fn(async () => {});
+    renderCard({ onConvertToProject });
+    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
+    fireEvent.click(screen.getByTestId('task-convert-project-t_conv'));
+
+    const dialog = screen.getByTestId('task-convert-dialog-t_conv');
+    expect(dialog).toHaveTextContent(/Convert this task into a project/i);
+    expect((screen.getByTestId('task-convert-title-t_conv') as HTMLInputElement).value).toBe('Finish DSH integration');
+
+    fireEvent.change(screen.getByTestId('task-convert-nodes-t_conv'), { target: { value: 'Write tests\nReview\n' } });
+    fireEvent.click(screen.getByTestId('task-convert-confirm-t_conv'));
+
+    await vi.waitFor(() => expect(onConvertToProject).toHaveBeenCalledWith(expect.objectContaining({ id: 't_conv' }), {
+      title: 'Finish DSH integration',
+      extraNodes: ['Write tests', 'Review'],
+    }));
+    await vi.waitFor(() => expect(screen.queryByTestId('task-convert-dialog-t_conv')).not.toBeInTheDocument());
   });
 });

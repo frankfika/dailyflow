@@ -4,9 +4,10 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw } from 'lucide-react';
-import { filesApi, tasksApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
+import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw, X } from 'lucide-react';
+import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
+import type { RecurrenceRule } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
 import { getTodayStr } from './utils/tagColors';
@@ -14,15 +15,18 @@ import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 import { RolloverPreviewModal } from './components/RolloverPreviewModal';
-import { TaskInputPanel } from './components/TaskInputPanel';
+import { TodayInputBar, type AiAnswer, type BrainPreviewTask, type QuickTaskDraft } from './components/TodayInputBar';
+import type { AiActionKind } from './api/client';
 import { WorkspaceSetup } from './components/WorkspaceSetup';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
-import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from './components/TodayBacklog';
-import { TodayScopeTabs } from './components/TodayScopeTabs';
+import { TodayBacklog, type TodayPlanningGroup } from './components/TodayBacklog';
+import { DatePickerPopover } from './components/DatePickerPopover';
+import { TodayFocusBar } from './components/TodayFocusBar';
 import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
 import { TodayProactiveBanner } from './components/TodayProactiveBanner';
+import { TodayReflectionBar, isReflectionPromptOptedOut } from './components/TodayReflectionBar';
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
@@ -35,8 +39,10 @@ import { useEvents, useTodayItems } from './features/v2/hooks/useEvents';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
-import { createNote as createV2Note } from './features/v2/api/client';
+import { createNote as createV2Note, patchCommitment as v2PatchCommitment, completeCommitment as v2CompleteCommitment } from './features/v2/api/client';
+import type { ProactiveProposal, ProactiveSuggestion } from './api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
+import { CommandPalette, type CommandId } from './components/CommandPalette';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
 import { useQueryClient } from '@tanstack/react-query';
@@ -106,10 +112,16 @@ export default function App() {
   const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
-  const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
+  const [prefillNoteDraft, setPrefillNoteDraft] = useState<string | null>(null);
+  const [prefillNoteTitle, setPrefillNoteTitle] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'today' | 'events' | 'calendar' | 'notes' | 'ai-chat' | 'memory' | 'team'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'events'>('today');
+  // UX S5: notes / AI / calendar / memory / team render as overlays over the
+  // permanent home; Esc (or the close button) returns to it.
+  const [activeOverlay, setActiveOverlay] = useState<'notes' | 'ai-chat' | 'calendar' | 'memory' | 'team' | null>(null);
   const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
+  // UX S8: node to highlight after a "来自 ↗" chip jump into the canvas.
+  const [requestedNodeId, setRequestedNodeId] = useState<string | null>(null);
   const [notesSurface, setNotesSurface] = useState<'notes' | 'inbox'>('notes');
   const [requestedV2NoteId, setRequestedV2NoteId] = useState<string | null>(null);
   useEffect(() => {
@@ -123,6 +135,8 @@ export default function App() {
     return () => window.removeEventListener('df:open-event-operator', openEventOperator);
   }, []);
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>([]);
+  // Registered by TodayInputBar so Cmd+N and CTAs can focus the input.
+  const taskInputFocusRef = useRef<(() => void) | null>(null);
   // Meeting capture has one canonical owner: a v2 NoteDocument. Every entry
   // point creates and opens a meeting note instead of mounting the retired
   // standalone meeting modal, which used a different API and storage tree.
@@ -140,11 +154,7 @@ export default function App() {
   // Background sync is intentionally disabled until it has version-aware
   // writes. Saving a captured date/content pair on a timer can overwrite a
   // different date after the user navigates.
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedMindmapFilter, setSelectedMindmapFilter] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showBrainDump, setShowBrainDump] = useState(false);
-  const [showTaskInput, setShowTaskInput] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [entityDrawerRef, setEntityDrawerRef] = useState<EntityRef | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,23 +170,26 @@ export default function App() {
   };
 
   const [brainDumpText, setBrainDumpText] = useState('');
-  const brainDumpProgressRef = useRef<{ source: string; date: string; pending: Task[] } | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskTagsList, setNewTaskTagsList] = useState<string[]>([]);
-  const [tagInputValue, setTagInputValue] = useState('');
-  const [newTaskDeadline, setNewTaskDeadline] = useState<string>('');
   const [isProcessingBrainDump, setIsProcessingBrainDump] = useState(false);
+  // UX S6: brainstorm preview + `?` answers + Cmd+B signal.
+  const [brainPreviewTasks, setBrainPreviewTasks] = useState<BrainPreviewTask[] | null>(null);
+  const [rewritingPreviewId, setRewritingPreviewId] = useState<string | null>(null);
+  const [aiAnswer, setAiAnswer] = useState<AiAnswer | null>(null);
+  const [brainModeSignal, setBrainModeSignal] = useState(0);
 
   const [showRolloverPreview, setShowRolloverPreview] = useState(false);
   const [rolloverPreview, setRolloverPreview] = useState<{ tasksToMigrate: any[]; fromDate: string } | null>(null);
   const [isRollingOver, setIsRollingOver] = useState(false);
-  // Daily reflection modal — opened from TodayScopeTabs "今日复盘" button or
+  // Daily reflection modal — S12 will give it a quiet prompt bar on Today;
   // auto-triggered after the day rolls over if the user hasn't written
   // today's Journal entry yet.
   const [showDailyReflection, setShowDailyReflection] = useState(false);
   const [savingDailyReflection, setSavingDailyReflection] = useState(false);
   const [lastDailySummary, setLastDailySummary] = useState<import('./api/client').DailyReportSummary | null>(null);
   const [reflectionDate, setReflectionDate] = useState<string>(todayStr);
+
+  // S12: quiet prompt bar instead of the auto-opened reflection modal.
+  const [reflectionBar, setReflectionBar] = useState<{ date: string; completedCount: number } | null>(null);
 
   const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
@@ -194,7 +207,7 @@ export default function App() {
   const openMeetingNote = useCallback(async () => {
     if (meetingCreateInFlightRef.current) return;
     meetingCreateInFlightRef.current = true;
-    setActiveTab('notes');
+    setActiveOverlay('notes');
     setNotesSurface('notes');
     try {
       const now = new Date();
@@ -227,8 +240,6 @@ export default function App() {
   const initializedDaysRef = useRef(new Set<string>());
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
-  const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
-  const [hideDoneTasks, setHideDoneTasks] = useState(false);
   const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
@@ -394,10 +405,6 @@ export default function App() {
     }
   }, [focusStorageKey]);
 
-  useEffect(() => {
-    setSelectedCategory(null);
-  }, [currentFileDate, activeContext]);
-
   const updateFocusTaskIds = useCallback((ids: string[]) => {
     const next = ids.slice(0, 3);
     setFocusTaskIds(next);
@@ -428,14 +435,14 @@ export default function App() {
       if (!entity) return;
       setEntityDrawerRef(null);
       if (entity.type === 'note') {
-        setActiveTab('notes');
+        setActiveOverlay('notes');
         setNotesSurface('notes');
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('df:select-note', { detail: { id: entity.id } })), 0);
       } else if (entity.type === 'source' || entity.type === 'proposal' || entity.type === 'job') {
-        setActiveTab('notes');
+        setActiveOverlay('notes');
         setNotesSurface('inbox');
       } else if (entity.type === 'calendar_event') {
-        setActiveTab('calendar');
+        setActiveOverlay('calendar');
       } else {
         setActiveTab('today');
       }
@@ -773,11 +780,20 @@ export default function App() {
     loadContextNotes();
   }, [activeContext, loadContextNotes]);
 
+  // ⌘K palette note search covers every note in the current context
+  // (UX_DESIGN §11), not just the current day.
+  const paletteNotes = useMemo(() => {
+    const byId = new Map<string, NoteData>();
+    for (const note of contextNotes) byId.set(note.id, note);
+    for (const note of dailyNotes) byId.set(note.id, note);
+    return Array.from(byId.values());
+  }, [contextNotes, dailyNotes]);
+
   useEffect(() => {
-    if (activeTab === 'ai-chat') {
+    if (activeOverlay === 'ai-chat') {
       loadContextNotes();
     }
-  }, [activeTab, loadContextNotes]);
+  }, [activeOverlay, loadContextNotes]);
 
   const handleSwitchWorkspace = useCallback(async (id: string) => {
     if (id === activeWorkspaceId) return;
@@ -797,16 +813,14 @@ export default function App() {
       // default to Notes and could leak stale filters or drafts across it.
       setActiveTab('today');
       setCurrentFileDate(getTodayStr());
-      setShowTaskInput(false);
-      setShowBrainDump(false);
       setShowQuickNoteEditor(false);
       setIsNoteEditorMaximized(false);
       setEditingDailyNote(null);
       setPrefillLinkedTaskId(null);
-      setNotesFilterByTaskId(null);
+      setPrefillNoteDraft(null);
+      setPrefillNoteTitle(null);
       setQuickNoteDefaultType(undefined);
       setChatDraft(null);
-      setSelectedCategory(null);
 
       // Reset data state for the new workspace.
       setMarkdown('');
@@ -843,95 +857,324 @@ export default function App() {
         void openMeetingNote();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setShowDatePicker(true);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        setWorkspaceOpenSignal(value => value + 1);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '!') {
+        e.preventDefault();
+        setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        const singleKeyActions: Record<string, () => void> = {
+          j: () => kbActionsRef.current.reflection(),
+          r: () => kbActionsRef.current.rollover(),
+          '3': () => setActiveOverlay('notes'),
+          '4': () => setActiveOverlay('ai-chat'),
+          '5': () => setActiveOverlay('calendar'),
+          '6': () => setActiveOverlay('memory'),
+          '7': () => setActiveOverlay('team'),
+          ',': () => setShowSettings(true),
+        };
+        const action = singleKeyActions[e.key.toLowerCase()];
+        if (action) {
+          e.preventDefault();
+          action();
+          return;
+        }
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        setShowTaskInput(prev => !prev);
+        setActiveTab('today');
+        taskInputFocusRef.current?.();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        setActiveTab('today');
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '2') {
+        e.preventDefault();
+        setActiveTab('events');
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        // Inside the Events canvas, ⌘B toggles the outline (handled by
+        // EventsView). Brainstorm mode only claims ⌘B elsewhere.
+        if (activeTab !== 'events') {
+          e.preventDefault();
+          setActiveTab('today');
+          setBrainModeSignal(value => value + 1);
+        }
         return;
       }
       if (e.key === 'Escape') {
-        setShowTaskInput(false);
-        setShowBrainDump(false);
+        const target = e.target as HTMLElement | null;
+        const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (typing) return;
+        if (activeOverlay) {
+          setActiveOverlay(null);
+        } else if (activeTab === 'events') {
+          setActiveTab('today');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openMeetingNote]);
+  }, [openMeetingNote, activeTab, activeOverlay]);
 
-  const processBrainDump = async () => {
-    const sourceText = brainDumpText.trim();
-    if (!sourceText) return;
+  const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [workspaceOpenSignal, setWorkspaceOpenSignal] = useState(0);
+  // Keyboard handlers defined later in the component; the keydown effect
+  // reads them through this ref.
+  const kbActionsRef = useRef<{ reflection: () => void; rollover: () => void }>({
+    reflection: () => {},
+    rollover: () => {},
+  });
+
+  // Suggestions from the proactive scan target v2 commitments, not daily
+  // tasks — apply them through the v2 API so the buttons do real work
+  // instead of just hiding the card (design v3.1: no dead buttons).
+  const handleApplySuggestion = async (proposal: ProactiveProposal, suggestion: ProactiveSuggestion) => {
+    try {
+      if (suggestion.action === 'move_to_today') {
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 0);
+        await v2PatchCommitment(proposal.entityId, { dueAt: endOfToday.toISOString() });
+        showToast(language === 'zh' ? '已排进今天' : 'Moved to today', 'success');
+      } else if (suggestion.action === 'mark_done') {
+        await v2CompleteCommitment(proposal.entityId, {
+          outcomeKind: 'delivered',
+          outcomeSummary: proposal.title,
+        });
+        showToast(language === 'zh' ? '已标记完成' : 'Marked as done', 'success');
+      } else {
+        // regroup has no single-click server action yet; point the user at
+        // the canvas instead of pretending the card action did it.
+        showToast(language === 'zh' ? '请在事件画布中重新整理该事项' : 'Regroup this item from the event canvas', 'info');
+      }
+    } catch (err) {
+      console.error('Failed to apply proactive suggestion', err);
+      showToast(language === 'zh' ? '操作失败，建议已恢复' : 'Action failed; suggestion restored', 'error');
+    } finally {
+      setProactiveRefreshKey(k => k + 1);
+    }
+  };
+
+  // --- UX S6: AI actions ----------------------------------------------------
+  // The backend /api/ai/action endpoint owns the prompts and JSON parsing;
+  // this wrapper only carries the user's own provider credentials and turns
+  // "not configured" into a friendly message (design: 后端可关).
+  const runAiAction = async (action: AiActionKind, input: string, context?: string) => {
+    if (!aiApiKey || !aiBaseUrl) {
+      throw new Error(language === 'zh' ? '请先在设置里配置 AI 提供商' : 'Configure an AI provider in Settings first');
+    }
+    const { result } = await aiApi.action({ action, apiKey: aiApiKey, model: aiModel || undefined, baseUrl: aiBaseUrl, input, context });
+    return result;
+  };
+
+  const refreshDayFromServer = async () => {
+    const data = await filesApi.get(currentFileDate);
+    if (data) {
+      setMarkdown(data.content);
+      setTasks(data.tasks as Task[]);
+      setLastSyncedMD(data.content);
+      setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+    }
+  };
+
+  /** Brainstorm extract — returns the preview list instead of creating tasks. */
+  const extractBrainDump = async (text: string): Promise<BrainPreviewTask[]> => {
     setIsProcessingBrainDump(true);
     try {
-      let progress = brainDumpProgressRef.current;
-      if (!progress || progress.source !== sourceText || progress.date !== currentFileDate) {
-        if (!aiApiKey || !aiBaseUrl) {
-          throw new Error('AI provider not configured');
-        }
-
-        const { summary: content } = await aiApi.summarize({
-          apiKey: aiApiKey,
-          model: aiModel || undefined,
-          baseUrl: aiBaseUrl,
-          systemPrompt: 'You are a task extraction assistant. Output ONLY a valid JSON array of tasks. Each task object must have: title (string), tags (string array), project (string, optional), deadline (YYYY-MM-DD string, optional), priority ("high"|"medium"|"low", optional). Do not include any markdown formatting or explanation outside the JSON.',
-          userPrompt: `Extract a list of actionable tasks from the following text. Return ONLY a JSON array:\n\n"${sourceText}"`,
-        });
-
-        const jsonStr = content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
-        const extracted = JSON.parse(jsonStr) as any[];
-        const batchId = Date.now();
-        const pending: Task[] = extracted.map((t, idx) => {
-          const tags = Array.isArray(t.tags) && t.tags.length > 0
-            ? t.tags.map((tag: string) => tag.toLowerCase())
-            : [];
-          if (!tags.some((tag: string) => ['work', 'life'].includes(tag))) tags.push(activeContext);
-          return {
-            id: `t_${batchId}_${idx}`,
-            title: t.title,
-            status: 'todo',
-            tags,
-            source_date: currentFileDate,
-            project: t.project,
-            deadline: t.deadline,
-            priority: t.priority as any,
-          };
-        });
-        progress = { source: sourceText, date: currentFileDate, pending };
-        brainDumpProgressRef.current = progress;
+      const result = await runAiAction('split_tasks', text);
+      const arr = Array.isArray(result) ? result : [];
+      const extracted: BrainPreviewTask[] = [];
+      arr.slice(0, 12).forEach((item: any, idx: number) => {
+        const title = String(item?.title ?? '').trim();
+        if (!title) return;
+        const deadline = typeof item?.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.deadline)
+          ? item.deadline
+          : undefined;
+        extracted.push({ id: `bp_${Date.now()}_${idx}`, title, deadline });
+      });
+      if (extracted.length === 0) {
+        showToast(language === 'zh' ? 'AI 没有提取到任务' : 'AI found no tasks', 'info');
       }
-
-      const failed: Task[] = [];
-      for (const task of progress.pending) {
-        try {
-          await tasksApi.create(currentFileDate, task);
-        } catch {
-          failed.push(task);
-        }
-      }
-      brainDumpProgressRef.current = failed.length > 0
-        ? { source: sourceText, date: currentFileDate, pending: failed }
-        : null;
-
-      // Refresh markdown and re-sync tasks with server-side parsed IDs
-      const fileData = await filesApi.get(currentFileDate);
-      if (fileData) {
-        setMarkdown(fileData.content);
-        setTasks(fileData.tasks as Task[]);
-        setLastSyncedMD(fileData.content);
-        setFilesMap(prev => ({ ...prev, [currentFileDate]: fileData.content }));
-      }
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} extracted tasks could not be created`);
-      }
-      setBrainDumpText('');
-      setShowBrainDump(false);
-      setShowTaskInput(false);
-    } catch (e) {
-      console.error(e);
-      showToast(language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.', 'error');
+      return extracted;
+    } catch (e: any) {
+      console.error('Brain dump extraction failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 处理失败' : 'Failed to process with AI.'), 'error');
+      return [];
     } finally {
       setIsProcessingBrainDump(false);
     }
   };
+
+  const handleBrainPreviewAdd = async (list: BrainPreviewTask[]) => {
+    let created = 0;
+    for (const item of list) {
+      try {
+        await tasksApi.create(currentFileDate, {
+          id: `t_${Date.now()}_${created}`,
+          title: item.title,
+          status: 'todo',
+          tags: [activeContext],
+          source_date: currentFileDate,
+          deadline: /^\d{4}-\d{2}-\d{2}$/.test(item.deadline ?? '') ? item.deadline : undefined,
+        } as Task);
+        created += 1;
+      } catch (err) {
+        console.error('Failed to create brainstorm task', err);
+      }
+    }
+    setBrainPreviewTasks(null);
+    setBrainDumpText('');
+    if (created > 0) {
+      try { await refreshDayFromServer(); } catch { /* non-fatal */ }
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? `已加入 ${created} 个任务` : `Added ${created} tasks`, 'success');
+    } else {
+      showToast(language === 'zh' ? '添加失败' : 'Failed to add tasks', 'error');
+    }
+  };
+
+  const handleBrainPreviewRewrite = async (id: string) => {
+    const item = brainPreviewTasks?.find(task => task.id === id);
+    if (!item || rewritingPreviewId) return;
+    setRewritingPreviewId(id);
+    try {
+      const result = await runAiAction('rewrite_task', item.title) as { title?: string };
+      const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : item.title;
+      setBrainPreviewTasks(prev => (prev ? prev.map(task => (task.id === id ? { ...task, title } : task)) : prev));
+    } catch (e: any) {
+      console.error('Rewrite failed', e);
+      showToast(e?.message || (language === 'zh' ? '改写失败' : 'Rewrite failed'), 'error');
+    } finally {
+      setRewritingPreviewId(null);
+    }
+  };
+
+  const handleBrainPreviewRemove = (id: string) => {
+    setBrainPreviewTasks(prev => {
+      const next = prev ? prev.filter(task => task.id !== id) : null;
+      return next && next.length > 0 ? next : null;
+    });
+  };
+
+  const handleAskAi = async (question: string) => {
+    const openList = todayTasks.filter(task => task.status === 'todo').slice(0, 20);
+    const context = openList.map(task => `- ${task.title}${task.deadline ? ` (due ${task.deadline})` : ''}`).join('\n');
+    try {
+      const result = await runAiAction('ask', question, context) as { answer?: string; suggestedTask?: { title?: string } };
+      setAiAnswer({
+        answer: (result?.answer ?? '').trim() || (language === 'zh' ? '（AI 没有给出回答）' : '(No answer from AI)'),
+        suggestedTitle: result?.suggestedTask?.title?.trim() || undefined,
+      });
+    } catch (e: any) {
+      console.error('AI ask failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 问答失败' : 'AI ask failed'), 'error');
+    }
+  };
+
+  const handleAnswerAdopt = (title: string) => {
+    setAiAnswer(null);
+    void handleQuickAddTask({ title, tags: [activeContext] });
+  };
+
+  const handleAiPickFocus = async () => {
+    const openList = todayTasks.filter(task => task.status === 'todo');
+    if (openList.length <= 3) {
+      updateFocusTaskIds(openList.map(task => task.id));
+      return;
+    }
+    const input = JSON.stringify(openList.map(task => ({
+      id: task.id,
+      title: task.title,
+      deadline: task.deadline,
+      priority: task.priority,
+    })));
+    const result = await runAiAction('pick_focus', input) as { ids?: string[] };
+    const picked = (result?.ids ?? []).filter(id => openList.some(task => task.id === id)).slice(0, 3);
+    if (picked.length === 0) {
+      throw new Error(language === 'zh' ? 'AI 没有选中任何任务' : 'AI picked nothing valid');
+    }
+    updateFocusTaskIds(picked);
+    showToast(language === 'zh' ? 'AI 已选好今天的焦点' : 'AI picked your focus', 'success');
+  };
+
+  const handleTaskAiAction = async (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => {
+    const body = [task.title, task.description].filter(Boolean).join('\n');
+    try {
+      if (action === 'decompose') {
+        const result = await runAiAction('split_tasks', body);
+        const arr = Array.isArray(result) ? result : [];
+        const subtasks = arr
+          .map((item: any) => String(item?.title ?? '').trim())
+          .filter(Boolean)
+          .slice(0, 8);
+        if (subtasks.length === 0) {
+          showToast(language === 'zh' ? 'AI 没有拆出子任务' : 'AI produced no subtasks', 'info');
+          return;
+        }
+        for (const [idx, title] of subtasks.entries()) {
+          try {
+            await tasksApi.create(currentFileDate, {
+              id: `t_${Date.now()}_${idx}`,
+              title,
+              status: 'todo',
+              tags: task.tags?.length ? [...task.tags] : [activeContext],
+              source_date: currentFileDate,
+              parentTaskId: task.id,
+              deadline: task.deadline,
+            } as Task);
+          } catch (err) {
+            console.error('Failed to create subtask', err);
+          }
+        }
+        await refreshDayFromServer();
+        await todayItemsQuery.refetch();
+        showToast(language === 'zh' ? `已拆解出 ${subtasks.length} 个子任务` : `Added ${subtasks.length} subtasks`, 'success');
+      } else if (action === 'rewrite') {
+        const result = await runAiAction('rewrite_task', body) as { title?: string; description?: string };
+        const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : task.title;
+        await handleEditTask(task.id, {
+          title,
+          ...(typeof result?.description === 'string' && result.description.trim() ? { description: result.description.trim() } : {}),
+        }, task.host_date);
+      } else {
+        const comments = (task.comments ?? []).map(comment => comment.text).join('\n');
+        const result = await runAiAction('summarize_task', body, comments || undefined) as { summary?: string };
+        const summary = (result?.summary ?? '').trim();
+        if (!summary) throw new Error(language === 'zh' ? 'AI 没有给出总结' : 'AI produced no summary');
+        const now = new Date();
+        const pad = (value: number) => String(value).padStart(2, '0');
+        const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        await handleEditTask(task.id, {
+          comments: [...(task.comments ?? []), { text: summary, timestamp: stamp }],
+        }, task.host_date);
+      }
+    } catch (e: any) {
+      console.error('Task AI action failed', e);
+      showToast(e?.message || (language === 'zh' ? 'AI 操作失败' : 'AI action failed'), 'error');
+    }
+  };
+
 
   // When date changes, load tasks
   const handleToggleTask = async (id: string, hostDate?: string) => {
@@ -1089,6 +1332,125 @@ export default function App() {
     showToast(language === 'zh' ? '更新失败，请重试' : 'Failed to update task — please retry', 'error');
   };
 
+  // S2: bottom input bar submits here — optimistic row, server create,
+  // re-read for stable ids, optional recurrence rule, projection refetch.
+  const handleQuickAddTask = async (draft: QuickTaskDraft) => {
+    const newTask: Task = {
+      id: `t_${Date.now()}`,
+      title: draft.title,
+      description: draft.description,
+      status: 'todo',
+      tags: draft.tags,
+      deadline: draft.deadline,
+      source_date: currentFileDate,
+    };
+    // Optimistic UI update
+    setTasks(prev => [...prev, newTask]);
+    const newCategory = draft.tags.filter(t => !['work', 'life', 'tasks'].includes(t))[0];
+    if (newCategory) setLastAddedCategory(newCategory);
+    try {
+      await tasksApi.create(currentFileDate, newTask);
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+      if (draft.recurrence) {
+        try {
+          await recurringApi.create({
+            title: draft.title,
+            description: draft.description,
+            tags: draft.tags,
+            recurrence: draft.recurrence,
+          });
+        } catch (e) {
+          console.error('Failed to create recurring task', e);
+          showToast(language === 'zh' ? '任务已添加，但重复规则保存失败' : 'Task added, but recurrence could not be saved', 'error');
+        }
+      }
+      showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
+      await todayItemsQuery.refetch();
+    } catch (e) {
+      console.error('Failed to add task', e);
+      // Roll back the optimistic row on failure.
+      setTasks(prev => prev.filter(task => task.id !== newTask.id));
+      showToast(language === 'zh' ? '添加失败' : 'Failed to add task', 'error');
+    }
+  };
+
+  /** UX S7: task → new project event, then jump into its canvas. */
+  const handleConvertTaskToProject = async (task: Task, opts: { title: string; extraNodes: string[] }) => {
+    try {
+      const result = await eventsApi.convertTaskToEvent({
+        taskId: task.id,
+        scheduledDate: task.host_date || currentFileDate,
+        title: opts.title,
+        context: (activeContext as 'work' | 'life'),
+        extraNodes: opts.extraNodes,
+      });
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
+      setRequestedEventId(result.eventId);
+      setActiveTab('events');
+    } catch (e: any) {
+      console.error('Convert to project failed', e);
+      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to convert to project'), 'error');
+    }
+  };
+
+  /** UX_DESIGN §12: task inline "R" — save a recurrence rule (creates a
+   * recurring template, same as adding a task with a rule from the input bar). */
+  const handleSetTaskRecurrence = (task: Task, recurrence: RecurrenceRule) => {
+    void recurringApi.create({
+      title: task.title,
+      description: task.description,
+      tags: task.tags,
+      recurrence,
+    }).then(() => {
+      showToast(language === 'zh' ? '重复规则已保存，任务将按规则自动生成' : 'Recurrence saved — tasks will be generated on schedule', 'success');
+    }).catch((e: any) => {
+      console.error('Failed to save recurrence', e);
+      showToast(e?.message || (language === 'zh' ? '重复规则保存失败' : 'Failed to save recurrence'), 'error');
+    });
+  };
+
+  /** UX_DESIGN §2: ⋯ menu "转成项目" — create a project event from the draft. */
+  const handleDraftToProject = async (title: string) => {
+    try {
+      const event = await eventsApi.create({ title, context: (activeContext as 'work' | 'life') });
+      await todayItemsQuery.refetch();
+      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
+      setRequestedEventId(event.id);
+      setActiveTab('events');
+    } catch (e: any) {
+      console.error('Draft to project failed', e);
+      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to create project'), 'error');
+    }
+  };
+
+  const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
+    const targetDate = hostDate ?? currentFileDate;
+    try {
+      await tasksApi.updateSpace(id, null, targetDate);
+      const data = await filesApi.get(targetDate);
+      if (data) {
+        if (targetDate === currentFileDate) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+        }
+        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
+      }
+      showToast(language === 'zh' ? '已移出事件' : 'Removed from event', 'success');
+      await todayItemsQuery.refetch();
+    } catch (e) {
+      console.error('Failed to remove task from event', e);
+      showToast(language === 'zh' ? '移出事件失败' : 'Failed to remove from event', 'error');
+    }
+  };
+
   const handleDeleteTask = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
     try {
@@ -1133,7 +1495,7 @@ export default function App() {
   //
   // Splits the in-memory tasks by status so the modal can pre-fill today's
   // completed / in-progress / postponed lists. Auto-triggered after the
-  // day rolls over; also reachable from the "今日复盘" button in TodayScopeTabs.
+  // day rolls over; also reachable from the reflection bar / ⌘J.
   // ---------------------------------------------------------------------
 
   const buildReflectionTasks = (): {
@@ -1165,6 +1527,10 @@ export default function App() {
     setReflectionDate(todayStr);
     setShowDailyReflection(true);
   }, [todayStr]);
+
+  useEffect(() => {
+    kbActionsRef.current = { reflection: handleOpenReflection, rollover: handleManualRollover };
+  }, [handleOpenReflection, handleManualRollover]);
 
   const handleSaveReflection = useCallback(
     async (params: {
@@ -1210,10 +1576,14 @@ export default function App() {
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
       await refreshEarlierOpenTasks();
-      // Auto-open the reflection modal for the day that was just archived.
-      // The user can dismiss it if they don't want to write a journal entry.
-      setReflectionDate(currentFileDate);
-      setShowDailyReflection(true);
+      // S12: offer a quiet prompt bar for the day that was just archived
+      // instead of interrupting with an auto-opened modal.
+      if (!isReflectionPromptOptedOut()) {
+        // UX_DESIGN §6.1: only prompt when the archived day had real
+        // substance (≥3 done tasks) — a 1-2 item day doesn't need one.
+        const doneCount = (data?.tasks as Task[] ?? []).filter(t => t.status === 'done').length;
+        if (doneCount >= 3) setReflectionBar({ date: currentFileDate, completedCount: doneCount });
+      }
     } catch (e) {
       console.error('Rollover failed', e);
       showToast(language === 'zh' ? '迁移失败' : 'Rollover failed', 'error');
@@ -1236,6 +1606,17 @@ export default function App() {
   // source Event, node breadcrumb and inherited category tags even after a
   // reload. Keep the legacy task parse only as a resilient loading fallback.
   const todayTasks = [...(projectedTodayTasks ?? currentVisibleTasks), ...earlierVisibleTasks];
+
+  // Prune focus picks whose tasks are no longer open so stale ids cannot
+  // occupy the 3 slots (design v3.1 focus row stays usable all day).
+  const openTodayTaskIds = useMemo(
+    () => new Set(todayTasks.filter(task => task.status === 'todo').map(task => task.id)),
+    [todayTasks],
+  );
+  useEffect(() => {
+    const kept = focusTaskIds.filter(id => openTodayTaskIds.has(id));
+    if (kept.length !== focusTaskIds.length) updateFocusTaskIds(kept);
+  }, [focusTaskIds, openTodayTaskIds, updateFocusTaskIds]);
   const systemTags = ['work', 'life', 'delayed', 'tasks'];
   const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
@@ -1243,56 +1624,9 @@ export default function App() {
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
-  const todayTaskIds = new Set(todayTasks.map((task) => task.id));
-  const todayMindmapOptions = todayPlanningGroups
-    .map((group) => ({ ...group, taskIds: group.taskIds.filter((taskId) => todayTaskIds.has(taskId)) }))
-    .filter((group) => group.taskIds.length > 0);
-  const hasStandaloneTodayTasks = todayTasks.some((task) =>
-    !todayPlanningGroups.some((group) => group.taskIds.includes(task.id)),
-  );
-  const selectedMindmapFilterIsAvailable = !selectedMindmapFilter
-    || (selectedMindmapFilter === STANDALONE_MINDMAP_FILTER
-      ? hasStandaloneTodayTasks
-      : todayMindmapOptions.some((group) => group.mindmapId === selectedMindmapFilter));
-  const selectedCategoryIsAvailable = !selectedCategory || categories.includes(selectedCategory);
-
-  // Scope filters belong to the currently visible workspace/context. A map or
-  // tag that disappears after switching Work/Life (or deleting a map) must not
-  // keep filtering the next surface invisibly.
-  useEffect(() => {
-    if (!selectedMindmapFilterIsAvailable) setSelectedMindmapFilter(null);
-  }, [selectedMindmapFilterIsAvailable]);
-  useEffect(() => {
-    if (!selectedCategoryIsAvailable) setSelectedCategory(null);
-  }, [selectedCategoryIsAvailable]);
-
-  const filteredTodayTasks = filterTodayTasks(
-    todayTasks,
-    selectedCategory,
-    selectedMindmapFilter,
-    todayPlanningGroups,
-  );
-
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const recentDates = allDates.filter(d => d >= recentThreshold);
-  const archivedDates = allDates.filter(d => d < recentThreshold);
-  
-  const archivedMonths: Record<string, string[]> = {};
-  archivedDates.forEach(d => {
-    const dateObj = new Date(`${d}T00:00:00Z`);
-    const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const monthName = monthFormatter.format(dateObj); // e.g. "April 2026"
-    if (!archivedMonths[monthName]) archivedMonths[monthName] = [];
-    archivedMonths[monthName].push(d);
-  });
-
-  const [expandedArchiveMonths, setExpandedArchiveMonths] = useState<Record<string, boolean>>({});
-
-  const toggleArchiveMonth = (month: string) => {
-    setExpandedArchiveMonths(prev => ({ ...prev, [month]: !prev[month] }));
-  };
-
   // Handle workspace setup completion
   const handleWorkspaceSetupComplete = async () => {
     setShowWorkspaceSetup(false);
@@ -1413,16 +1747,16 @@ export default function App() {
         language={language}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={activeOverlay ?? activeTab}
+        setActiveTab={(tab) => {
+          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          else setActiveOverlay(tab);
+        }}
         currentFileDate={currentFileDate}
         setCurrentFileDate={setCurrentFileDate}
         filesMap={filesMap}
         setFilesMap={setFilesMap}
         recentDates={recentDates}
-        archivedMonths={archivedMonths}
-        expandedArchiveMonths={expandedArchiveMonths}
-        toggleArchiveMonth={toggleArchiveMonth}
         showToast={showToast}
         workspaceSwitcher={
           workspaces.length > 0 ? (
@@ -1433,6 +1767,7 @@ export default function App() {
               onActivate={handleSwitchWorkspace}
               onAdded={ws => setWorkspaces(prev => [...prev, ws])}
               onRenamed={(id, name) => setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w))}
+              openSignal={workspaceOpenSignal}
               onRemoved={(id, nextActive) => {
                 setWorkspaces(prev => prev.filter(w => w.id !== id));
                 if (!nextActive) {
@@ -1463,7 +1798,8 @@ export default function App() {
         activeContext={activeContext}
         onContextChange={setActiveContext}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenNotesSurface={(surface) => { setActiveTab('notes'); setNotesSurface(surface); }}
+        onOpenNotesSurface={(surface) => { setActiveOverlay('notes'); setNotesSurface(surface); }}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
       />
 
       {/* Main Content Area */}
@@ -1486,7 +1822,7 @@ export default function App() {
             page padding but must not be constrained to document-reading
             width. A `max-w-3xl` wrapper left nearly half of a 1920px window
             empty and made the dashboard cards look like a narrow island. */}
-        <div className={`flex-1 w-full min-h-0 ${activeTab === 'ai-chat' || activeTab === 'notes' || activeTab === 'memory' || activeTab === 'events' || activeTab === 'today' || activeTab === 'calendar' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-8 lg:p-12 pb-32'}`}>
+        <div className="flex-1 w-full min-h-0 overflow-hidden">
           <div className={`h-full min-h-0 w-full ${!isSidebarOpen ? 'max-sm:pt-12' : ''}`}>
             {/* Loading state */}
             {isLoading && (
@@ -1555,21 +1891,39 @@ export default function App() {
                           <ChevronRight className="w-4 h-4" />
                         </button>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
-                              {currentFileDate === getTodayStr()
-                                ? (language === 'zh' ? '今天' : 'Today')
-                                : (language === 'zh' ? '历史任务' : 'Past tasks')}
-                            </p>
-                            <h1 className="truncate text-lg font-semibold tracking-tight text-text-heading md:text-xl">
-                              {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
-                                weekday: 'long',
-                                month: 'long',
-                                day: 'numeric',
-                                year: 'numeric',
-                                timeZone: 'UTC',
-                              }).format(new Date(`${currentFileDate}T00:00:00Z`))}
-                            </h1>
+                          <div className="relative min-w-0" data-testid="date-picker-anchor">
+                            <button
+                              type="button"
+                              onClick={() => setShowDatePicker(true)}
+                              className="flex flex-col items-start text-left"
+                              data-testid="date-picker-trigger"
+                            >
+                              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
+                                {currentFileDate === getTodayStr()
+                                  ? (language === 'zh' ? '今天' : 'Today')
+                                  : (language === 'zh' ? '历史任务' : 'Past tasks')}
+                              </p>
+                              <h1 className="truncate text-lg font-semibold tracking-tight text-text-heading md:text-xl">
+                                {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                                  weekday: 'long',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  timeZone: 'UTC',
+                                }).format(new Date(`${currentFileDate}T00:00:00Z`))}
+                              </h1>
+                            </button>
+                            <DatePickerPopover
+                              open={showDatePicker}
+                              onClose={() => setShowDatePicker(false)}
+                              currentDate={currentFileDate}
+                              today={getTodayStr()}
+                              onSelect={(date) => {
+                                setCurrentFileDate(date);
+                                setShowDatePicker(false);
+                              }}
+                              language={language}
+                            />
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1600,33 +1954,48 @@ export default function App() {
                     activeTab={activeTab}
                     currentFileDate={currentFileDate}
                     isToday={currentFileDate === getTodayStr()}
+                    refreshKey={proactiveRefreshKey}
+                    onApplySuggestion={handleApplySuggestion}
+                    onDismissAll={() => setProactiveRefreshKey(k => k + 1)}
                   />
 
-                  <TodayScopeTabs
-                    groups={todayMindmapOptions}
-                    hasStandalone={hasStandaloneTodayTasks}
-                    selectedMindmapId={selectedMindmapFilter}
-                    onMindmapChange={setSelectedMindmapFilter}
-                    tags={categories}
-                    selectedTag={selectedCategory}
-                    onTagChange={setSelectedCategory}
+                  {reflectionBar && (
+                    <TodayReflectionBar
+                      date={reflectionBar.date}
+                      completedCount={reflectionBar.completedCount}
+                      language={language}
+                      onWrite={() => {
+                        setReflectionDate(reflectionBar.date);
+                        setShowDailyReflection(true);
+                        setReflectionBar(null);
+                      }}
+                      onDismiss={() => setReflectionBar(null)}
+                      onOptOut={() => {
+                        try { localStorage.setItem('dailyflow:reflection:promptOptOut', '1'); } catch { /* private mode */ }
+                        setReflectionBar(null);
+                      }}
+                    />
+                  )}
+
+                  <TodayFocusBar
+                    tasks={todayTasks}
+                    focusTaskIds={focusTaskIds}
+                    onChange={updateFocusTaskIds}
                     language={language}
-                    storageKey={`df_today_mindmap_tabs_${activeWorkspaceId || 'default'}`}
-                    onOpenReflection={handleOpenReflection}
-                    reflectionSaving={savingDailyReflection}
+                    isToday={currentFileDate === getTodayStr()}
+                    onAiPick={() => handleAiPickFocus()}
                   />
 
                   <TodayBacklog
-                    tasks={filteredTodayTasks}
+                    tasks={todayTasks}
                     planningGroups={todayPlanningGroups}
-                    onOpenPlanningGroup={(group) => {
+                    onOpenPlanningGroup={(group, nodeId) => {
                       setRequestedEventId(group.spaceId ?? group.id);
+                      setRequestedNodeId(nodeId ?? null);
                       setActiveTab('events');
                     }}
                     selectedDate={currentFileDate}
                     categories={categories}
-                    focusTaskIds={focusTaskIds}
-                    onFocusTaskIdsChange={updateFocusTaskIds}
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
                     onDeleteTask={handleDeleteTask}
@@ -1635,17 +2004,25 @@ export default function App() {
                       setPrefillLinkedTaskId(taskId);
                       setShowQuickNoteEditor(true);
                     }}
+                    onUnlinkFromSpace={handleUnlinkFromSpace}
+                    onAiAction={handleTaskAiAction}
+                    onConvertToProject={handleConvertTaskToProject}
+                    onSetRecurrence={handleSetTaskRecurrence}
                     onShowLinkedNotes={(taskId) => {
-                      setNotesFilterByTaskId(taskId);
-                      setActiveTab('notes');
+                      // Open the task's newest linked note in the quick note
+                      // editor — linked notes live in the per-date note store,
+                      // not the v2 Notes overlay, so filtering that list would
+                      // show nothing.
+                      const linked = dailyNotes
+                        .filter(n => (n.linkedTaskIds ?? []).includes(taskId))
+                        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+                      if (linked[0]) {
+                        setEditingDailyNote(linked[0]);
+                        setShowQuickNoteEditor(true);
+                      }
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
-                    onAddTask={() => setShowTaskInput(true)}
-                    hasActiveFilters={Boolean(selectedCategory || selectedMindmapFilter)}
-                    onClearFilters={() => {
-                      setSelectedCategory(null);
-                      setSelectedMindmapFilter(null);
-                    }}
+                    onAddTask={() => taskInputFocusRef.current?.()}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     completionPromptTaskIds={completionPromptTaskIds}
@@ -1657,9 +2034,53 @@ export default function App() {
                       });
                     }}
                   />
+
+                  <TodayInputBar
+                    language={language}
+                    activeContext={activeContext}
+                    categories={categories}
+                    brainDumpText={brainDumpText}
+                    setBrainDumpText={setBrainDumpText}
+                    isProcessingBrainDump={isProcessingBrainDump}
+                    onBrainExtract={extractBrainDump}
+                    brainPreviewTasks={brainPreviewTasks}
+                    onBrainPreviewAdd={(list) => void handleBrainPreviewAdd(list)}
+                    onBrainPreviewRewrite={(id) => void handleBrainPreviewRewrite(id)}
+                    onBrainPreviewRemove={handleBrainPreviewRemove}
+                    onBrainPreviewCancel={() => setBrainPreviewTasks(null)}
+                    rewritingPreviewId={rewritingPreviewId}
+                    onAsk={(question) => void handleAskAi(question)}
+                    aiAnswer={aiAnswer}
+                    onAnswerAdopt={handleAnswerAdopt}
+                    onAnswerCopy={(answer) => {
+                      void navigator.clipboard.writeText(answer)
+                        .then(() => showToast(language === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard', 'success'))
+                        .catch(() => showToast(language === 'zh' ? '复制失败' : 'Copy failed', 'error'));
+                    }}
+                    onAnswerOpen={(answer) => {
+                      setEditingDailyNote(null);
+                      setPrefillLinkedTaskId(null);
+                      setPrefillNoteTitle(answer.suggestedTitle || null);
+                      setPrefillNoteDraft(answer.answer);
+                      setShowQuickNoteEditor(true);
+                    }}
+                    onAnswerClose={() => setAiAnswer(null)}
+                    brainModeSignal={brainModeSignal}
+                    onLinkNote={(draft) => {
+                      setEditingDailyNote(null);
+                      setPrefillLinkedTaskId(null);
+                      setPrefillNoteDraft(draft || null);
+                      setPrefillNoteTitle(null);
+                      setShowQuickNoteEditor(true);
+                    }}
+                    onDraftToProject={(title) => void handleDraftToProject(title)}
+                    onMeetingCapture={() => void openMeetingNote()}
+                    onAddTask={handleQuickAddTask}
+                    onRegisterFocus={(focus) => { taskInputFocusRef.current = focus; }}
+                  />
                   </motion.div>
                 </div>
-              ) : activeTab === 'events' ? (
+              ) : (
                 <motion.div
                   key="events"
                   initial={{ opacity: 0, y: 8 }}
@@ -1673,137 +2094,181 @@ export default function App() {
                     onNotice={showToast}
                     requestedEventId={requestedEventId}
                     onRequestedEventHandled={() => setRequestedEventId(null)}
+                    requestedNodeId={requestedNodeId}
+                    onRequestedNodeHandled={() => setRequestedNodeId(null)}
                   />
                 </motion.div>
-              ) : activeTab === 'calendar' ? (
-                <motion.div
-                  key="calendar"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6 lg:px-12"
-                  data-testid="calendar-page"
-                >
-                  <CalendarWorkspace
-                    date={currentFileDate}
-                    setDate={setCurrentFileDate}
-                    language={language}
-                    onOpenLocalDate={(date) => {
-                      setCurrentFileDate(date);
-                      setActiveTab('today');
-                    }}
-                    onManageConnections={() => {
-                      setConfigTab('sync');
-                      setShowSettings(true);
-                    }}
-                  />
-                </motion.div>
-              ) : activeTab === 'ai-chat' ? (
-                <motion.div
-                  key="ai-chat"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="h-full"
-                >
-                  <AIChat
-                    workspaceId={activeWorkspaceId || 'default'}
-                    language={language}
-                    activeContext={activeContext}
-                    tasks={contextFilteredTasks}
-                    notes={contextNotes}
-                    filesMap={filesMap}
-                    showToast={showToast}
-                    initialDraft={chatDraft}
-                    onDraftConsumed={() => setChatDraft(null)}
-                    onCreateMeetingNote={() => void openMeetingNote()}
-                    onNoteCreated={() => {
-                      const today = getTodayStr();
-                      notesApi.getByDate(today).then(dateNotes => {
-                        setDailyNotes(prev => {
-                          const others = prev.filter(n => n.date !== today);
-                          return [...others, ...dateNotes];
-                        });
-                      }).catch(err => console.error('Failed to refresh daily notes:', err));
-                      loadContextNotes();
-                    }}
-                  />
-                </motion.div>
-              ) : activeTab === 'memory' ? (
-                <motion.div
-                  key="memory"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="h-full min-h-0 overflow-hidden"
-                >
-                  <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
-                </motion.div>
-              ) : activeTab === 'team' ? (
-                <motion.div
-                  key="team"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="h-full min-h-0 overflow-hidden"
-                >
-                  <TeamView language={language} showToast={showToast} />
-                </motion.div>
-              ) : (
-                <div className="flex h-full min-h-0 flex-col">
-                  <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
-                    {([
-                      ['notes', language === 'zh' ? '笔记' : 'Notes'],
-                      ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
-                    ] as const).map(([surface, label]) => (
-                      <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
-                  </div>
-                </div>
               )
             )}
           </div>
         </div>
 
-        {/* Task Input Panel */}
-        {activeTab === 'today' && (
-          <TaskInputPanel
-            showTaskInput={showTaskInput}
-            setShowTaskInput={setShowTaskInput}
-            showBrainDump={showBrainDump}
-            setShowBrainDump={setShowBrainDump}
-            language={language}
-            newTaskTitle={newTaskTitle}
-            setNewTaskTitle={setNewTaskTitle}
-            newTaskTagsList={newTaskTagsList}
-            setNewTaskTagsList={setNewTaskTagsList}
-            tagInputValue={tagInputValue}
-            setTagInputValue={setTagInputValue}
-            newTaskDeadline={newTaskDeadline}
-            setNewTaskDeadline={setNewTaskDeadline}
-            brainDumpText={brainDumpText}
-            setBrainDumpText={setBrainDumpText}
-            isProcessingBrainDump={isProcessingBrainDump}
-            processBrainDump={processBrainDump}
-            currentFileDate={currentFileDate}
-            activeContext={activeContext}
-            categories={categories}
-            systemTags={systemTags}
-            setTasks={setTasks}
-            setMarkdown={setMarkdown}
-            setLastSyncedMD={setLastSyncedMD}
-            setFilesMap={setFilesMap}
-            showToast={showToast}
-            setLastAddedCategory={setLastAddedCategory}
-          />
-        )}
+
       </main>
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
+
+      {/* UX S5: everything except Today (home) and Events (canvas) is an
+          overlay. Esc or the backdrop closes it and lands back on home. */}
+      <AnimatePresence>
+        {activeOverlay && (
+          <motion.div
+            key="workspace-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-0 md:p-6"
+            data-testid="workspace-overlay"
+          >
+            <div
+              className="absolute inset-0 bg-black/25"
+              onClick={() => setActiveOverlay(null)}
+              data-testid="overlay-backdrop"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 14, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="relative flex h-full w-full flex-col overflow-hidden rounded-none border border-border bg-background shadow-2xl md:rounded-xl"
+              data-testid={`overlay-${activeOverlay}`}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2.5">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">
+                  {activeOverlay === 'notes'
+                    ? (language === 'zh' ? '笔记' : 'Notes')
+                    : activeOverlay === 'ai-chat'
+                      ? (language === 'zh' ? '问 AI' : 'Ask AI')
+                      : activeOverlay === 'calendar'
+                        ? (language === 'zh' ? '日历' : 'Calendar')
+                        : activeOverlay === 'memory'
+                          ? (language === 'zh' ? '记忆' : 'Memory')
+                          : (language === 'zh' ? '团队' : 'Team')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveOverlay(null)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
+                  aria-label={language === 'zh' ? '关闭浮层' : 'Close overlay'}
+                  data-testid="overlay-close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeOverlay === 'notes' ? (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
+                      {([
+                        ['notes', language === 'zh' ? '笔记' : 'Notes'],
+                        ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
+                      ] as const).map(([surface, label]) => (
+                        <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
+                    </div>
+                  </div>
+                ) : activeOverlay === 'ai-chat' ? (
+                  <div className="h-full">
+                    <AIChat
+                      workspaceId={activeWorkspaceId || 'default'}
+                      language={language}
+                      activeContext={activeContext}
+                      tasks={contextFilteredTasks}
+                      notes={contextNotes}
+                      filesMap={filesMap}
+                      showToast={showToast}
+                      initialDraft={chatDraft}
+                      onDraftConsumed={() => setChatDraft(null)}
+                      onCreateMeetingNote={() => void openMeetingNote()}
+                      onNoteCreated={() => {
+                        const today = getTodayStr();
+                        notesApi.getByDate(today).then(dateNotes => {
+                          setDailyNotes(prev => {
+                            const others = prev.filter(n => n.date !== today);
+                            return [...others, ...dateNotes];
+                          });
+                        }).catch(err => console.error('Failed to refresh daily notes:', err));
+                        loadContextNotes();
+                      }}
+                    />
+                  </div>
+                ) : activeOverlay === 'calendar' ? (
+                  <div className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6" data-testid="calendar-page">
+                    <CalendarWorkspace
+                      date={currentFileDate}
+                      setDate={setCurrentFileDate}
+                      language={language}
+                      onOpenLocalDate={(date) => {
+                        setCurrentFileDate(date);
+                        setActiveOverlay(null);
+                        setActiveTab('today');
+                      }}
+                      onManageConnections={() => {
+                        setConfigTab('sync');
+                        setShowSettings(true);
+                      }}
+                    />
+                  </div>
+                ) : activeOverlay === 'memory' ? (
+                  <div className="h-full min-h-0 overflow-hidden">
+                    <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
+                  </div>
+                ) : (
+                  <div className="h-full min-h-0 overflow-hidden">
+                    <TeamView language={language} showToast={showToast} />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <CommandPalette
+        open={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        language={language}
+        tasks={todayTasks}
+        notes={paletteNotes}
+        events={(eventsQuery.data?.events ?? []).map(event => ({ id: event.id, title: event.title }))}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectTask={() => setActiveTab('today')}
+        onSelectNote={(id) => {
+          setActiveOverlay('notes');
+          setNotesSurface('notes');
+          window.setTimeout(() => window.dispatchEvent(new CustomEvent('df:select-note', { detail: { id } })), 0);
+        }}
+        onSelectEvent={(id) => {
+          setRequestedEventId(id);
+          setActiveTab('events');
+        }}
+        onSelectWorkspace={(id) => void handleSwitchWorkspace(id)}
+        onCommand={(command: CommandId) => {
+          if (command === 'reflection') handleOpenReflection();
+          else if (command === 'rollover') void handleManualRollover();
+          else if (command === 'calendar') setActiveOverlay('calendar');
+          else if (command === 'memory') setActiveOverlay('memory');
+          else if (command === 'team') setActiveOverlay('team');
+          else if (command === 'settings') setShowSettings(true);
+          else if (command === 'toggle-context') setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
+          else if (command === 'pick-date') setShowDatePicker(true);
+          else if (command === 'switch-workspace') setWorkspaceOpenSignal(value => value + 1);
+          else if (command === 'check-updates') void checkForUpdates().then(info => {
+            if (info.hasUpdate) {
+              setUpdateInfo(info);
+              setShowUpdateModal(true);
+            } else {
+              showToast(language === 'zh' ? '已是最新版本' : 'Already up to date', 'info');
+            }
+          }).catch(err => console.error('Update check failed', err));
+        }}
+      />
 
       <SettingsModal
         showSettings={showSettings}
@@ -1900,7 +2365,10 @@ export default function App() {
              note={editingDailyNote || undefined}
              defaultDate={currentFileDate}
              defaultLinkedTaskIds={prefillLinkedTaskId ? [prefillLinkedTaskId] : undefined}
-             defaultTitle={prefillLinkedTaskId ? tasks.find(t => t.id === prefillLinkedTaskId)?.title : undefined}
+             defaultTitle={prefillLinkedTaskId
+               ? tasks.find(t => t.id === prefillLinkedTaskId)?.title
+               : (prefillNoteTitle || prefillNoteDraft?.split('\n')[0]?.trim() || undefined)}
+             defaultBody={prefillNoteDraft ?? undefined}
              defaultType={quickNoteDefaultType}
              availableTasks={tasks.map(t => ({ id: t.id, title: t.title }))}
              availableTags={[]}
@@ -1927,8 +2395,10 @@ export default function App() {
                 setShowQuickNoteEditor(false);
                 setEditingDailyNote(null);
                 setPrefillLinkedTaskId(null);
+                setPrefillNoteDraft(null);
+                setPrefillNoteTitle(null);
                 setQuickNoteDefaultType(undefined);
-                setActiveTab('ai-chat');
+                setActiveOverlay('ai-chat');
               }}
               onSave={async (data) => {
                 try {

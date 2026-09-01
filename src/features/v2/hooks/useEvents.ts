@@ -17,6 +17,9 @@ import {
   type EditNodeTaskInput,
   type EventDetail,
   type EventNode,
+  type MindMapEdge,
+  type MindMapNode,
+  type OrganizeSuggestion,
   type EventSummary,
   type StandaloneTask,
   type TodayItem,
@@ -24,6 +27,7 @@ import {
   type UndoConvertStandaloneToEventNodeTaskInput,
 } from '../../../api/client';
 import { queryKeys } from '../../../queryKeys';
+import { getTemplate } from '../../../components/MindMap/templates';
 import { ulid } from 'ulid';
 import { layoutEventTree } from '../events/nodePlacement';
 import { MAP_WRITE_SCOPE, dropEventMap, readEventMap, writeEventMap } from './mindMapCache';
@@ -95,7 +99,7 @@ export function useStandaloneTasks(opts?: { from?: string; to?: string }): UseQu
 
 /** Create the Event and its root canvas in one command. */
 export function useCreateEvent(): UseMutationResult<
-  { id: string },
+  { id: string; mindmapId: string },
   Error,
   CreateEventInput
 > {
@@ -103,7 +107,7 @@ export function useCreateEvent(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ title, context }) => {
       const event = await eventsApi.create({ title: title.trim(), context });
-      return { id: event.id };
+      return { id: event.id, mindmapId: event.mindmapId };
     },
     onSuccess: async () => {
       await Promise.all([
@@ -892,5 +896,115 @@ export function useLayoutEventTree(): UseMutationResult<
       return { laidOut: true };
     },
     onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// UX S9 — the orphan MindMapView's capabilities folded into the Events view.
+// "AI organize" applies a read-only suggestion from
+// POST /api/v2/mindmaps/:id/organize by adding one parent branch per group
+// under the root and re-parenting the loose nodes. One PUT = one undo entry.
+// ---------------------------------------------------------------------------
+export function useApplyOrganizeSuggestion(): UseMutationResult<
+  { applied: boolean },
+  Error,
+  Pick<EventMapMutationContext, 'eventId' | 'mindmapId'> & { suggestion: OrganizeSuggestion }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: MAP_WRITE_SCOPE,
+    mutationFn: async ({ mindmapId, suggestion }) => {
+      if (!suggestion.groups.length) return { applied: false };
+      const map = await readEventMap(qc, mindmapId);
+      const root = map.nodes.find((node) => node.id === map.rootId);
+      if (!root) throw new Error('Root node no longer exists');
+      const existingIds = new Set(map.nodes.map((node) => node.id));
+      const nodesSoFar: MindMapNode[] = [...map.nodes];
+      const newNodes: MindMapNode[] = [];
+      const newEdges: MindMapEdge[] = [];
+      for (const group of suggestion.groups) {
+        const parentId = `node_${ulid()}`;
+        const parent: MindMapNode = {
+          id: parentId,
+          text: group.parentText,
+          position: planChildPosition(nodesSoFar, map.edges, root),
+          kind: group.parentKind === 'tag' ? 'tag' : 'branch',
+          collapsed: false,
+        };
+        newNodes.push(parent);
+        nodesSoFar.push(parent);
+        newEdges.push({ id: `edge_${ulid()}`, source: map.rootId, target: parentId });
+        for (const nodeId of group.nodeIds) {
+          if (!existingIds.has(nodeId)) continue;
+          newEdges.push({ id: `edge_${ulid()}`, source: parentId, target: nodeId });
+        }
+        existingIds.add(parentId);
+      }
+      const updated = await mindmapsApi.update(mindmapId, {
+        nodes: [...map.nodes, ...newNodes],
+        edges: [...map.edges, ...newEdges],
+      });
+      writeEventMap(qc, updated);
+      return { applied: true };
+    },
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
+    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
+  });
+}
+
+// UX S9 — fork a built-in mind-map template into a newly created event.
+// Template node ids are deterministic (`tpl-...`) and would collide across
+// events, so every non-root node is remapped to a fresh `node_ulid` and the
+// template root is dropped in favour of the event's own title root. The
+// combined tree is laid out in the same PUT so it renders tidy immediately.
+export function useSeedEventTemplate(): UseMutationResult<
+  { seeded: boolean },
+  Error,
+  Pick<EventMapMutationContext, 'eventId' | 'mindmapId'> & { templateId: string; language?: 'zh' | 'en' }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: MAP_WRITE_SCOPE,
+    mutationFn: async ({ mindmapId, templateId, language = 'zh' }) => {
+      const template = getTemplate(templateId);
+      if (!template) return { seeded: false };
+      const map = await readEventMap(qc, mindmapId);
+      if (!map.nodes.some((node) => node.id === map.rootId)) return { seeded: false };
+      const tpl = template.build(language);
+      const existingIds = new Set(map.nodes.map((node) => node.id));
+      const idMap = new Map<string, string>([[tpl.rootId, map.rootId]]);
+      for (const node of tpl.nodes) {
+        if (node.id === tpl.rootId) continue;
+        let id = `node_${ulid()}`;
+        while (existingIds.has(id)) id = `node_${ulid()}`;
+        idMap.set(node.id, id);
+        existingIds.add(id);
+      }
+      const newNodes: MindMapNode[] = tpl.nodes
+        .filter((node) => node.id !== tpl.rootId)
+        .map((node) => ({
+          id: idMap.get(node.id)!,
+          text: node.text,
+          position: { x: 0, y: 0 },
+          ...(node.kind ? { kind: node.kind } : {}),
+        }));
+      const newEdges: MindMapEdge[] = tpl.edges.map((edge) => ({
+        id: `edge_${ulid()}`,
+        source: idMap.get(edge.source)!,
+        target: idMap.get(edge.target)!,
+      }));
+      const nodes = [...map.nodes, ...newNodes];
+      const edges = [...map.edges, ...newEdges];
+      const layout = layoutEventTree(nodes, edges, map.rootId);
+      const nextNodes = nodes.map((node) => {
+        const pos = layout.get(node.id);
+        return pos ? { ...node, position: pos } : node;
+      });
+      const updated = await mindmapsApi.update(mindmapId, { nodes: nextNodes, edges });
+      writeEventMap(qc, updated);
+      return { seeded: true };
+    },
+    onSuccess: (_data, vars) => invalidateEventMap(qc, vars),
+    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
   });
 }

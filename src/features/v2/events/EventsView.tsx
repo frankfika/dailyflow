@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Search, Sparkles, Undo2, X } from 'lucide-react';
 import { ulid } from 'ulid';
-import type { EventDetail, EventNode, EventSummary } from '../../../api/client';
+import type { EventDetail, EventNode, EventSummary, MindMap, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
+import { mindmapsApi, organizeApi } from '../../../api/client';
+import { queryKeys } from '../../../queryKeys';
+import { readEventMap, writeEventMap } from '../hooks/mindMapCache';
+import { OrganizeSuggestionModal } from '../../../components/MindMap/OrganizeSuggestionModal';
+import { MINDMAP_TEMPLATES } from '../../../components/MindMap/templates';
 import {
   useAddEventChild,
   useAddEventSibling,
+  useApplyOrganizeSuggestion,
+  useSeedEventTemplate,
   useCompleteNodeTask,
   useCreateEvent,
   useDeleteEventNode,
@@ -33,15 +41,18 @@ export interface EventsViewProps {
   sidebarOpen?: boolean;
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
   requestedEventId?: string | null;
+  /** UX S8: node to highlight when the canvas opens via a Today chip. */
+  requestedNodeId?: string | null;
+  onRequestedNodeHandled?: () => void;
   onRequestedEventHandled?: () => void;
 }
 
 const TEXT = {
   en: {
-    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', removePending: 'Removing a date is not available yet.', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks',
   },
   zh: {
-    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', removePending: '暂时无法移出日程。', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务',
   },
 } as const;
 
@@ -56,13 +67,16 @@ function readOutlineWidth(): number {
   const parsed = Number(window.localStorage.getItem(OUTLINE_WIDTH_KEY));
   return Number.isFinite(parsed) && parsed >= OUTLINE_MIN_WIDTH ? parsed : OUTLINE_DEFAULT_WIDTH;
 }
-export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled }: EventsViewProps) {
+export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  // UX S9: optional built-in mind-map template forked into the new event.
+  const [newTemplateId, setNewTemplateId] = useState<string>('');
   const eventsQ = useEvents();
   const createEvent = useCreateEvent();
+  const seedTemplate = useSeedEventTemplate();
   const events = useMemo(
     () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
     [context, eventsQ.data?.events],
@@ -78,7 +92,12 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
     if (!newTitle.trim()) return;
     try {
       const created = await createEvent.mutateAsync({ title: newTitle.trim(), context });
-      setNewTitle('');
+      if (newTemplateId && created.mindmapId) {
+        try {
+          await seedTemplate.mutateAsync({ eventId: created.id, mindmapId: created.mindmapId, templateId: newTemplateId, language });
+        } catch { /* template seeding is best-effort; the event itself exists */ }
+      }
+      setNewTemplateId('');
       setCreating(false);
       setSelectedEventId(created.id);
       onNotice?.(language === 'zh' ? '事件已创建' : 'Event created', 'success');
@@ -88,7 +107,7 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   }
 
   if (selectedEventId) {
-    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} />;
+    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} requestedNodeId={requestedNodeId} onRequestedNodeHandled={onRequestedNodeHandled} />;
   }
 
   const active = events.filter((event) => event.status === 'active');
@@ -109,6 +128,13 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
             <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t.input} aria-label={t.input} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#23877B] focus:ring-2 focus:ring-[#23877B]/10 dark:border-gray-700 dark:bg-gray-900" />
             <button disabled={!newTitle.trim() || createEvent.isPending} className="rounded-lg bg-[#23877B] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">{createEvent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t.create}</button>
             <button type="button" onClick={() => { setCreating(false); setNewTitle(''); }} className="rounded-lg px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800">{t.cancel}</button>
+          </div>
+          <div className="mx-auto mt-2.5 flex max-w-4xl flex-wrap items-center gap-1.5" data-testid="new-event-templates">
+            <span className="text-[11px] text-gray-400">{language === 'zh' ? '从模板开始：' : 'Start from:'}</span>
+            <button type="button" onClick={() => setNewTemplateId('')} aria-pressed={newTemplateId === ''} className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${newTemplateId === '' ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800'}`} data-testid="new-event-template-blank">{language === 'zh' ? '空白' : 'Blank'}</button>
+            {MINDMAP_TEMPLATES.map((template) => (
+              <button key={template.id} type="button" onClick={() => setNewTemplateId(template.id)} aria-pressed={newTemplateId === template.id} title={language === 'zh' ? template.hint : template.hintEn} className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${newTemplateId === template.id ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800'}`} data-testid={`new-event-template-${template.id}`}>{language === 'zh' ? template.title : template.titleEn}</button>
+            ))}
           </div>
         </form>
       )}
@@ -145,7 +171,7 @@ function EventCard({ event, language, onOpen, noActions, updated }: { event: Eve
   return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)]" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3><p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}</button>;
 }
 
-function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void }) {
+function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void }) {
   const t = TEXT[language];
   const detailQ = useEventById(eventId);
   const addChild = useAddEventChild();
@@ -161,9 +187,14 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const unschedule = useUnscheduleEventNode();
   const complete = useCompleteNodeTask();
   const reopen = useUndoCompleteNodeTask();
+  const applyOrganize = useApplyOrganizeSuggestion();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  // UX S9: AI organize (folded in from the orphan MindMapView).
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  const [organizeStrategy, setOrganizeStrategy] = useState<OrganizeStrategy | null>(null);
+  const [organizeSuggestion, setOrganizeSuggestion] = useState<OrganizeSuggestion | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
@@ -211,6 +242,120 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     window.addEventListener('resize', clampToContainer);
     return () => window.removeEventListener('resize', clampToContainer);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Undo / redo (UX_DESIGN §4.3 — ⌘Z / ⇧⌘Z, 50 steps). Two stacks of *full*
+  // MindMap snapshots, taken just before each map-writing mutation. Snapshots
+  // come from the lossless mindMapCache — the EventDetail projection drops
+  // kind/taskId/taskDate/planOrder, so restoring from it would strip task
+  // bindings. Undo/redo restore via one PUT /mindmaps/:id each, so a whole
+  // undo step is a single entry in the server's own history too.
+  // ---------------------------------------------------------------------------
+  const qc = useQueryClient();
+  const HISTORY_LIMIT = 50;
+  const pastRef = useRef<MindMap[]>([]);
+  const futureRef = useRef<MindMap[]>([]);
+  const [, setHistoryVersion] = useState(0);
+  useEffect(() => {
+    // Switching events starts a fresh history for the new canvas.
+    pastRef.current = [];
+    futureRef.current = [];
+    setHistoryVersion((v) => v + 1);
+  }, [eventId]);
+
+  const recordHistory = useCallback(async (): Promise<boolean> => {
+    if (!event) return false;
+    try {
+      const map = await readEventMap(qc, event.mindmapId);
+      const top = pastRef.current[pastRef.current.length - 1];
+      if (top && top.rootId === map.rootId
+        && JSON.stringify(top.nodes) === JSON.stringify(map.nodes)
+        && JSON.stringify(top.edges) === JSON.stringify(map.edges)) return false;
+      pastRef.current.push(map);
+      while (pastRef.current.length > HISTORY_LIMIT) pastRef.current.shift();
+      futureRef.current = [];
+      setHistoryVersion((v) => v + 1);
+      return true;
+    } catch { /* snapshot is best-effort — never block the edit itself */ return false; }
+  }, [event, qc]);
+
+  const restoreMap = useCallback(async (snap: MindMap) => {
+    const updated = await mindmapsApi.update(snap.id, {
+      title: snap.title, rootId: snap.rootId, nodes: snap.nodes, edges: snap.edges,
+    });
+    writeEventMap(qc, updated);
+    qc.invalidateQueries({ queryKey: queryKeys.event(eventId) });
+    qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.tasksRoot() });
+    qc.invalidateQueries({ queryKey: queryKeys.standaloneTasks() });
+    qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false });
+  }, [eventId, qc]);
+
+  const undo = useCallback(async () => {
+    const prev = pastRef.current[pastRef.current.length - 1];
+    if (!prev || !event) return;
+    try {
+      const current = await readEventMap(qc, event.mindmapId);
+      pastRef.current.pop();
+      futureRef.current.push(current);
+      setHistoryVersion((v) => v + 1);
+      await restoreMap(prev);
+      onNotice?.(language === 'zh' ? '已撤销' : 'Undone', 'info');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }, [event, qc, language, onNotice, restoreMap, t.loadError]);
+
+  const redo = useCallback(async () => {
+    const next = futureRef.current[futureRef.current.length - 1];
+    if (!next || !event) return;
+    try {
+      const current = await readEventMap(qc, event.mindmapId);
+      futureRef.current.pop();
+      pastRef.current.push(current);
+      setHistoryVersion((v) => v + 1);
+      await restoreMap(next);
+      onNotice?.(language === 'zh' ? '已重做' : 'Redone', 'info');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }, [event, qc, language, onNotice, restoreMap, t.loadError]);
+
+  const canUndo = pastRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
+  // UX_DESIGN §4.3 canvas shortcuts: ⌘F search, ⌘Z undo, ⇧⌘Z / ⌘Y redo.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !typing) {
+        e.preventDefault();
+        if (e.shiftKey) void redo(); else void undo();
+      } else if (key === 'y' && !typing) {
+        e.preventDefault();
+        void redo();
+      } else if (key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  // UX S8: when opened from a Today "来自 ↗" chip, highlight the origin node.
+  useEffect(() => {
+    if (!event || !requestedNodeId) return;
+    if (!event.nodes.some((node) => node.id === requestedNodeId)) return;
+    setActiveNodeId(requestedNodeId);
+    onRequestedNodeHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id, event?.nodes, requestedNodeId]);
 
   useEffect(() => {
     if (!event) return;
@@ -285,13 +430,19 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
 
   const activateNode = (id: string) => setActiveNodeId(id);
 
-  async function safe<T>(action: () => Promise<T>, success?: string): Promise<T | undefined> {
+  async function safe<T>(action: () => Promise<T>, success?: string, history = true): Promise<T | undefined> {
+    let pushed = false;
     try {
+      if (history) pushed = await recordHistory();
       const result = await action();
       if (success) onNotice?.(success, 'success');
       return result;
     }
-    catch (error) { onNotice?.(error instanceof Error ? error.message : t.loadError, 'error'); return undefined; }
+    catch (error) {
+      if (pushed) { pastRef.current.pop(); }
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+      return undefined;
+    }
   }
 
   async function handleAddChild(parentId: string, text: string) {
@@ -346,9 +497,56 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     if (!node.execution) return;
     const input = { taskId: node.execution.taskId, scheduledDate: node.execution.scheduledDate, eventId, nodeId: node.id };
     if (node.execution.status === 'done') {
-      await safe(() => reopen.mutateAsync(input));
+      await safe(() => reopen.mutateAsync(input), undefined, false);
     } else {
-      await safe(() => complete.mutateAsync(input));
+      await safe(() => complete.mutateAsync(input), undefined, false);
+    }
+  }
+
+  async function handleChangeKind(nodeId: string, kind: 'branch' | 'tag' | 'question' | 'resource' | 'risk') {
+    if (!event) return;
+    await recordHistory();
+    try {
+      const map = await readEventMap(qc, event.mindmapId);
+      const nodes = map.nodes.map((n) => (n.id === nodeId ? { ...n, kind } : n));
+      const updated = await mindmapsApi.update(map.id, { title: map.title, rootId: map.rootId, nodes, edges: map.edges });
+      writeEventMap(qc, updated);
+      qc.invalidateQueries({ queryKey: queryKeys.event(event.id) });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }
+
+  async function runOrganize(strategy: OrganizeStrategy) {
+    if (!event) return;
+    setOrganizeStrategy(strategy);
+    try {
+      const suggestion = await organizeApi.organize(event.mindmapId, strategy);
+      setOrganizeSuggestion(suggestion);
+      setOrganizeOpen(true);
+    } catch (error) {
+      onNotice?.(language === 'zh'
+        ? `AI 整理失败：${error instanceof Error ? error.message : '未知错误'}`
+        : `AI organize failed: ${error instanceof Error ? error.message : 'unknown error'}`, 'error');
+    }
+  }
+
+  async function handleApplyOrganize(suggestion: OrganizeSuggestion) {
+    if (!event) return;
+    try {
+      await recordHistory();
+      const result = await applyOrganize.mutateAsync({ eventId: event.id, mindmapId: event.mindmapId, suggestion });
+      setOrganizeOpen(false);
+      setOrganizeSuggestion(null);
+      setOrganizeStrategy(null);
+      if (result.applied) {
+        onNotice?.(language === 'zh'
+          ? `AI 整理完成：${suggestion.stats.organizedNodes} 个节点 → ${suggestion.stats.groupCount} 组`
+          : `AI organize applied: ${suggestion.stats.organizedNodes} nodes → ${suggestion.stats.groupCount} groups`, 'success');
+      }
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
     }
   }
 
@@ -376,6 +574,28 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       </button>
       <button
         type="button"
+        onClick={() => void undo()}
+        disabled={!canUndo}
+        title={`${t.undo} (⌘Z)`}
+        aria-label={t.undo}
+        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800"
+        data-testid="event-undo"
+      >
+        <Undo2 className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => void redo()}
+        disabled={!canRedo}
+        title={`${t.redo} (⇧⌘Z)`}
+        aria-label={t.redo}
+        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800"
+        data-testid="event-redo"
+      >
+        <Redo2 className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
         onClick={toggleOutline}
         title={outlineVisible ? t.hideOutline : t.showOutline}
         aria-label={outlineVisible ? t.hideOutline : t.showOutline}
@@ -386,7 +606,58 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         {outlineVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
       </button>
       {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
-      <div className="relative"><button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more}><MoreHorizontal className="h-4 w-4" /></button>{moreOpen && <div className="absolute right-0 top-10 w-44 rounded-xl border border-gray-200 bg-white p-2 text-xs text-gray-500 shadow-lg dark:border-gray-700 dark:bg-gray-900">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}</div>}</div>
+      <div className="relative">
+        <button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more} aria-expanded={moreOpen} data-testid="event-more-toggle"><MoreHorizontal className="h-4 w-4" /></button>
+        {moreOpen && (
+          <div className="absolute right-0 top-10 z-30 w-48 rounded-xl border border-gray-200 bg-white p-2 text-xs shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-more-menu">
+            <p className="px-2 py-1 text-[11px] text-gray-400">
+              {event.progress.total ? `${event.progress.done} / ${event.progress.total}` : t.noActions}
+              <span className="mx-1">·</span>
+              {event.nodes.length} {t.statNodes}
+              <span className="mx-1">·</span>
+              {event.nodes.filter((n) => n.kind === 'task').length} {t.statTasks}
+            </p>
+            <button
+              type="button"
+              className="w-full rounded-lg px-2 py-1.5 text-left text-gray-600 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-800"
+              disabled={layoutTree.isPending}
+              onClick={() => {
+                setMoreOpen(false);
+                void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).then(() => onNotice?.(language === 'zh' ? '布局已整理' : 'Layout updated', 'success')).catch(() => {});
+              }}
+              data-testid="event-more-layout"
+            >
+              {t.autoLayout}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-lg px-2 py-1.5 text-left text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => {
+                setMoreOpen(false);
+                const byId = new Map(event.nodes.map((n) => [n.id, n]));
+                const depthOf = (node: { parentId?: string }): number => {
+                  let depth = 0;
+                  let parent = node.parentId;
+                  while (parent && byId.has(parent)) {
+                    depth += 1;
+                    parent = byId.get(parent)!.parentId;
+                  }
+                  return depth;
+                };
+                const lines = event.nodes
+                  .filter((node) => node.id !== event.rootNodeId)
+                  .map((node) => `${'  '.repeat(Math.max(0, depthOf(node) - 1))}- ${node.text}`);
+                void navigator.clipboard.writeText([event.title, ...lines].join('\n'))
+                  .then(() => onNotice?.(t.outlineCopied, 'success'))
+                  .catch(() => onNotice?.(t.copyFailed, 'error'));
+              }}
+              data-testid="event-more-copy-outline"
+            >
+              {t.copyOutline}
+            </button>
+          </div>
+        )}
+      </div>
     </header>
     <div ref={splitRef} className="min-h-0 flex-1 flex" data-testid="event-split-view">
       <div
@@ -455,6 +726,9 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onToggleDone={handleToggleDone}
           onMoveNodePosition={handleMoveNodePosition}
           onRequestTreeLayout={() => void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).catch(() => {})}
+          onOrganize={(strategy) => void runOrganize(strategy)}
+          organizeBusy={applyOrganize.isPending}
+          onChangeKind={(nodeId, kind) => void handleChangeKind(nodeId, kind)}
           proposal={graphProposal}
           proposalSelection={proposalSelection}
           activeProposalChangeId={activeProposalChangeId}
@@ -471,11 +745,22 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         autoStart={autoStartRun}
         onNotice={onNotice}
         onApplied={() => { void detailQ.refetch(); }}
+        onBeforeApply={recordHistory}
         onClose={() => { setAgentPanelOpen(false); setAutoStartRun(false); }}
         onProposalChange={(proposal, selection, activeChangeId) => { setGraphProposal(proposal); setProposalSelection(new Set(selection)); setActiveProposalChangeId(activeChangeId); }}
       />
     )}
     {contextPreviewOpen && <EventOperatorContextPreview event={event} language={language} defaultRefs={runContextRefs} onCancel={() => setContextPreviewOpen(false)} onConfirm={(refs) => { setRunContextRefs(refs); setAutoStartRun(true); setContextPreviewOpen(false); setAgentPanelOpen(true); }} />}
+    {organizeOpen && (
+      <OrganizeSuggestionModal
+        open={organizeOpen}
+        strategy={organizeStrategy}
+        suggestion={organizeSuggestion}
+        language={language}
+        onApply={handleApplyOrganize}
+        onClose={() => { setOrganizeOpen(false); setOrganizeSuggestion(null); setOrganizeStrategy(null); }}
+      />
+    )}
   </section>;
 }
 

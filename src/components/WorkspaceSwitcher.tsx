@@ -16,6 +16,8 @@ interface WorkspaceSwitcherProps {
   onAdded?: (ws: Workspace) => void;
   onRenamed?: (id: string, name: string) => void;
   onRemoved?: (id: string, nextActiveId: string) => void;
+  /** Bump to programmatically open the dropdown (⌘⇧W, UX_DESIGN §12). */
+  openSignal?: number;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
@@ -32,6 +34,7 @@ export function WorkspaceSwitcher({
   onAdded,
   onRenamed,
   onRemoved,
+  openSignal,
   showToast,
 }: WorkspaceSwitcherProps) {
   const [open, setOpen] = useState(false);
@@ -51,6 +54,11 @@ export function WorkspaceSwitcher({
 
   const active = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
 
+  // ⌘⇧W (UX_DESIGN §12) opens the switcher from anywhere in the app.
+  useEffect(() => {
+    if (openSignal && openSignal > 0) setOpen(true);
+  }, [openSignal]);
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -59,8 +67,20 @@ export function WorkspaceSwitcher({
         setRenamingId(null);
       }
     };
+    // Esc closes the dropdown too — while it is open it covers the whole
+    // sidebar rail, so a user pressing Esc with nowhere else to click was
+    // stuck (found by the runtime operability audit).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      setOpen(false);
+      setRenamingId(null);
+    };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   // Auto-discover candidates whenever the dropdown opens

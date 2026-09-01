@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, Plus, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Network, Pin, Plus, Sparkles } from 'lucide-react';
 import { TaskCard } from './TaskCard';
+import type { RecurrenceRule } from '../api/client';
 
 export type TodayTask = {
   id: string;
@@ -23,27 +24,6 @@ export type TodayTask = {
   sourcePath?: string[];
 };
 
-export const STANDALONE_MINDMAP_FILTER = '__standalone__';
-
-export function filterTodayTasks(
-  tasks: TodayTask[],
-  selectedTag: string | null,
-  selectedMindmapId: string | null,
-  planningGroups: TodayPlanningGroup[],
-): TodayTask[] {
-  const groupByTaskId = new Map<string, TodayPlanningGroup>();
-  for (const group of planningGroups) {
-    for (const taskId of group.taskIds) groupByTaskId.set(taskId, group);
-  }
-  return tasks.filter((task) => {
-    if (selectedTag && !(task.tags ?? []).includes(selectedTag)) return false;
-    if (!selectedMindmapId) return true;
-    const group = groupByTaskId.get(task.id);
-    if (selectedMindmapId === STANDALONE_MINDMAP_FILTER) return !group;
-    return group?.mindmapId === selectedMindmapId;
-  });
-}
-
 export interface TodayPlanningGroup {
   id: string;
   mindmapId: string;
@@ -56,20 +36,22 @@ export interface TodayPlanningGroup {
 interface TodayBacklogProps {
   tasks: TodayTask[];
   planningGroups?: TodayPlanningGroup[];
-  onOpenPlanningGroup?: (group: TodayPlanningGroup) => void;
+  onOpenPlanningGroup?: (group: TodayPlanningGroup, nodeId?: string) => void;
   selectedDate: string;
   categories: string[];
-  focusTaskIds: string[];
-  onFocusTaskIdsChange: (ids: string[]) => void;
   onToggleTask: (id: string, hostDate?: string) => void;
   onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
   onDeleteTask: (id: string, hostDate?: string) => void;
   onCreateLinkedNote: (taskId: string) => void;
   onShowLinkedNotes: (taskId: string) => void;
+  onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
+  /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
+  onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
+  /** UX S7: convert the task into a new project event. */
+  onConvertToProject?: (task: TodayTask, opts: { title: string; extraNodes: string[] }) => Promise<void>;
+  onSetRecurrence?: (task: TodayTask, recurrence: RecurrenceRule) => void;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
-  hasActiveFilters?: boolean;
-  onClearFilters?: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
   completionPromptTaskIds?: Set<string>;
@@ -88,6 +70,11 @@ function compareTasks(a: TodayTask, b: TodayTask): number {
   return (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER);
 }
 
+interface RenderedEventGroup {
+  group: TodayPlanningGroup;
+  openTasks: TodayTask[];
+}
+
 export function TodayBacklog({
   tasks,
   planningGroups = [],
@@ -99,16 +86,27 @@ export function TodayBacklog({
   onDeleteTask,
   onCreateLinkedNote,
   onShowLinkedNotes,
+  onUnlinkFromSpace,
+  onAiAction,
+  onConvertToProject,
+  onSetRecurrence,
   linkedNotesCount,
   onAddTask,
-  hasActiveFilters = false,
-  onClearFilters,
   language,
   isToday,
   completionPromptTaskIds = new Set<string>(),
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [showCompleted, setShowCompleted] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const openTasks = useMemo(
     () => tasks.filter(task => task.status === 'todo').sort(compareTasks),
@@ -118,23 +116,29 @@ export function TodayBacklog({
     () => tasks.filter(task => task.status === 'done'),
     [tasks],
   );
-  const openTaskGroups = useMemo(() => {
-    const groups: Array<{ key: 'overdue' | 'today' | 'upcoming' | 'unscheduled'; label: string; tasks: TodayTask[] }> = [
-      { key: 'overdue', label: language === 'zh' ? '已逾期' : 'Overdue', tasks: [] },
-      { key: 'today', label: language === 'zh' ? '今天截止' : 'Due today', tasks: [] },
-      { key: 'upcoming', label: language === 'zh' ? '接下来' : 'Upcoming', tasks: [] },
-      { key: 'unscheduled', label: language === 'zh' ? '无截止日期' : 'No due date', tasks: [] },
-    ];
-    for (const task of openTasks) {
-      const key = !task.deadline
-        ? 'unscheduled'
-        : task.deadline < selectedDate
-          ? 'overdue'
-          : task.deadline === selectedDate ? 'today' : 'upcoming';
-      groups.find((group) => group.key === key)!.tasks.push(task);
+
+  // Tasks belong to their source Event (mind map); anything unclaimed renders
+  // under a plain "standalone" group. Groups without open work are omitted so
+  // the list only shows events that still need attention today.
+  const { eventGroups, standaloneTasks } = useMemo(() => {
+    const taskById = new Map(openTasks.map(task => [task.id, task] as const));
+    const claimed = new Set<string>();
+    const eventGroups: RenderedEventGroup[] = [];
+    for (const group of planningGroups) {
+      const openTasksInGroup: TodayTask[] = [];
+      for (const taskId of group.taskIds) {
+        const task = taskById.get(taskId);
+        if (!task || claimed.has(taskId)) continue;
+        claimed.add(taskId);
+        openTasksInGroup.push(task);
+      }
+      if (openTasksInGroup.length === 0) continue;
+      eventGroups.push({ group, openTasks: openTasksInGroup });
     }
-    return groups.filter((group) => group.tasks.length > 0);
-  }, [language, openTasks, selectedDate]);
+    const standaloneTasks = openTasks.filter(task => !claimed.has(task.id));
+    return { eventGroups, standaloneTasks };
+  }, [openTasks, planningGroups]);
+
   const eventByTaskId = useMemo(() => {
     const lookup = new Map<string, TodayPlanningGroup>();
     for (const group of planningGroups) {
@@ -149,7 +153,7 @@ export function TodayBacklog({
         task={task}
         spaceTitle={eventByTaskId.get(task.id)?.title}
         onOpenSpace={onOpenPlanningGroup && eventByTaskId.has(task.id)
-          ? () => onOpenPlanningGroup(eventByTaskId.get(task.id)!)
+          ? (nodeId) => onOpenPlanningGroup(eventByTaskId.get(task.id)!, nodeId)
           : undefined}
         language={language}
         categories={categories}
@@ -160,11 +164,27 @@ export function TodayBacklog({
         onDelete={() => onDeleteTask(task.id, task.host_date)}
         onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
         onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
+        onUnlinkFromSpace={onUnlinkFromSpace
+          ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
+          : undefined}
+        onAiAction={onAiAction}
+        onConvertToProject={onConvertToProject}
+        onSetRecurrence={onSetRecurrence}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />
     </li>
   );
+
+  const hasOpenWork = eventGroups.length > 0 || standaloneTasks.length > 0;
+  const standaloneLabel = language === 'zh' ? '独立任务' : 'Standalone';
+  const openCountLabel = (count: number) => language === 'zh' ? `${count} 项待办` : `${count} open`;
+  const enterCanvasTitle = language === 'zh' ? '进入事件画布' : 'Open event canvas';
+
+  const renderGroupBody = (key: string, groupTasks: TodayTask[]) => {
+    if (collapsedGroups.has(key)) return null;
+    return <ul className="today-simple-list">{groupTasks.map(renderTask)}</ul>;
+  };
 
   return (
     <div className="today-backlog today-simple" data-testid="today-backlog">
@@ -189,31 +209,81 @@ export function TodayBacklog({
           </div>
         </header>
 
-        {openTasks.length > 0 ? (
+        {hasOpenWork ? (
           <div className="space-y-4" data-testid="today-execution-list">
-            {openTaskGroups.map((group) => (
-              <section key={group.key} aria-labelledby={`today-task-group-${group.key}`}>
-                <div className="mb-1.5 flex items-center gap-2 px-1 text-[11px] font-semibold text-text-muted">
-                  <h3 id={`today-task-group-${group.key}`}>{group.label}</h3>
-                  <span className="tabular-nums opacity-60">{group.tasks.length}</span>
+            {eventGroups.map(({ group, openTasks: groupTasks }) => {
+              const key = group.mindmapId;
+              const isCollapsed = collapsedGroups.has(key);
+              return (
+                <section key={key} className="today-event-group" data-testid={`today-event-group-${key}`}>
+                  <div className="today-event-head">
+                    {onOpenPlanningGroup ? (
+                      <button
+                        type="button"
+                        className="today-event-head-main"
+                        onClick={() => onOpenPlanningGroup(group)}
+                        title={enterCanvasTitle}
+                        data-testid={`today-event-head-${key}`}
+                      >
+                        <Network className="today-event-icon" aria-hidden="true" />
+                        <span className="today-event-title">{group.title}</span>
+                        <span className="today-event-count">{openCountLabel(groupTasks.length)}</span>
+                      </button>
+                    ) : (
+                      <div className="today-event-head-main" data-testid={`today-event-head-${key}`}>
+                        <Network className="today-event-icon" aria-hidden="true" />
+                        <span className="today-event-title">{group.title}</span>
+                        <span className="today-event-count">{openCountLabel(groupTasks.length)}</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="today-event-collapse"
+                      onClick={() => toggleGroup(key)}
+                      aria-expanded={!isCollapsed}
+                      aria-label={`${isCollapsed
+                        ? (language === 'zh' ? '展开' : 'Expand')
+                        : (language === 'zh' ? '折叠' : 'Collapse')} ${group.title}`}
+                    >
+                      <ChevronDown className={`today-event-arrow ${isCollapsed ? 'is-collapsed' : ''}`} aria-hidden="true" />
+                    </button>
+                  </div>
+                  {renderGroupBody(key, groupTasks)}
+                </section>
+              );
+            })}
+
+            {standaloneTasks.length > 0 && (
+              <section className="today-event-group today-event-group-standalone" data-testid="today-event-group-standalone">
+                <div className="today-standalone-head">
+                  <span className="today-standalone-label">
+                    <Pin className="today-event-icon" aria-hidden="true" />
+                    {standaloneLabel}
+                  </span>
+                  <span className="today-event-count">{openCountLabel(standaloneTasks.length)}</span>
+                  <button
+                    type="button"
+                    className="today-event-collapse"
+                    onClick={() => toggleGroup('standalone')}
+                    aria-expanded={!collapsedGroups.has('standalone')}
+                    aria-label={`${collapsedGroups.has('standalone')
+                      ? (language === 'zh' ? '展开' : 'Expand')
+                      : (language === 'zh' ? '折叠' : 'Collapse')} ${standaloneLabel}`}
+                  >
+                    <ChevronDown className={`today-event-arrow ${collapsedGroups.has('standalone') ? 'is-collapsed' : ''}`} aria-hidden="true" />
+                  </button>
                 </div>
-                <ul className="today-simple-list">{group.tasks.map(renderTask)}</ul>
+                {renderGroupBody('standalone', standaloneTasks)}
               </section>
-            ))}
+            )}
           </div>
         ) : (
           <div className="today-backlog-empty">
             <Sparkles className="h-4 w-4" />
-            <p>{hasActiveFilters
-              ? (language === 'zh' ? '没有符合当前筛选条件的任务。' : 'No tasks match the current filters.')
-              : isToday
+            <p>{isToday
               ? (language === 'zh' ? '今天还没有任务。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
               : (language === 'zh' ? '这一天没有任务。' : 'No open tasks on this day.')}</p>
-            {hasActiveFilters && onClearFilters ? (
-              <button type="button" onClick={onClearFilters} className="today-backlog-empty-cta">
-                {language === 'zh' ? '清除筛选' : 'Clear filters'}
-              </button>
-            ) : isToday && (
+            {isToday && (
               <button onClick={onAddTask} className="today-backlog-empty-cta">
                 {language === 'zh' ? '添加任务' : 'Add one thing'}
               </button>

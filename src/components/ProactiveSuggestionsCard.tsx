@@ -1,7 +1,7 @@
 /**
  * Proactive Suggestions Card (Gap 3 — Sprint 1).
  *
- * Shown above TodayScopeTabs. Receives a list of "agent suggestions" produced
+ * Shown at the top of the Today view. Receives a list of "agent suggestions" produced
  * by GET /api/v2/proactive/scan. Each suggestion carries a small action menu
  * (move_to_today, mark_done, dismiss, regroup). The card itself decides:
  *   - 0 proposals   → render null

@@ -21,10 +21,12 @@ interface Props {
   initialContextRefs?: ContextRef[]; autoStart?: boolean;
   onNotice?: (message: string, type?: 'success' | 'info' | 'error') => void;
   onApplied: () => void; onClose: () => void;
+  /** Called before a proposal apply so the parent can snapshot undo history. */
+  onBeforeApply?: () => Promise<boolean> | Promise<void> | void;
   onProposalChange?: (proposal: EventGraphProposal | null, selection: Set<string>, activeChangeId: string | null) => void;
 }
 
-export function AgentRunPanel({ language, eventId, mindmapId, initialContextRefs = [], autoStart = false, onNotice, onApplied, onClose, onProposalChange }: Props) {
+export function AgentRunPanel({ language, eventId, mindmapId, initialContextRefs = [], autoStart = false, onNotice, onApplied, onClose, onProposalChange, onBeforeApply }: Props) {
   const zh = language === 'zh';
   const [proposal, setProposal] = useState<EventGraphProposal | null>(null);
   const [run, setRun] = useState<EventOperatorRun | null>(null);
@@ -101,6 +103,7 @@ export function AgentRunPanel({ language, eventId, mindmapId, initialContextRefs
     if (!proposal || submitLock.current) return;
     submitLock.current = true; setLoading(true);
     try {
+      if (onBeforeApply) await onBeforeApply();
       const result = await applyGraphProposal(eventId, proposal.id, { selection: [...selection], userOverrides: overrides });
       if (result.staleChangeIds.length) { onNotice?.(zh ? '事件已变化；冲突项不能批量接受，请重新生成。' : 'The event changed. Conflicted items cannot be applied; regenerate.', 'error'); return; }
       onNotice?.(zh ? `已生成 ${result.createdCommitments} 个承诺，并更新画布。` : `Generated ${result.createdCommitments} commitments and updated the canvas.`, 'success');

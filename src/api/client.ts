@@ -89,7 +89,7 @@ export type ConfigPatch = {
   export interface SuggestedTag { value: string; source: 'ai'; confidence: number; state: TagSuggestionState; }
   export interface EventSummary { id: string; mindmapId?: string; title: string; context: EventContext; status: EventStatus; progress: { done: number; total: number }; effectiveTags: string[]; createdAt: string; updatedAt: string; }
   export interface EventExecution { taskId: string; status: ExecutionStatus; scheduledDate: string; deadline?: string; priority?: 'high' | 'medium' | 'low'; completedAt?: string; }
-  export interface EventNode { id: string; eventId: string; parentId?: string; text: string; note?: string; position: { x: number; y: number }; collapsed?: boolean; manualTags: string[]; aiTags: SuggestedTag[]; execution?: EventExecution; }
+  export interface EventNode { id: string; eventId: string; parentId?: string; text: string; note?: string; position: { x: number; y: number }; collapsed?: boolean; manualTags: string[]; aiTags: SuggestedTag[]; execution?: EventExecution; kind?: 'root' | 'branch' | 'tag' | 'task' | 'question' | 'resource' | 'risk' | 'decision' | 'waiting' | 'outcome'; }
   export interface EventDetail extends EventSummary { mindmapId: string; rootNodeId: string; nodes: EventNode[]; edges: Array<{ id: string; source: string; target: string }>; manualTags: string[]; aiTags: SuggestedTag[]; integrity: { missingMap: boolean; sourceContextWasUnclassified: boolean; orphanTaskIds: string[]; duplicateNodeTaskIds: string[] }; }
   export interface StandaloneTask { id: string; title: string; status: ExecutionStatus; scheduledDate: string; deadline?: string; note?: string; manualTags: string[]; aiTags: SuggestedTag[]; }
   export type TodayItem = { kind: 'event-node'; id: string; eventId: string; mindmapId: string; spaceId?: string; nodeId: string; taskId: string; title: string; status: ExecutionStatus; scheduledDate: string; eventTitle: string; path: Array<{ id: string; text: string }>; effectiveTags: string[]; deadline?: string; priority?: 'high' | 'medium' | 'low' } | { kind: 'standalone'; id: string; taskId: string; title: string; status: ExecutionStatus; scheduledDate: string; effectiveTags: string[]; deadline?: string; priority?: 'high' | 'medium' | 'low' };
@@ -382,6 +382,15 @@ export interface EditNodeTaskInput {
 }
 export interface CompleteNodeTaskInput { taskId: string; scheduledDate: string; }
 export interface UndoCompleteNodeTaskInput { taskId: string; scheduledDate: string; }
+/** UX S7: task → new project event (with undo-recorded conversion). */
+export interface ConvertTaskToEventInput {
+  taskId: string;
+  scheduledDate: string;
+  title: string;
+  context?: EventContext;
+  extraNodes?: string[];
+}
+
 export interface ConvertStandaloneToEventNodeTaskInput {
   taskId: string;
   scheduledDate: string;
@@ -487,6 +496,16 @@ export const eventsApi = {
     if (!res.ok) throw await httpError(res, 'Failed to undo complete node task');
     return res.json();
   },
+  async convertTaskToEvent(input: ConvertTaskToEventInput): Promise<{ eventId: string; mindmapId: string; nodeId: string; conversionId: string; converted: boolean }> {
+    const res = await fetch(`${API_BASE}/events/actions/convert-task-to-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to convert task to event');
+    return res.json();
+  },
+
   async convertStandaloneToEventNodeTask(input: ConvertStandaloneToEventNodeTaskInput): Promise<{ converted: boolean; alreadyConverted: boolean; spaceLinked: boolean }> {
     const res = await fetch(`${API_BASE}/events/actions/convert-standalone-to-event-node-task`, {
       method: 'POST',
@@ -1228,7 +1247,7 @@ export type MindMapNodeColor = 'default' | 'accent' | 'warm' | 'success' | 'warn
  * "Change Type" menu can re-classify nodes beyond just tag/branch.
  * All four Phase-2 kinds (tag, task, question, resource, risk) are
  * `mindmapsApi.updateNodeKind`-writable; `'root'` and `'branch'` are
- * not (the menu hides those entries, see NodeContextMenu).
+ * not.
  */
 export type MindMapNodeKind =
   | 'root'
@@ -1582,12 +1601,47 @@ export interface AISummarizeResponse {
   model: string;
 }
 
+// --- Structured AI actions (UX S6) -----------------------------------------
+export type AiActionKind = 'split_tasks' | 'rewrite_task' | 'summarize_task' | 'ask' | 'pick_focus';
+
+export interface AiActionRequest {
+  action: AiActionKind;
+  apiKey: string;
+  model?: string;
+  baseUrl: string;
+  /** The main payload: task text, question, brainstorm text… */
+  input: string;
+  /** Optional supporting data (today's task list, task description…). */
+  context?: string;
+  signal?: AbortSignal;
+}
+
+export interface AiActionResponse {
+  result: unknown;
+  model: string;
+}
+
 /**
  * AI 代理 API（避免前端直接调用 LLM 暴露 key + CORS 问题）
  */
 export const aiApi = {
   async summarize(req: AISummarizeRequest): Promise<AISummarizeResponse> {
     const res = await fetch(`${API_BASE}/ai/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+      signal: req.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw await httpError(res, data.error || data.detail || `AI request failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  /** Structured AI actions — the server owns the prompts and JSON parsing. */
+  async action(req: AiActionRequest): Promise<AiActionResponse> {
+    const res = await fetch(`${API_BASE}/ai/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),

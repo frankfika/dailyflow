@@ -84,6 +84,7 @@ export function TagInput({ tags, onChange, availableTags, language, placeholder 
         <input
           ref={inputRef}
           type="text"
+          data-testid="taginput-field"
           className="flex-1 min-w-[100px] bg-transparent border-none outline-none text-[13px] font-medium text-text-heading placeholder:text-text-muted/60"
           placeholder={tags.length === 0 ? (placeholder || (language === 'zh' ? '添加标签...' : 'Add tags...')) : ''}
           value={inputValue}

@@ -17,6 +17,9 @@ import {
   rescheduleNodeTask,
 } from '../services/eventExecutionService.js';
 import { createTopicSpace } from '../services/topicSpaces.js';
+import { convertStandaloneTaskToEventNode } from '../services/taskEventConversion.js';
+import { getMindMap, updateMindMap } from '../services/mindmaps.js';
+import { randomUUID } from 'node:crypto';
 import type { EventContext } from '../types/event.js';
 // Sprint 1 Gap 7: mirror v1 task completion back to the linked mindmap node.
 import { bootstrapV2 } from '../services/v2/workspaceContext.js';
@@ -302,6 +305,79 @@ router.post('/actions/undo-complete-node-task', async (req, res) => {
  * Body: { taskId, scheduledDate, mindmapId, nodeId }
  * Returns: { converted, alreadyConverted, spaceLinked }
  */
+/**
+ * POST /api/events/actions/convert-task-to-event  (UX S7: 任务 → 转成项目)
+ *
+ * Body: { taskId, scheduledDate, title, context?, extraNodes?: string[] }
+ * Creates a brand-new Event (TopicSpace + dominant mindmap), seeds child
+ * nodes — the first carrying the converted task — then runs the audited
+ * standalone→node-task conversion (with its 10-minute undo record).
+ * Returns: { eventId, mindmapId, nodeId, conversionId, converted }
+ */
+router.post('/actions/convert-task-to-event', async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.taskId || !b.scheduledDate) {
+      return res.status(400).json({ error: 'Required fields missing: taskId, scheduledDate' });
+    }
+    const title = typeof b.title === 'string' ? b.title.trim() : '';
+    if (!title) return res.status(400).json({ error: 'title is required' });
+    const context = isEventContext(b.context) ? b.context : 'work';
+    const extraNodes: string[] = Array.isArray(b.extraNodes)
+      ? b.extraNodes.filter((n: unknown) => typeof n === 'string' && n.trim()).map((n: string) => n.trim()).slice(0, 8)
+      : [];
+
+    const space = await createTopicSpace({ title, context });
+    const detail = await getEventById(space.id);
+    if (!detail) return res.status(500).json({ error: 'Event was created but could not be read' });
+
+    const map = await getMindMap(detail.mindmapId);
+    if (!map) return res.status(500).json({ error: 'Mindmap missing after event creation' });
+    const root = map.nodes.find((node) => node.id === detail.rootNodeId) ?? map.nodes[0];
+    if (!root) return res.status(500).json({ error: 'Mindmap has no root node' });
+
+    const newNodeIds: string[] = [];
+    const nodes = [...map.nodes];
+    const edges = [...map.edges];
+    const seedTexts = [title, ...extraNodes];
+    seedTexts.forEach((text, index) => {
+      const nodeId = `node_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
+      newNodeIds.push(nodeId);
+      nodes.push({
+        id: nodeId,
+        text,
+        position: { x: root.position.x + 40 + index * 60, y: root.position.y + 140 + index * 90 },
+        kind: 'branch',
+      });
+      edges.push({ id: `edge_${randomUUID().replace(/-/g, '').slice(0, 20)}`, source: root.id, target: nodeId });
+    });
+    const updated = await updateMindMap(map.id, { nodes, edges });
+    if (!updated) return res.status(500).json({ error: 'Failed to seed project nodes' });
+
+    // The first seeded node carries the original task via the audited
+    // conversion pipeline (marker injection + undo record).
+    const scheduledDate = String(b.scheduledDate);
+    const conversion = await withDateLock(scheduledDate, () => convertStandaloneTaskToEventNode({
+      taskId: String(b.taskId),
+      scheduledDate,
+      mindmapId: map.id,
+      nodeId: newNodeIds[0],
+    }));
+
+    res.status(201).json({
+      eventId: space.id,
+      mindmapId: map.id,
+      nodeId: newNodeIds[0],
+      conversionId: conversion.conversionId,
+      converted: conversion.converted || conversion.alreadyConverted,
+    });
+  } catch (error: any) {
+    console.error('[events] convert-task-to-event error:', error);
+    const status = error?.status ?? 500;
+    res.status(status).json({ error: error.message });
+  }
+});
+
 router.post('/actions/convert-standalone-to-event-node-task', async (req, res) => {
   try {
     const b = req.body || {};

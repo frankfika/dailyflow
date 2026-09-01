@@ -4,7 +4,20 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "url": "http://localhost:47831",
+      "port": 47831
+    },
+    {
+      "name": "dev-all",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "unset PORT; npm run dev:all"
+      ],
       "url": "http://localhost:47831",
       "port": 47831
     }
