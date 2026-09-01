@@ -900,8 +900,10 @@ export function EventCanvas({
       </div>
 
       {/* Empty-state direct input for brand-new events. */}
+      {/* pointer-events-none lets the toolbar (AI organize etc.) stay
+          clickable on an otherwise empty canvas; the form re-enables them. */}
       {hasOnlyRoot && (
-        <div className="absolute inset-0 z-10 grid place-items-center">
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -909,7 +911,7 @@ export function EventCanvas({
               const text = input?.value.trim() ?? '';
               if (text) void submitFirstStep(text);
             }}
-            className="flex w-80 items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+            className="pointer-events-auto flex w-80 items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}
           >
             <input
