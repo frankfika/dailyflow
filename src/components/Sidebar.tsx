@@ -101,9 +101,6 @@ interface SidebarProps {
   filesMap: Record<string, string>;
   setFilesMap: (v: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   recentDates: string[];
-  archivedMonths: Record<string, string[]>;
-  expandedArchiveMonths: Record<string, boolean>;
-  toggleArchiveMonth: (month: string) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   workspaceSwitcher?: React.ReactNode;
   activeContext?: 'work' | 'life';

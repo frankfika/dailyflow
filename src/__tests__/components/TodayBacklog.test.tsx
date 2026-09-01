@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { STANDALONE_MINDMAP_FILTER, TodayBacklog, filterTodayTasks, type TodayPlanningGroup } from '../../components/TodayBacklog';
+import { TodayBacklog, type TodayPlanningGroup } from '../../components/TodayBacklog';
 
 const noop = vi.fn();
 
@@ -198,26 +198,5 @@ describe('TodayBacklog Event-first execution flow', () => {
     expect(screen.getByText('Nothing here yet. Add one thing to get started.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add one thing' }));
     expect(noop).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Today task filters', () => {
-  const tasks = [
-    { id: 'map-work', title: '发布官网', status: 'todo' as const, tags: ['work', 'launch'], originMindmapId: 'map-1' },
-    { id: 'map-life', title: '制定旅行路线', status: 'todo' as const, tags: ['life'], originMindmapId: 'map-2' },
-    { id: 'standalone', title: '买牛奶', status: 'todo' as const, tags: ['life'] },
-  ];
-  const groups = [
-    { id: 'map-1', mindmapId: 'map-1', title: '发布计划', taskIds: ['map-work'], completedTaskIds: [] },
-    { id: 'map-2', mindmapId: 'map-2', title: '旅行计划', taskIds: ['map-life'], completedTaskIds: [] },
-  ];
-
-  it('filters by tag and mind map together', () => {
-    expect(filterTodayTasks(tasks, 'launch', 'map-1', groups).map(task => task.id)).toEqual(['map-work']);
-    expect(filterTodayTasks(tasks, 'life', 'map-1', groups)).toEqual([]);
-  });
-
-  it('can show only tasks that do not belong to a mind map', () => {
-    expect(filterTodayTasks(tasks, null, STANDALONE_MINDMAP_FILTER, groups).map(task => task.id)).toEqual(['standalone']);
   });
 });

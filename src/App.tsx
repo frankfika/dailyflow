@@ -110,7 +110,6 @@ export default function App() {
   const [isNoteEditorMaximized, setIsNoteEditorMaximized] = useState(false);
   const [editingDailyNote, setEditingDailyNote] = useState<NoteData | null>(null);
   const [prefillLinkedTaskId, setPrefillLinkedTaskId] = useState<string | null>(null);
-  const [notesFilterByTaskId, setNotesFilterByTaskId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState<{ text: string; key: string; sourceTitle?: string; contextText?: string; contextLabel?: string; noteId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'events'>('today');
   // UX S5: notes / AI / calendar / memory / team render as overlays over the
@@ -237,8 +236,6 @@ export default function App() {
   const initializedDaysRef = useRef(new Set<string>());
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
-  const [showDoneByCategory, setShowDoneByCategory] = useState<Record<string, boolean>>({});
-  const [hideDoneTasks, setHideDoneTasks] = useState(false);
   const [completionPromptTaskIds, setCompletionPromptTaskIds] = useState<Set<string>>(new Set());
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
   const [githubRepoInput, setGithubRepoInput] = useState<string>('');
@@ -807,7 +804,6 @@ export default function App() {
       setIsNoteEditorMaximized(false);
       setEditingDailyNote(null);
       setPrefillLinkedTaskId(null);
-      setNotesFilterByTaskId(null);
       setQuickNoteDefaultType(undefined);
       setChatDraft(null);
 
@@ -891,9 +887,13 @@ export default function App() {
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault();
-        setActiveTab('today');
-        setBrainModeSignal(value => value + 1);
+        // Inside the Events canvas, ⌘B toggles the outline (handled by
+        // EventsView). Brainstorm mode only claims ⌘B elsewhere.
+        if (activeTab !== 'events') {
+          e.preventDefault();
+          setActiveTab('today');
+          setBrainModeSignal(value => value + 1);
+        }
         return;
       }
       if (e.key === 'Escape') {
@@ -1568,23 +1568,6 @@ export default function App() {
   const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
   const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const recentDates = allDates.filter(d => d >= recentThreshold);
-  const archivedDates = allDates.filter(d => d < recentThreshold);
-  
-  const archivedMonths: Record<string, string[]> = {};
-  archivedDates.forEach(d => {
-    const dateObj = new Date(`${d}T00:00:00Z`);
-    const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const monthName = monthFormatter.format(dateObj); // e.g. "April 2026"
-    if (!archivedMonths[monthName]) archivedMonths[monthName] = [];
-    archivedMonths[monthName].push(d);
-  });
-
-  const [expandedArchiveMonths, setExpandedArchiveMonths] = useState<Record<string, boolean>>({});
-
-  const toggleArchiveMonth = (month: string) => {
-    setExpandedArchiveMonths(prev => ({ ...prev, [month]: !prev[month] }));
-  };
-
   // Handle workspace setup completion
   const handleWorkspaceSetupComplete = async () => {
     setShowWorkspaceSetup(false);
@@ -1715,9 +1698,6 @@ export default function App() {
         filesMap={filesMap}
         setFilesMap={setFilesMap}
         recentDates={recentDates}
-        archivedMonths={archivedMonths}
-        expandedArchiveMonths={expandedArchiveMonths}
-        toggleArchiveMonth={toggleArchiveMonth}
         showToast={showToast}
         workspaceSwitcher={
           workspaces.length > 0 ? (
@@ -1950,8 +1930,17 @@ export default function App() {
                     onAiAction={handleTaskAiAction}
                     onConvertToProject={handleConvertTaskToProject}
                     onShowLinkedNotes={(taskId) => {
-                      setNotesFilterByTaskId(taskId);
-                      setActiveOverlay('notes');
+                      // Open the task's newest linked note in the quick note
+                      // editor — linked notes live in the per-date note store,
+                      // not the v2 Notes overlay, so filtering that list would
+                      // show nothing.
+                      const linked = dailyNotes
+                        .filter(n => (n.linkedTaskIds ?? []).includes(taskId))
+                        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+                      if (linked[0]) {
+                        setEditingDailyNote(linked[0]);
+                        setShowQuickNoteEditor(true);
+                      }
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => taskInputFocusRef.current?.()}

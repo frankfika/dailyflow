@@ -23,27 +23,6 @@ export type TodayTask = {
   sourcePath?: string[];
 };
 
-export const STANDALONE_MINDMAP_FILTER = '__standalone__';
-
-export function filterTodayTasks(
-  tasks: TodayTask[],
-  selectedTag: string | null,
-  selectedMindmapId: string | null,
-  planningGroups: TodayPlanningGroup[],
-): TodayTask[] {
-  const groupByTaskId = new Map<string, TodayPlanningGroup>();
-  for (const group of planningGroups) {
-    for (const taskId of group.taskIds) groupByTaskId.set(taskId, group);
-  }
-  return tasks.filter((task) => {
-    if (selectedTag && !(task.tags ?? []).includes(selectedTag)) return false;
-    if (!selectedMindmapId) return true;
-    const group = groupByTaskId.get(task.id);
-    if (selectedMindmapId === STANDALONE_MINDMAP_FILTER) return !group;
-    return group?.mindmapId === selectedMindmapId;
-  });
-}
-
 export interface TodayPlanningGroup {
   id: string;
   mindmapId: string;

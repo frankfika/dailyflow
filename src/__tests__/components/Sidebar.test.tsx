@@ -59,9 +59,6 @@ function SidebarHarness({ onOpenSettings, onOpenCommandPalette }: { onOpenSettin
       filesMap={{}}
       setFilesMap={vi.fn()}
       recentDates={[]}
-      archivedMonths={{}}
-      expandedArchiveMonths={{}}
-      toggleArchiveMonth={vi.fn()}
       showToast={vi.fn()}
       onOpenSettings={onOpenSettings}
       onOpenCommandPalette={onOpenCommandPalette}
