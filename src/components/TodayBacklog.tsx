@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Network, Pin, Plus, Sparkles } from 'lucide-react';
 import { TaskCard } from './TaskCard';
+import type { RecurrenceRule } from '../api/client';
 
 export type TodayTask = {
   id: string;
@@ -48,6 +49,7 @@ interface TodayBacklogProps {
   onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   /** UX S7: convert the task into a new project event. */
   onConvertToProject?: (task: TodayTask, opts: { title: string; extraNodes: string[] }) => Promise<void>;
+  onSetRecurrence?: (task: TodayTask, recurrence: RecurrenceRule) => void;
   linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
   language: 'en' | 'zh';
@@ -87,6 +89,7 @@ export function TodayBacklog({
   onUnlinkFromSpace,
   onAiAction,
   onConvertToProject,
+  onSetRecurrence,
   linkedNotesCount,
   onAddTask,
   language,
@@ -166,6 +169,7 @@ export function TodayBacklog({
           : undefined}
         onAiAction={onAiAction}
         onConvertToProject={onConvertToProject}
+        onSetRecurrence={onSetRecurrence}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />

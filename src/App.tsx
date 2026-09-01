@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw, X } from 'lucide-react';
 import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
+import type { RecurrenceRule } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
 import { getTodayStr } from './utils/tagColors';
@@ -1395,6 +1396,22 @@ export default function App() {
     }
   };
 
+  /** UX_DESIGN §12: task inline "R" — save a recurrence rule (creates a
+   * recurring template, same as adding a task with a rule from the input bar). */
+  const handleSetTaskRecurrence = (task: Task, recurrence: RecurrenceRule) => {
+    void recurringApi.create({
+      title: task.title,
+      description: task.description,
+      tags: task.tags,
+      recurrence,
+    }).then(() => {
+      showToast(language === 'zh' ? '重复规则已保存，任务将按规则自动生成' : 'Recurrence saved — tasks will be generated on schedule', 'success');
+    }).catch((e: any) => {
+      console.error('Failed to save recurrence', e);
+      showToast(e?.message || (language === 'zh' ? '重复规则保存失败' : 'Failed to save recurrence'), 'error');
+    });
+  };
+
   const handleUnlinkFromSpace = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
     try {
@@ -1972,6 +1989,7 @@ export default function App() {
                     onUnlinkFromSpace={handleUnlinkFromSpace}
                     onAiAction={handleTaskAiAction}
                     onConvertToProject={handleConvertTaskToProject}
+                    onSetRecurrence={handleSetTaskRecurrence}
                     onShowLinkedNotes={(taskId) => {
                       // Open the task's newest linked note in the quick note
                       // editor — linked notes live in the per-date note store,
