@@ -21,6 +21,7 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { TodayBacklog, type TodayPlanningGroup } from './components/TodayBacklog';
+import { DatePickerPopover } from './components/DatePickerPopover';
 import { TodayFocusBar } from './components/TodayFocusBar';
 import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
 import { TodayProactiveBanner } from './components/TodayProactiveBanner';
@@ -847,6 +848,11 @@ export default function App() {
         setShowCommandPalette(prev => !prev);
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setShowDatePicker(true);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '!') {
         e.preventDefault();
         setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
@@ -913,6 +919,7 @@ export default function App() {
 
   const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   // Keyboard handlers defined later in the component; the keydown effect
   // reads them through this ref.
   const kbActionsRef = useRef<{ reflection: () => void; rollover: () => void }>({
@@ -1833,21 +1840,39 @@ export default function App() {
                           <ChevronRight className="w-4 h-4" />
                         </button>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
-                              {currentFileDate === getTodayStr()
-                                ? (language === 'zh' ? '今天' : 'Today')
-                                : (language === 'zh' ? '历史任务' : 'Past tasks')}
-                            </p>
-                            <h1 className="truncate text-lg font-semibold tracking-tight text-text-heading md:text-xl">
-                              {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
-                                weekday: 'long',
-                                month: 'long',
-                                day: 'numeric',
-                                year: 'numeric',
-                                timeZone: 'UTC',
-                              }).format(new Date(`${currentFileDate}T00:00:00Z`))}
-                            </h1>
+                          <div className="relative min-w-0" data-testid="date-picker-anchor">
+                            <button
+                              type="button"
+                              onClick={() => setShowDatePicker(true)}
+                              className="flex flex-col items-start text-left"
+                              data-testid="date-picker-trigger"
+                            >
+                              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
+                                {currentFileDate === getTodayStr()
+                                  ? (language === 'zh' ? '今天' : 'Today')
+                                  : (language === 'zh' ? '历史任务' : 'Past tasks')}
+                              </p>
+                              <h1 className="truncate text-lg font-semibold tracking-tight text-text-heading md:text-xl">
+                                {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                                  weekday: 'long',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  timeZone: 'UTC',
+                                }).format(new Date(`${currentFileDate}T00:00:00Z`))}
+                              </h1>
+                            </button>
+                            <DatePickerPopover
+                              open={showDatePicker}
+                              onClose={() => setShowDatePicker(false)}
+                              currentDate={currentFileDate}
+                              today={getTodayStr()}
+                              onSelect={(date) => {
+                                setCurrentFileDate(date);
+                                setShowDatePicker(false);
+                              }}
+                              language={language}
+                            />
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2159,6 +2184,7 @@ export default function App() {
           else if (command === 'team') setActiveOverlay('team');
           else if (command === 'settings') setShowSettings(true);
           else if (command === 'toggle-context') setActiveContext(prev => (prev === 'work' ? 'life' : 'work'));
+          else if (command === 'pick-date') setShowDatePicker(true);
           else if (command === 'check-updates') void checkForUpdates().then(info => {
             if (info.hasUpdate) {
               setUpdateInfo(info);
