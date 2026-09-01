@@ -115,14 +115,14 @@ export function PrivacyPanel({ language }: PrivacyPanelProps) {
                   <h4 className="text-sm font-medium text-text-heading">
                     {language === 'zh' ? entry.category : entry.categoryEn}
                   </h4>
-                  <span className="rounded-full bg-[var(--color-accent-light)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
+                  <span className="rounded-full bg-[var(--color-accent-light)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
                     {language === 'zh' ? entry.control : entry.controlEn}
                   </span>
                 </div>
                 <p className="mt-0.5 text-[12px] text-text-muted">
                   {language === 'zh' ? entry.description : entry.descriptionEn}
                 </p>
-                <p className="mt-1 text-[11px] text-text-muted/80">
+                <p className="mt-1 text-[12px] text-text-muted/80">
                   {language === 'zh' ? '目标：' : 'Targets: '}
                   {entry.destinations.join(' · ')}
                 </p>
@@ -132,7 +132,7 @@ export function PrivacyPanel({ language }: PrivacyPanelProps) {
         })}
       </ul>
 
-      <p className="text-[11px] text-text-muted/80">
+      <p className="text-[12px] text-text-muted/80">
         {language === 'zh'
           ? '详细审计见 docs/ZERO_UPLOAD_AUDIT.md'
           : 'See docs/ZERO_UPLOAD_AUDIT.md for the full audit.'}

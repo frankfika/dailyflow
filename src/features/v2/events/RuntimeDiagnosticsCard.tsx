@@ -22,4 +22,4 @@ export function RuntimeDiagnosticsCard({ language = 'en' }: { language?: 'zh' | 
   </section>;
 }
 
-function Diagnostic({ label, value, ok }: { label: string; value: string; ok: boolean }) { return <div className="rounded-lg border border-border bg-surface-elevated p-2.5"><div className="flex items-center gap-1 text-[10px] text-text-muted">{ok ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-amber-600" />}{label}</div><p className="mt-1 truncate font-medium text-text-heading" title={value}>{value}</p></div>; }
+function Diagnostic({ label, value, ok }: { label: string; value: string; ok: boolean }) { return <div className="rounded-lg border border-border bg-surface-elevated p-2.5"><div className="flex items-center gap-1 text-[11px] text-text-muted">{ok ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-amber-600" />}{label}</div><p className="mt-1 truncate font-medium text-text-heading" title={value}>{value}</p></div>; }

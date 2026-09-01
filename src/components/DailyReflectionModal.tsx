@@ -72,10 +72,10 @@ function Section({
       <header className="flex items-center gap-1.5 mb-1.5">
         {icon}
         <h3 className="text-xs font-medium text-text-heading">{title}</h3>
-        <span className="text-[10px] tabular-nums text-text-muted/65">{count}</span>
+        <span className="text-[11px] tabular-nums text-text-muted/65">{count}</span>
       </header>
       {count === 0 ? (
-        <p className="text-[11px] text-text-muted/65 italic">{emptyLabel}</p>
+        <p className="text-[12px] text-text-muted/65 italic">{emptyLabel}</p>
       ) : (
         <ul className="space-y-1">{children}</ul>
       )}
@@ -90,15 +90,15 @@ function TaskRow({ task, testid }: { task: DailyReflectionTask; testid?: string 
       <div className="flex-1 min-w-0">
         <div className="truncate text-text-main">{task.title}</div>
         {task.tags && task.tags.length > 0 && (
-          <div className="text-[10px] text-text-muted/65">
+          <div className="text-[11px] text-text-muted/65">
             {task.tags.slice(0, 4).map((t) => `#${t}`).join(' ')}
           </div>
         )}
         {task.progress && (
-          <div className="text-[10px] text-text-muted/75">{task.progress}</div>
+          <div className="text-[11px] text-text-muted/75">{task.progress}</div>
         )}
         {task.reason && (
-          <div className="text-[10px] text-text-muted/75">原因：{task.reason}</div>
+          <div className="text-[11px] text-text-muted/75">原因：{task.reason}</div>
         )}
       </div>
     </li>
@@ -192,7 +192,7 @@ export function DailyReflectionModal({
                   <h2 id="daily-reflection-title" className="font-sans text-base font-medium text-text-heading">
                     {language === 'zh' ? '今日复盘' : 'Daily reflection'}
                   </h2>
-                  <p className="text-[11px] text-text-muted/75">
+                  <p className="text-[12px] text-text-muted/75">
                     {language === 'zh'
                       ? `${date} · 将写入 Journal/${date}.md`
                       : `${date} · writes to Journal/${date}.md`}
@@ -265,7 +265,7 @@ export function DailyReflectionModal({
                   data-testid="reflection-textarea"
                   className="block w-full resize-y rounded-md border border-border/80 bg-white/80 p-2.5 text-sm leading-relaxed text-text-main placeholder:text-text-muted/45 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
                 />
-                <div className="mt-1 flex items-center justify-between text-[10px] text-text-muted/65">
+                <div className="mt-1 flex items-center justify-between text-[11px] text-text-muted/65">
                   <span>
                     {language === 'zh'
                       ? '将保存为 Markdown 文件，路径 Journal/<date>.md'
@@ -278,7 +278,7 @@ export function DailyReflectionModal({
               </div>
 
               {lastSaved && (
-                <p className="text-[11px] text-success" data-testid="reflection-saved-path">
+                <p className="text-[12px] text-success" data-testid="reflection-saved-path">
                   ✓ {language === 'zh' ? '已保存到' : 'Saved to'} {lastSaved.filePath} ({lastSaved.byteSize}B)
                 </p>
               )}

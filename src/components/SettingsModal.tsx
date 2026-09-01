@@ -71,7 +71,7 @@ interface SettingsModalProps {
 
 function StepNumber({ value, done }: { value: string; done: boolean }) {
   return (
-    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
       done
         ? 'bg-green-100 text-green-700'
         : 'border border-border bg-surface text-text-muted'
@@ -1015,7 +1015,7 @@ export function SettingsModal({
                           document.documentElement.style.setProperty('--font-sans', f.font);
                           try { localStorage.setItem('df_selected_font', f.key); } catch {}
                         }}
-                        className={`px-2 py-2 rounded-md text-[11px] font-medium transition-all border ${
+                        className={`px-2 py-2 rounded-md text-[12px] font-medium transition-all border ${
                           selectedFont === f.key
                             ? 'bg-accent text-white border-accent shadow-sm'
                             : 'bg-surface text-text-muted border-border/50 hover:border-accent/30 hover:text-text-main'
@@ -1050,7 +1050,7 @@ export function SettingsModal({
                     }}
                     className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                  <div className="flex justify-between text-[11px] text-text-muted mt-0.5">
                     <span>A</span>
                     <span>A</span>
                   </div>
@@ -1079,7 +1079,7 @@ export function SettingsModal({
                     }}
                     className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                  <div className="flex justify-between text-[11px] text-text-muted mt-0.5">
                     <span>{language === 'zh' ? '细' : 'Light'}</span>
                     <span>{language === 'zh' ? '粗' : 'Bold'}</span>
                   </div>
@@ -1106,7 +1106,7 @@ export function SettingsModal({
                     }}
                     className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="flex justify-between text-[10px] text-text-muted mt-0.5">
+                  <div className="flex justify-between text-[11px] text-text-muted mt-0.5">
                     <span>{language === 'zh' ? '暗' : 'Dark'}</span>
                     <span>{language === 'zh' ? '亮' : 'Bright'}</span>
                   </div>
@@ -1131,7 +1131,7 @@ export function SettingsModal({
                   </h3>
                   <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded font-bold">Beta</span>
                 </div>
-                <p className="text-[11px] text-text-muted mb-3">
+                <p className="text-[12px] text-text-muted mb-3">
                   {language === 'zh'
                     ? '备份、恢复或重置本地工作区。导出会下载一个 JSON 文件, 包含全部笔记 / 承诺 / 决策 / 证据。'
                     : 'Back up, restore, or reset the local workspace. Export downloads a JSON file with all notes / commitments / decisions / evidence.'}
@@ -1157,7 +1157,7 @@ export function SettingsModal({
                     )}
                   </button>
                   {lastExportTime && !isExporting && (
-                    <p className="text-[10px] text-text-muted text-center -mt-1">
+                    <p className="text-[11px] text-text-muted text-center -mt-1">
                       {language === 'zh' ? '上次导出：' : 'Last exported: '}{formatRelativeTime(lastExportTime)}
                     </p>
                   )}
@@ -1273,16 +1273,16 @@ export function SettingsModal({
                           {googleStatus?.connected ? (language === 'zh' ? '已连接' : 'Connected') : (language === 'zh' ? '未连接' : 'Not connected')}
                         </span>
                       </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                      <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
                         {language === 'zh' ? '授权后，Google 主日历会直接显示在 DailyFlow 的日、周、月视图中。' : 'After authorization, your primary Google calendar appears in DailyFlow day, week, and month views.'}
                       </p>
-                      {googleStatus?.accountEmail && <p className="mt-1 text-[10px] text-text-muted">{googleStatus.accountEmail}</p>}
+                      {googleStatus?.accountEmail && <p className="mt-1 text-[11px] text-text-muted">{googleStatus.accountEmail}</p>}
                     </div>
                   </div>
                   {!googleStatus?.configured && (
                     <div className="rounded-xl border border-border/70 bg-background p-3">
                       <p className="text-xs font-semibold text-text-heading">{language === 'zh' ? '首次配置' : 'One-time setup'}</p>
-                      <p className="mt-1 text-[11px] text-text-muted">
+                      <p className="mt-1 text-[12px] text-text-muted">
                         {language === 'zh' ? '填入 Google Cloud 中创建的“桌面应用”OAuth Client ID。这里只需要 Client ID，不需要密钥。' : 'Enter the Desktop app OAuth Client ID from Google Cloud. No client secret is required.'}
                       </p>
                       <input
@@ -1296,7 +1296,7 @@ export function SettingsModal({
                           const url = 'https://console.cloud.google.com/apis/credentials';
                           try { await open(url); } catch { window.open(url, '_blank', 'noopener,noreferrer'); }
                         }}
-                        className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-green-700"
+                        className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-green-700"
                       >
                         <ExternalLink className="h-3 w-3" />{language === 'zh' ? '打开 Google Cloud 凭据页' : 'Open Google Cloud credentials'}
                       </button>
@@ -1351,7 +1351,7 @@ export function SettingsModal({
                               : (language === 'zh' ? '未连接' : 'Not connected')}
                         </span>
                       </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                      <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
                         {feishuStatus?.authorized
                           ? (language === 'zh'
                             ? '任务和日程已可在 DailyFlow 与飞书之间同步。'
@@ -1361,7 +1361,7 @@ export function SettingsModal({
                             : 'Connect to sync your Feishu tasks and calendar.')}
                       </p>
                       {feishuStatus?.userName && (
-                        <p className="mt-1 truncate text-[10px] text-text-muted">
+                        <p className="mt-1 truncate text-[11px] text-text-muted">
                           {language === 'zh' ? '当前账号：' : 'Account: '}{feishuStatus.userName}
                         </p>
                       )}
@@ -1377,12 +1377,12 @@ export function SettingsModal({
                             {language === 'zh' ? '企业应用准备' : 'Enterprise app setup'}
                           </p>
                           {feishuStatus?.appConfigured && (
-                            <span className="text-[10px] font-medium text-green-700">
+                            <span className="text-[11px] font-medium text-green-700">
                               {language === 'zh' ? '已就绪' : 'Ready'}
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
                           {feishuStatusLoading
                             ? (language === 'zh' ? '正在检查连接环境…' : 'Checking the connector environment…')
                             : !feishuStatus?.cliAvailable
@@ -1407,7 +1407,7 @@ export function SettingsModal({
                                 window.open(url, '_blank', 'noopener,noreferrer');
                               }
                             }}
-                            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800"
+                            className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-blue-700 hover:text-blue-800"
                           >
                             <ExternalLink className="h-3 w-3" />
                             {language === 'zh' ? '打开飞书开发者后台' : 'Open Feishu Developer Console'}
@@ -1421,7 +1421,7 @@ export function SettingsModal({
                         <p className="text-xs font-semibold text-amber-900">
                           {language === 'zh' ? '当前版本暂时无法连接飞书' : 'Feishu is not available in this build'}
                         </p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-amber-800/80">
+                        <p className="mt-1 text-[12px] leading-relaxed text-amber-800/80">
                           {language === 'zh'
                             ? '请更新 DailyFlow 或联系支持人员。你不需要安装命令行工具，也不需要配置开发者应用。'
                             : 'Update DailyFlow or contact support. You should not need to install command-line tools or configure a developer app.'}
@@ -1434,7 +1434,7 @@ export function SettingsModal({
                         <p className="text-xs font-semibold text-text-heading">
                           {language === 'zh' ? '首次连接准备' : 'One-time connection setup'}
                         </p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
                           {language === 'zh'
                             ? 'DailyFlow 会打开飞书官方页面完成一次性准备。无需安装命令行工具，也无需在这里填写 App ID 或 App Secret。'
                             : 'DailyFlow opens the official Feishu page for one-time setup. No CLI install, App ID, or App Secret is required here.'}
@@ -1451,7 +1451,7 @@ export function SettingsModal({
                         )}
                         {feishuSetupUrl && (
                           <div className="mt-3 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
-                            <ol className="space-y-1 text-[11px] leading-relaxed text-text-main">
+                            <ol className="space-y-1 text-[12px] leading-relaxed text-text-main">
                               <li>{language === 'zh' ? '1. 在飞书官方页面确认创建连接应用。' : '1. Confirm the connector app on the official Feishu page.'}</li>
                               <li>{language === 'zh' ? '2. 完成后回到 DailyFlow，应用会自动继续。' : '2. Return to DailyFlow; setup continues automatically.'}</li>
                             </ol>
@@ -1470,7 +1470,7 @@ export function SettingsModal({
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 onClick={() => openFeishuUrl(feishuSetupUrl)}
-                                className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                                className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[12px] font-semibold text-text-main hover:bg-black/[0.03]"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {language === 'zh' ? '重新打开' : 'Open again'}
@@ -1480,7 +1480,7 @@ export function SettingsModal({
                                   await navigator.clipboard.writeText(feishuSetupUrl);
                                   setFeishuMessage(language === 'zh' ? '连接链接已复制。' : 'Setup link copied.');
                                 }}
-                                className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                                className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[12px] font-semibold text-text-main hover:bg-black/[0.03]"
                               >
                                 <Copy className="h-3.5 w-3.5" />
                                 {language === 'zh' ? '复制链接' : 'Copy link'}
@@ -1489,7 +1489,7 @@ export function SettingsModal({
                             <button
                               onClick={handleFinishFeishuSetup}
                               disabled={feishuLoading}
-                              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-2 text-[11px] font-semibold text-blue-700 disabled:opacity-50"
+                              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-2 text-[12px] font-semibold text-blue-700 disabled:opacity-50"
                             >
                               {feishuLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                               {language === 'zh' ? '重新检查' : 'Check again'}
@@ -1511,7 +1511,7 @@ export function SettingsModal({
                             ? (language === 'zh' ? '账号已连接' : 'Account connected')
                             : (language === 'zh' ? '连接飞书' : 'Connect Feishu')}
                         </p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                        <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
                           {feishuStatus?.authorized
                             ? (language === 'zh'
                               ? `已连接${feishuStatus.userName ? `：${feishuStatus.userName}` : '企业账号'}。`
@@ -1525,7 +1525,7 @@ export function SettingsModal({
                             <button
                               onClick={handleConnectFeishu}
                               disabled={feishuLoading}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-white px-2 py-2 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-white px-2 py-2 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                               {language === 'zh' ? '重新授权' : 'Reauthorize'}
@@ -1533,7 +1533,7 @@ export function SettingsModal({
                             <button
                               onClick={handleDisconnectFeishu}
                               disabled={feishuLoading}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[11px] font-semibold text-text-muted hover:bg-black/[0.03] disabled:opacity-50"
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white px-2 py-2 text-[12px] font-semibold text-text-muted hover:bg-black/[0.03] disabled:opacity-50"
                             >
                               {language === 'zh' ? '断开连接' : 'Disconnect'}
                             </button>
@@ -1551,7 +1551,7 @@ export function SettingsModal({
                         )}
                         {feishuDeviceCode && (
                           <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
-                            <ol className="space-y-1 text-[11px] leading-relaxed text-text-main">
+                            <ol className="space-y-1 text-[12px] leading-relaxed text-text-main">
                               <li>{language === 'zh' ? '1. 在飞书页面登录企业账号并点击授权。' : '1. Sign in on Feishu and approve access.'}</li>
                               <li>{language === 'zh' ? '2. 完成后回到 DailyFlow，连接状态会自动更新。' : '2. Return to DailyFlow; the connection updates automatically.'}</li>
                             </ol>
@@ -1572,14 +1572,14 @@ export function SettingsModal({
                             <div className="flex gap-2">
                               <button
                                 onClick={reopenFeishuAuthorization}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[12px] font-semibold text-text-main hover:bg-black/[0.03]"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {language === 'zh' ? '重新打开' : 'Open again'}
                               </button>
                               <button
                                 onClick={copyFeishuAuthorization}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[11px] font-semibold text-text-main hover:bg-black/[0.03]"
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-2 text-[12px] font-semibold text-text-main hover:bg-black/[0.03]"
                               >
                                 <Copy className="h-3.5 w-3.5" />
                                 {language === 'zh' ? '复制链接' : 'Copy link'}
@@ -1609,7 +1609,7 @@ export function SettingsModal({
                         <p className="text-xs font-semibold text-text-heading">
                           {language === 'zh' ? '同步内容' : 'Sync content'}
                         </p>
-                        <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-text-muted">
+                        <div className="mt-1.5 space-y-1 text-[12px] leading-relaxed text-text-muted">
                           <p><span className="font-semibold text-text-main">{language === 'zh' ? '任务：' : 'Tasks: '}</span>{language === 'zh' ? 'DailyFlow ↔ 飞书任务，双向同步标题、描述、截止日和完成状态。' : 'DailyFlow ↔ Feishu Tasks, including title, description, due date, and completion.'}</p>
                           <p><span className="font-semibold text-text-main">{language === 'zh' ? '日程：' : 'Calendar: '}</span>{language === 'zh' ? '飞书日程显示在 DailyFlow；带时间的会议笔记可创建或更新飞书日程。' : 'Feishu events appear in DailyFlow; timed meeting notes can create or update Feishu events.'}</p>
                         </div>
@@ -1636,7 +1636,7 @@ export function SettingsModal({
                     </div>
                   )}
                   {(feishuStatus?.lastTaskSyncAt || feishuStatus?.lastCalendarSyncAt) && (
-                    <p className="text-center text-[10px] text-text-muted">
+                    <p className="text-center text-[11px] text-text-muted">
                       {language === 'zh' ? '上次同步：' : 'Last sync: '}
                       {formatRelativeTime(feishuStatus.lastTaskSyncAt || feishuStatus.lastCalendarSyncAt!)}
                     </p>
@@ -1665,7 +1665,7 @@ export function SettingsModal({
                   <ol className="text-xs text-text-muted space-y-2 list-decimal list-inside">
                     <li>
                       <strong>{language === 'zh' ? '创建 GitHub 仓库' : 'Create GitHub Repository'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '访问 github.com，点击右上角 "+" → "New repository"' : 'Go to github.com, click "+" → "New repository"'}</li>
                         <li>{language === 'zh' ? '输入仓库名称（如 dailyflow-notes）' : 'Enter repository name (e.g., dailyflow-notes)'}</li>
                         <li>{language === 'zh' ? '选择 "Private"（私有仓库）' : 'Select "Private" repository'}</li>
@@ -1674,7 +1674,7 @@ export function SettingsModal({
                     </li>
                     <li>
                       <strong>{language === 'zh' ? '生成 Personal Access Token' : 'Generate Personal Access Token'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '访问 github.com/settings/tokens' : 'Go to github.com/settings/tokens'}</li>
                         <li>{language === 'zh' ? '点击 "Generate new token" → "Generate new token (classic)"' : 'Click "Generate new token" → "Generate new token (classic)"'}</li>
                         <li>{language === 'zh' ? '输入 Note（如 "DailyFlow Sync"）' : 'Enter Note (e.g., "DailyFlow Sync")'}</li>
@@ -1684,7 +1684,7 @@ export function SettingsModal({
                     </li>
                     <li>
                       <strong>{language === 'zh' ? '填写配置并测试' : 'Fill Configuration and Test'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '在下方粘贴仓库链接（如 https://github.com/username/repo-name）' : 'Paste repository URL below (e.g. https://github.com/username/repo-name)'}</li>
                         <li>{language === 'zh' ? '粘贴刚才复制的 Personal Access Token' : 'Paste the Personal Access Token you just copied'}</li>
                         <li>{language === 'zh' ? '点击 "测试连接" 验证配置是否正确' : 'Click "Test Connection" to verify configuration'}</li>
@@ -1699,7 +1699,7 @@ export function SettingsModal({
                     <label className="text-xs text-text-muted mb-1 block">
                       {language === 'zh' ? '同步频率' : 'Sync Frequency'}
                     </label>
-                    <p className="text-[11px] text-text-muted mb-1">
+                    <p className="text-[12px] text-text-muted mb-1">
                       {language === 'zh'
                         ? '自动同步正在升级为带版本校验的保存机制，当前仅支持手动同步。'
                         : 'Automatic sync is being upgraded to version-aware saves; manual sync is currently available.'}
@@ -1844,20 +1844,20 @@ export function SettingsModal({
                   <ol className="text-xs text-text-muted space-y-2 list-decimal list-inside">
                     <li>
                       <strong>{language === 'zh' ? '注册 Pinata' : 'Sign up for Pinata'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '访问 pinata.cloud 注册免费账号（包含 1 GB 存储）' : 'Go to pinata.cloud and create a free account (1 GB free)'}</li>
                       </ul>
                     </li>
                     <li>
                       <strong>{language === 'zh' ? '生成 JWT API Key' : 'Generate a JWT API Key'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '前往 API Keys 页面，点击 "New Key"' : 'Visit the API Keys page and click "New Key"'}</li>
                         <li>{language === 'zh' ? '勾选 pinFileToIPFS 权限，复制生成的 JWT' : 'Enable pinFileToIPFS permission, copy the generated JWT'}</li>
                       </ul>
                     </li>
                     <li>
                       <strong>{language === 'zh' ? '粘贴 Token 并测试' : 'Paste the token and test'}</strong>
-                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <ul className="ml-4 mt-1 space-y-0.5 list-disc list-inside text-[12px]">
                         <li>{language === 'zh' ? '点击下方"测试连接"，验证 token 有效' : 'Click "Test Connection" to verify the token works'}</li>
                         <li>{language === 'zh' ? '保存设置后，可使用"立即备份"上传' : 'After saving, use "Backup Now" to upload your workspace'}</li>
                       </ul>
@@ -1870,7 +1870,7 @@ export function SettingsModal({
                     <p className="text-xs font-bold text-text-heading">
                       {language === 'zh' ? '启用 IPFS 备份' : 'Enable IPFS Backup'}
                     </p>
-                    <p className="text-[11px] text-text-muted mt-0.5">
+                    <p className="text-[12px] text-text-muted mt-0.5">
                       {language === 'zh' ? '将工作区快照上传到 Pinata 永久存储' : 'Upload a workspace snapshot to Pinata for persistent storage'}
                     </p>
                   </div>
@@ -1925,7 +1925,7 @@ export function SettingsModal({
                       placeholder="https://gateway.pinata.cloud"
                       className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors font-mono"
                     />
-                    <p className="text-[11px] text-text-muted mt-1">
+                    <p className="text-[12px] text-text-muted mt-1">
                       {language === 'zh' ? '留空则使用 Pinata 默认网关' : 'Leave empty to use the Pinata default gateway'}
                     </p>
                   </div>
@@ -1980,10 +1980,10 @@ export function SettingsModal({
                             className="flex items-center justify-between gap-2 px-3 py-2 bg-surface border border-border rounded-md"
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="text-[11px] font-mono text-text-heading truncate" title={record.cid}>
+                              <p className="text-[12px] font-mono text-text-heading truncate" title={record.cid}>
                                 {record.cid}
                               </p>
-                              <p className="text-[10px] text-text-muted">
+                              <p className="text-[11px] text-text-muted">
                                 {new Date(record.createdAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
                                 {' · '}
                                 {record.fileCount} {language === 'zh' ? '个文件' : 'files'}

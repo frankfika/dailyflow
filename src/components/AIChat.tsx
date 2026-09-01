@@ -194,7 +194,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-0.5 w-full" data-testid="chat-session-scroll-region">
-              <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wider text-text-muted/70 font-bold">
+              <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider text-text-muted/70 font-bold">
                 {language === 'zh' ? '历史对话' : 'Recent'}
               </div>
               {sessions.map(session => (
@@ -333,7 +333,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 {activeProvider ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                  <span className="inline-flex items-center gap-1 text-[12px] text-text-muted">
                     <Bot className="w-3 h-3" />
                     {activeProvider.name}
                     <span className="text-text-muted/60 font-mono truncate">· {activeProvider.model}</span>
@@ -341,7 +341,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 ) : (
                   <button
                     onClick={() => setShowSettings(true)}
-                    className="inline-flex items-center gap-1 text-[11px] text-amber-600 hover:underline"
+                    className="inline-flex items-center gap-1 text-[12px] text-amber-600 hover:underline"
                   >
                     <Bot className="w-3 h-3" />
                     {language === 'zh' ? '尚未配置模型，点这里添加' : 'No model configured — click to add'}
@@ -421,7 +421,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                     >
                       {compact ? s.label : <><span className="text-xl leading-none mt-0.5">{s.icon}</span><div className="min-w-0">
                         <div className="text-sm font-semibold text-text-heading">{s.label}</div>
-                        <div className="text-[11px] text-text-muted mt-0.5">{s.hint}</div>
+                        <div className="text-[12px] text-text-muted mt-0.5">{s.hint}</div>
                       </div></>}
                     </button>
                   ))}

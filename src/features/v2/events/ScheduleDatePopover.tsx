@@ -67,7 +67,7 @@ export function ScheduleDatePopover({
       onClick={(e) => e.stopPropagation()}
       data-testid={testId}
     >
-      <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+      <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
         {copy.pickDate}
       </div>
       <div className="mb-2 grid grid-cols-4 gap-1">
@@ -79,7 +79,7 @@ export function ScheduleDatePopover({
               key={p.label}
               type="button"
               onClick={() => onChange(value)}
-              className={`rounded-md border px-1 py-1 text-[10px] font-medium ${active ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-200 text-gray-600 hover:border-[#23877B]/40 hover:text-[#23877B] dark:border-gray-700'}`}
+              className={`rounded-md border px-1 py-1 text-[11px] font-medium ${active ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-200 text-gray-600 hover:border-[#23877B]/40 hover:text-[#23877B] dark:border-gray-700'}`}
               data-testid={`${testId}-preset-${p.days}`}
             >
               {p.label}
@@ -99,7 +99,7 @@ export function ScheduleDatePopover({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="rounded-md px-2 py-1 text-[12px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
           data-testid={`${testId}-cancel`}
         >
           {copy.cancel}
@@ -107,7 +107,7 @@ export function ScheduleDatePopover({
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-md bg-[#23877B] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          className="rounded-md bg-[#23877B] px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
           data-testid={`${testId}-confirm`}
         >
           {copy.confirm}

@@ -524,13 +524,13 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           data-testid="note-primary-properties"
         >
           <div className="flex min-w-0 items-start gap-2 py-0.5" data-testid="note-tags">
-            <span className="inline-flex h-6 w-24 shrink-0 items-center gap-1.5 text-[11px] font-medium text-text-muted">
+            <span className="inline-flex h-6 w-24 shrink-0 items-center gap-1.5 text-[12px] font-medium text-text-muted">
               <Tag size={12} />
               {t.tags}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-accent/8 px-2 py-1 text-[11px] text-accent">
+                <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-accent/8 px-2 py-1 text-[12px] text-accent">
                   #{tag}
                   <button
                     type="button"
@@ -548,14 +548,14 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                 onKeyDown={onTagKeyDown}
                 onBlur={() => void addTag()}
                 placeholder={tags.length === 0 ? t.addTag : '+ tag'}
-                className="h-6 min-w-36 flex-1 bg-transparent text-[11px] text-text-heading outline-none placeholder:text-text-muted"
+                className="h-6 min-w-36 flex-1 bg-transparent text-[12px] text-text-heading outline-none placeholder:text-text-muted"
                 data-testid="note-tag-input"
               />
             </div>
           </div>
 
           <div className="flex min-w-0 items-start gap-2 py-0.5" data-testid="note-linked-tasks">
-            <span className="inline-flex h-7 w-24 shrink-0 items-center gap-1.5 text-[11px] font-medium text-text-muted">
+            <span className="inline-flex h-7 w-24 shrink-0 items-center gap-1.5 text-[12px] font-medium text-text-muted">
               <Link2 size={12} />
               {t.linkedTasks}
             </span>
@@ -578,7 +578,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                 value=""
                 disabled={isLinkingTask}
                 onChange={(event) => void linkSelectedTask(event.target.value)}
-                className="h-7 min-w-40 max-w-full rounded-md border border-transparent bg-transparent px-1 text-[11px] text-text-muted outline-none hover:border-border hover:bg-surface/60 disabled:opacity-50"
+                className="h-7 min-w-40 max-w-full rounded-md border border-transparent bg-transparent px-1 text-[12px] text-text-muted outline-none hover:border-border hover:bg-surface/60 disabled:opacity-50"
                 aria-label={t.linkTask}
                 data-testid="note-task-picker"
               >
@@ -618,17 +618,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                     void createAndLinkTask();
                   }}
                   placeholder={t.createTask}
-                  className="min-w-0 flex-1 bg-transparent text-[11px] text-text-heading outline-none placeholder:text-text-muted"
+                  className="min-w-0 flex-1 bg-transparent text-[12px] text-text-heading outline-none placeholder:text-text-muted"
                   data-testid="note-create-task-input"
                 />
               </label>
             </div>
           </div>
-          {relationError && <p className="pl-[104px] text-[11px] text-danger" role="alert">{relationError}</p>}
+          {relationError && <p className="pl-[104px] text-[12px] text-danger" role="alert">{relationError}</p>}
         </div>
 
         <details className="group mx-auto w-full max-w-[760px] text-xs">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-[11px] font-medium text-text-muted transition-colors hover:text-text-heading">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-[12px] font-medium text-text-muted transition-colors hover:text-text-heading">
             <Settings2 size={12} />
             {t.moreProperties}
             <span className="ml-auto transition-transform group-open:rotate-180">⌄</span>
@@ -732,7 +732,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           here but duplicated the header timestamp that we removed,
           so the strip now only carries live writing stats. */}
       <footer
-        className="pl-6 pr-8 py-1.5 border-t border-border flex items-center justify-end gap-4 text-[11px] text-text-muted"
+        className="pl-6 pr-8 py-1.5 border-t border-border flex items-center justify-end gap-4 text-[12px] text-text-muted"
         data-testid="note-editor-statusbar"
       >
         <span data-testid="note-editor-words">
@@ -778,7 +778,7 @@ function LinkedTaskChip({
 }) {
   return (
     <span
-      className="inline-flex max-w-64 items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[11px] text-text-heading"
+      className="inline-flex max-w-64 items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[12px] text-text-heading"
       title={task?.title ?? id}
     >
       <span className="truncate">{task?.title ?? id}</span>
@@ -874,7 +874,7 @@ function OnboardingPanel({
           when there's nothing real to show (e.g. fresh workspace). */}
       {recentItems.length > 0 && (
         <div className="mt-8 flex w-full flex-col items-start gap-2 border-t border-border pt-6">
-          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          <p className="px-3 text-[12px] font-semibold uppercase tracking-wider text-text-muted">
             {t.recentSection}
           </p>
           <ul className="w-full flex flex-col gap-1">
@@ -935,7 +935,7 @@ function BacklinksPanel({
       className="px-4 py-3 border-t border-border bg-surface-elevated/50"
       data-testid="note-backlinks"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-text-muted mb-2">
         {labels.title}
       </p>
       <ul className="flex flex-col gap-1.5 text-xs">
@@ -988,7 +988,7 @@ function BacklinkRow({
         {ids.map((id) => (
           <code
             key={id}
-            className="px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] text-text-muted font-mono"
+            className="px-1.5 py-0.5 rounded bg-surface border border-border text-[11px] text-text-muted font-mono"
             title={id}
           >
             {id.slice(0, 16)}…

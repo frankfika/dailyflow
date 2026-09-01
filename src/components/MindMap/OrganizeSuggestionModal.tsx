@@ -81,7 +81,7 @@ export function OrganizeSuggestionModal({
             <Sparkles className="h-4 w-4 text-[var(--color-accent)]" />
             <h2 className="text-base font-semibold text-text-heading">{L.title}</h2>
             {strategy && (
-              <span className="ml-2 rounded-full bg-[var(--color-accent-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
+              <span className="ml-2 rounded-full bg-[var(--color-accent-light)] px-2 py-0.5 text-[12px] font-medium text-[var(--color-accent)]">
                 {STRATEGY_LABELS[strategy][language]}
               </span>
             )}
@@ -110,15 +110,15 @@ export function OrganizeSuggestionModal({
               {suggestion.stats && (
                 <section className="mb-4 grid grid-cols-3 gap-2 text-center" data-testid="organize-stats">
                   <div className="rounded-lg bg-black/[0.03] p-2">
-                    <div className="text-[10px] uppercase text-text-muted">{L.groupCount}</div>
+                    <div className="text-[11px] uppercase text-text-muted">{L.groupCount}</div>
                     <div className="text-base font-semibold text-text-heading">{suggestion.stats.groupCount}</div>
                   </div>
                   <div className="rounded-lg bg-black/[0.03] p-2">
-                    <div className="text-[10px] uppercase text-text-muted">{L.organizedNodes}</div>
+                    <div className="text-[11px] uppercase text-text-muted">{L.organizedNodes}</div>
                     <div className="text-base font-semibold text-text-heading">{suggestion.stats.organizedNodes}</div>
                   </div>
                   <div className="rounded-lg bg-black/[0.03] p-2">
-                    <div className="text-[10px] uppercase text-text-muted">{L.looseNodes}</div>
+                    <div className="text-[11px] uppercase text-text-muted">{L.looseNodes}</div>
                     <div className="text-base font-semibold text-text-heading">{suggestion.stats.looseNodes}</div>
                   </div>
                 </section>
@@ -132,15 +132,15 @@ export function OrganizeSuggestionModal({
                       <li key={i} className="rounded-lg border border-border bg-white/60 p-3">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-semibold text-text-heading">{g.parentText}</span>
-                          <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                          <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] font-medium text-text-muted">
                             {g.parentKind}
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] text-text-muted">
+                        <p className="mt-1 text-[12px] text-text-muted">
                           {g.nodeIds.length} {language === 'zh' ? '个节点' : 'nodes'}
                         </p>
                         {suggestion.groupRationale?.[g.parentText] && (
-                          <p className="mt-1 text-[11px] text-text-muted/80 italic">
+                          <p className="mt-1 text-[12px] text-text-muted/80 italic">
                             {suggestion.groupRationale[g.parentText]}
                           </p>
                         )}

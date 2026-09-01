@@ -62,9 +62,9 @@ export function MessageBubble({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-sm font-bold text-text-heading">AI</span>
-            {message.modelName && <span className="text-[10px] text-text-muted">· {message.modelName}</span>}
+            {message.modelName && <span className="text-[11px] text-text-muted">· {message.modelName}</span>}
             {message.skillName && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded">
                 <Zap className="w-2.5 h-2.5" />
                 {message.skillName}
               </span>
@@ -84,7 +84,7 @@ export function MessageBubble({
                   <div className="mt-3 flex items-center gap-2">
                     <button
                       onClick={onOpenSettings}
-                      className="px-2.5 py-1 text-[11px] font-bold bg-amber-200 text-amber-900 rounded hover:bg-amber-300 transition-colors"
+                      className="px-2.5 py-1 text-[12px] font-bold bg-amber-200 text-amber-900 rounded hover:bg-amber-300 transition-colors"
                     >
                       {language === 'zh' ? '打开模型设置' : 'Open Model Settings'}
                     </button>
@@ -118,28 +118,28 @@ export function MessageBubble({
             <div className="flex items-center gap-1 mt-2">
               <button
                 onClick={() => copyMessageContent(message.content, { language, showToast })}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-[12px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <Copy className="w-3 h-3" />
                 {language === 'zh' ? '复制' : 'Copy'}
               </button>
               <button
                 onClick={() => onSaveAsNote(message)}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-[12px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <Bookmark className="w-3 h-3" />
                 {language === 'zh' ? '保存为笔记' : 'Save as note'}
               </button>
               <button
                 onClick={() => createTaskProposalsFromMessage(message.content, { activeContext: activeContext ?? 'work', language, showToast })}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-[12px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <PlusCircle className="w-3 h-3" />
                 {language === 'zh' ? '生成事项建议' : 'Propose items'}
               </button>
               <button
                 onClick={onRetry}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-[12px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
                 {language === 'zh' ? '重复提问' : 'Retry'}

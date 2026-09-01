@@ -304,7 +304,7 @@ export function TranscriptionSettingsSection({
                     ].filter(Boolean).join(", "),
                   )}
                 </p>
-                <p className="mt-1 text-[11px] leading-4 opacity-90">{t.testHelp}</p>
+                <p className="mt-1 text-[12px] leading-4 opacity-90">{t.testHelp}</p>
               </div>
             </div>
           )}
@@ -339,13 +339,13 @@ export function TranscriptionSettingsSection({
               </button>
             </div>
             {savedAt && (
-              <span className="text-[11px] text-text-muted" data-testid="transcription-saved">
+              <span className="text-[12px] text-text-muted" data-testid="transcription-saved">
                 <CheckCircle2 className="mr-1 inline h-3 w-3 align-text-bottom" /> {t.saved}
               </span>
             )}
           </div>
 
-          <p className="text-[11px] text-text-muted">{t.backendNote}</p>
+          <p className="text-[12px] text-text-muted">{t.backendNote}</p>
         </div>
       )}
     </div>
@@ -389,7 +389,7 @@ function BackendOption({
       </span>
       <span>
         <span className="block text-xs font-bold text-text-heading">{label}</span>
-        <span className="mt-1 block text-[11px] leading-4 text-text-muted">{hint}</span>
+        <span className="mt-1 block text-[12px] leading-4 text-text-muted">{hint}</span>
       </span>
     </button>
   );
@@ -421,7 +421,7 @@ function Field({
         data-testid={testId}
         className="mt-1.5 block w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-text-heading shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
       />
-      <p className="mt-1 text-[11px] text-text-muted">{hint}</p>
+      <p className="mt-1 text-[12px] text-text-muted">{hint}</p>
     </div>
   );
 }

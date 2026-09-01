@@ -38,7 +38,7 @@ export function EntityContextDrawer({ ref, onClose }: { ref: EntityRef | null; o
     >
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-text-muted">{ref.type}</div>
+          <div className="text-[11px] uppercase tracking-wider text-text-muted">{ref.type}</div>
           <h2 className="truncate text-sm font-semibold text-text-heading">{ref.label || ref.id}</h2>
         </div>
         <button onClick={onClose} className="rounded-md p-2 text-text-muted hover:bg-black/5" aria-label="Close context">

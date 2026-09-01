@@ -538,7 +538,7 @@ function OutlineItem({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-            className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[10px] font-medium text-[#23877B] opacity-0 transition-opacity hover:bg-[#23877B]/20 group-hover:opacity-100"
+            className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[11px] font-medium text-[#23877B] opacity-0 transition-opacity hover:bg-[#23877B]/20 group-hover:opacity-100"
             title={copy.addToTask}
             aria-label={copy.addToTask}
             aria-expanded={schedulePickerOpen}

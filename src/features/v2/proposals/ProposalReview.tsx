@@ -81,7 +81,7 @@ export function ProposalReview({
               {proposal.changes.length} {isZh ? '项建议' : 'suggestions'}
             </Badge>
           </div>
-          <div className="mt-1 text-[11px] text-text-muted">
+          <div className="mt-1 text-[12px] text-text-muted">
             {expanded
               ? (isZh ? '逐项确认、编辑或取消选择' : 'Review, edit, or deselect each change')
               : (isZh ? '展开查看具体修改和写入位置' : 'Expand to inspect changes and destinations')}
@@ -169,20 +169,20 @@ function ChangeReview({
             <span className="font-medium text-text-heading">
               {changeLabel(change, isZh)}
             </span>
-            <span className="text-[10px] text-text-muted">
+            <span className="text-[11px] text-text-muted">
               {isZh ? '写入：' : 'Destination: '}{destinationLabel(change.entity, isZh)}
             </span>
           </div>
-          <div className="mt-1 text-[11px] leading-5 text-text-muted">{change.reason}</div>
+          <div className="mt-1 text-[12px] leading-5 text-text-muted">{change.reason}</div>
           {change.targetId && (
-            <div className="mt-1 text-[10px] text-text-muted">
+            <div className="mt-1 text-[11px] text-text-muted">
               {isZh ? '目标实体：' : 'Target: '}{change.targetId}
             </div>
           )}
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {Object.entries(change.draft).slice(0, 8).map(([field, value]) => (
               <label key={field} className="text-xs">
-                <span className="mb-0.5 block text-[10px] uppercase text-text-muted">{field}</span>
+                <span className="mb-0.5 block text-[11px] uppercase text-text-muted">{field}</span>
                 <input
                   type="text"
                   defaultValue={String(value ?? '')}
@@ -193,7 +193,7 @@ function ChangeReview({
             ))}
           </div>
           {evidence.length > 0 && (
-            <blockquote className="mt-2 rounded-md bg-black/5 px-2 py-1.5 text-[11px] italic dark:bg-white/5">
+            <blockquote className="mt-2 rounded-md bg-black/5 px-2 py-1.5 text-[12px] italic dark:bg-white/5">
               “{evidence[0]!.quote}”
             </blockquote>
           )}

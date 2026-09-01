@@ -141,7 +141,7 @@ export function SaveNoteModal({
             </div>
           )}
           <div>
-            <label htmlFor="save-note-title-input" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '标题' : 'Title'}</label>
+            <label htmlFor="save-note-title-input" className="block text-[12px] font-bold text-text-muted mb-1">{language === 'zh' ? '标题' : 'Title'}</label>
             <input
               id="save-note-title-input"
               autoFocus
@@ -152,7 +152,7 @@ export function SaveNoteModal({
             />
           </div>
           <div>
-            <label htmlFor="save-note-type" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '类型' : 'Type'}</label>
+            <label htmlFor="save-note-type" className="block text-[12px] font-bold text-text-muted mb-1">{language === 'zh' ? '类型' : 'Type'}</label>
             <select
               id="save-note-type"
               value={type}
@@ -165,10 +165,10 @@ export function SaveNoteModal({
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '标签' : 'Tags'}</label>
+            <label className="block text-[12px] font-bold text-text-muted mb-1">{language === 'zh' ? '标签' : 'Tags'}</label>
             <div className="flex flex-wrap gap-1.5">
               {tags.map(tag => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-accent/10 text-accent border border-accent/20">
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-bold bg-accent/10 text-accent border border-accent/20">
                   #{tag}
                   <button onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-red-500">
                     <X className="w-2.5 h-2.5" />
@@ -188,12 +188,12 @@ export function SaveNoteModal({
                     }
                   }
                 }}
-                className="w-24 px-2 py-0.5 text-[11px] border border-border rounded bg-surface focus:outline-none focus:border-accent"
+                className="w-24 px-2 py-0.5 text-[12px] border border-border rounded bg-surface focus:outline-none focus:border-accent"
               />
             </div>
           </div>
           <div>
-            <label htmlFor="save-note-content" className="block text-[11px] font-bold text-text-muted mb-1">{language === 'zh' ? '内容' : 'Content'}</label>
+            <label htmlFor="save-note-content" className="block text-[12px] font-bold text-text-muted mb-1">{language === 'zh' ? '内容' : 'Content'}</label>
             <textarea
               id="save-note-content"
               value={content}

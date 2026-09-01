@@ -229,7 +229,7 @@ export function NoteList({
           <h2 className="text-[15px] font-semibold tracking-tight text-text-heading">
             {language === 'zh' ? '笔记' : 'Notes'}
           </h2>
-          <p className="mt-0.5 text-[11px] text-text-muted">
+          <p className="mt-0.5 text-[12px] text-text-muted">
             {items.length} {language === 'zh' ? '篇' : items.length === 1 ? 'note' : 'notes'}
           </p>
         </div>
@@ -277,7 +277,7 @@ export function NoteList({
       <div className="flex items-center gap-1 px-3 pb-2" role="tablist" aria-label="Note view">
         {(['all', 'recent', 'meeting', 'pinned'] as ViewKey[]).map((key) => (
           <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}
-            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${view === key ? 'bg-black/[0.06] text-text-heading dark:bg-white/10' : 'text-text-muted hover:text-text-heading'}`}
+            className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${view === key ? 'bg-black/[0.06] text-text-heading dark:bg-white/10' : 'text-text-muted hover:text-text-heading'}`}
             data-testid={`notes-view-${key}`}>
             {key === 'pinned' ? <Star className="h-3 w-3" aria-label={VIEW_LABELS[key][language]} /> : VIEW_LABELS[key][language]}
           </button>
@@ -286,7 +286,7 @@ export function NoteList({
           value={['daily', 'project', 'archived'].includes(view) ? view : ''}
           onChange={(event) => event.target.value && setView(event.target.value as ViewKey)}
           aria-label={language === 'zh' ? '更多笔记视图' : 'More note views'}
-          className="ml-auto max-w-20 bg-transparent text-[11px] text-text-muted outline-none"
+          className="ml-auto max-w-20 bg-transparent text-[12px] text-text-muted outline-none"
           data-testid="notes-view-more"
         >
           <option value="">{language === 'zh' ? '更多' : 'More'}</option>
@@ -305,7 +305,7 @@ export function NoteList({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block">{language === 'zh' ? '会议笔记' : 'Meeting note'}</span>
-            <span className="block truncate text-[10px] font-normal text-text-muted">
+            <span className="block truncate text-[11px] font-normal text-text-muted">
               {language === 'zh' ? '录音无需 AI · 自动转写需先配置' : 'record without AI · set up auto-transcription first'}
             </span>
           </span>
@@ -323,7 +323,7 @@ export function NoteList({
             type="button"
             aria-pressed={tagFilter === null}
             onClick={() => setTagFilter(null)}
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               tagFilter === null
                 ? 'border-accent bg-accent/10 text-accent'
                 : 'border-border text-text-muted hover:text-text-heading'
@@ -337,7 +337,7 @@ export function NoteList({
               type="button"
               aria-pressed={tagFilter === tag}
               onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-              className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
                 tagFilter === tag
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'border-border text-text-muted hover:text-text-heading'
@@ -391,7 +391,7 @@ export function NoteList({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-text-heading truncate">{title}</span>
-                        <span className="text-[11px] text-text-muted shrink-0">
+                        <span className="text-[12px] text-text-muted shrink-0">
                           {relativeTime(n.updatedAt, language)}
                         </span>
                       </div>
@@ -406,14 +406,14 @@ export function NoteList({
                           {n.tagIds?.map((tag) => (
                             <span
                               key={tag}
-                              className="max-w-full truncate rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent"
+                              className="max-w-full truncate rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent"
                             >
                               #{tag}
                             </span>
                           ))}
                         </div>
                       )}
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-text-muted">
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
                         <span>{VIEW_LABELS[n.kind === 'meeting' ? 'meeting' : n.kind === 'daily' ? 'daily' : n.kind === 'project' ? 'project' : 'all'][language]}</span>
                         {n.pinned && <span>· ★</span>}
                       </div>

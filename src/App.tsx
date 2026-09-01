@@ -1856,7 +1856,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25 }}
-                    className="mx-auto max-w-4xl space-y-6"
+                    className="mx-auto max-w-4xl xl:max-w-5xl 2xl:max-w-6xl space-y-6"
                   >
                     <header className="space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1898,7 +1898,7 @@ export default function App() {
                               className="flex flex-col items-start text-left"
                               data-testid="date-picker-trigger"
                             >
-                              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
+                              <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-text-muted">
                                 {currentFileDate === getTodayStr()
                                   ? (language === 'zh' ? '今天' : 'Today')
                                   : (language === 'zh' ? '历史任务' : 'Past tasks')}
@@ -1931,7 +1931,7 @@ export default function App() {
                             <button
                               onClick={handleManualRollover}
                               title={language === 'zh' ? '回顾并处理历史未完成事项' : 'Review unfinished items from earlier days'}
-                              className="flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1.5 text-[11px] font-medium text-text-muted transition-colors hover:border-accent/20 hover:bg-accent/10 hover:text-accent"
+                              className="flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1.5 text-[12px] font-medium text-text-muted transition-colors hover:border-accent/20 hover:bg-accent/10 hover:text-accent"
                             >
                               <RefreshCw className="h-3 w-3" />
                               {language === 'zh' ? '整理遗留' : 'Review leftovers'}
@@ -1939,7 +1939,7 @@ export default function App() {
                           ) : (
                             <button
                               onClick={() => setCurrentFileDate(getTodayStr())}
-                              className="flex items-center gap-1.5 rounded-lg border border-accent/20 px-2.5 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10"
+                              className="flex items-center gap-1.5 rounded-lg border border-accent/20 px-2.5 py-1.5 text-[12px] font-medium text-accent transition-colors hover:bg-accent/10"
                             >
                               <Calendar className="h-3 w-3" />
                               {language === 'zh' ? '回到今天' : 'Back to today'}

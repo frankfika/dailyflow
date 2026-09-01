@@ -101,7 +101,7 @@ export function ProactiveSettingsSection({
             onClick={handleSave}
             disabled={saving}
             data-testid="proactive-save"
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-bold text-white hover:bg-accent/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-bold text-white hover:bg-accent/90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             {isZh ? '保存' : 'Save'}
@@ -109,7 +109,7 @@ export function ProactiveSettingsSection({
         )}
       </header>
 
-      <p className="mb-3 text-[11px] text-text-muted">
+      <p className="mb-3 text-[12px] text-text-muted">
         {isZh
           ? 'AI 在检测到任务逾期 5 天后会主动问你是否排进今天。以下三条限制防止打扰。'
           : 'AI will ask "schedule this into today?" when a task is overdue 5+ days. The three limits below prevent nuisance.'}
@@ -121,7 +121,7 @@ export function ProactiveSettingsSection({
           <p className="text-xs font-bold text-text-heading">
             {isZh ? '启用主动提案' : 'Enable proactive suggestions'}
           </p>
-          <p className="text-[10px] text-text-muted">
+          <p className="text-[11px] text-text-muted">
             {isZh ? '关闭后不再生成任何主动建议。' : 'Disable to stop all proactive suggestions.'}
           </p>
         </div>
@@ -146,7 +146,7 @@ export function ProactiveSettingsSection({
       {/* Quiet hours */}
       <div className="mb-3 grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-text-muted block mb-1">
+          <label className="text-[11px] text-text-muted block mb-1">
             {isZh ? '静默开始 (0–24)' : 'Quiet hours start (0–24)'}
           </label>
           <input
@@ -159,7 +159,7 @@ export function ProactiveSettingsSection({
           />
         </div>
         <div>
-          <label className="text-[10px] text-text-muted block mb-1">
+          <label className="text-[11px] text-text-muted block mb-1">
             {isZh ? '静默结束 (0–24)' : 'Quiet hours end (0–24)'}
           </label>
           <input
@@ -175,7 +175,7 @@ export function ProactiveSettingsSection({
 
       {/* Max per week */}
       <div className="mb-3">
-        <label className="text-[10px] text-text-muted block mb-1">
+        <label className="text-[11px] text-text-muted block mb-1">
           {isZh ? '每周最多主动建议次数' : 'Max proactive suggestions per week'}
         </label>
         <input
@@ -193,7 +193,7 @@ export function ProactiveSettingsSection({
 
       {/* Overdue days */}
       <div>
-        <label className="text-[10px] text-text-muted block mb-1">
+        <label className="text-[11px] text-text-muted block mb-1">
           {isZh ? '触发阈值（逾期多少天）' : 'Trigger threshold (days overdue)'}
         </label>
         <input
