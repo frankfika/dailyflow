@@ -5,6 +5,42 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0](https://github.com/frankfika/dailyflow/compare/v2.4.1...v2.5.0) (2026-09-01)
+
+
+### Features
+
+* **ai:** structured AI actions for brainstorm, ask, rewrite, decompose (UX S6) ([7757b7e](https://github.com/frankfika/dailyflow/commit/7757b7ecf04ce0b7f0e70d6e420dac4c379e4ce6))
+* **app:** Cmd+K command palette with search and management commands (UX S4) ([5ee9924](https://github.com/frankfika/dailyflow/commit/5ee9924ddf7dac5ea83160fe09617930ab1e17f9))
+* **app:** overlay notes/AI/calendar/memory/team (UX S5) ([e6c9eb3](https://github.com/frankfika/dailyflow/commit/e6c9eb3add4ca48f312fd81111dec6edcb2541eb))
+* **events:** canvas undo/redo (⌘Z/⇧⌘Z, 50 steps) + ⌘F node search (UX_DESIGN §4.3) ([43adc3f](https://github.com/frankfika/dailyflow/commit/43adc3f663645e9cf8d6d1b86c1f66499ec85e4f))
+* **events:** fold orphan MindMapView's AI organize + templates into Events (UX S9) ([87dbf33](https://github.com/frankfika/dailyflow/commit/87dbf33899ed6f71de2492549fd9005f51db404f))
+* **events:** header ⋯ menu — stats, auto layout, copy outline (UX_DESIGN §4.3) ([cd3bf4d](https://github.com/frankfika/dailyflow/commit/cd3bf4ddb1f5329d87bd6fa95b8f5dd5ca5d8856))
+* **events:** node kind UI — semantic kinds visible and re-classifiable (UX_DESIGN §4.3) ([be3edcc](https://github.com/frankfika/dailyflow/commit/be3edcc3d51537a00e8c7cb69d830671b9cf4e3e))
+* **palette:** ⌘K note search covers all notes in the current context (UX_DESIGN §11) ([02c4e2b](https://github.com/frankfika/dailyflow/commit/02c4e2be2e1f8cb782db626ef03f009e7d534428))
+* **sidebar:** put the ⌘K command palette on the 60px icon rail (UX S10) ([49fce77](https://github.com/frankfika/dailyflow/commit/49fce77aa3b2353588bbb5411ff5ebf95054b5d2))
+* **tasks:** convert task into a project event with canvas handoff (UX S7) ([39b8492](https://github.com/frankfika/dailyflow/commit/39b8492e6f1f556865d91729646124d3e363de93))
+* **tasks:** inline keyboard shortcuts E/D/T/R + ⌘⏎, recurrence editor (UX_DESIGN §12) ([208e949](https://github.com/frankfika/dailyflow/commit/208e94919f19210625f27dd68a797c60a8169bd8))
+* **today:** '来自 ↗' chip jumps to canvas and highlights the origin node (UX S8) ([2438917](https://github.com/frankfika/dailyflow/commit/243891723c96f3bda77e9412b57ff9a3455b7b31))
+* **today:** AI answer copy/open actions + ⋯ menu App wiring (UX_DESIGN §5.1, §2) ([05b135f](https://github.com/frankfika/dailyflow/commit/05b135f860ad602c8891fa947249ec10847ed1ef))
+* **today:** clickable header date + date picker popover via ⌘D (UX_DESIGN §1.2) ([3dd0f15](https://github.com/frankfika/dailyflow/commit/3dd0f158941268360220e63ee86a8b8f1ce5dc56))
+* **today:** group tasks by event, add focus bar, drop filter tabs (UX S1) ([6bddb9f](https://github.com/frankfika/dailyflow/commit/6bddb9fa2d1083b87cb617278e4e1eceb742aef4))
+* **today:** inline attribute bar on task expand replaces edit mode (UX S3) ([276afbf](https://github.com/frankfika/dailyflow/commit/276afbf2fb9ab03fa7ce8f7c21f4f5a2d33e58ba))
+* **today:** input bar ⋯ menu — linked note, draft-to-project, meeting capture (UX_DESIGN §2) ([e127e42](https://github.com/frankfika/dailyflow/commit/e127e429136f3bac39f8041378c29d4fc4c8225f))
+* **today:** persistent bottom input bar replaces task popup (UX S2) ([6e54e51](https://github.com/frankfika/dailyflow/commit/6e54e510327791eff42d6fed02c7bf23cd7d8544))
+* **today:** quiet reflection prompt bar instead of auto-opened modal (UX S12) ([a3af1b3](https://github.com/frankfika/dailyflow/commit/a3af1b3aecdc6d00762ab39d20a7c5b491e0734a))
+* **ux:** UX v3.1 redesign S1–S12 + complete all promised enhancements ([53689f1](https://github.com/frankfika/dailyflow/commit/53689f1988a99648e40a6a98563ad919f5f859db))
+* **workspace:** ⌘⇧W opens workspace switcher from anywhere (UX_DESIGN §12) ([d4a48a4](https://github.com/frankfika/dailyflow/commit/d4a48a417c0151666e16811d220968932b5684e6))
+
+
+### Bug Fixes
+
+* **sidebar:** close WorkspaceSwitcher dropdown on Escape ([81cb1ff](https://github.com/frankfika/dailyflow/commit/81cb1ffe6f78940605866c975c2f180ad7e2dc90))
+* **today:** make proactive suggestions, unlink and keyboard glue operable ([c22db31](https://github.com/frankfika/dailyflow/commit/c22db31b691fb288f44c4e93ad0e4552dfb6bf24))
+* **ux:** empty-canvas first-step overlay no longer blocks the AI organize button ([117acc0](https://github.com/frankfika/dailyflow/commit/117acc02bc4d6856787f9677d0cbda56b58c4872))
+* **ux:** reflection prompt bar only appears when the archived day had &gt;=3 done tasks (UX_DESIGN §6.1) ([375c448](https://github.com/frankfika/dailyflow/commit/375c448c33bcef5e1d4ca959eef80df0f378f6aa))
+* **ux:** resolve ⌘B conflict, wire 查看笔记 to real notes, drop dead props/states ([611375e](https://github.com/frankfika/dailyflow/commit/611375e1d8f815ff3fb09bb8fe9163dd1de567b5))
+
 ## [2.4.1](https://github.com/frankfika/dailyflow/compare/v2.4.0...v2.4.1) (2026-08-31)
 
 
