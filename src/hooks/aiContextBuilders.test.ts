@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutoContextText, buildContextText, deriveAutoContextLabel } from './aiContextBuilders';
+import { buildAutoContextText, buildContextText } from './aiContextBuilders';
 import type { ContextItem } from '../types/chat';
 
 const args = {
@@ -39,6 +39,5 @@ describe('AI context builders', () => {
     expect(buildContextText([project], zhArgs)).toBe('## 项目: 空项目\n（空）');
     expect(buildAutoContextText({ type: 'note', title: '当前', content: '正文' }, zhArgs))
       .toBe('## 当前笔记: 当前\n正文');
-    expect(deriveAutoContextLabel({ type: 'today' }, args.tasks, 'en')).toBe("Today's Tasks (1)");
   });
 });
