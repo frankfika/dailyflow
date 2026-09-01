@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Calendar, Check, Hash, Plus, Repeat, Send, Sparkles, X } from 'lucide-react';
+import { Calendar, Check, FileText, Hash, ListTodo, Mic, Plus, Repeat, Send, Sparkles, X } from 'lucide-react';
 import type { RecurrenceRule } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 
@@ -45,6 +45,12 @@ interface TodayInputBarProps {
   onAnswerClose: () => void;
   /** Increment to flip the bar into brainstorm mode (Cmd+B). */
   brainModeSignal?: number;
+  /** ⋯ menu — open a new note prefilled with the current draft (§2). */
+  onLinkNote?: (draft: string) => void;
+  /** ⋯ menu — create a project event from the draft title (§2/§4.2). */
+  onDraftToProject?: (title: string) => void;
+  /** ⋯ menu — start meeting capture (§2). */
+  onMeetingCapture?: () => void;
   onAddTask: (draft: QuickTaskDraft) => void;
   onRegisterFocus?: (focus: () => void) => void;
 }
@@ -94,6 +100,9 @@ export function TodayInputBar({
   onAnswerAdopt,
   onAnswerClose,
   brainModeSignal,
+  onLinkNote,
+  onDraftToProject,
+  onMeetingCapture,
   onAddTask,
   onRegisterFocus,
 }: TodayInputBarProps) {
@@ -564,6 +573,40 @@ export function TodayInputBar({
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
             {t('AI 脑暴 · 把想法拆成任务', 'AI Brainstorm · split ideas into tasks')}
           </button>
+          {onLinkNote && (
+            <button
+              type="button"
+              className="today-input-popitem"
+              data-testid="input-more-link-note"
+              onClick={() => { onLinkNote(title.trim()); setOpenPop(null); }}
+            >
+              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+              {title.trim() ? t('关联笔记 · 存为笔记', 'Linked note · save draft as note') : t('关联笔记 · 新建笔记', 'Linked note · new note')}
+            </button>
+          )}
+          {onDraftToProject && (
+            <button
+              type="button"
+              className="today-input-popitem"
+              data-testid="input-more-to-project"
+              disabled={!title.trim()}
+              onClick={() => { onDraftToProject(title.trim()); setOpenPop(null); }}
+            >
+              <ListTodo className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('转成项目 · 建事件进画布', 'To project · create event + canvas')}
+            </button>
+          )}
+          {onMeetingCapture && (
+            <button
+              type="button"
+              className="today-input-popitem"
+              data-testid="input-more-meeting"
+              onClick={() => { onMeetingCapture(); setOpenPop(null); }}
+            >
+              <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('会议转写 · 开始记录', 'Meeting capture · start recording')}
+            </button>
+          )}
         </div>
       )}
     </div>

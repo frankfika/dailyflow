@@ -30,6 +30,38 @@ function renderBar(overrides: Partial<Parameters<typeof TodayInputBar>[0]> = {})
   );
 }
 
+describe('TodayInputBar ⋯ menu extras (UX_DESIGN §2)', () => {
+  beforeEach(() => noop.mockClear());
+
+  it('link note / to project / meeting capture appear and fire with the draft', () => {
+    const onLinkNote = vi.fn();
+    const onDraftToProject = vi.fn();
+    const onMeetingCapture = vi.fn();
+    renderBar({ onLinkNote, onDraftToProject, onMeetingCapture });
+    fireEvent.change(screen.getByTestId('quick-task-input'), { target: { value: 'Prep launch review' } });
+    fireEvent.click(screen.getByTestId('input-more'));
+    fireEvent.click(screen.getByTestId('input-more-link-note'));
+    expect(onLinkNote).toHaveBeenCalledWith('Prep launch review');
+
+    fireEvent.click(screen.getByTestId('input-more'));
+    fireEvent.click(screen.getByTestId('input-more-to-project'));
+    expect(onDraftToProject).toHaveBeenCalledWith('Prep launch review');
+
+    fireEvent.click(screen.getByTestId('input-more'));
+    fireEvent.click(screen.getByTestId('input-more-meeting'));
+    expect(onMeetingCapture).toHaveBeenCalledTimes(1);
+  });
+
+  it('to-project is disabled with an empty draft and link note falls back to new note', () => {
+    const onLinkNote = vi.fn();
+    renderBar({ onLinkNote, onDraftToProject: noop });
+    fireEvent.click(screen.getByTestId('input-more'));
+    expect(screen.getByTestId('input-more-to-project')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('input-more-link-note'));
+    expect(onLinkNote).toHaveBeenCalledWith('');
+  });
+});
+
 describe('TodayInputBar', () => {
   beforeEach(() => noop.mockClear());
 
