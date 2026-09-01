@@ -127,7 +127,7 @@ export function ProactiveSuggestionsCard({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
               data-testid="proactive-expand"
             >
               <ChevronDown className="h-3 w-3" aria-hidden="true" />
@@ -138,7 +138,7 @@ export function ProactiveSuggestionsCard({
               <button
                 type="button"
                 onClick={() => setShowAll(false)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
                 data-testid="proactive-collapse"
               >
                 <ChevronUp className="h-3 w-3" aria-hidden="true" />
@@ -150,7 +150,7 @@ export function ProactiveSuggestionsCard({
             <button
               type="button"
               onClick={onDismissAll}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
               aria-label={dismissAllLabel}
             >
               <X className="h-3 w-3" aria-hidden="true" />
@@ -175,11 +175,11 @@ export function ProactiveSuggestionsCard({
                     <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span className="text-xs font-semibold">{proposal.title}</span>
                   </div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-text-main/85">
+                  <p className="mt-1 text-[12px] leading-relaxed text-text-main/85">
                     {proposal.body}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border border-current/30 px-1.5 py-0.5 text-[10px] font-medium">
+                <span className="shrink-0 rounded-full border border-current/30 px-1.5 py-0.5 text-[11px] font-medium">
                   {isZh ? sev.zh : sev.en}
                 </span>
               </div>
@@ -192,7 +192,7 @@ export function ProactiveSuggestionsCard({
                     onClick={() => handleAction(proposal, suggestion)}
                     data-testid="proposal-action"
                     data-action={suggestion.action}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed ${ACTION_BUTTON_CLS[suggestion.action]}`}
+                    className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors disabled:cursor-not-allowed ${ACTION_BUTTON_CLS[suggestion.action]}`}
                   >
                     {suggestion.label}
                   </button>

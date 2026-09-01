@@ -388,7 +388,7 @@ export function CalendarWorkspace({
           </div>
           <button
             onClick={() => setDate(getTodayStr())}
-            className="rounded-lg border border-border/70 bg-surface px-3 py-1.5 text-[11px] font-semibold text-text-main transition hover:border-border-strong"
+            className="rounded-lg border border-border/70 bg-surface px-3 py-1.5 text-[12px] font-semibold text-text-main transition hover:border-border-strong"
           >
             {language === 'zh' ? '今天' : 'Today'}
           </button>
@@ -398,7 +398,7 @@ export function CalendarWorkspace({
           <button
             type="button"
             onClick={requestCreateEvent}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-blue-700"
             title={language === 'zh' ? '创建到飞书日历' : 'Create in Feishu Calendar'}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -415,7 +415,7 @@ export function CalendarWorkspace({
                 onClick={() => changeMode(view)}
                 role="tab"
                 aria-selected={mode === view}
-                className={`min-w-12 rounded-md px-3 py-1.5 text-[11px] font-semibold transition ${
+                className={`min-w-12 rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
                   mode === view ? 'bg-surface text-text-heading shadow-sm ring-1 ring-border/60' : 'text-text-muted hover:text-text-main'
                 }`}
               >
@@ -436,7 +436,7 @@ export function CalendarWorkspace({
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
           <Legend color={SOURCE_COLOR.dailyflow} label="DailyFlow" active />
           {data.connectors
             .filter(connector => connector.id !== 'feishu')
@@ -484,7 +484,7 @@ export function CalendarWorkspace({
       </header>
 
       {!loading && feishuConnector?.error && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-red-100 bg-red-50/70 px-4 py-2 text-[11px] text-red-700 md:px-6">
+        <div className="flex shrink-0 items-center gap-2 border-b border-red-100 bg-red-50/70 px-4 py-2 text-[12px] text-red-700 md:px-6">
           <CircleAlert className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{feishuConnector.error}</span>
           <button onClick={load} className="font-semibold hover:underline">
@@ -640,7 +640,7 @@ function CreateEventDialog({
             <h2 id="create-event-title" className="text-base font-semibold tracking-tight text-text-heading">
               {language === 'zh' ? '新建日程' : 'New event'}
             </h2>
-            <p className="mt-0.5 text-[11px] text-text-muted">
+            <p className="mt-0.5 text-[12px] text-text-muted">
               {language === 'zh' ? '保存后会直接创建到你的飞书日历' : 'This will be created directly in your Feishu Calendar'}
             </p>
           </div>
@@ -657,7 +657,7 @@ function CreateEventDialog({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
           <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
+            <span className="mb-1.5 block text-[12px] font-semibold text-text-main">
               {language === 'zh' ? '名称' : 'Title'}
             </span>
             <input
@@ -672,7 +672,7 @@ function CreateEventDialog({
 
           <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-2.5">
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
+              <span className="mb-1.5 block text-[12px] font-semibold text-text-main">
                 {language === 'zh' ? '日期' : 'Date'}
               </span>
               <input
@@ -684,7 +684,7 @@ function CreateEventDialog({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
+              <span className="mb-1.5 block text-[12px] font-semibold text-text-main">
                 {language === 'zh' ? '开始' : 'Start'}
               </span>
               <input
@@ -696,7 +696,7 @@ function CreateEventDialog({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
+              <span className="mb-1.5 block text-[12px] font-semibold text-text-main">
                 {language === 'zh' ? '结束' : 'End'}
               </span>
               <input
@@ -710,7 +710,7 @@ function CreateEventDialog({
           </div>
 
           <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold text-text-main">
+            <span className="mb-1.5 block text-[12px] font-semibold text-text-main">
               {language === 'zh' ? '备注（可选）' : 'Notes (optional)'}
             </span>
             <textarea
@@ -723,7 +723,7 @@ function CreateEventDialog({
           </label>
 
           {formError && (
-            <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-[11px] text-red-700" role="alert">
+            <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-[12px] text-red-700" role="alert">
               <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{formError}</span>
             </div>
@@ -731,7 +731,7 @@ function CreateEventDialog({
         </div>
 
         <div className="flex items-center justify-between border-t border-border/70 bg-background/30 px-5 py-3.5">
-          <span className="text-[10px] text-text-muted">
+          <span className="text-[11px] text-text-muted">
             {language === 'zh' ? '亚洲/上海 · 飞书主日历' : 'Asia/Shanghai · Feishu primary calendar'}
           </span>
           <div className="flex items-center gap-2">
@@ -829,7 +829,7 @@ function DayView({
               <p className="mt-0.5 text-xs text-text-muted">{monthText}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-text-muted">
+          <div className="flex items-center gap-2 text-[12px] text-text-muted">
             <span className="rounded-full border border-border bg-surface px-2.5 py-1">
               {timed.length} {language === 'zh' ? '个日程' : timed.length === 1 ? 'event' : 'events'}
             </span>
@@ -845,7 +845,7 @@ function DayView({
               <Clock3 className="h-3.5 w-3.5 text-text-muted" />
               {language === 'zh' ? '时间安排' : 'Timeline'}
             </div>
-            <span className="text-[10px] text-text-muted">
+            <span className="text-[11px] text-text-muted">
               {language === 'zh' ? '06:00—23:00 · 亚洲/上海' : '06:00–23:00 · Asia/Shanghai'}
             </span>
           </div>
@@ -854,7 +854,7 @@ function DayView({
               {hours.map((hour, index) => (
                 <div
                   key={hour}
-                  className="absolute w-full -translate-y-1/2 pr-3 text-right text-[10px] tabular-nums text-text-muted"
+                  className="absolute w-full -translate-y-1/2 pr-3 text-right text-[11px] tabular-nums text-text-muted"
                   style={{ top: index * HOUR_HEIGHT }}
                 >
                   {String(hour).padStart(2, '0')}:00
@@ -892,7 +892,7 @@ function DayView({
                   <p className="mt-2 text-xs font-medium text-text-main">
                     {language === 'zh' ? '今天没有定时日程' : 'No timed events today'}
                   </p>
-                  <p className="mt-1 text-[10px] text-text-muted">
+                  <p className="mt-1 text-[11px] text-text-muted">
                     {language === 'zh' ? '全天任务仍会显示在右侧。' : 'All-day items still appear in the agenda.'}
                   </p>
                 </div>
@@ -909,7 +909,7 @@ function DayView({
               <h2 className="text-sm font-semibold tracking-tight text-text-heading">
                 {language === 'zh' ? '今日议程' : 'Agenda'}
               </h2>
-              <p className="mt-0.5 text-[10px] text-text-muted">
+              <p className="mt-0.5 text-[11px] text-text-muted">
                 {language === 'zh' ? `${dayItems.length} 个安排，按时间排序` : `${dayItems.length} items, ordered by time`}
               </p>
             </div>
@@ -963,11 +963,11 @@ function AgendaSection({
   return (
     <section>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">{title}</h3>
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">{title}</h3>
         <span className="rounded-full bg-background px-1.5 py-0.5 text-[9px] font-semibold text-text-muted">{count}</span>
       </div>
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-[10px] text-text-muted">
+        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-[11px] text-text-muted">
           {language === 'zh' ? '没有安排' : 'Nothing scheduled'}
         </div>
       ) : (
@@ -993,7 +993,7 @@ function AgendaSection({
                 >
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                   <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[11px] font-semibold text-text-heading ${item.status === 'done' ? 'line-through opacity-55' : ''}`}>
+                    <span className={`block truncate text-[12px] font-semibold text-text-heading ${item.status === 'done' ? 'line-through opacity-55' : ''}`}>
                       {item.title}
                     </span>
                     <span className="mt-0.5 flex items-center gap-1.5 text-[9px] text-text-muted">
@@ -1048,7 +1048,7 @@ function TimelineEvent({
       style={style}
       title={`${item.title} · ${timeText(item.start, language)}${item.end ? `–${timeText(item.end, language)}` : ''}`}
     >
-      <div className={`${compact ? 'text-[10px]' : 'text-[11px]'} truncate font-semibold leading-tight text-text-heading`}>
+      <div className={`${compact ? 'text-[11px]' : 'text-[12px]'} truncate font-semibold leading-tight text-text-heading`}>
         {item.title}
       </div>
       {duration >= 40 && (
@@ -1189,7 +1189,7 @@ function MonthView({
             <div key={day} className={`group min-h-[132px] border-b border-r border-border/70 p-2 transition-colors hover:bg-background/55 ${isCurrentMonth ? 'bg-surface' : 'bg-black/[0.018]'}`}>
               <button
                 onClick={() => onOpenDay(day)}
-                className={`mb-1.5 grid h-7 min-w-7 place-items-center rounded-full px-1 text-[11px] font-semibold transition ${
+                className={`mb-1.5 grid h-7 min-w-7 place-items-center rounded-full px-1 text-[12px] font-semibold transition ${
                   isToday ? 'bg-blue-600 text-white shadow-sm' : isCurrentMonth ? 'text-text-heading hover:bg-background' : 'text-text-muted/45'
                 }`}
                 title={language === 'zh' ? '打开日视图' : 'Open day view'}

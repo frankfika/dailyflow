@@ -66,11 +66,11 @@ export function ChatInputArea({
       <div className="w-full">
         {activeSession && activeSession.contextItems.length > 0 && (
           <div className="mb-1.5 flex items-center gap-1.5 flex-wrap px-1">
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted/70 font-bold mr-0.5">
+            <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wider text-text-muted/70 font-bold mr-0.5">
               {language === 'zh' ? '上下文' : 'Context'}
             </span>
             {activeSession.contextItems.map((item: ContextItem) => (
-              <span key={item.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] bg-accent/10 border border-accent/20 text-accent rounded-full">
+              <span key={item.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-accent/10 border border-accent/20 text-accent rounded-full">
                 {item.type === 'today-tasks' && <Calendar className="w-3 h-3" />}
                 {item.type === 'date-tasks' && <Calendar className="w-3 h-3" />}
                 {item.type === 'note' && <FileText className="w-3 h-3" />}
@@ -91,11 +91,11 @@ export function ChatInputArea({
 
         {pendingSkillId && activeSkill && (
           <div className="mb-2 flex items-center gap-2 px-1">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-accent/10 text-accent rounded">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[12px] font-bold bg-accent/10 text-accent rounded">
               <Zap className="w-3 h-3" />
               {language === 'zh' ? '应用 Skill: ' : 'Skill: '}{activeSkill.name}
             </span>
-            <button onClick={onClearPendingSkill} className="text-[11px] text-text-muted hover:text-red-500">
+            <button onClick={onClearPendingSkill} className="text-[12px] text-text-muted hover:text-red-500">
               {language === 'zh' ? '移除' : 'Remove'}
             </button>
           </div>
@@ -103,11 +103,11 @@ export function ChatInputArea({
 
         {draftSourceTitle && (
           <div className="mb-2 flex items-center gap-2 px-1">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[12px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
               <FileText className="w-3 h-3" />
               {language === 'zh' ? '来自笔记: ' : 'From note: '}{draftSourceTitle}
             </span>
-            <button onClick={onClearDraftSource} className="text-[11px] text-text-muted hover:text-red-500">
+            <button onClick={onClearDraftSource} className="text-[12px] text-text-muted hover:text-red-500">
               {language === 'zh' ? '清除' : 'Clear'}
             </button>
           </div>
@@ -140,7 +140,7 @@ export function ChatInputArea({
               <Paperclip className="w-3.5 h-3.5" />
               {language === 'zh' ? '上下文' : 'Context'}
               {(activeSession?.contextItems.length || 0) > 0 && (
-                <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-accent text-white">
+                <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[11px] font-bold rounded-full bg-accent text-white">
                   {activeSession!.contextItems.length}
                 </span>
               )}
@@ -171,7 +171,7 @@ export function ChatInputArea({
               </button>
               {showSkillMenu && (
                 <div className="absolute bottom-full mb-1.5 left-0 w-72 bg-surface-white border border-border rounded-lg shadow-lg max-h-72 overflow-y-auto z-50">
-                  <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-text-muted/80 font-bold border-b border-border">
+                  <div className="px-3 py-2 text-[11px] uppercase tracking-wider text-text-muted/80 font-bold border-b border-border">
                     {language === 'zh' ? 'Skills（提示词预设）' : 'Skills (prompt presets)'}
                   </div>
                   {skills.length === 0 ? (
@@ -193,14 +193,14 @@ export function ChatInputArea({
                           title={skill.description || ''}
                         >
                           <div className="font-bold">{skill.name}</div>
-                          <div className="text-[10px] text-text-muted truncate">
+                          <div className="text-[11px] text-text-muted truncate">
                             {skill.description || (skill.systemPrompt || skill.prompt || '').slice(0, 60) + '…'}
                           </div>
                         </button>
                       ))}
                       <button
                         onClick={() => { setShowSkillMenu(false); onOpenSettings(); }}
-                        className="w-full text-left px-3 py-2 text-[11px] font-bold text-accent border-t border-border hover:bg-accent/5"
+                        className="w-full text-left px-3 py-2 text-[12px] font-bold text-accent border-t border-border hover:bg-accent/5"
                       >
                         {language === 'zh' ? '管理 Skills…' : 'Manage skills…'}
                       </button>
@@ -222,7 +222,7 @@ export function ChatInputArea({
               </button>
               {showModelMenu && (
                 <div className="absolute bottom-full mb-1.5 right-0 w-72 bg-surface-white border border-border rounded-lg shadow-lg max-h-72 overflow-y-auto z-50">
-                  <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-text-muted/80 font-bold border-b border-border">
+                  <div className="px-3 py-2 text-[11px] uppercase tracking-wider text-text-muted/80 font-bold border-b border-border">
                     {language === 'zh' ? '模型供应商' : 'Providers'}
                   </div>
                   {providers.length === 0 ? (
@@ -244,14 +244,14 @@ export function ChatInputArea({
                         >
                           <div className="font-bold flex items-center gap-1">
                             {p.name}
-                            {activeProvider?.id === p.id && <span className="ml-auto text-[10px]">✓</span>}
+                            {activeProvider?.id === p.id && <span className="ml-auto text-[11px]">✓</span>}
                           </div>
-                          <div className="text-[10px] text-text-muted truncate font-mono">{p.model}</div>
+                          <div className="text-[11px] text-text-muted truncate font-mono">{p.model}</div>
                         </button>
                       ))}
                       <button
                         onClick={() => { setShowModelMenu(false); onOpenSettings(); }}
-                        className="w-full text-left px-3 py-2 text-[11px] font-bold text-accent border-t border-border hover:bg-accent/5"
+                        className="w-full text-left px-3 py-2 text-[12px] font-bold text-accent border-t border-border hover:bg-accent/5"
                       >
                         {language === 'zh' ? '管理供应商…' : 'Manage providers…'}
                       </button>
@@ -276,7 +276,7 @@ export function ChatInputArea({
           </div>
         </div>
 
-        {!compact && <p className="text-[10px] text-text-muted/70 text-center mt-2">
+        {!compact && <p className="text-[11px] text-text-muted/70 text-center mt-2">
           {language === 'zh'
             ? `通过「模型 & Skills 设置」管理供应商与提示词预设`
             : `Manage providers & prompt presets in "Models & Skills"`}

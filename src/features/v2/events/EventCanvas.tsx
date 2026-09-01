@@ -715,16 +715,16 @@ export function EventCanvas({
       onClick={() => { setMoreOpen(false); setOrganizeMenuOpen(false); setKindMenuOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-        <button type="button" onClick={handleFitAll} className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.fitAll} title={copy.fitAll} data-testid="event-fit-all"><Focus className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={handleFitAll} className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.fitAll} title={copy.fitAll} data-testid="event-fit-all"><Focus className="h-3.5 w-3.5" /></button>
         <button type="button" onClick={() => setZoom((value) => Math.max(0.4, Number((value - 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomOut} title={copy.zoomOut}><Minus className="h-4 w-4" /></button>
-        <button type="button" onClick={() => setZoom(1)} className="min-w-10 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomReset} title={copy.zoomReset}>{Math.round(zoom * 100)}%</button>
+        <button type="button" onClick={() => setZoom(1)} className="min-w-10 rounded-md px-1.5 py-1 text-[12px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomReset} title={copy.zoomReset}>{Math.round(zoom * 100)}%</button>
         <button type="button" onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.1).toFixed(1))))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={copy.zoomIn} title={copy.zoomIn}><Plus className="h-4 w-4" /></button>
         {onRequestTreeLayout && (
-          <button type="button" onClick={onRequestTreeLayout} className="ml-0.5 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.layoutTree} title={copy.layoutTreeTitle} data-testid="event-layout-tree"><LayoutGrid className="h-3.5 w-3.5" />{copy.layoutTree}</button>
+          <button type="button" onClick={onRequestTreeLayout} className="ml-0.5 flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.layoutTree} title={copy.layoutTreeTitle} data-testid="event-layout-tree"><LayoutGrid className="h-3.5 w-3.5" />{copy.layoutTree}</button>
         )}
         {onOrganize && (
           <div className="relative ml-0.5">
-            <button type="button" onClick={(e) => { e.stopPropagation(); setOrganizeMenuOpen((open) => !open); }} disabled={organizeBusy} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.organize} aria-expanded={organizeMenuOpen} data-testid="event-organize-button"><Sparkles className="h-3.5 w-3.5" />{copy.organize}<ChevronDown className="h-3 w-3" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setOrganizeMenuOpen((open) => !open); }} disabled={organizeBusy} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.organize} aria-expanded={organizeMenuOpen} data-testid="event-organize-button"><Sparkles className="h-3.5 w-3.5" />{copy.organize}<ChevronDown className="h-3 w-3" /></button>
             {organizeMenuOpen && (
               <div className="absolute right-0 top-8 z-20 min-w-40 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-organize-menu">
                 {([['by_topic', copy.organizeByTopic], ['by_priority', copy.organizeByPriority], ['by_time', copy.organizeByTime]] as const).map(([strategy, label]) => (
@@ -820,7 +820,7 @@ export function EventCanvas({
                   {/* Task badge + date — persistent visual marker so the user can
                       see at a glance "this node is already a task". */}
                   {isTaskNode && !isActive && (
-                    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[#23877B]" data-testid={`event-node-task-badge-${node.id}`}>
+                    <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#23877B]" data-testid={`event-node-task-badge-${node.id}`}>
                       <ListTodo className="h-3 w-3" aria-hidden="true" />
                       <span>{copy.taskBadge}</span>
                       <span className="text-gray-400">·</span>
@@ -832,7 +832,7 @@ export function EventCanvas({
                       own treatments, so only the label kinds get a badge. */}
                   {node.kind && ['tag', 'question', 'resource', 'risk'].includes(node.kind) && !isActive && (
                     <span
-                      className={`flex shrink-0 items-center gap-1 text-[10px] font-medium ${
+                      className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
                         node.kind === 'risk' ? 'text-amber-600'
                         : node.kind === 'question' ? 'text-sky-600'
                         : node.kind === 'tag' ? 'text-violet-600'
@@ -893,7 +893,7 @@ export function EventCanvas({
                         e.stopPropagation();
                         setSchedulePicker((prev) => (prev?.nodeId === node.id && prev.anchor === 'node' ? null : { nodeId: node.id, date: today, anchor: 'node' }));
                       }}
-                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light,#23877B1a)] px-2 py-1 text-[11px] font-medium text-[#23877B] shadow-sm hover:brightness-95"
+                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light,#23877B1a)] px-2 py-1 text-[12px] font-medium text-[#23877B] shadow-sm hover:brightness-95"
                       aria-label={copy.addToTask}
                       title={copy.addToTask}
                       aria-expanded={schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node'}
@@ -1041,7 +1041,7 @@ export function EventCanvas({
                 </div>
               )}
               <div className="relative"><ToolbarButton icon={<MoreHorizontal className="h-4 w-4" />} label={copy.more} onClick={() => setMoreOpen((open) => !open)} trailing={<ChevronDown className="h-3 w-3" />} />{moreOpen && <div className="absolute bottom-12 right-0 min-w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900">{activeNode.execution && <button onClick={() => void onUnschedule(activeNode)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><CalendarDays className="h-4 w-4" />{copy.removeDay}</button>}{!isRootActive && <button onClick={() => void onDelete(activeNode.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" />{copy.deleteNode}</button>}</div>}</div>
-              <span className="ml-1 hidden text-[10px] text-gray-400 md:inline">{copy.hint}</span>
+              <span className="ml-1 hidden text-[11px] text-gray-400 md:inline">{copy.hint}</span>
             </>
           )}
         </div>
@@ -1052,7 +1052,7 @@ export function EventCanvas({
 
 function ProposalNode({ op, x, y, selected, active, highRisk, onSelect }: { op: GraphOperation; x: number; y: number; selected: boolean; active: boolean; highRisk: boolean; onSelect: () => void }) {
   return <button type="button" onClick={(event) => { event.stopPropagation(); onSelect(); }} className={`absolute min-h-[58px] rounded-xl border-2 border-dashed px-3 py-2 text-left shadow-lg backdrop-blur-sm transition ${highRisk ? 'border-red-500 bg-red-50/80 text-red-900' : selected ? 'border-emerald-500 bg-violet-100/85 text-violet-950' : 'border-violet-400 bg-violet-50/60 text-violet-900 opacity-55'} ${active ? 'ring-4 ring-violet-300/40' : ''}`} style={{ left: x, top: y, width: NODE_W }} data-testid={`proposal-node-${op.changeId}`}>
-    <span className="block truncate text-[10px] font-semibold uppercase tracking-wide">AI · {op.node?.kind ?? op.op}</span><span className="mt-0.5 block text-sm leading-5">{op.node?.text ?? op.patch?.text ?? op.reason}</span>
+    <span className="block truncate text-[11px] font-semibold uppercase tracking-wide">AI · {op.node?.kind ?? op.op}</span><span className="mt-0.5 block text-sm leading-5">{op.node?.text ?? op.patch?.text ?? op.reason}</span>
   </button>;
 }
 

@@ -440,7 +440,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   transition={{ duration: 0.15 }}
                   className="absolute right-0 top-full mt-2 bg-surface-white border border-border rounded-md shadow-lg p-2 z-30 min-w-[260px]"
                 >
-                  <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                  <p className="text-[11px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
                     {language === 'zh' ? '智能整理' : 'Smart actions'}
                   </p>
                   <button
@@ -450,7 +450,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <Mic className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '整理为会议纪要' : 'Format as meeting notes'}</div>
-                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '原始记录 → 议题/决定/待办' : 'Raw record → topics / decisions / actions'}</div>
+                      <div className="text-[12px] text-text-muted">{language === 'zh' ? '原始记录 → 议题/决定/待办' : 'Raw record → topics / decisions / actions'}</div>
                     </div>
                   </button>
                   <button
@@ -460,7 +460,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <ListChecks className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '提取待办' : 'Extract todos'}</div>
-                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
+                      <div className="text-[12px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
                     </div>
                   </button>
                   <button
@@ -470,7 +470,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <Sparkles className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '生成总结' : 'Generate summary'}</div>
-                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 风险 / 下一步' : 'Key points / decisions / risks / next'}</div>
+                      <div className="text-[12px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 风险 / 下一步' : 'Key points / decisions / risks / next'}</div>
                     </div>
                   </button>
                   <button
@@ -480,14 +480,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <Edit3 className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '润色优化' : 'Polish'}</div>
-                      <div className="text-[11px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
+                      <div className="text-[12px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
                     </div>
                   </button>
 
                   {formatPrompts.length > 0 && (
                     <>
                       <div className="border-t border-border/60 my-1.5" />
-                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
                         {language === 'zh' ? '自定义 Skill' : 'Custom skills'}
                       </p>
                       <div className="flex flex-wrap gap-1 px-1">
@@ -495,7 +495,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                           <button
                             key={p.id}
                             onClick={() => handleFormat(p.id)}
-                            className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
+                            className="px-2 py-0.5 rounded-md text-[12px] font-bold border bg-surface text-text-muted border-border hover:border-accent/50 hover:text-accent transition-all"
                           >
                             {p.name}
                           </button>
@@ -540,7 +540,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 >
                   {aiEditResult ? (
                     <div className="space-y-2">
-                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
                         {language === 'zh' ? 'AI 编辑结果' : 'AI Edit Result'}
                       </p>
                       <div className="px-2 py-1.5 max-h-48 overflow-y-auto text-xs text-text-heading bg-surface rounded border border-border whitespace-pre-wrap font-mono">
@@ -553,7 +553,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                             setAiEditResult('');
                             setShowAiEditPanel(false);
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
+                          className="px-2.5 py-1 text-[12px] font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
                         >
                           {language === 'zh' ? '替换' : 'Replace'}
                         </button>
@@ -563,13 +563,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                             setAiEditResult('');
                             setShowAiEditPanel(false);
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold border border-border rounded hover:border-accent/50 hover:text-accent transition-colors"
+                          className="px-2.5 py-1 text-[12px] font-bold border border-border rounded hover:border-accent/50 hover:text-accent transition-colors"
                         >
                           {language === 'zh' ? '追加' : 'Append'}
                         </button>
                         <button
                           onClick={() => { setAiEditResult(''); }}
-                          className="px-2.5 py-1 text-[11px] text-text-muted hover:text-text-heading transition-colors"
+                          className="px-2.5 py-1 text-[12px] text-text-muted hover:text-text-heading transition-colors"
                         >
                           {language === 'zh' ? '返回' : 'Back'}
                         </button>
@@ -577,7 +577,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-0.5">
-                      <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
                         {language === 'zh' ? 'AI 编辑' : 'AI Edit'}
                       </p>
                       <button
@@ -587,7 +587,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <Edit3 className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '润色优化' : 'Polish'}</div>
-                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
+                          <div className="text-[12px] text-text-muted">{language === 'zh' ? '修语法、提清晰度' : 'Fix grammar, improve clarity'}</div>
                         </div>
                       </button>
                       <button
@@ -597,7 +597,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <MessageSquare className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '续写' : 'Continue'}</div>
-                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '基于上下文续写内容' : 'Continue writing from context'}</div>
+                          <div className="text-[12px] text-text-muted">{language === 'zh' ? '基于上下文续写内容' : 'Continue writing from context'}</div>
                         </div>
                       </button>
                       <button
@@ -607,7 +607,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <Sparkles className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '总结摘要' : 'Summarize'}</div>
-                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 下一步' : 'Key points / decisions / next'}</div>
+                          <div className="text-[12px] text-text-muted">{language === 'zh' ? '要点 / 决策 / 下一步' : 'Key points / decisions / next'}</div>
                         </div>
                       </button>
                       <button
@@ -617,7 +617,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <ListChecks className="w-3.5 h-3.5 mt-0.5 text-accent shrink-0" />
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-text-heading">{language === 'zh' ? '提取待办' : 'Extract todos'}</div>
-                          <div className="text-[11px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
+                          <div className="text-[12px] text-text-muted">{language === 'zh' ? '抽取所有 action items' : 'Pull out all action items'}</div>
                         </div>
                       </button>
                     </div>

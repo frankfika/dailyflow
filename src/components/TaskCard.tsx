@@ -240,7 +240,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <h3 className={`break-words text-[14px] font-medium leading-snug ${isDone ? 'text-text-muted line-through' : 'text-text-heading'}`}>
             {task.title}
           </h3>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-text-muted">
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
             {onOpenSpace ? (
               <button
                 type="button"
@@ -296,7 +296,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="border-t border-border/50 px-3 pb-3 pt-2.5" ref={detailsRef} data-testid={`task-details-${task.id}`}>
           {/* Attribute bar (S3): deadline and tags edit inline, changes commit immediately. */}
           <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-border/40 pb-2">
-            <label className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[11px] text-text-muted">
+            <label className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[12px] text-text-muted">
               <Calendar className="h-3 w-3" />
               <input
                 ref={deadlineInputRef}
@@ -312,7 +312,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <div className="relative inline-flex">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-heading"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[12px] text-text-muted hover:text-text-heading"
                   data-testid={`task-recurrence-${task.id}`}
                   onClick={() => setRecOpen(value => !value)}
                 >
@@ -329,7 +329,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         <button
                           key={type}
                           type="button"
-                          className={`rounded-md px-2 py-1 text-[11px] font-medium ${
+                          className={`rounded-md px-2 py-1 text-[12px] font-medium ${
                             recRule?.type === type ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
                           }`}
                           data-testid={`task-recurrence-${type}-${task.id}`}
@@ -357,7 +357,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                             <button
                               key={letter}
                               type="button"
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
                                 selected ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
                               }`}
                               onClick={() => {
@@ -374,7 +374,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       </div>
                     )}
                     {recRule?.type === 'monthly' && (
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-text-muted">
                         {language === 'zh' ? '每月几号' : 'Day of month'}
                         <input
                           type="number"
@@ -391,7 +391,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     )}
                     <button
                       type="button"
-                      className="mt-2 w-full rounded-md bg-accent/15 px-2 py-1 text-[11px] font-semibold text-accent disabled:opacity-40"
+                      className="mt-2 w-full rounded-md bg-accent/15 px-2 py-1 text-[12px] font-semibold text-accent disabled:opacity-40"
                       data-testid={`task-recurrence-save-${task.id}`}
                       disabled={!recRule}
                       onClick={() => {
@@ -436,12 +436,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {task.tags?.filter(tag => !['tasks', 'work', 'life'].includes(tag)).map(tag => (
-                  <span key={tag} className={`rounded-md border bg-transparent px-1.5 py-0.5 text-[10px] font-medium ${getTagColor(tag)}`}>#{tag}</span>
+                  <span key={tag} className={`rounded-md border bg-transparent px-1.5 py-0.5 text-[11px] font-medium ${getTagColor(tag)}`}>#{tag}</span>
                 ))}
-                {task.project && <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{task.project}</span>}
-                {task.priority && <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] capitalize text-text-muted">{task.priority}</span>}
+                {task.project && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted">{task.project}</span>}
+                {task.priority && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] capitalize text-text-muted">{task.priority}</span>}
                 {task.source_date && task.source_date !== currentFileDate && (
-                  <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-text-muted">
+                  <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted">
                     {language === 'zh' ? `从 ${task.source_date} 迁移` : `Migrated from ${task.source_date}`}
                   </span>
                 )}
@@ -449,7 +449,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <button
                     type="button"
                     onClick={() => onUnlinkFromSpace(task.id)}
-                    className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-heading"
+                    className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text-heading"
                     data-testid={`task-card-space-unlink-${task.id}`}
                   >
                     {language === 'zh' ? '移出事件' : 'Remove from event'}
@@ -460,14 +460,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {(task.comment || task.comments?.length || showComment) && (
                 <div className="mb-2 space-y-2">
                   {(task.comment || task.comments?.length) && (
-                    <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                       <MessageSquare className="h-3 w-3" />
                       {isDone ? (language === 'zh' ? '解决方案' : 'Resolution') : (language === 'zh' ? '备注' : 'Comments')}
                     </div>
                   )}
                   {task.comments?.map((comment, index) => (
                     <div key={`${comment.timestamp}-${index}`} className="group/comment relative rounded-lg border-l-2 border-border bg-black/[0.02] px-3 py-2 pr-8 text-xs text-text-muted">
-                      {comment.timestamp && <div className="mb-0.5 font-mono text-[10px] opacity-60">{comment.timestamp}</div>}
+                      {comment.timestamp && <div className="mb-0.5 font-mono text-[11px] opacity-60">{comment.timestamp}</div>}
                       <div className="whitespace-pre-wrap">{comment.text}</div>
                       <button
                         type="button"
@@ -505,16 +505,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         <button
                           type="button"
                           onClick={() => { suppressComments(); closeComment(); }}
-                          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-text-muted hover:bg-black/[0.03]"
+                          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-text-muted hover:bg-black/[0.03]"
                         >
                           <BellOff className="h-3 w-3" />
                           {language === 'zh' ? '不再询问' : "Don't ask again"}
                         </button>
                         <div className="flex gap-1.5">
-                          <button type="button" onClick={closeComment} className="rounded-md px-2.5 py-1 text-[11px] text-text-muted hover:bg-black/[0.03]">
+                          <button type="button" onClick={closeComment} className="rounded-md px-2.5 py-1 text-[12px] text-text-muted hover:bg-black/[0.03]">
                             {language === 'zh' ? '取消' : 'Cancel'}
                           </button>
-                          <button type="button" onClick={saveComment} className="rounded-md bg-accent px-3 py-1 text-[11px] font-semibold text-white">
+                          <button type="button" onClick={saveComment} className="rounded-md bg-accent px-3 py-1 text-[12px] font-semibold text-white">
                             {language === 'zh' ? '保存' : 'Save'}
                           </button>
                         </div>
@@ -527,7 +527,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {(onAiAction || onConvertToProject) && (
                 <div className="mb-2 flex flex-wrap items-center gap-1 border-t border-border/40 pt-2" data-testid={`task-ai-row-${task.id}`}>
                   {onAiAction && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                       <Sparkles className="h-3 w-3" />
                       {language === 'zh' ? 'AI 帮你' : 'AI'}
                     </span>
@@ -541,7 +541,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         setConvertNodes('');
                         setShowConvert(true);
                       }}
-                      className="rounded-md border border-border/70 px-2 py-1 text-[11px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      className="rounded-md border border-border/70 px-2 py-1 text-[12px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
                       data-testid={`task-convert-project-${task.id}`}
                     >
                       {language === 'zh' ? '转成项目' : 'To project'}
@@ -560,7 +560,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         setAiBusy(action);
                         void onAiAction?.(task, action).finally(() => setAiBusy(null));
                       }}
-                      className="rounded-md border border-border/70 px-2 py-1 text-[11px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      className="rounded-md border border-border/70 px-2 py-1 text-[12px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
                       data-testid={`task-ai-${action}-${task.id}`}
                     >
                       {aiBusy === action ? (language === 'zh' ? '处理中…' : 'Working…') : label}
@@ -573,25 +573,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowComment(true)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
                     aria-label={language === 'zh' ? '添加任务备注' : 'Add task comment'}
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     {language === 'zh' ? '备注' : 'Comment'}
                   </button>
                   {onCreateLinkedNote && (
-                    <button type="button" onClick={onCreateLinkedNote} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
+                    <button type="button" onClick={onCreateLinkedNote} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
                       <FileText className="h-3.5 w-3.5" />
                       {language === 'zh' ? '新建关联笔记' : 'Link note'}
                     </button>
                   )}
                   {linkedNotesCount > 0 && (
-                    <button type="button" onClick={onShowLinkedNotes} className="rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
+                    <button type="button" onClick={onShowLinkedNotes} className="rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
                       {language === 'zh' ? `查看笔记 ${linkedNotesCount}` : `View notes ${linkedNotesCount}`}
                     </button>
                   )}
                   {!isDone && (
-                    <button type="button" onClick={() => setEditingContent(true)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading" aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}>
+                    <button type="button" onClick={() => setEditingContent(true)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading" aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}>
                       <Edit2 className="h-3.5 w-3.5" />
                       {language === 'zh' ? '编辑' : 'Edit'}
                     </button>
@@ -599,7 +599,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <button
                     type="button"
                     onClick={onToggle}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
                     data-testid={`task-card-complete-${task.id}`}
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -609,15 +609,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   </button>
                   {confirmingDelete ? (
                     <div className="ml-auto flex items-center gap-1">
-                      <button type="button" onClick={() => { onDelete(); setConfirmingDelete(false); }} className="rounded-md bg-[var(--color-danger)] px-2.5 py-1 text-[11px] font-semibold text-white">
+                      <button type="button" onClick={() => { onDelete(); setConfirmingDelete(false); }} className="rounded-md bg-[var(--color-danger)] px-2.5 py-1 text-[12px] font-semibold text-white">
                         {language === 'zh' ? '确认删除' : 'Confirm delete'}
                       </button>
-                      <button type="button" onClick={() => setConfirmingDelete(false)} className="rounded-md px-2 py-1 text-[11px] text-text-muted hover:bg-black/[0.03]">
+                      <button type="button" onClick={() => setConfirmingDelete(false)} className="rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/[0.03]">
                         {language === 'zh' ? '取消' : 'Cancel'}
                       </button>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => setConfirmingDelete(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-text-muted hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)]" aria-label={language === 'zh' ? '删除任务' : 'Delete task'}>
+                    <button type="button" onClick={() => setConfirmingDelete(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)]" aria-label={language === 'zh' ? '删除任务' : 'Delete task'}>
                       <Trash2 className="h-3.5 w-3.5" />
                       {language === 'zh' ? '删除' : 'Delete'}
                     </button>
@@ -639,7 +639,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 ? '会新建一个事件画布，这个任务成为画布里的第一个任务节点。'
                 : 'Creates a new event canvas; this task becomes its first task node.'}
             </p>
-            <label className="mt-4 block text-[11px] font-medium text-text-muted">
+            <label className="mt-4 block text-[12px] font-medium text-text-muted">
               {language === 'zh' ? '项目名称' : 'Project title'}
               <input
                 autoFocus
@@ -649,7 +649,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 data-testid={`task-convert-title-${task.id}`}
               />
             </label>
-            <label className="mt-3 block text-[11px] font-medium text-text-muted">
+            <label className="mt-3 block text-[12px] font-medium text-text-muted">
               {language === 'zh' ? '初始步骤（每行一个，可留空）' : 'Initial steps (one per line, optional)'}
               <textarea
                 value={convertNodes}

@@ -450,7 +450,7 @@ export function Sidebar({
                   {language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
                 </span>
               )}
-              {!isCompact && <kbd className="rounded border border-border/70 bg-black/[0.03] px-1 py-0.5 text-[10px] text-text-muted">⌘K</kbd>}
+              {!isCompact && <kbd className="rounded border border-border/70 bg-black/[0.03] px-1 py-0.5 text-[11px] text-text-muted">⌘K</kbd>}
             </button>
           )}
 
@@ -600,7 +600,7 @@ export function Sidebar({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between px-1 text-[10px] text-text-muted/80">
+                <div className="flex items-center justify-between px-1 text-[11px] text-text-muted/80">
                   <span className="font-mono">v{__APP_VERSION__}</span>
                   <span>{language === 'zh' ? 'DailyFlow' : 'DailyFlow'}</span>
                 </div>

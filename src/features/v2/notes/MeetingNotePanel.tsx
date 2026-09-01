@@ -536,10 +536,10 @@ export function MeetingNotePanel({
             </span>
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-text-primary">{t.title}</h3>
-              <p className="truncate text-[11px] leading-4 text-text-muted">{t.hint}</p>
+              <p className="truncate text-[12px] leading-4 text-text-muted">{t.hint}</p>
             </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">
           <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-medium ${canTranscribe ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${canTranscribe ? 'bg-green-500' : 'bg-amber-500'}`} />
             {canTranscribe ? t.transcriptionReady : t.recordingOnly}
@@ -560,7 +560,7 @@ export function MeetingNotePanel({
         {!canTranscribe && state === 'idle' && savedAudioSources.length === 0 && (
           <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="transcription-setup-callout">
             <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{t.setupTitle}</p>
-            <p className="mt-1 text-[11px] leading-5 text-amber-800/90 dark:text-amber-300/90">{t.setupBody}</p>
+            <p className="mt-1 text-[12px] leading-5 text-amber-800/90 dark:text-amber-300/90">{t.setupBody}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -570,7 +570,7 @@ export function MeetingNotePanel({
                   saveMeetingTranscriptionSettings(next);
                   setShowTranscriptionSettings(true);
                 }}
-                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[11px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
               >
                 <span className="block">{t.setupRemote}</span>
                 <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
@@ -583,7 +583,7 @@ export function MeetingNotePanel({
                   saveMeetingTranscriptionSettings(next);
                   setShowTranscriptionSettings(true);
                 }}
-                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[11px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
               >
                 <span className="block">{t.setupLocal}</span>
                 <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupLocalHint}</span>
@@ -601,7 +601,7 @@ export function MeetingNotePanel({
                 className="h-4 w-4 shrink-0 accent-current"
               />
               <span>
-                <span className="block text-[11px] text-text-muted">{t.consent}</span>
+                <span className="block text-[12px] text-text-muted">{t.consent}</span>
               </span>
             </label>
             <button
@@ -683,7 +683,7 @@ export function MeetingNotePanel({
         <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700" role="status" aria-live="polite">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           <span>{t.backgroundTranscribing}</span>
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700" data-testid="transcription-backend-badge">
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700" data-testid="transcription-backend-badge">
             {activeBackend === 'local' ? t.backendBadgeLocal : t.backendBadgeOpenai}
           </span>
         </p>
@@ -700,7 +700,7 @@ export function MeetingNotePanel({
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-text-primary">{t.settingsTitle}</p>
-              <p className="mt-0.5 text-[11px] text-text-muted">
+              <p className="mt-0.5 text-[12px] text-text-muted">
                 {canTranscribe ? t.transcriptionReady : t.recordingOnly}
               </p>
             </div>
@@ -753,7 +753,7 @@ export function MeetingNotePanel({
           <option value="en">{t.languageEn}</option>
         </select>
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-text-muted">
+      <p className="mt-2 text-[12px] leading-5 text-text-muted">
         {selectedMode === 'remote'
           ? (remoteEndpoint ? t.remoteReady : t.apiKeyRequired)
           : selectedMode === 'local-endpoint'
@@ -944,7 +944,7 @@ export function MeetingNotePanel({
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           {savedAudioSources.length > 0 && (
             <div>
-              <p className="mb-2 text-[11px] font-medium text-text-secondary">
+              <p className="mb-2 text-[12px] font-medium text-text-secondary">
                 {t.savedRecordings} · {audioCount}
               </p>
               <div className="space-y-3">
@@ -957,16 +957,16 @@ export function MeetingNotePanel({
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-950/30">
                           <FileAudio className="h-3.5 w-3.5" aria-hidden="true" />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[11px] text-text-muted">
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-text-muted">
                           {source.title || `${t.recording} ${index + 1}`}
                         </span>
                         {isTranscribing ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600">
+                          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600">
                             <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                             {t.backgroundTranscribing}
                           </span>
                         ) : transcript?.body ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700">
+                          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-green-700">
                             <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                             {t.transcribed}
                           </span>
@@ -978,7 +978,7 @@ export function MeetingNotePanel({
                               audioSource: source,
                               transcriptionMode: 'saved-only',
                             })}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-[12px] font-medium text-text-secondary hover:bg-surface"
                           >
                             {t.transcribeLater}
                           </button>
@@ -986,7 +986,7 @@ export function MeetingNotePanel({
                           <button
                             type="button"
                             onClick={() => setShowTranscriptionSettings(true)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] font-medium text-amber-700 hover:bg-amber-100"
                           >
                             <Settings2 className="h-3 w-3" aria-hidden="true" />
                             {t.configureTranscription}
@@ -1002,18 +1002,18 @@ export function MeetingNotePanel({
                       />
                       {transcript?.body && (
                         <div className="mt-2 rounded-md border border-border/60 bg-background/60 p-2">
-                          <p className="text-[11px] font-medium text-text-secondary">{t.latestTranscript}</p>
+                          <p className="text-[12px] font-medium text-text-secondary">{t.latestTranscript}</p>
                           {onInsertTranscript && (
                             <button
                               type="button"
                               onClick={() => void onInsertTranscript(transcript.body!)}
-                              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-accent/25 bg-accent/5 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+                              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-accent/25 bg-accent/5 px-2 py-1 text-[12px] font-medium text-accent hover:bg-accent/10"
                             >
                               <FileText className="h-3 w-3" aria-hidden="true" />
                               {t.insertTranscript}
                             </button>
                           )}
-                          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-text-secondary">
+                          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[12px] leading-5 text-text-secondary">
                             {transcript.body}
                           </pre>
                         </div>

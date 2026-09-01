@@ -111,7 +111,7 @@ export function TeamView({ language = 'zh', showToast }: TeamViewProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain p-4" data-testid="team-scroll-region">
       <header className="px-1 pt-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{isZh ? '团队协作' : 'Team collaboration'}</p>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{isZh ? '团队协作' : 'Team collaboration'}</p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text-heading)]">{t.title}</h1>
         <p className="mt-1 max-w-2xl text-sm text-[var(--color-text-muted)]">{t.subtitle}</p>
       </header>
@@ -204,7 +204,7 @@ function TaskRow({ task, memberId, date, language }: { task: TaskInput; memberId
           {task.tags && task.tags.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {task.tags.map((tag) => (
-                <span key={tag} className="rounded bg-black/[0.045] px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]">#{tag}</span>
+                <span key={tag} className="rounded bg-black/[0.045] px-1.5 py-0.5 text-[11px] text-[var(--color-text-muted)]">#{tag}</span>
               ))}
             </div>
           )}

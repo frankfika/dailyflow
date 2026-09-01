@@ -51,7 +51,7 @@ export function MemoryView({ workspaceId = 'default', language = 'zh' }: { works
       data-testid="memory-scroll-region"
     >
       <header className="px-1 pt-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
           {isZh ? '工作上下文' : 'Work context'}
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text-heading)]">
@@ -206,11 +206,11 @@ function SearchHit({ hit, workspaceId, isZh }: { hit: MemoryHit; workspaceId: st
       </div>
       <div className="mt-1 text-xs italic">"{hit.snippet}"</div>
       {hit.tierReason && (
-        <div className="mt-1 text-[10px] text-[var(--color-text-muted)]" title={hit.tierReason}>
+        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]" title={hit.tierReason}>
           {isZh ? '匹配原因' : 'reason'}: {hit.tierReason}
         </div>
       )}
-      <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+      <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
         {isZh ? '来源' : 'sources'}: {hit.sourceIds.length} · {isZh ? '证据' : 'evidence'}: {hit.evidenceIds.length}
       </div>
     </li>

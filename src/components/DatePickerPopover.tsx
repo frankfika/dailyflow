@@ -105,7 +105,7 @@ export function DatePickerPopover({ open, onClose, currentDate, today, onSelect,
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-7 gap-y-0.5 text-center text-[10px] font-medium text-text-muted">
+      <div className="mt-2 grid grid-cols-7 gap-y-0.5 text-center text-[11px] font-medium text-text-muted">
         {(language === 'zh' ? WEEKDAYS_ZH : WEEKDAYS_EN).map((label) => (
           <span key={label}>{label}</span>
         ))}
@@ -142,7 +142,7 @@ export function DatePickerPopover({ open, onClose, currentDate, today, onSelect,
         <button
           type="button"
           onClick={onClose}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-text-muted hover:bg-black/5 hover:text-text-heading"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/5 hover:text-text-heading"
           data-testid="date-picker-close"
         >
           <X className="h-3 w-3" />
@@ -151,7 +151,7 @@ export function DatePickerPopover({ open, onClose, currentDate, today, onSelect,
         <button
           type="button"
           onClick={() => onSelect(today)}
-          className="flex items-center gap-1 rounded-md border border-accent/20 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+          className="flex items-center gap-1 rounded-md border border-accent/20 px-2 py-1 text-[12px] font-medium text-accent hover:bg-accent/10"
           data-testid="date-picker-today"
         >
           <Calendar className="h-3 w-3" />

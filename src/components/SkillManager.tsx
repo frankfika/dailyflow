@@ -425,7 +425,7 @@ export function SkillManager({ language }: SkillManagerProps) {
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-bold text-text-heading truncate">{skill.name}</h4>
-            <p className="text-[11px] text-text-muted line-clamp-2 mt-0.5">{(skill as any).description || (language === 'zh' ? '暂无描述' : 'No description')}</p>
+            <p className="text-[12px] text-text-muted line-clamp-2 mt-0.5">{(skill as any).description || (language === 'zh' ? '暂无描述' : 'No description')}</p>
           </div>
           <div className="flex-shrink-0">
             {isBuiltIn ? (
@@ -466,22 +466,22 @@ export function SkillManager({ language }: SkillManagerProps) {
 
         {/* Meta row */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface text-text-muted border border-border">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-surface text-text-muted border border-border">
             <CatIcon className="w-2.5 h-2.5" />
             {language === 'zh'
               ? CATEGORIES.find(c => c.key === category)?.zh || category
               : CATEGORIES.find(c => c.key === category)?.en || category}
           </span>
           {(skill as any).type === 'agent' && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+            <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-700">
               Agent
             </span>
           )}
           {(skill as any).version && (
-            <span className="text-[10px] text-text-muted font-mono">v{(skill as any).version}</span>
+            <span className="text-[11px] text-text-muted font-mono">v{(skill as any).version}</span>
           )}
           {(skill as any).author && (
-            <span className="text-[10px] text-text-muted">@{(skill as any).author}</span>
+            <span className="text-[11px] text-text-muted">@{(skill as any).author}</span>
           )}
         </div>
 
@@ -489,7 +489,7 @@ export function SkillManager({ language }: SkillManagerProps) {
         {(skill as any).tags && (skill as any).tags.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
             {(skill as any).tags.map((tag: string) => (
-              <span key={tag} className="text-[10px] text-text-muted bg-surface border border-border rounded px-1.5 py-0.5">
+              <span key={tag} className="text-[11px] text-text-muted bg-surface border border-border rounded px-1.5 py-0.5">
                 {tag}
               </span>
             ))}
@@ -526,7 +526,7 @@ export function SkillManager({ language }: SkillManagerProps) {
             >
               {language === 'zh' ? '已安装' : 'Installed'}
               {skills.length > 0 && (
-                <span className="ml-1.5 px-1 py-0.5 rounded-full bg-accent/20 text-[10px]">{skills.length}</span>
+                <span className="ml-1.5 px-1 py-0.5 rounded-full bg-accent/20 text-[11px]">{skills.length}</span>
               )}
             </button>
           </div>
@@ -593,7 +593,7 @@ export function SkillManager({ language }: SkillManagerProps) {
             {language === 'zh' ? '导入' : 'Import'}
           </button>
           {importError && (
-            <span className="text-[11px] text-red-500 shrink-0">{importError}</span>
+            <span className="text-[12px] text-red-500 shrink-0">{importError}</span>
           )}
         </div>
 
@@ -603,7 +603,7 @@ export function SkillManager({ language }: SkillManagerProps) {
             <button
               key={cat.key}
               onClick={() => setSelectedCategory(cat.key)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
+              className={`px-2.5 py-1 rounded-md text-[12px] font-bold border transition-all ${
                 selectedCategory === cat.key
                   ? 'bg-accent text-white border-accent'
                   : 'bg-surface text-text-muted border-border hover:border-accent/30'
@@ -647,7 +647,7 @@ export function SkillManager({ language }: SkillManagerProps) {
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">
                       {language === 'zh' ? '名称' : 'Name'} *
                     </label>
                     <input
@@ -659,7 +659,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">
                       {language === 'zh' ? '范围' : 'Scope'}
                     </label>
                     <select
@@ -677,7 +677,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">
+                  <label className="block text-[12px] font-bold text-text-muted mb-1">
                     {language === 'zh' ? '描述' : 'Description'}
                   </label>
                   <input
@@ -691,7 +691,7 @@ export function SkillManager({ language }: SkillManagerProps) {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">Icon</label>
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">Icon</label>
                     <input
                       type="text"
                       value={form.icon}
@@ -701,7 +701,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">Version</label>
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">Version</label>
                     <input
                       type="text"
                       value={form.version}
@@ -711,7 +711,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">Author</label>
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">Author</label>
                     <input
                       type="text"
                       value={form.author}
@@ -723,7 +723,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">Tags</label>
+                  <label className="block text-[12px] font-bold text-text-muted mb-1">Tags</label>
                   <TagInput
                     tags={form.tags}
                     onChange={tags => setForm({ ...form, tags })}
@@ -733,7 +733,7 @@ export function SkillManager({ language }: SkillManagerProps) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">
                       {language === 'zh' ? '类型' : 'Type'}
                     </label>
                     <select
@@ -746,7 +746,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-text-muted mb-1">
+                    <label className="block text-[12px] font-bold text-text-muted mb-1">
                       {language === 'zh' ? '快捷命令 (用逗号分隔)' : 'Commands (comma separated)'}
                     </label>
                     <input
@@ -759,7 +759,7 @@ export function SkillManager({ language }: SkillManagerProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-text-muted mb-1">
+                  <label className="block text-[12px] font-bold text-text-muted mb-1">
                     {form.type === 'agent'
                       ? (language === 'zh' ? '知识库内容 (Knowledge Base)' : 'Knowledge Base')
                       : (language === 'zh' ? '系统提示词 (System Prompt)' : 'System Prompt')} *

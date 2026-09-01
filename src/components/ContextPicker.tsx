@@ -155,7 +155,7 @@ export function ContextPicker({
             <h3 className="text-base font-bold text-text-heading">
               {language === 'zh' ? '挂载上下文' : 'Add Context'}
             </h3>
-            <p className="text-[11px] text-text-muted mt-0.5">
+            <p className="text-[12px] text-text-muted mt-0.5">
               {language === 'zh'
                 ? '可多选——选中的项目会作为参考资料一起发给 AI'
                 : 'Pick multiple — selected items will be sent to AI as reference'}
@@ -174,7 +174,7 @@ export function ContextPicker({
             </span>
           ) : (
             <>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-accent uppercase tracking-wider">
                 <CheckCircle2 className="w-3 h-3" />
                 {language === 'zh' ? `已选 ${totalCount}` : `${totalCount} selected`}
               </span>
@@ -182,7 +182,7 @@ export function ContextPicker({
               {selectedItems.map(item => (
                 <span
                   key={item.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-surface-white border border-accent/30 rounded-full"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[12px] bg-surface-white border border-accent/30 rounded-full"
                 >
                   {item.type === 'today-tasks' && <Calendar className="w-3 h-3 text-accent" />}
                   {item.type === 'date-tasks' && <Calendar className="w-3 h-3 text-accent" />}
@@ -252,7 +252,7 @@ export function ContextPicker({
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-3.5 h-3.5 text-accent" />
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     {language === 'zh' ? '今日汇总' : "Today's Summary"}
                   </span>
                   <span className="h-px bg-border flex-1" />
@@ -283,7 +283,7 @@ export function ContextPicker({
                         <div className="text-sm font-bold text-text-heading">
                           {language === 'zh' ? '今日任务' : "Today's Tasks"}
                         </div>
-                        <div className="text-[11px] text-text-muted">
+                        <div className="text-[12px] text-text-muted">
                           {tasks.length} {language === 'zh' ? '个任务' : 'tasks'}
                         </div>
                       </div>
@@ -296,7 +296,7 @@ export function ContextPicker({
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Check className="w-3.5 h-3.5 text-accent" />
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     {language === 'zh' ? '单个任务' : 'Individual Tasks'}
                   </span>
                   <span className="h-px bg-border flex-1" />
@@ -335,7 +335,7 @@ export function ContextPicker({
                             {task.title}
                           </div>
                           {task.tags?.length > 0 && (
-                            <div className="text-[10px] text-text-muted mt-0.5 truncate">
+                            <div className="text-[11px] text-text-muted mt-0.5 truncate">
                               {task.tags.slice(0, 3).map((t: string) => `#${t}`).join(' ')}
                             </div>
                           )}
@@ -350,7 +350,7 @@ export function ContextPicker({
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-3.5 h-3.5 text-text-muted" />
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     {language === 'zh' ? '历史日期' : 'Past Dates'}
                   </span>
                   <span className="h-px bg-border flex-1" />
@@ -381,7 +381,7 @@ export function ContextPicker({
                         </div>
                         <div className="flex-1 text-xs">
                           <div className="font-bold text-text-heading">{date}</div>
-                          <div className="text-[10px] text-text-muted">
+                          <div className="text-[11px] text-text-muted">
                             {(filesMap[date] || '').split('\n').filter(l => l.trim().startsWith('- [')).length} {language === 'zh' ? '项' : 'items'}
                           </div>
                         </div>
@@ -426,7 +426,7 @@ export function ContextPicker({
                     <div className="text-xs font-bold text-text-heading truncate">
                       {note.title || (language === 'zh' ? '无标题' : 'Untitled')}
                     </div>
-                    <div className="text-[10px] text-text-muted truncate">
+                    <div className="text-[11px] text-text-muted truncate">
                       {(note.body || note.content || '').slice(0, 60)}
                     </div>
                   </div>
@@ -460,7 +460,7 @@ export function ContextPicker({
                 <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border bg-accent/5">
                   <div className="flex items-center gap-2 min-w-0">
                     <Calendar className="w-3.5 h-3.5 text-accent flex-shrink-0" />
-                    <div className="text-[11px] text-text-heading">
+                    <div className="text-[12px] text-text-heading">
                       {language === 'zh'
                         ? `自动包含: 最近 7 天 (${recentCount} 场)`
                         : `Auto-include: last 7 days (${recentCount} meeting${recentCount === 1 ? '' : 's'})`}
@@ -515,7 +515,7 @@ export function ContextPicker({
                         <div className="text-xs font-bold text-text-heading truncate">
                           {note.title || (language === 'zh' ? '无标题会议' : 'Untitled meeting')}
                         </div>
-                        <div className="text-[10px] text-text-muted truncate">
+                        <div className="text-[11px] text-text-muted truncate">
                           {note.date}{note.time ? ` · ${note.time}` : ''}
                           {note.participants?.length ? ` · ${note.participants.join(', ')}` : ''}
                         </div>
@@ -558,7 +558,7 @@ export function ContextPicker({
                   <Folder className="w-3.5 h-3.5 text-text-muted" />
                   <div className="flex-1 text-xs">
                     <div className="font-bold text-text-heading">{project}</div>
-                    <div className="text-[10px] text-text-muted">
+                    <div className="text-[11px] text-text-muted">
                       {tasks.filter((t: any) => t.project === project || t.tags?.includes(project)).length} {language === 'zh' ? '项' : 'items'}
                     </div>
                   </div>

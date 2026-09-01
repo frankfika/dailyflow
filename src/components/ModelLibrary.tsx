@@ -293,7 +293,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
           <div className="space-y-3">
             <div className="grid gap-3 rounded-lg border border-border bg-surface-white p-4 sm:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                <span className="block text-[12px] font-bold uppercase tracking-wider text-text-muted">
                   {language === 'zh' ? '聊天模型' : 'Chat model'}
                 </span>
                 <select
@@ -305,7 +305,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                 </select>
               </label>
               <label className="space-y-1.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                <span className="block text-[12px] font-bold uppercase tracking-wider text-text-muted">
                   {language === 'zh' ? '会议总结 / 结构化提取模型' : 'Meeting summary / extraction'}
                 </span>
                 <select
@@ -316,7 +316,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   {configs.map(config => <option key={config.id} value={config.id}>{config.name} · {config.model}</option>)}
                 </select>
               </label>
-              <p className="text-[11px] text-text-muted sm:col-span-2">
+              <p className="text-[12px] text-text-muted sm:col-span-2">
                 {language === 'zh'
                   ? '语音转写模型也保存在同一模型中心，在任一会议笔记的录音面板中配置。'
                   : 'Speech transcription is stored in the same Model Center and configured from any meeting note recording panel.'}
@@ -343,13 +343,13 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-sm text-text-heading">{config.name}</h3>
                       {activeId === config.id && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 rounded">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 rounded">
                           <CheckCircle2 className="w-2.5 h-2.5" />
                           {language === 'zh' ? '使用中' : 'Active'}
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-text-muted/80 font-mono truncate">
+                    <div className="text-[12px] text-text-muted/80 font-mono truncate">
                       {config.model}
                     </div>
                     {config.notes && (
@@ -376,13 +376,13 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
 
                 <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className="text-[10px] text-text-muted font-mono truncate">{config.baseUrl}</span>
+                    <span className="text-[11px] text-text-muted font-mono truncate">{config.baseUrl}</span>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {activeId !== config.id && (
                       <button
                         onClick={() => handleActivate(config)}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-accent text-white rounded-md hover:bg-accent/90 transition-colors"
+                        className="px-2.5 py-1 text-[12px] font-bold bg-accent text-white rounded-md hover:bg-accent/90 transition-colors"
                       >
                         {language === 'zh' ? '切换' : 'Activate'}
                       </button>
@@ -391,7 +391,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     <button
                       onClick={() => handleTest(config)}
                       disabled={testingId === config.id}
-                      className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium border rounded-md transition-colors disabled:opacity-50 bg-surface border-border hover:border-accent/30 text-text-heading"
+                      className="flex items-center gap-1 px-2.5 py-1 text-[12px] font-medium border rounded-md transition-colors disabled:opacity-50 bg-surface border-border hover:border-accent/30 text-text-heading"
                     >
                       {testingId === config.id ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -407,7 +407,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    className={`mt-2 px-3 py-1.5 rounded-md text-[11px] ${
+                    className={`mt-2 px-3 py-1.5 rounded-md text-[12px] ${
                       testResult.status === 'success'
                         ? 'bg-green-50 text-green-700'
                         : 'bg-red-50 text-red-700'
@@ -434,7 +434,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     ? (language === 'zh' ? '编辑供应商' : 'Edit Provider')
                     : (language === 'zh' ? '添加供应商' : 'Add Provider')}
                 </h3>
-                <p className="text-[11px] text-text-muted mt-0.5">
+                <p className="text-[12px] text-text-muted mt-0.5">
                   {editingId
                     ? (language === 'zh' ? '修改后立即生效' : 'Changes apply immediately')
                     : (language === 'zh' ? '从模板开始或自定义配置' : 'Pick a template or configure manually')}
@@ -454,7 +454,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   <label className="block text-xs font-bold text-text-muted uppercase tracking-wider">
                     {language === 'zh' ? '选择供应商' : 'Choose Provider'}
                   </label>
-                  <span className="text-[10px] text-text-muted">
+                  <span className="text-[11px] text-text-muted">
                     {filteredTemplates.length} {language === 'zh' ? '个模板' : 'templates'}
                   </span>
                 </div>
@@ -469,7 +469,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     <button
                       key={key}
                       onClick={() => setFilterCategory(key)}
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                      className={`px-2.5 py-1 rounded-full text-[12px] font-bold border transition-all ${
                         filterCategory === key
                           ? 'bg-accent text-white border-accent'
                           : 'bg-surface text-text-muted border-border hover:border-accent/30 hover:text-text-heading'
@@ -497,7 +497,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                       >
                         <ProviderIcon name={t.name} size="sm" />
                         <div className="flex-1 min-w-0">
-                          <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-accent' : 'text-text-heading'}`}>
+                          <div className={`text-[12px] font-bold truncate ${isSelected ? 'text-accent' : 'text-text-heading'}`}>
                             {isCustom ? (language === 'zh' ? '自定义' : 'Custom') : t.name}
                           </div>
                           {!isCustom && (
@@ -520,7 +520,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                 </div>
 
                 {activeTemplate?.hint && (
-                  <div className="flex items-start gap-1.5 px-2.5 py-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-700">
+                  <div className="flex items-start gap-1.5 px-2.5 py-2 rounded bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
                     <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>{activeTemplate.hint}</span>
                   </div>
@@ -530,7 +530,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     href={activeTemplate.apiKeyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+                    className="inline-flex items-center gap-1 text-[12px] text-accent hover:underline"
                   >
                     <ExternalLink className="w-3 h-3" />
                     {language === 'zh' ? `获取 ${activeTemplate.name} API Key` : `Get ${activeTemplate.name} API key`}
@@ -557,7 +557,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   }`}
                 />
                 {touched.name && !form.name?.trim() && (
-                  <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入名称' : 'Name is required'}</p>
+                  <p className="mt-1 text-[12px] text-red-500">{language === 'zh' ? '请输入名称' : 'Name is required'}</p>
                 )}
               </div>
 
@@ -576,7 +576,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   }`}
                 />
                 {touched.baseUrl && !form.baseUrl?.trim() && (
-                  <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 Base URL' : 'Base URL is required'}</p>
+                  <p className="mt-1 text-[12px] text-red-500">{language === 'zh' ? '请输入 Base URL' : 'Base URL is required'}</p>
                 )}
               </div>
 
@@ -594,7 +594,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     }`}
                   />
                   {touched.model && !form.model?.trim() && (
-                    <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 Model ID' : 'Model ID is required'}</p>
+                    <p className="mt-1 text-[12px] text-red-500">{language === 'zh' ? '请输入 Model ID' : 'Model ID is required'}</p>
                   )}
                 </div>
                 <div>
@@ -620,7 +620,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                     </button>
                   </div>
                   {touched.apiKey && !form.apiKey?.trim() && (
-                    <p className="mt-1 text-[11px] text-red-500">{language === 'zh' ? '请输入 API Key' : 'API Key is required'}</p>
+                    <p className="mt-1 text-[12px] text-red-500">{language === 'zh' ? '请输入 API Key' : 'API Key is required'}</p>
                   )}
                 </div>
               </div>
@@ -656,7 +656,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`mt-2 px-3 py-1.5 rounded-md text-[11px] ${
+                    className={`mt-2 px-3 py-1.5 rounded-md text-[12px] ${
                       testResult.status === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
                     }`}
                   >

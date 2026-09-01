@@ -198,7 +198,7 @@ export function WorkspaceSwitcher({
 
   return (
     <div ref={ref} className="relative">
-      <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-text-muted">
+      <p className="mb-1 px-2 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
         {language === 'zh' ? '工作区' : 'Workspace'}
       </p>
       <button
@@ -215,7 +215,7 @@ export function WorkspaceSwitcher({
           </div>
           <div className="min-w-0 text-left">
             <div className="text-xs font-semibold text-text-heading truncate">{active.name}</div>
-            <div className="text-[10px] text-text-muted/80 truncate font-mono">{active.path}</div>
+            <div className="text-[11px] text-text-muted/80 truncate font-mono">{active.path}</div>
           </div>
         </div>
         <ChevronsUpDown className="w-3.5 h-3.5 text-text-muted shrink-0" />
@@ -267,7 +267,7 @@ export function WorkspaceSwitcher({
                     ) : (
                       <>
                         <div className="text-xs font-medium text-text-heading truncate">{ws.name}</div>
-                        <div className="text-[10px] text-text-muted/70 truncate font-mono">{ws.path}</div>
+                        <div className="text-[11px] text-text-muted/70 truncate font-mono">{ws.path}</div>
                       </>
                     )}
                   </div>
@@ -300,7 +300,7 @@ export function WorkspaceSwitcher({
               {/* Suggestions section */}
               {(discovering || candidates.length > 0) && (
                 <div className="mt-1 pt-1 border-t border-border/60">
-                  <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wider text-text-muted/80">
+                  <div className="flex items-center gap-1.5 px-3 py-1 text-[11px] uppercase tracking-wider text-text-muted/80">
                     <Sparkles className="w-3 h-3" />
                     {language === 'zh' ? '本地发现' : 'Found on this Mac'}
                     {discovering && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
@@ -317,12 +317,12 @@ export function WorkspaceSwitcher({
                           <FolderOpen className="w-3 h-3 text-text-muted shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-medium text-text-heading truncate">{c.name}</div>
-                            <div className="text-[10px] text-text-muted/70 truncate font-mono">{c.path}</div>
+                            <div className="text-[11px] text-text-muted/70 truncate font-mono">{c.path}</div>
                           </div>
                           {busyId === '__new__' ? (
                             <Loader2 className="w-3 h-3 animate-spin text-accent" />
                           ) : (
-                            <span className="text-[11px] font-bold text-accent opacity-0 group-hover/cand:opacity-100 transition-opacity">+</span>
+                            <span className="text-[12px] font-bold text-accent opacity-0 group-hover/cand:opacity-100 transition-opacity">+</span>
                           )}
                         </button>
                       ))}
