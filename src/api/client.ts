@@ -905,35 +905,6 @@ export interface TopicSpaceFilters {
   query?: string;
 }
 
-/**
- * One entry in a Topic Space's cross-date task list. `date` is the
- * daily-note date that hosts the task — the client uses it to
- * navigate to the right day when the user opens the task.
- */
-export interface TopicSpaceTaskItem {
-  task: TaskInput & { spaceId?: string; originMindmapId?: string; originNodeId?: string };
-  date: string;
-}
-
-export interface TopicSpaceCreateInput {
-  title: string;
-  context?: TopicSpaceContext;
-  defaultView?: TopicSpaceDefaultView;
-  status?: TopicSpaceStatus;
-  tags?: string[];
-  intent?: string;
-  scratchpad?: string;
-  brief?: string;
-  journey?: string;
-}
-
-export type TopicSpaceUpdate = Partial<
-  Omit<
-    TopicSpace,
-    'id' | 'kind' | 'createdAt' | 'updatedAt' | 'filePath' | 'mindmapId'
-  >
->;
-
 export const topicSpacesApi = {
   async list(filters?: TopicSpaceFilters): Promise<TopicSpace[]> {
     const params = new URLSearchParams();
@@ -946,67 +917,6 @@ export const topicSpacesApi = {
     const res = await fetch(`${API_BASE}/topic-spaces${query}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch topic spaces');
     return res.json();
-  },
-
-  async get(id: string): Promise<TopicSpace> {
-    const res = await fetch(`${API_BASE}/topic-spaces/${id}`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch topic space');
-    return res.json();
-  },
-
-  /**
-   * Cross-date task source (Phase 3). Returns the space's tasks across
-   * ALL daily notes as `{ task, date }[]`. Use this instead of
-   * filtering the current day's tasks — the old approach silently
-   * dropped any task that wasn't on the open date.
-   */
-  async getTasks(id: string): Promise<TopicSpaceTaskItem[]> {
-    const res = await fetch(`${API_BASE}/topic-spaces/${encodeURIComponent(id)}/tasks`);
-    if (!res.ok) throw await httpError(res, 'Failed to fetch topic-space tasks');
-    const data = await res.json();
-    return (data?.items ?? []) as TopicSpaceTaskItem[];
-  },
-
-  async create(input: TopicSpaceCreateInput): Promise<TopicSpace> {
-    const res = await fetch(`${API_BASE}/topic-spaces`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to create topic space');
-    return res.json();
-  },
-
-  async update(id: string, patch: TopicSpaceUpdate): Promise<TopicSpace> {
-    const res = await fetch(`${API_BASE}/topic-spaces/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to update topic space');
-    return res.json();
-  },
-
-  async delete(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/topic-spaces/${id}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok && res.status !== 404) {
-      throw await httpError(res, 'Failed to delete topic space');
-    }
-  },
-
-  /**
-   * Reorder spaces within a context. The server persists the new `order`
-   * based on the position in `orderedIds`.
-   */
-  async reorder(context: TopicSpaceContext, orderedIds: string[]): Promise<void> {
-    const res = await fetch(`${API_BASE}/topic-spaces/reorder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context, orderedIds }),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to reorder topic spaces');
   },
 };
 
@@ -1258,22 +1168,7 @@ export type MindMapNodeKind =
   | 'resource'
   | 'risk';
 
-export const MINDMAP_NODE_COLORS: readonly MindMapNodeColor[] = [
-  'default',
-  'accent',
-  'warm',
-  'success',
-  'warning',
-  'danger',
-] as const;
-
 export type MindMapNodeStatus = 'todo' | 'in-progress' | 'done';
-
-export const MINDMAP_NODE_STATUSES: readonly MindMapNodeStatus[] = [
-  'todo',
-  'in-progress',
-  'done',
-] as const;
 
 export interface MindMapNode {
   id: string;
@@ -2002,40 +1897,4 @@ export const reportsApi = {
 
 
 // ---------------------------------------------------------------------------
-// Task-Completion → MindMap mirror (Sprint 1 Gap 7)
-// ---------------------------------------------------------------------------
-// Mirrors a completed Task's status / outcome back to the linked
-// mindmap node (kind='task'). The node is never deleted — the
-// completion is appended to its `note` and `status` flips to 'done'.
-// See docs/TASK_MIRROR_TO_MINDMAP.md.
-// ---------------------------------------------------------------------------
 
-export interface MirrorTaskCompletionInput {
-  taskId: string;
-  taskDate: string;
-  completedAt: string;
-  outcomeSummary?: string;
-}
-
-export interface MirrorTaskCompletionResult {
-  mirrored: boolean;
-  mirroredNodeIds: string[];
-  mindmapIds: string[];
-}
-
-export const mirrorApi = {
-  /**
-   * Trigger an explicit mirror. Use this when the caller has no
-   * automatic hook into the v2 `completeWithOutcome` flow (e.g. a
-   * recovery script after a partial failure).
-   */
-  async taskCompletion(input: MirrorTaskCompletionInput): Promise<MirrorTaskCompletionResult> {
-    const res = await fetch(`${API_BASE}/v2/mirror/task-completion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) throw await httpError(res, 'Failed to mirror task completion');
-    return res.json() as Promise<MirrorTaskCompletionResult>;
-  },
-};

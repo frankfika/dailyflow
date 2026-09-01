@@ -91,18 +91,3 @@ export function buildAutoContextText(
   return '';
 }
 
-export function deriveAutoContextLabel(
-  focusedContext: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null | undefined,
-  tasks: any[],
-  language: 'en' | 'zh'
-): string | null {
-  if (!focusedContext) return null;
-  if (focusedContext.type === 'today') {
-    const count = tasks.filter((t: any) => t.status !== 'done').length;
-    return `${language === 'zh' ? '今日任务' : "Today's Tasks"} (${count})`;
-  }
-  if (focusedContext.type === 'note') {
-    return focusedContext.title || (language === 'zh' ? '当前笔记' : 'Current Note');
-  }
-  return null;
-}
