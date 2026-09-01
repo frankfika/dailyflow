@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Focus, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Check, ChevronDown, FileText, Focus, HelpCircle, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Tag, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode, OrganizeStrategy } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { ScheduleDatePopover } from './ScheduleDatePopover';
@@ -36,6 +36,12 @@ type Copy = {
   organizeByTopic: string;
   organizeByPriority: string;
   organizeByTime: string;
+  kind: string;
+  kindBranch: string;
+  kindTag: string;
+  kindQuestion: string;
+  kindResource: string;
+  kindRisk: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -70,6 +76,12 @@ const COPY: Record<'en' | 'zh', Copy> = {
     organizeByTopic: 'By topic',
     organizeByPriority: 'By execution status',
     organizeByTime: 'By time tag',
+    kind: 'Type',
+    kindBranch: 'Branch',
+    kindTag: 'Tag',
+    kindQuestion: 'Question',
+    kindResource: 'Resource',
+    kindRisk: 'Risk',
   },
   zh: {
     child: '子节点',
@@ -102,6 +114,12 @@ const COPY: Record<'en' | 'zh', Copy> = {
     organizeByTopic: '按主题分类',
     organizeByPriority: '按执行状态分类',
     organizeByTime: '按时间标签分类',
+    kind: '类型',
+    kindBranch: '普通节点',
+    kindTag: '标签',
+    kindQuestion: '问题',
+    kindResource: '资料',
+    kindRisk: '风险',
   },
 };
 
@@ -127,6 +145,8 @@ interface EventCanvasProps {
   /** UX S9: run an AI organize strategy (read-only suggestion → modal). */
   onOrganize?: (strategy: OrganizeStrategy) => void;
   organizeBusy?: boolean;
+  /** Re-classify a node's semantic kind (question / resource / risk / tag / branch). */
+  onChangeKind?: (nodeId: string, kind: 'branch' | 'tag' | 'question' | 'resource' | 'risk') => void;
   proposal?: EventGraphProposal | null;
   proposalSelection?: Set<string>;
   activeProposalChangeId?: string | null;
@@ -157,6 +177,7 @@ export function EventCanvas({
   onRequestTreeLayout,
   onOrganize,
   organizeBusy,
+  onChangeKind,
   proposal,
   proposalSelection = new Set<string>(),
   activeProposalChangeId,
@@ -167,6 +188,7 @@ export function EventCanvas({
   const [childText, setChildText] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [organizeMenuOpen, setOrganizeMenuOpen] = useState(false);
+  const [kindMenuOpen, setKindMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   // Ref mirror of `zoom` so the native wheel listener (bound once) reads the
   // freshest zoom without re-subscribing on every render.
@@ -690,7 +712,7 @@ export function EventCanvas({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      onClick={() => { setMoreOpen(false); setOrganizeMenuOpen(false); }}
+      onClick={() => { setMoreOpen(false); setOrganizeMenuOpen(false); setKindMenuOpen(false); }}
     >
       <div className="sticky right-4 top-4 z-10 float-right mr-4 flex w-fit items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <button type="button" onClick={handleFitAll} className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label={copy.fitAll} title={copy.fitAll} data-testid="event-fit-all"><Focus className="h-3.5 w-3.5" /></button>
@@ -803,6 +825,30 @@ export function EventCanvas({
                       <span>{copy.taskBadge}</span>
                       <span className="text-gray-400">·</span>
                       <span className="tabular-nums text-gray-500">{node.execution!.scheduledDate.slice(5)}</span>
+                    </span>
+                  )}
+                  {/* Semantic-kind badge (UX_DESIGN §4.3 — the 7 node kinds are
+                      visible, not just data). Task/root/branch nodes keep their
+                      own treatments, so only the label kinds get a badge. */}
+                  {node.kind && ['tag', 'question', 'resource', 'risk'].includes(node.kind) && !isActive && (
+                    <span
+                      className={`flex shrink-0 items-center gap-1 text-[10px] font-medium ${
+                        node.kind === 'risk' ? 'text-amber-600'
+                        : node.kind === 'question' ? 'text-sky-600'
+                        : node.kind === 'tag' ? 'text-violet-600'
+                        : 'text-gray-500'}`}
+                      data-testid={`event-node-kind-badge-${node.id}`}
+                    >
+                      {node.kind === 'risk' ? <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                        : node.kind === 'question' ? <HelpCircle className="h-3 w-3" aria-hidden="true" />
+                        : node.kind === 'tag' ? <Tag className="h-3 w-3" aria-hidden="true" />
+                        : <FileText className="h-3 w-3" aria-hidden="true" />}
+                      <span>
+                        {node.kind === 'risk' ? copy.kindRisk
+                          : node.kind === 'question' ? copy.kindQuestion
+                          : node.kind === 'tag' ? copy.kindTag
+                          : copy.kindResource}
+                      </span>
                     </span>
                   )}
                 </button>
@@ -966,6 +1012,31 @@ export function EventCanvas({
                       testId="event-toolbar-schedule-popover"
                       placement="up"
                     />
+                  )}
+                </div>
+              )}
+              {!isRootActive && activeNode && onChangeKind && (
+                <div className="relative">
+                  <ToolbarButton
+                    icon={activeNode.kind === 'risk' ? <AlertTriangle className="h-4 w-4" />
+                      : activeNode.kind === 'question' ? <HelpCircle className="h-4 w-4" />
+                      : activeNode.kind === 'tag' ? <Tag className="h-4 w-4" />
+                      : activeNode.kind === 'resource' ? <FileText className="h-4 w-4" />
+                      : <LayoutGrid className="h-4 w-4" />}
+                    label={copy.kind}
+                    onClick={() => setKindMenuOpen((open) => !open)}
+                    trailing={<ChevronDown className="h-3 w-3" />}
+                  />
+                  {kindMenuOpen && (
+                    <div className="absolute bottom-12 left-0 z-20 min-w-40 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-kind-menu">
+                      {([['branch', copy.kindBranch], ['tag', copy.kindTag], ['question', copy.kindQuestion], ['resource', copy.kindResource], ['risk', copy.kindRisk]] as const).map(([kind, label]) => (
+                        <button key={kind} type="button" onClick={() => { setKindMenuOpen(false); if (activeNode.kind !== kind) onChangeKind(activeNode.id, kind); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" data-testid={`event-kind-${kind}`}>
+                          {kind === 'risk' ? <AlertTriangle className="h-4 w-4" /> : kind === 'question' ? <HelpCircle className="h-4 w-4" /> : kind === 'tag' ? <Tag className="h-4 w-4" /> : kind === 'resource' ? <FileText className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                          {label}
+                          {activeNode.kind === kind && <Check className="ml-auto h-3.5 w-3.5 text-[#23877B]" />}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}

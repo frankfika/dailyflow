@@ -574,6 +574,7 @@ async function buildEventDetailFromSources(
         manualTags,
         aiTags,
         execution,
+        kind,
       });
     }
 

@@ -252,3 +252,24 @@ describe('EventCanvas AI organize (UX S9)', () => {
     expect(screen.getByTestId('event-organize-button')).toBeDisabled();
   });
 });
+
+describe('EventCanvas node kind UI (UX_DESIGN §4.3)', () => {
+  it('offers a Type menu on non-root nodes and calls onChangeKind', () => {
+    const onChangeKind = vi.fn();
+    renderCanvas({ activeNodeId: 'step', onChangeKind });
+    const toolbar = screen.getByTestId('event-node-toolbar');
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Type' }));
+    const menu = screen.getByTestId('event-kind-menu');
+    fireEvent.click(within(menu).getByTestId('event-kind-question'));
+    expect(onChangeKind).toHaveBeenCalledWith('step', 'question');
+  });
+
+  it('shows a semantic-kind badge on nodes carrying a label kind', () => {
+    const event = {
+      ...EVENT,
+      nodes: EVENT.nodes.map((n) => (n.id === 'step' ? { ...n, kind: 'risk' as const } : n)),
+    };
+    renderCanvas({ event, activeNodeId: 'root' });
+    expect(screen.getByTestId('event-node-kind-badge-step')).toHaveTextContent('Risk');
+  });
+});

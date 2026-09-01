@@ -43,6 +43,8 @@ export interface EventNode {
   manualTags: string[];
   aiTags: SuggestedTag[];
   execution?: EventExecution;
+  /** Semantic node kind from the mind map ('branch' default). */
+  kind?: 'root' | 'branch' | 'tag' | 'task' | 'question' | 'resource' | 'risk' | 'decision' | 'waiting' | 'outcome';
 }
 
 export interface EventDetail extends EventSummary {

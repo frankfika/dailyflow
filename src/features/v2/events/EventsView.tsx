@@ -503,6 +503,21 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     }
   }
 
+  async function handleChangeKind(nodeId: string, kind: 'branch' | 'tag' | 'question' | 'resource' | 'risk') {
+    if (!event) return;
+    await recordHistory();
+    try {
+      const map = await readEventMap(qc, event.mindmapId);
+      const nodes = map.nodes.map((n) => (n.id === nodeId ? { ...n, kind } : n));
+      const updated = await mindmapsApi.update(map.id, { title: map.title, rootId: map.rootId, nodes, edges: map.edges });
+      writeEventMap(qc, updated);
+      qc.invalidateQueries({ queryKey: queryKeys.event(event.id) });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }
+
   async function runOrganize(strategy: OrganizeStrategy) {
     if (!event) return;
     setOrganizeStrategy(strategy);
@@ -662,6 +677,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onRequestTreeLayout={() => void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).catch(() => {})}
           onOrganize={(strategy) => void runOrganize(strategy)}
           organizeBusy={applyOrganize.isPending}
+          onChangeKind={(nodeId, kind) => void handleChangeKind(nodeId, kind)}
           proposal={graphProposal}
           proposalSelection={proposalSelection}
           activeProposalChangeId={activeProposalChangeId}
