@@ -47,6 +47,12 @@ import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Overlay title bar (tauri.conf.json "titleBarStyle": "Overlay"): mark the
+// root so CSS can clear the macOS traffic lights. Browser/dev mode is untouched.
+if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && /Mac/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add('tauri-mac');
+}
+
 type Task = {
   id: string;
   title: string;
@@ -1858,7 +1864,7 @@ export default function App() {
                     transition={{ duration: 0.25 }}
                     className="mx-auto max-w-4xl xl:max-w-5xl 2xl:max-w-6xl space-y-6"
                   >
-                    <header className="space-y-3 border-b border-border/60 pb-5">
+                    <header className="titlebar space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface p-0.5">

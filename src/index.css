@@ -113,9 +113,19 @@ body {
   app-region: drag;
 }
 .titlebar button,
-.titlebar a {
+.titlebar a,
+.titlebar input,
+.titlebar textarea,
+.titlebar select {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Overlay title bar (Tauri macOS): clear the traffic lights at the top-left.
+   The `tauri-mac` root class is set from App.tsx only when running inside
+   the Tauri shell on macOS, so browser/dev mode keeps normal spacing. */
+.tauri-mac .sidebar-titlebar {
+  padding-left: 80px;
 }
 
 /* Typography Overrides */
