@@ -420,9 +420,9 @@ export function EventOutline({
                 name="first-outline-step"
                 autoFocus
                 placeholder={copy.rootPlaceholder}
-                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-[#23877B] dark:border-gray-700"
+                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-gray-700"
               />
-              <button type="submit" className="rounded-md bg-[#23877B] px-2.5 py-1.5 text-xs text-white">
+              <button type="submit" className="rounded-md bg-accent px-2.5 py-1.5 text-xs text-white">
                 {language === 'zh' ? '添加' : 'Add'}
               </button>
             </form>
@@ -494,7 +494,7 @@ function OutlineItem({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-[#23877B]/8' : isTaskRow ? 'bg-[#23877B]/[0.04] hover:bg-[#23877B]/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-[#23877B] ring-inset' : ''}`}
+      className={`group relative flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
       style={{ paddingLeft: `${12 + row.depth * 18}px` }}
       data-testid={`outline-row-${row.node.id}`}
       data-task-row={isTaskRow || undefined}
@@ -510,7 +510,7 @@ function OutlineItem({
         onStartEdit();
       }}
     >
-      {isTaskRow && <span className="absolute inset-y-0 left-0 w-0.5 bg-[#23877B]" aria-hidden="true" />}
+      {isTaskRow && <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" aria-hidden="true" />}
       {row.hasChildren ? (
         <button
           type="button"
@@ -526,7 +526,7 @@ function OutlineItem({
 
       {row.node.execution && (
         <span
-          className={`mr-1 grid h-4 w-4 shrink-0 place-items-center rounded-full border ${isDone ? 'border-[#23877B] bg-[#23877B] text-white' : 'border-gray-300 dark:border-gray-600'}`}
+          className={`mr-1 grid h-4 w-4 shrink-0 place-items-center rounded-full border ${isDone ? 'border-accent bg-accent text-white' : 'border-gray-300 dark:border-gray-600'}`}
           onClick={(e) => e.stopPropagation()}
         >
           {isDone && <Check className="h-2.5 w-2.5" />}
@@ -551,7 +551,7 @@ function OutlineItem({
           onKeyDown={onKeyDown}
           onBlur={onBlur}
           onClick={(e) => e.stopPropagation()}
-          className="min-w-0 flex-1 rounded-md border border-[#23877B]/40 bg-white px-2 py-1 text-sm outline-none dark:bg-gray-900"
+          className="min-w-0 flex-1 rounded-md border border-accent/40 bg-white px-2 py-1 text-sm outline-none dark:bg-gray-900"
           data-testid={`outline-input-${row.node.id}`}
           aria-label="Node title"
         />
@@ -574,7 +574,7 @@ function OutlineItem({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-              className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[11px] font-medium text-[#23877B] hover:bg-[#23877B]/20"
+              className="flex h-5 items-center gap-1 rounded-md bg-accent/10 px-1.5 text-[11px] font-medium text-accent hover:bg-accent/20"
               title={copy.addToTask}
               aria-label={copy.addToTask}
               aria-expanded={schedulePickerOpen}
@@ -589,7 +589,7 @@ function OutlineItem({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAddChild(); }}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] hover:bg-[#23877B]/10 dark:bg-gray-900"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-accent bg-white text-accent hover:bg-accent/10 dark:bg-gray-900"
           title={copy.addChild}
           aria-label={copy.addChild}
         >
@@ -600,7 +600,7 @@ function OutlineItem({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onAddSibling(); }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 hover:border-accent hover:text-accent dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
             title={copy.addSibling}
             aria-label={copy.addSibling}
           >

@@ -79,7 +79,7 @@ export function ScheduleDatePopover({
               key={p.label}
               type="button"
               onClick={() => onChange(value)}
-              className={`rounded-md border px-1 py-1 text-[11px] font-medium ${active ? 'border-[#23877B] bg-[#23877B]/10 text-[#23877B]' : 'border-gray-200 text-gray-600 hover:border-[#23877B]/40 hover:text-[#23877B] dark:border-gray-700'}`}
+              className={`rounded-md border px-1 py-1 text-[11px] font-medium ${active ? 'border-accent bg-accent/10 text-accent' : 'border-gray-200 text-gray-600 hover:border-accent/40 hover:text-accent dark:border-gray-700'}`}
               data-testid={`${testId}-preset-${p.days}`}
             >
               {p.label}
@@ -107,7 +107,7 @@ export function ScheduleDatePopover({
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-md bg-[#23877B] px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
           data-testid={`${testId}-confirm`}
         >
           {copy.confirm}

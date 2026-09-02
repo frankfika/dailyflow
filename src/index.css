@@ -53,6 +53,11 @@
   --ease-native: cubic-bezier(0.25, 0.1, 0.25, 1.0);
 }
 
+/* Dark mode is not a designed feature: nothing ever sets `.dark` on the root,
+   so all `dark:` variants are inert and the app stays consistently light.
+   Flip this to a class toggle + token overrides when dark mode is designed. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root[data-context="life"] {
   /* Warm life variant */
   --color-background: #FDFCFB;

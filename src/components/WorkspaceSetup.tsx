@@ -127,7 +127,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-accent text-white mb-5 shadow-[var(--shadow-accent-glow)]">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-accent text-white mb-5 shadow-sm">
             <span className="text-xl font-semibold">3</span>
           </div>
           <h1 className="text-2xl font-bold mb-2">{t.title}</h1>
