@@ -533,22 +533,14 @@ function OutlineItem({
         </span>
       )}
 
-      {!isRoot && !row.node.execution && onOpenSchedulePicker && (
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-            className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[11px] font-medium text-[#23877B] opacity-0 transition-opacity hover:bg-[#23877B]/20 group-hover:opacity-100"
-            title={copy.addToTask}
-            aria-label={copy.addToTask}
-            aria-expanded={schedulePickerOpen}
-            data-testid={`outline-add-task-${row.node.id}`}
-          >
-            <ListTodo className="h-3 w-3" />
-            {copy.addToTask}
-          </button>
-          {schedulePickerOpen && schedulePicker}
-        </div>
+      {isTaskRow && (
+        <span
+          className="ml-auto flex shrink-0 items-center gap-1 pr-1 text-[11px] tabular-nums text-gray-400"
+          data-testid={`outline-task-date-${row.node.id}`}
+        >
+          <ListTodo className="h-3 w-3" aria-hidden="true" />
+          {row.node.execution!.scheduledDate.slice(5)}
+        </span>
       )}
 
       {isEditing ? (
@@ -571,27 +563,51 @@ function OutlineItem({
         </span>
       )}
 
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onAddChild(); }}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-900"
-        title={copy.addChild}
-        aria-label={copy.addChild}
+      {/* Hover action cluster — absolute so it never reserves blank width in
+          the row; task rows keep a persistent date chip in the flow instead. */}
+      <div
+        className={`absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm transition-opacity dark:border-gray-700 dark:bg-gray-900 ${
+          schedulePickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
       >
-        <Plus className="h-3 w-3" />
-      </button>
-
-      {!isRoot && onAddSibling && (
+        {!isRoot && !row.node.execution && onOpenSchedulePicker && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
+              className="flex h-5 items-center gap-1 rounded-md bg-[#23877B]/10 px-1.5 text-[11px] font-medium text-[#23877B] hover:bg-[#23877B]/20"
+              title={copy.addToTask}
+              aria-label={copy.addToTask}
+              aria-expanded={schedulePickerOpen}
+              data-testid={`outline-add-task-${row.node.id}`}
+            >
+              <ListTodo className="h-3 w-3" />
+              {copy.addToTask}
+            </button>
+            {schedulePickerOpen && schedulePicker}
+          </div>
+        )}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onAddSibling(); }}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 opacity-0 transition-opacity hover:border-[#23877B] hover:text-[#23877B] group-hover:opacity-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
-          title={copy.addSibling}
-          aria-label={copy.addSibling}
+          onClick={(e) => { e.stopPropagation(); onAddChild(); }}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] hover:bg-[#23877B]/10 dark:bg-gray-900"
+          title={copy.addChild}
+          aria-label={copy.addChild}
         >
           <Plus className="h-3 w-3" />
         </button>
-      )}
+
+        {!isRoot && onAddSibling && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAddSibling(); }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+            title={copy.addSibling}
+            aria-label={copy.addSibling}
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

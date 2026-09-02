@@ -195,9 +195,9 @@ export function EventCanvas({
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const [draftText, setDraftText] = useState<Record<string, string>>({});
-  // Single schedule picker shared by the node chip ('node' anchor) and the
-  // bottom toolbar ('toolbar' anchor); only one popover is visible at a time.
-  const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string; anchor: 'node' | 'toolbar' } | null>(null);
+  // Date picker for the bottom toolbar ("Add to Task" / reschedule). The map
+  // itself stays clean — per-node scheduling lives in the outline pane.
+  const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string } | null>(null);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -340,7 +340,7 @@ export function EventCanvas({
 
   // The toolbar picker tracks the active node; close it when selection moves.
   useEffect(() => {
-    setSchedulePicker((prev) => (prev?.anchor === 'toolbar' ? null : prev));
+    setSchedulePicker(null);
   }, [activeNodeId]);
 
   // Apply a pending zoom + scroll adjustment after React commits the new zoom.
@@ -882,46 +882,6 @@ export function EventCanvas({
                 </button>
                 )}
 
-                {/* Prominent "Add to Task" affordance for non-task nodes. Clicking opens a
-                    small date picker so the user can pick when to schedule it
-                    (defaults to today; offers Today/Tomorrow/+3d/+1w/custom). */}
-                {!isEventRoot && !node.execution && (
-                  <div className="absolute -top-8 right-1 z-20">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSchedulePicker((prev) => (prev?.nodeId === node.id && prev.anchor === 'node' ? null : { nodeId: node.id, date: today, anchor: 'node' }));
-                      }}
-                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light,#23877B1a)] px-2 py-1 text-[12px] font-medium text-[#23877B] shadow-sm hover:brightness-95"
-                      aria-label={copy.addToTask}
-                      title={copy.addToTask}
-                      aria-expanded={schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node'}
-                      data-testid={`event-node-add-task-${node.id}`}
-                      data-no-drag="true"
-                    >
-                      <ListTodo className="h-3.5 w-3.5" />
-                      {copy.addToTask}
-                    </button>
-                    {schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node' && (
-                      <ScheduleDatePopover
-                        copy={copy}
-                        date={schedulePicker.date}
-                        onChange={(d) => setSchedulePicker({ nodeId: node.id, date: d, anchor: 'node' })}
-                        onConfirm={async () => {
-                          await onSchedule(node, schedulePicker.date);
-                          setSchedulePicker(null);
-                        }}
-                        onCancel={() => setSchedulePicker(null)}
-                        onClickAway={() => setSchedulePicker(null)}
-                        today={today}
-                        shiftDate={shiftDate}
-                        testId="event-node-schedule-popover"
-                      />
-                    )}
-                  </div>
-                )}
-
                 {!isEventRoot && (
                   <button
                     type="button"
@@ -993,14 +953,14 @@ export function EventCanvas({
                   <ToolbarButton
                     icon={activeNode.execution ? <CalendarDays className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />}
                     label={activeNode.execution ? `${copy.date} · ${activeNode.execution.scheduledDate.slice(5)}` : copy.addToTask}
-                    onClick={() => setSchedulePicker((prev) => (prev?.anchor === 'toolbar' ? null : { nodeId: activeNode.id, date: activeNode.execution?.scheduledDate ?? today, anchor: 'toolbar' }))}
+                    onClick={() => setSchedulePicker((prev) => (prev ? null : { nodeId: activeNode.id, date: activeNode.execution?.scheduledDate ?? today }))}
                     trailing={<ChevronDown className="h-3 w-3" />}
                   />
-                  {schedulePicker?.anchor === 'toolbar' && (
+                  {schedulePicker && (
                     <ScheduleDatePopover
                       copy={copy}
                       date={schedulePicker.date}
-                      onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d, anchor: 'toolbar' })}
+                      onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d })}
                       onConfirm={async () => {
                         await onSchedule(activeNode, schedulePicker.date);
                         setSchedulePicker(null);

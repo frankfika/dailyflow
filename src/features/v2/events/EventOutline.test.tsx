@@ -95,4 +95,33 @@ describe('EventOutline rendering', () => {
     fireEvent.keyDown(input, { key: 'ArrowUp' });
     expect(onSelect).toHaveBeenCalledWith('root');
   });
+
+  it('schedules a non-task row as a task from the row hover chip', async () => {
+    // The outline is the home of "Add to Task" — chip on the right of the
+    // row, date popover with presets, schedules only on confirm.
+    const onScheduleTask = vi.fn(async () => undefined);
+    renderOutline({ selectedId: 'root', editingId: null, onScheduleTask });
+    fireEvent.click(screen.getByTestId('outline-add-task-step'));
+    expect(await screen.findByTestId('outline-schedule-popover')).toBeInTheDocument();
+    expect(screen.getByTestId('outline-schedule-popover-preset-1')).toHaveTextContent(/Tomorrow/);
+    fireEvent.click(screen.getByTestId('outline-schedule-popover-preset-1'));
+    fireEvent.click(screen.getByTestId('outline-schedule-popover-confirm'));
+    await waitFor(() => expect(onScheduleTask).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'step' }),
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    ));
+  });
+
+  it('shows a persistent date chip on task rows', () => {
+    const taskRow: EventDetail['nodes'][number] = {
+      id: 'done', eventId: EVENT.id, parentId: 'root', text: 'Shipped',
+      position: { x: 300, y: 40 }, manualTags: [], aiTags: [],
+      execution: { taskId: 'task-9', status: 'todo', scheduledDate: '2026-09-03' },
+    };
+    renderOutline({
+      selectedId: 'root', editingId: null,
+      event: { ...EVENT, nodes: [...EVENT.nodes, taskRow], edges: [...EVENT.edges, { id: 'edge-done', source: 'root', target: 'done' }] },
+    });
+    expect(screen.getByTestId('outline-task-date-done')).toHaveTextContent('09-03');
+  });
 });
