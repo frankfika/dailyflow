@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, FolderOpen, Moon, RefreshCw, Search, Settings, Sparkles, Target, Users } from 'lucide-react';
 
 export type CommandId =
+  | 'today'
   | 'reflection'
   | 'rollover'
   | 'calendar'
@@ -113,6 +114,7 @@ export function CommandPalette({
     }
 
     const commandItems: PaletteItem[] = ([
+      { key: 'today', section: 'command', label: t('今日', 'Today'), hint: '⌘1', run: () => onCommand('today') },
       { key: 'reflection', section: 'command', label: t('今日复盘', 'Daily reflection'), hint: '⌘J', run: () => onCommand('reflection') },
       { key: 'rollover', section: 'command', label: t('整理遗留', 'Review leftovers'), hint: '⌘R', run: () => onCommand('rollover') },
       { key: 'calendar', section: 'command', label: t('日历', 'Calendar'), hint: '⌘5', run: () => onCommand('calendar') },

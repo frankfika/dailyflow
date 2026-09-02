@@ -105,7 +105,6 @@ body {
   color: var(--color-text-main);
   font-family: var(--font-sans);
   font-weight: var(--font-weight-base, 400);
-  transition: background-color 0.5s ease, color 0.5s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;

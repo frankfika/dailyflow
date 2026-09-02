@@ -885,6 +885,8 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
         const singleKeyActions: Record<string, () => void> = {
+          '1': () => setActiveTab('today'),
+          t: () => setActiveTab('today'),
           j: () => kbActionsRef.current.reflection(),
           r: () => kbActionsRef.current.rollover(),
           '3': () => setActiveOverlay('notes'),
@@ -905,11 +907,6 @@ export default function App() {
         e.preventDefault();
         setActiveTab('today');
         taskInputFocusRef.current?.();
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
-        e.preventDefault();
-        setActiveTab('today');
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === '2') {
@@ -1695,7 +1692,7 @@ export default function App() {
   return (
     <WorkspaceScopeProvider value={activeWorkspaceId || 'default'}>
     <div
-      className="h-dvh w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-transparent"
+      className="h-dvh w-full flex overflow-hidden text-text-main relative bg-transparent"
     >
       <div className="ambient-bg" aria-hidden="true" />
 
@@ -2256,7 +2253,8 @@ export default function App() {
         }}
         onSelectWorkspace={(id) => void handleSwitchWorkspace(id)}
         onCommand={(command: CommandId) => {
-          if (command === 'reflection') handleOpenReflection();
+          if (command === 'today') setActiveTab('today');
+          else if (command === 'reflection') handleOpenReflection();
           else if (command === 'rollover') void handleManualRollover();
           else if (command === 'calendar') setActiveOverlay('calendar');
           else if (command === 'memory') setActiveOverlay('memory');
