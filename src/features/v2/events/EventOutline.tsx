@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ListTodo, Plus } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
-import { ScheduleDatePopover, type ScheduleDateCopy } from './ScheduleDatePopover';
+import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { getTodayStr } from '../../../utils/tagColors';
 
 type Copy = {
@@ -82,7 +82,7 @@ interface EventOutlineProps {
   onDelete: (nodeId: string) => Promise<void>;
   onMoveNode?: (nodeId: string, newParentId: string) => Promise<void>;
   onReorderNode?: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
-  onScheduleTask?: (node: EventNode, date: string) => Promise<void>;
+  onScheduleTask?: (node: EventNode, date: string, extras?: ScheduleExtrasDraft) => Promise<void>;
 }
 
 function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
@@ -336,12 +336,14 @@ export function EventOutline({
                 copy={pickDateCopy(copy)}
                 date={schedulePicker.date}
                 onChange={(d) => setSchedulePicker({ nodeId: root.node.id, date: d })}
-                                onConfirm={async (d) => { await onScheduleTask!(root.node, d); setSchedulePicker(null); }}
+                onConfirm={async (d, ex) => { await onScheduleTask!(root.node, d, hasExtras(ex) ? ex : undefined); setSchedulePicker(null); }}
                 onCancel={() => setSchedulePicker(null)}
                 onClickAway={() => setSchedulePicker(null)}
                 today={today}
                 shiftDate={shiftDate}
                 testId="outline-schedule-popover"
+                language={language}
+                showExtras
               />
             ) : undefined}
             onDragStart={() => setDragNodeId(root.node.id)}
@@ -386,12 +388,14 @@ export function EventOutline({
                 copy={pickDateCopy(copy)}
                 date={schedulePicker.date}
                 onChange={(d) => setSchedulePicker({ nodeId: row.node.id, date: d })}
-                onConfirm={async (d) => { await onScheduleTask!(row.node, d); setSchedulePicker(null); }}
+                onConfirm={async (d, ex) => { await onScheduleTask!(row.node, d, hasExtras(ex) ? ex : undefined); setSchedulePicker(null); }}
                 onCancel={() => setSchedulePicker(null)}
                 onClickAway={() => setSchedulePicker(null)}
                 today={today}
                 shiftDate={shiftDate}
                 testId="outline-schedule-popover"
+                language={language}
+                showExtras
               />
             ) : undefined}
             onDragStart={() => setDragNodeId(row.node.id)}

@@ -95,6 +95,7 @@ describe('EventCanvas node actions', () => {
     await waitFor(() => expect(onSchedule).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'branch' }),
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      undefined,
     ));
   });
 
@@ -109,7 +110,7 @@ describe('EventCanvas node actions', () => {
     expect(screen.getByTestId('event-toolbar-schedule-popover-date-input')).toHaveValue('2026-08-10');
     fireEvent.change(screen.getByTestId('event-toolbar-schedule-popover-date-input'), { target: { value: '2026-08-21' } });
     fireEvent.click(screen.getByTestId('event-toolbar-schedule-popover-confirm'));
-    await waitFor(() => expect(onSchedule).toHaveBeenCalledWith(EVENT.nodes[1], '2026-08-21'));
+    await waitFor(() => expect(onSchedule).toHaveBeenCalledWith(EVENT.nodes[1], '2026-08-21', undefined));
   });
 
   it('keeps Remove from day and Delete node in the More menu', () => {

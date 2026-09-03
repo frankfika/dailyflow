@@ -108,6 +108,7 @@ describe('EventOutline rendering', () => {
     await waitFor(() => expect(onScheduleTask).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'step' }),
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      undefined,
     ));
   });
 
