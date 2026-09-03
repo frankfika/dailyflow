@@ -47,8 +47,9 @@ describe('EventCanvas node actions', () => {
     expect(within(toolbar).queryByRole('button', { name: /^Date/ })).not.toBeInTheDocument();
   });
 
-  it('shows a prominent Add to Task button on each non-task node with date picker', async () => {
-    // Build a one-off event with a non-task child so we can assert against it.
+  it('renders no per-node Add to Task chip on the canvas', () => {
+    // Scheduling lives in the outline pane and the bottom toolbar — the map
+    // itself must not grow a floating chip on every node.
     const nonTaskNode: EventDetail['nodes'][number] = {
       id: 'branch', eventId: EVENT.id, parentId: 'root', text: 'Brainstorm',
       position: { x: 300, y: 120 }, manualTags: [], aiTags: [],
@@ -58,43 +59,8 @@ describe('EventCanvas node actions', () => {
       nodes: [...EVENT.nodes, nonTaskNode],
       edges: [...EVENT.edges, { id: 'edge-branch', source: 'root', target: 'branch' }],
     };
-    const onSchedule = vi.fn(async () => undefined);
-    render(<EventCanvas {...{
-      event: local,
-      language: 'en',
-      activeNodeId: 'branch',
-      collapsedIds: new Set<string>(),
-      onToggleCollapse: vi.fn(),
-      onActivate: vi.fn(),
-      onCommit: vi.fn(),
-      onAddChild: vi.fn(async () => ''),
-      onAddSibling: vi.fn(async () => ''),
-      onRename: vi.fn(),
-      onSchedule,
-      onUnschedule: vi.fn(),
-      onToggleDone: vi.fn(),
-      onDelete: vi.fn(),
-      onMoveNodePosition: vi.fn(),
-    }} />);
-    const addTask = screen.getByTestId('event-node-add-task-branch');
-    expect(addTask).toBeInTheDocument();
-    expect(addTask).toHaveTextContent(/Add to Task/);
-    fireEvent.click(addTask);
-    // After clicking, the picker popover appears with quick presets and a date input.
-    const popover = await screen.findByTestId('event-node-schedule-popover');
-    expect(popover).toBeInTheDocument();
-    expect(screen.getByTestId('event-node-schedule-popover-preset-1')).toHaveTextContent(/Tomorrow/);
-    fireEvent.click(screen.getByTestId('event-node-schedule-popover-preset-1'));
-    fireEvent.click(screen.getByTestId('event-node-schedule-popover-confirm'));
-    await waitFor(() => expect(onSchedule).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'branch' }),
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-    ));
-  });
-
-  it('hides the Add to Task button for nodes that are already tasks', () => {
-    // The 'step' node already has an execution; the button must not appear.
-    renderCanvas({ activeNodeId: 'step' });
+    renderCanvas({ event: local, activeNodeId: 'root' });
+    expect(screen.queryByTestId('event-node-add-task-branch')).not.toBeInTheDocument();
     expect(screen.queryByTestId('event-node-add-task-step')).not.toBeInTheDocument();
   });
 
@@ -199,7 +165,7 @@ describe('EventCanvas node actions', () => {
     expect(screen.getByTestId('event-node-step')).toBeInTheDocument();
   });
 
-  it('does not start a drag from the Add to Task chip, collapse button, or inline add buttons', () => {
+  it('does not start a drag from the inline add button or the collapse toggle', () => {
     // Make 'step' a non-task node for this test.
     const onMoveNodePosition = vi.fn();
     const localEvent: EventDetail = {
@@ -211,9 +177,10 @@ describe('EventCanvas node actions', () => {
     renderCanvas({ event: localEvent, activeNodeId: 'root', onMoveNodePosition });
     const step = screen.getByTestId('event-node-step');
     const canvas = screen.getByTestId('event-canvas');
-    // Click the "Add to Task" chip and drag — should NOT commit a move.
-    const chip = screen.getByTestId('event-node-add-task-step');
-    fireEvent.pointerDown(chip, { clientX: 10, clientY: 10, button: 0, pointerId: 9 });
+    // Pointer down on the node's inline "+" button and drag — should NOT commit a move.
+    const plus = step.querySelector('button[data-no-drag="true"]');
+    expect(plus).not.toBeNull();
+    fireEvent.pointerDown(plus!, { clientX: 10, clientY: 10, button: 0, pointerId: 9 });
     fireEvent.pointerMove(canvas, { clientX: 200, clientY: 200, pointerId: 9 });
     fireEvent.pointerUp(canvas, { clientX: 200, clientY: 200, pointerId: 9 });
     expect(onMoveNodePosition).not.toHaveBeenCalled();

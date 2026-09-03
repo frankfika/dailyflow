@@ -47,6 +47,12 @@ import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Overlay title bar (tauri.conf.json "titleBarStyle": "Overlay"): mark the
+// root so CSS can clear the macOS traffic lights. Browser/dev mode is untouched.
+if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && /Mac/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add('tauri-mac');
+}
+
 type Task = {
   id: string;
   title: string;
@@ -879,6 +885,8 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
         const singleKeyActions: Record<string, () => void> = {
+          '1': () => setActiveTab('today'),
+          t: () => setActiveTab('today'),
           j: () => kbActionsRef.current.reflection(),
           r: () => kbActionsRef.current.rollover(),
           '3': () => setActiveOverlay('notes'),
@@ -899,11 +907,6 @@ export default function App() {
         e.preventDefault();
         setActiveTab('today');
         taskInputFocusRef.current?.();
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
-        e.preventDefault();
-        setActiveTab('today');
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === '2') {
@@ -1689,7 +1692,7 @@ export default function App() {
   return (
     <WorkspaceScopeProvider value={activeWorkspaceId || 'default'}>
     <div
-      className="h-dvh w-full flex overflow-hidden text-text-main relative transition-colors duration-700 bg-transparent"
+      className="h-dvh w-full flex overflow-hidden text-text-main relative bg-transparent"
     >
       <div className="ambient-bg" aria-hidden="true" />
 
@@ -1858,7 +1861,7 @@ export default function App() {
                     transition={{ duration: 0.25 }}
                     className="mx-auto max-w-4xl xl:max-w-5xl 2xl:max-w-6xl space-y-6"
                   >
-                    <header className="space-y-3 border-b border-border/60 pb-5">
+                    <header className="titlebar space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface p-0.5">
@@ -2250,7 +2253,8 @@ export default function App() {
         }}
         onSelectWorkspace={(id) => void handleSwitchWorkspace(id)}
         onCommand={(command: CommandId) => {
-          if (command === 'reflection') handleOpenReflection();
+          if (command === 'today') setActiveTab('today');
+          else if (command === 'reflection') handleOpenReflection();
           else if (command === 'rollover') void handleManualRollover();
           else if (command === 'calendar') setActiveOverlay('calendar');
           else if (command === 'memory') setActiveOverlay('memory');

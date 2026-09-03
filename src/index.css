@@ -53,6 +53,11 @@
   --ease-native: cubic-bezier(0.25, 0.1, 0.25, 1.0);
 }
 
+/* Dark mode is not a designed feature: nothing ever sets `.dark` on the root,
+   so all `dark:` variants are inert and the app stays consistently light.
+   Flip this to a class toggle + token overrides when dark mode is designed. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root[data-context="life"] {
   /* Warm life variant */
   --color-background: #FDFCFB;
@@ -100,7 +105,6 @@ body {
   color: var(--color-text-main);
   font-family: var(--font-sans);
   font-weight: var(--font-weight-base, 400);
-  transition: background-color 0.5s ease, color 0.5s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
@@ -113,9 +117,19 @@ body {
   app-region: drag;
 }
 .titlebar button,
-.titlebar a {
+.titlebar a,
+.titlebar input,
+.titlebar textarea,
+.titlebar select {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Overlay title bar (Tauri macOS): clear the traffic lights at the top-left.
+   The `tauri-mac` root class is set from App.tsx only when running inside
+   the Tauri shell on macOS, so browser/dev mode keeps normal spacing. */
+.tauri-mac .sidebar-titlebar {
+  padding-left: 80px;
 }
 
 /* Typography Overrides */

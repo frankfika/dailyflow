@@ -371,11 +371,16 @@ export function Sidebar({
           className="px-2.5 py-4 flex flex-col h-full"
           style={{ width: showExpandedWidth ? expandedWidth : COMPACT_WIDTH }}
         >
-          {/* Logo + collapse */}
+          {/* Logo + collapse — top strip doubles as the window drag region
+              (`.titlebar`); expanded mode also clears the macOS traffic
+              lights via `.sidebar-titlebar` (gated on tauri-mac root class). */}
           <div
-            className={`flex items-center mb-4 ${
-              isCompact ? 'justify-center' : 'gap-2.5 px-1.5'
-            }`}
+            className={
+              `titlebar flex items-center mb-4 ` +
+              (isCompact
+                ? 'justify-center'
+                : 'gap-2.5 px-1.5 sidebar-titlebar')
+            }
           >
             {isCompact ? (
               <button

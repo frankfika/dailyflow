@@ -1044,7 +1044,7 @@ function TimelineEvent({
   return (
     <button
       onClick={() => onOpen(item)}
-      className="absolute z-10 overflow-hidden rounded-lg border border-black/[0.06] border-l-[3px] px-2 py-1.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition duration-200 hover:z-30 hover:-translate-y-px hover:border-black/10 hover:shadow-md"
+      className="absolute z-10 overflow-hidden rounded-lg border border-black/[0.06] border-l-[3px] px-2 py-1.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition duration-200 hover:z-30 hover:border-black/10 hover:shadow-md"
       style={style}
       title={`${item.title} · ${timeText(item.start, language)}${item.end ? `–${timeText(item.end, language)}` : ''}`}
     >

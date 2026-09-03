@@ -56,7 +56,7 @@ export function useNotes(opts: UseNotesOpts = {}): UseQueryResult<{ notes: NoteD
   return useQuery({
     queryKey: queryKeys.notes(workspaceId, { state: opts.state ?? null, kind: opts.kind ?? null, q: opts.q ?? null }),
     queryFn: () => listNotes(opts),
-    staleTime: 15_000,
+    staleTime: 10 * 60_000,
     retry: 1,
   });
 }
@@ -71,7 +71,7 @@ export function useNote(id: string | null | undefined): UseQueryResult<{ note: N
     queryKey: queryKeys.note(workspaceId, id ?? ''),
     queryFn: () => getNote(id as string),
     enabled: Boolean(id),
-    staleTime: 10_000,
+    staleTime: 10 * 60_000,
     retry: 1,
   });
 }

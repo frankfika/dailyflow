@@ -42,8 +42,7 @@ export function useEvents(opts?: { from?: string; to?: string }): UseQueryResult
   return useQuery({
     queryKey: queryKeys.events({ from: opts?.from ?? null, to: opts?.to ?? null }),
     queryFn: () => eventsApi.list(opts?.from, opts?.to),
-    staleTime: 15_000,
-    refetchOnMount: 'always',
+    staleTime: 10 * 60_000,
     retry: 1,
   });
 }
@@ -54,8 +53,7 @@ export function useEventById(id: string | null | undefined): UseQueryResult<{ ev
     queryKey: queryKeys.event(id ?? ''),
     queryFn: () => eventsApi.getById(id as string),
     enabled: Boolean(id),
-    staleTime: 10_000,
-    refetchOnMount: 'always',
+    staleTime: 10 * 60_000,
     retry: 1,
   });
   // When an event first loads for a *freshly opened* event, the underlying
@@ -83,7 +81,7 @@ export function useTodayItems(date: string, context?: 'work' | 'life'): UseQuery
   return useQuery({
     queryKey: [...queryKeys.todayItems(date, 'v2'), context ?? 'all'],
     queryFn: () => eventsApi.listTodayItems(date, context),
-    staleTime: 10_000,
+    staleTime: 10 * 60_000,
     retry: 1,
   });
 }
@@ -92,7 +90,7 @@ export function useStandaloneTasks(opts?: { from?: string; to?: string }): UseQu
   return useQuery({
     queryKey: queryKeys.standaloneTasks({ from: opts?.from ?? null, to: opts?.to ?? null }),
     queryFn: () => eventsApi.listStandaloneTasks(opts?.from, opts?.to),
-    staleTime: 15_000,
+    staleTime: 10 * 60_000,
     retry: 1,
   });
 }
@@ -136,6 +134,35 @@ export function useScheduleEventNode(): UseMutationResult<
         writeEventMap(qc, updated);
       }
     },
+    onMutate: async (vars) => {
+      const key = queryKeys.event(vars.eventId);
+      const prev = qc.getQueryData<{ event: EventDetail | null }>(key);
+      if (!prev?.event) return undefined;
+      const node = prev.event.nodes.find((n) => n.id === vars.nodeId);
+      if (!node) return undefined;
+      qc.setQueryData<{ event: EventDetail | null }>(key, {
+        event: {
+          ...prev.event,
+          nodes: prev.event.nodes.map((n) => {
+            if (n.id !== vars.nodeId) return n;
+            // A reschedule keeps the real taskId; a fresh promote has no
+            // taskId until the server answers, so park a placeholder the
+            // post-write invalidation refetch replaces.
+            const taskId = vars.taskId ?? n.execution?.taskId ?? 'pending';
+            return {
+              ...n,
+              execution: {
+                ...n.execution,
+                taskId,
+                status: n.execution?.status ?? ('todo' as const),
+                scheduledDate: vars.date,
+              },
+            };
+          }),
+        },
+      });
+      return { prev };
+    },
     onSuccess: (_data, vars) => {
       invalidateCommonAfterWrite(qc, {
         eventId: vars.eventId,
@@ -147,8 +174,12 @@ export function useScheduleEventNode(): UseMutationResult<
       }
     },
     // rescheduleNodeTask returns only a boolean; the map on disk changed, so
-    // don't trust the snapshot after a failed reschedule either.
-    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
+    // don't trust the snapshot after a failed reschedule either. Restore the
+    // cached event detail too, since onMutate already rewrote it.
+    onError: (_err, vars, context) => {
+      if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
+    },
   });
 }
 
@@ -162,8 +193,30 @@ export function useUnscheduleEventNode(): UseMutationResult<
     scope: MAP_WRITE_SCOPE,
     mutationFn: ({ mindmapId, nodeId, taskId, scheduledDate }) =>
       eventsApi.unscheduleNodeTask({ mindmapId, nodeId, taskId, scheduledDate }),
+    onMutate: async (vars) => {
+      const key = queryKeys.event(vars.eventId);
+      const prev = qc.getQueryData<{ event: EventDetail | null }>(key);
+      if (!prev?.event) return undefined;
+      if (!prev.event.nodes.some((n) => n.id === vars.nodeId && n.execution?.taskId === vars.taskId)) {
+        return undefined;
+      }
+      qc.setQueryData<{ event: EventDetail | null }>(key, {
+        event: {
+          ...prev.event,
+          nodes: prev.event.nodes.map((n) =>
+            n.id === vars.nodeId && n.execution?.taskId === vars.taskId
+              ? { ...n, execution: undefined }
+              : n,
+          ),
+        },
+      });
+      return { prev };
+    },
     onSuccess: (_data, vars) => invalidateCommonAfterWrite(qc, vars),
-    onError: (_err, vars) => dropEventMap(qc, vars.mindmapId),
+    onError: (_err, vars, context) => {
+      if (context?.prev) qc.setQueryData(queryKeys.event(vars.eventId), context.prev);
+      dropEventMap(qc, vars.mindmapId);
+    },
   });
 }
 

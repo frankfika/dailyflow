@@ -195,9 +195,9 @@ export function EventCanvas({
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const [draftText, setDraftText] = useState<Record<string, string>>({});
-  // Single schedule picker shared by the node chip ('node' anchor) and the
-  // bottom toolbar ('toolbar' anchor); only one popover is visible at a time.
-  const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string; anchor: 'node' | 'toolbar' } | null>(null);
+  // Date picker for the bottom toolbar ("Add to Task" / reschedule). The map
+  // itself stays clean — per-node scheduling lives in the outline pane.
+  const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string } | null>(null);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -340,7 +340,7 @@ export function EventCanvas({
 
   // The toolbar picker tracks the active node; close it when selection moves.
   useEffect(() => {
-    setSchedulePicker((prev) => (prev?.anchor === 'toolbar' ? null : prev));
+    setSchedulePicker(null);
   }, [activeNodeId]);
 
   // Apply a pending zoom + scroll adjustment after React commits the new zoom.
@@ -777,7 +777,7 @@ export function EventCanvas({
                 <button
                   type="button"
                   onClick={(e) => { if (didDragRef.current) { e.preventDefault(); return; } e.stopPropagation(); onActivate(node.id); }}
-                  className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${update ? (proposal?.riskLevel === 'high' ? 'border-red-500 ring-2 ring-red-400/20' : 'border-amber-400 ring-2 ring-amber-300/20') : isActive ? 'border-[#23877B] bg-white ring-2 ring-[#23877B]/15 dark:bg-gray-900' : isTaskNode ? 'border-[#23877B]/40 bg-[#23877B]/[0.04] hover:border-[#23877B]/60 dark:bg-[#23877B]/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
+                  className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${update ? (proposal?.riskLevel === 'high' ? 'border-red-500 ring-2 ring-red-400/20' : 'border-amber-400 ring-2 ring-amber-300/20') : isActive ? 'border-accent bg-white ring-2 ring-accent/15 dark:bg-gray-900' : isTaskNode ? 'border-accent/40 bg-accent/[0.04] hover:border-accent/60 dark:bg-accent/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
                   aria-pressed={isActive}
                   data-task-node={isTaskNode || undefined}
                 >
@@ -785,7 +785,7 @@ export function EventCanvas({
                       treatment so the user can scan the canvas and instantly see
                       which branches are already in Today. */}
                   {isTaskNode && (
-                    <span className="absolute inset-y-0 left-0 w-1 bg-[#23877B]" aria-hidden="true" />
+                    <span className="absolute inset-y-0 left-0 w-1 bg-accent" aria-hidden="true" />
                   )}
                   {node.execution && (
                     <span
@@ -794,7 +794,7 @@ export function EventCanvas({
                       aria-label={isDone ? 'Reopen' : 'Complete'}
                       onClick={(e) => { e.stopPropagation(); void onToggleDone(node); }}
                       data-no-drag="true"
-                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isDone ? 'border-[#23877B] bg-[#23877B] text-white' : 'border-gray-300 dark:border-gray-600'}`}
+                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isDone ? 'border-accent bg-accent text-white' : 'border-gray-300 dark:border-gray-600'}`}
                     >{isDone && <Check className="h-3 w-3" />}</span>
                   )}
                   {isActive ? (
@@ -820,7 +820,7 @@ export function EventCanvas({
                   {/* Task badge + date — persistent visual marker so the user can
                       see at a glance "this node is already a task". */}
                   {isTaskNode && !isActive && (
-                    <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#23877B]" data-testid={`event-node-task-badge-${node.id}`}>
+                    <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-accent" data-testid={`event-node-task-badge-${node.id}`}>
                       <ListTodo className="h-3 w-3" aria-hidden="true" />
                       <span>{copy.taskBadge}</span>
                       <span className="text-gray-400">·</span>
@@ -833,10 +833,8 @@ export function EventCanvas({
                   {node.kind && ['tag', 'question', 'resource', 'risk'].includes(node.kind) && !isActive && (
                     <span
                       className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
-                        node.kind === 'risk' ? 'text-amber-600'
-                        : node.kind === 'question' ? 'text-sky-600'
-                        : node.kind === 'tag' ? 'text-violet-600'
-                        : 'text-gray-500'}`}
+                        node.kind === 'risk' ? 'text-warning'
+                        : 'text-text-muted'}`}
                       data-testid={`event-node-kind-badge-${node.id}`}
                     >
                       {node.kind === 'risk' ? <AlertTriangle className="h-3 w-3" aria-hidden="true" />
@@ -858,7 +856,7 @@ export function EventCanvas({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onToggleCollapse(node.id); }}
-                    className="absolute -right-3 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                    className="absolute -right-3 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-accent hover:text-accent dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={isCollapsed ? 'Expand' : 'Collapse'}
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                     data-no-drag="true"
@@ -872,7 +870,7 @@ export function EventCanvas({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); void addChildTo(node); }}
-                  className="absolute -right-2 top-1/2 z-20 flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-[#23877B] bg-white text-[#23877B] shadow-sm hover:bg-[#23877B] hover:text-white dark:border-[#23877B] dark:bg-gray-900"
+                  className="absolute -right-2 top-1/2 z-20 flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-accent bg-white text-accent shadow-sm hover:bg-accent hover:text-white dark:border-accent dark:bg-gray-900"
                   aria-label={copy.addChild}
                   title={copy.addChild}
                   data-no-drag="true"
@@ -882,51 +880,11 @@ export function EventCanvas({
                 </button>
                 )}
 
-                {/* Prominent "Add to Task" affordance for non-task nodes. Clicking opens a
-                    small date picker so the user can pick when to schedule it
-                    (defaults to today; offers Today/Tomorrow/+3d/+1w/custom). */}
-                {!isEventRoot && !node.execution && (
-                  <div className="absolute -top-8 right-1 z-20">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSchedulePicker((prev) => (prev?.nodeId === node.id && prev.anchor === 'node' ? null : { nodeId: node.id, date: today, anchor: 'node' }));
-                      }}
-                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent-light,#23877B1a)] px-2 py-1 text-[12px] font-medium text-[#23877B] shadow-sm hover:brightness-95"
-                      aria-label={copy.addToTask}
-                      title={copy.addToTask}
-                      aria-expanded={schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node'}
-                      data-testid={`event-node-add-task-${node.id}`}
-                      data-no-drag="true"
-                    >
-                      <ListTodo className="h-3.5 w-3.5" />
-                      {copy.addToTask}
-                    </button>
-                    {schedulePicker?.nodeId === node.id && schedulePicker.anchor === 'node' && (
-                      <ScheduleDatePopover
-                        copy={copy}
-                        date={schedulePicker.date}
-                        onChange={(d) => setSchedulePicker({ nodeId: node.id, date: d, anchor: 'node' })}
-                        onConfirm={async () => {
-                          await onSchedule(node, schedulePicker.date);
-                          setSchedulePicker(null);
-                        }}
-                        onCancel={() => setSchedulePicker(null)}
-                        onClickAway={() => setSchedulePicker(null)}
-                        today={today}
-                        shiftDate={shiftDate}
-                        testId="event-node-schedule-popover"
-                      />
-                    )}
-                  </div>
-                )}
-
                 {!isEventRoot && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void addSiblingAfter(node); }}
-                    className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-[#23877B] hover:text-[#23877B] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                    className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-accent hover:text-accent dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={copy.addSibling}
                     title={copy.addSibling}
                     data-no-drag="true"
@@ -964,10 +922,10 @@ export function EventCanvas({
               name="first-step"
               autoFocus
               placeholder={copy.addFirstStep}
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-[#23877B] dark:border-gray-700"
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-accent dark:border-gray-700"
               aria-label={copy.addFirstStep}
             />
-            <button type="submit" className="rounded-lg bg-[#23877B] px-3 py-2 text-sm text-white">{copy.addStep}</button>
+            <button type="submit" className="rounded-lg bg-accent px-3 py-2 text-sm text-white">{copy.addStep}</button>
           </form>
         </div>
       )}
@@ -976,8 +934,8 @@ export function EventCanvas({
         <div className="sticky bottom-5 z-10 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900" data-testid="event-node-toolbar" onClick={(e) => e.stopPropagation()}>
           {addingChild ? (
             <form onSubmit={(e) => { e.preventDefault(); void submitChild(); }} className="flex items-center gap-1">
-              <input autoFocus value={childText} onChange={(e) => setChildText(e.target.value)} placeholder={copy.addStep} className="w-48 rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-[#23877B] dark:border-gray-700" aria-label={copy.addStep} />
-              <button disabled={!childText.trim()} className="rounded-lg bg-[#23877B] px-3 py-2 text-sm text-white disabled:opacity-40">{copy.addStep}</button>
+              <input autoFocus value={childText} onChange={(e) => setChildText(e.target.value)} placeholder={copy.addStep} className="w-48 rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-accent dark:border-gray-700" aria-label={copy.addStep} />
+              <button disabled={!childText.trim()} className="rounded-lg bg-accent px-3 py-2 text-sm text-white disabled:opacity-40">{copy.addStep}</button>
               <button type="button" onClick={() => setAddingChild(false)} className="rounded-lg p-2 text-gray-500" aria-label={copy.cancel}><X className="h-4 w-4" /></button>
             </form>
           ) : (
@@ -993,14 +951,14 @@ export function EventCanvas({
                   <ToolbarButton
                     icon={activeNode.execution ? <CalendarDays className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />}
                     label={activeNode.execution ? `${copy.date} · ${activeNode.execution.scheduledDate.slice(5)}` : copy.addToTask}
-                    onClick={() => setSchedulePicker((prev) => (prev?.anchor === 'toolbar' ? null : { nodeId: activeNode.id, date: activeNode.execution?.scheduledDate ?? today, anchor: 'toolbar' }))}
+                    onClick={() => setSchedulePicker((prev) => (prev ? null : { nodeId: activeNode.id, date: activeNode.execution?.scheduledDate ?? today }))}
                     trailing={<ChevronDown className="h-3 w-3" />}
                   />
-                  {schedulePicker?.anchor === 'toolbar' && (
+                  {schedulePicker && (
                     <ScheduleDatePopover
                       copy={copy}
                       date={schedulePicker.date}
-                      onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d, anchor: 'toolbar' })}
+                      onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d })}
                       onConfirm={async () => {
                         await onSchedule(activeNode, schedulePicker.date);
                         setSchedulePicker(null);
@@ -1033,7 +991,7 @@ export function EventCanvas({
                         <button key={kind} type="button" onClick={() => { setKindMenuOpen(false); if (activeNode.kind !== kind) onChangeKind(activeNode.id, kind); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" data-testid={`event-kind-${kind}`}>
                           {kind === 'risk' ? <AlertTriangle className="h-4 w-4" /> : kind === 'question' ? <HelpCircle className="h-4 w-4" /> : kind === 'tag' ? <Tag className="h-4 w-4" /> : kind === 'resource' ? <FileText className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
                           {label}
-                          {activeNode.kind === kind && <Check className="ml-auto h-3.5 w-3.5 text-[#23877B]" />}
+                          {activeNode.kind === kind && <Check className="ml-auto h-3.5 w-3.5 text-accent" />}
                         </button>
                       ))}
                     </div>
