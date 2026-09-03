@@ -485,21 +485,29 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   }
 
   async function handleSchedule(node: EventNode, date: string, extras?: ScheduleExtrasDraft) {
-    await safe(() => schedule.mutateAsync({
-      eventId,
-      mindmapId: event!.mindmapId,
-      nodeId: node.id,
-      date,
-      taskId: node.execution?.taskId,
-      fromDate: node.execution?.scheduledDate,
-      deadline: extras?.deadline || undefined,
-      priority: extras?.priority || undefined,
-      tags: extras?.tags.split(/[\s,#]+/).map((t) => t.trim()).filter(Boolean),
-    }), language === 'zh' ? '已安排' : 'Scheduled');
+    const tags = extras?.tags.split(/[\s,#]+/).map((t) => t.trim()).filter(Boolean);
+    // safe() swallows mutation errors, so track success via a closure flag —
+    // a recurrence template must never be created for a task that failed.
+    let scheduled = false;
+    await safe(async () => {
+      await schedule.mutateAsync({
+        eventId,
+        mindmapId: event!.mindmapId,
+        nodeId: node.id,
+        date,
+        taskId: node.execution?.taskId,
+        fromDate: node.execution?.scheduledDate,
+        deadline: extras?.deadline || undefined,
+        priority: extras?.priority || undefined,
+        tags,
+      });
+      scheduled = true;
+    }, language === 'zh' ? '已安排' : 'Scheduled');
+    if (!scheduled || !extras?.recurrence) return;
     // Parity with the Today composer: a repeat rule creates a recurring-task
     // template on top of the scheduled task (best effort — the task itself
     // already exists).
-    if (extras?.recurrence) {
+    {
       const weekday = new Date(`${date}T00:00:00`).getDay();
       const rule = extras.recurrence === 'daily'
         ? { type: 'daily' as const }
@@ -509,7 +517,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       try {
         await recurringApi.create({
           title: node.text,
-          tags: extras.tags.split(/[\s,#]+/).map((t) => t.trim()).filter(Boolean),
+          tags,
           recurrence: rule,
         });
       } catch (e) {

@@ -214,6 +214,7 @@ export function EventCanvas({
   // already placed the node visually, replaying it via the .event-node-pos
   // transition looks like a rubber-band.
   const [animSuppressId, setAnimSuppressId] = useState<string | null>(null);
+  const animSuppressTimerRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const dragOriginRef = useRef<{ nodeId: string; origX: number; origY: number; pointerId: number; startX: number; startY: number } | null>(null);
   // Ref mirrors dragOffset so handlePointerUp can read the latest delta without
@@ -671,7 +672,8 @@ export function EventCanvas({
         const nextY = d.origY + finalOffset.dy;
         void onMoveNodePosition(d.nodeId, nextX, nextY);
         setAnimSuppressId(d.nodeId);
-        window.setTimeout(() => setAnimSuppressId(null), 300);
+        if (animSuppressTimerRef.current) window.clearTimeout(animSuppressTimerRef.current);
+        animSuppressTimerRef.current = window.setTimeout(() => setAnimSuppressId(null), 300);
         // Clear the didDrag latch after the click that bubbles after pointerup
         // has fired, otherwise activating via a later click would be suppressed.
         setTimeout(() => { didDragRef.current = false; }, 0);
