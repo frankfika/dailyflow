@@ -132,6 +132,13 @@ body {
   padding-left: 80px;
 }
 
+/* Mind-map nodes glide when moved programmatically (auto layout, undo/redo,
+   remote sync). Suppressed while pointer-dragging so the node tracks the
+   cursor 1:1 and doesn't replay the drag on drop. */
+.event-node-pos {
+  transition: left 220ms var(--ease-native), top 220ms var(--ease-native);
+}
+
 /* Typography Overrides */
 h1, h2, h3, h4, h5, h6, .editorial-hero {
   font-family: var(--font-sans);

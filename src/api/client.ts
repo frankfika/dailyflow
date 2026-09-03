@@ -1314,7 +1314,7 @@ export const mindmapsApi = {
   async promoteNodeToTask(
     mapId: string,
     nodeId: string,
-    opts: { date: string; context?: string },
+    opts: { date: string; context?: string; deadline?: string; priority?: 'high' | 'medium' | 'low'; tags?: string[] },
   ): Promise<MindMap> {
     const res = await fetch(
       `${API_BASE}/mindmaps/${encodeURIComponent(mapId)}/nodes/${encodeURIComponent(nodeId)}/promote-to-task`,

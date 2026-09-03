@@ -288,11 +288,23 @@ function planOrderForNode(map: MindMap, nodeId: string): number {
 router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
   try {
     const { id: mindmapId, nodeId } = req.params;
-    const body = (req.body ?? {}) as { date?: string; context?: 'work' | 'life' };
+    const body = (req.body ?? {}) as {
+      date?: string; context?: 'work' | 'life';
+      deadline?: string; priority?: 'high' | 'medium' | 'low'; tags?: string[];
+    };
     const date = body.date || todayIso();
 
     if (body.context && body.context !== 'work' && body.context !== 'life') {
       return res.status(400).json({ error: "context must be 'work' or 'life'" });
+    }
+    if (body.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(body.deadline)) {
+      return res.status(400).json({ error: 'deadline must be YYYY-MM-DD' });
+    }
+    if (body.priority && !['high', 'medium', 'low'].includes(body.priority)) {
+      return res.status(400).json({ error: "priority must be 'high' | 'medium' | 'low'" });
+    }
+    if (body.tags && (!Array.isArray(body.tags) || body.tags.some(t => typeof t !== 'string'))) {
+      return res.status(400).json({ error: 'tags must be a string array' });
     }
 
     const config = await loadConfig();
@@ -318,7 +330,13 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
     //    node sits under any ancestor `kind: 'tag'` node, those
     //    labels flow down into the task's tag list.
     const inheritedTags = getInheritedTagsFromMap(map, node.id);
-    const userTags = [...(node.tags ?? []), ...extractUserTags(node.text)];
+    const userTags = [
+      ...(node.tags ?? []),
+      ...extractUserTags(node.text),
+      // Extra tags from the promote body may arrive with markdown-style
+      // leading '#' — normalize before the dedupe merge.
+      ...(body.tags ?? []).map(t => t.replace(/^#/, '')).filter(Boolean),
+    ];
     // De-dup inherited vs user tags (case-insensitive, first wins).
     const seen = new Set<string>();
     const mergedTags: string[] = [];
@@ -345,6 +363,12 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
       // can group it correctly. We don't write it to the markdown
       // line (it lives only in memory for now).
       (newTask as any).context = body.context;
+    }
+    if (body.deadline) {
+      newTask.deadline = body.deadline;
+    }
+    if (body.priority) {
+      newTask.priority = body.priority;
     }
 
     // 3. Append the task to the daily note under the date lock.

@@ -119,18 +119,18 @@ export function useCreateEvent(): UseMutationResult<
 export function useScheduleEventNode(): UseMutationResult<
   void,
   Error,
-  { eventId: string; mindmapId: string; nodeId: string; date: string; taskId?: string; fromDate?: string }
+  { eventId: string; mindmapId: string; nodeId: string; date: string; taskId?: string; fromDate?: string; deadline?: string; priority?: 'high' | 'medium' | 'low'; tags?: string[] }
 > {
   const qc = useQueryClient();
   return useMutation({
     scope: MAP_WRITE_SCOPE,
-    mutationFn: async ({ mindmapId, nodeId, date, taskId, fromDate }) => {
+    mutationFn: async ({ mindmapId, nodeId, date, taskId, fromDate, deadline, priority, tags }) => {
       if (taskId && fromDate && fromDate !== date) {
         await eventsApi.rescheduleNodeTask({ taskId, fromDate, toDate: date, mindmapId, nodeId });
         return;
       }
       if (!taskId) {
-        const updated = await mindmapsApi.promoteNodeToTask(mindmapId, nodeId, { date });
+        const updated = await mindmapsApi.promoteNodeToTask(mindmapId, nodeId, { date, deadline, priority, tags });
         writeEventMap(qc, updated);
       }
     },

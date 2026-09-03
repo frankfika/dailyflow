@@ -162,6 +162,44 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     expect(content).toContain('^node:' + branchId);
   });
 
+  it('carries deadline / priority / extra tags from the promote body onto the task', async () => {
+    const { createTopicSpace } = await import('../../services/topicSpaces.js');
+    const space = await createTopicSpace({ title: 'Promote extras space' });
+    const { updateMindMap, getMindMap } = await import('../../services/mindmaps.js');
+    const map = await getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    const branchId = 'n_branch_deadline';
+    await updateMindMap(space.mindmapId, {
+      nodes: [
+        ...map.nodes,
+        { id: branchId, text: '递签材料', tags: [], position: { x: 2, y: 0 }, kind: 'branch' },
+      ],
+      edges: [...map.edges, { id: 'e2', source: map.rootId, target: branchId }],
+    });
+
+    const date = '2026-08-09';
+    const res = await withServer(app, (p) =>
+      request(p, 'POST', `/api/mindmaps/${space.mindmapId}/nodes/${branchId}/promote-to-task`, {
+        date,
+        deadline: '2026-08-15',
+        priority: 'high',
+        tags: ['签证', '#重要'],
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.task.deadline).toBe('2026-08-15');
+    expect(res.body.task.priority).toBe('high');
+    expect(res.body.task.tags).toContain('签证');
+    expect(res.body.task.tags).toContain('重要'); // leading # stripped by merge
+
+    // The markdown line serializes the deadline and priority annotations.
+    const filePath = path.join(tmpRoot, 'Daily', '2026', '08', `${date}.md`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toContain('#deadline:2026-08-15');
+    expect(content).toContain('#priority:high');
+    expect(content).toContain('#签证');
+  });
+
   it('returns 404 when the mindmap does not exist', async () => {
     const res = await withServer(app, (p) =>
       request(p, 'POST', `/api/mindmaps/mm_does_not_exist/nodes/n1/promote-to-task`, {}),

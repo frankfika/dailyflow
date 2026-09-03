@@ -105,10 +105,10 @@ describe('EventOutline rendering', () => {
     expect(await screen.findByTestId('outline-schedule-popover')).toBeInTheDocument();
     expect(screen.getByTestId('outline-schedule-popover-preset-1')).toHaveTextContent(/Tomorrow/);
     fireEvent.click(screen.getByTestId('outline-schedule-popover-preset-1'));
-    fireEvent.click(screen.getByTestId('outline-schedule-popover-confirm'));
     await waitFor(() => expect(onScheduleTask).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'step' }),
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      undefined,
     ));
   });
 

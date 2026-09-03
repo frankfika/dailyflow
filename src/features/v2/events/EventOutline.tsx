@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ListTodo, Plus } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
-import { ScheduleDatePopover, type ScheduleDateCopy } from './ScheduleDatePopover';
+import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { getTodayStr } from '../../../utils/tagColors';
 
 type Copy = {
@@ -13,6 +13,7 @@ type Copy = {
   addToTask: string;
   today: string;
   tomorrow: string;
+  in3Days: string;
   nextWeek: string;
   pickDate: string;
   confirm: string;
@@ -29,6 +30,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: 'Add to Task',
     today: 'Today',
     tomorrow: 'Tomorrow',
+    in3Days: 'In 3 days',
     nextWeek: 'Next week',
     pickDate: 'Pick date',
     confirm: 'Schedule',
@@ -43,6 +45,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: '添加为任务',
     today: '今天',
     tomorrow: '明天',
+    in3Days: '3 天后',
     nextWeek: '下周',
     pickDate: '选择日期',
     confirm: '安排',
@@ -51,7 +54,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
 };
 
 function pickDateCopy(copy: Copy): ScheduleDateCopy {
-  return { pickDate: copy.pickDate, today: copy.today, tomorrow: copy.tomorrow, nextWeek: copy.nextWeek, cancel: copy.cancel, confirm: copy.confirm };
+  return { pickDate: copy.pickDate, today: copy.today, tomorrow: copy.tomorrow, in3Days: copy.in3Days, nextWeek: copy.nextWeek, confirm: copy.confirm };
 }
 
 interface OutlineRow {
@@ -79,7 +82,7 @@ interface EventOutlineProps {
   onDelete: (nodeId: string) => Promise<void>;
   onMoveNode?: (nodeId: string, newParentId: string) => Promise<void>;
   onReorderNode?: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
-  onScheduleTask?: (node: EventNode, date: string) => Promise<void>;
+  onScheduleTask?: (node: EventNode, date: string, extras?: ScheduleExtrasDraft) => Promise<void>;
 }
 
 function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
@@ -333,12 +336,14 @@ export function EventOutline({
                 copy={pickDateCopy(copy)}
                 date={schedulePicker.date}
                 onChange={(d) => setSchedulePicker({ nodeId: root.node.id, date: d })}
-                onConfirm={async () => { await onScheduleTask!(root.node, schedulePicker.date); setSchedulePicker(null); }}
+                onConfirm={async (d, ex) => { await onScheduleTask!(root.node, d, hasExtras(ex) ? ex : undefined); setSchedulePicker(null); }}
                 onCancel={() => setSchedulePicker(null)}
                 onClickAway={() => setSchedulePicker(null)}
                 today={today}
                 shiftDate={shiftDate}
                 testId="outline-schedule-popover"
+                language={language}
+                showExtras
               />
             ) : undefined}
             onDragStart={() => setDragNodeId(root.node.id)}
@@ -383,12 +388,14 @@ export function EventOutline({
                 copy={pickDateCopy(copy)}
                 date={schedulePicker.date}
                 onChange={(d) => setSchedulePicker({ nodeId: row.node.id, date: d })}
-                onConfirm={async () => { await onScheduleTask!(row.node, schedulePicker.date); setSchedulePicker(null); }}
+                onConfirm={async (d, ex) => { await onScheduleTask!(row.node, d, hasExtras(ex) ? ex : undefined); setSchedulePicker(null); }}
                 onCancel={() => setSchedulePicker(null)}
                 onClickAway={() => setSchedulePicker(null)}
                 today={today}
                 shiftDate={shiftDate}
                 testId="outline-schedule-popover"
+                language={language}
+                showExtras
               />
             ) : undefined}
             onDragStart={() => setDragNodeId(row.node.id)}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AlertTriangle, CalendarDays, Check, ChevronDown, FileText, Focus, HelpCircle, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Tag, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode, OrganizeStrategy } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
-import { ScheduleDatePopover } from './ScheduleDatePopover';
+import { ScheduleDatePopover, hasExtras, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import type { EventGraphProposal, GraphOperation } from '../api/client';
 
 type Copy = {
@@ -23,6 +23,7 @@ type Copy = {
   addToTask: string;
   taskBadge: string;
   tomorrow: string;
+  in3Days: string;
   nextWeek: string;
   pickDate: string;
   confirm: string;
@@ -63,6 +64,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: 'Add to Task',
     taskBadge: 'Task',
     tomorrow: 'Tomorrow',
+    in3Days: 'In 3 days',
     nextWeek: 'Next week',
     pickDate: 'Pick date',
     confirm: 'Schedule',
@@ -101,6 +103,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: '添加为任务',
     taskBadge: '任务',
     tomorrow: '明天',
+    in3Days: '3 天后',
     nextWeek: '下周',
     pickDate: '选择日期',
     confirm: '安排',
@@ -135,7 +138,7 @@ interface EventCanvasProps {
   onAddChild: (parentId: string, text: string) => Promise<string>;
   onAddSibling: (referenceId: string, text: string) => Promise<string>;
   onRename: (nodeId: string, text: string) => Promise<void>;
-  onSchedule: (node: EventNode, date: string) => Promise<void>;
+  onSchedule: (node: EventNode, date: string, extras?: ScheduleExtrasDraft) => Promise<void>;
   onUnschedule: (node: EventNode) => Promise<void>;
   onToggleDone: (node: EventNode) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
@@ -207,6 +210,11 @@ export function EventCanvas({
   // only commits to the server when it actually moved (≥4px); otherwise a quick
   // press/release should just activate the node.
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // Node whose position change right after a drop must NOT glide — the drop
+  // already placed the node visually, replaying it via the .event-node-pos
+  // transition looks like a rubber-band.
+  const [animSuppressId, setAnimSuppressId] = useState<string | null>(null);
+  const animSuppressTimerRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const dragOriginRef = useRef<{ nodeId: string; origX: number; origY: number; pointerId: number; startX: number; startY: number } | null>(null);
   // Ref mirrors dragOffset so handlePointerUp can read the latest delta without
@@ -663,6 +671,9 @@ export function EventCanvas({
         const nextX = d.origX + finalOffset.dx;
         const nextY = d.origY + finalOffset.dy;
         void onMoveNodePosition(d.nodeId, nextX, nextY);
+        setAnimSuppressId(d.nodeId);
+        if (animSuppressTimerRef.current) window.clearTimeout(animSuppressTimerRef.current);
+        animSuppressTimerRef.current = window.setTimeout(() => setAnimSuppressId(null), 300);
         // Clear the didDrag latch after the click that bubbles after pointerup
         // has fired, otherwise activating via a later click would be suppressed.
         setTimeout(() => { didDragRef.current = false; }, 0);
@@ -763,13 +774,13 @@ export function EventCanvas({
           const isCollapsed = collapsedIds.has(node.id);
           const isTaskNode = Boolean(node.execution);
           const isDragging = draggingId === node.id;
-          const dragTransform = isDragging ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined;
+          const dragTransform = isDragging ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px) scale(1.02)` : undefined;
           const update = proposalPreview.find(({ op }) => op.nodeId === node.id && (op.op === 'update_node' || op.op === 'move_node'));
           return (
             <div
               key={node.id}
-              className="absolute"
-              style={{ left: node.canvasX, top: node.canvasY, width: NODE_W, transform: dragTransform, zIndex: isDragging ? 30 : undefined }}
+              className={`absolute ${!isDragging && animSuppressId !== node.id ? 'event-node-pos' : ''}`}
+              style={{ left: node.canvasX, top: node.canvasY, width: NODE_W, transform: dragTransform, zIndex: isDragging ? 30 : undefined, boxShadow: isDragging ? 'var(--shadow-lg, 0 10px 24px rgba(0,0,0,0.14))' : undefined }}
               data-testid={`event-node-${node.id}`}
               onPointerDown={(e) => { handleNodePointerDown(e, node); }}
             >
@@ -959,8 +970,8 @@ export function EventCanvas({
                       copy={copy}
                       date={schedulePicker.date}
                       onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d })}
-                      onConfirm={async () => {
-                        await onSchedule(activeNode, schedulePicker.date);
+                      onConfirm={async (d, ex) => {
+                        await onSchedule(activeNode, d, hasExtras(ex) ? ex : undefined);
                         setSchedulePicker(null);
                       }}
                       onCancel={() => setSchedulePicker(null)}
@@ -969,6 +980,8 @@ export function EventCanvas({
                       shiftDate={shiftDate}
                       testId="event-toolbar-schedule-popover"
                       placement="up"
+                      language={language}
+                      showExtras={!activeNode.execution}
                     />
                   )}
                 </div>
