@@ -5,6 +5,25 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0](https://github.com/frankfika/dailyflow/compare/v2.5.2...v2.6.0) (2026-09-03)
+
+
+### Features
+
+* **data:** local-first query cache — persist, longer staleness, optimistic schedule ([d909285](https://github.com/frankfika/dailyflow/commit/d909285f8fa1ba2d37b025018aa56b7a873e43d2))
+* **shell:** native overlay title bar with drag regions ([11b6c24](https://github.com/frankfika/dailyflow/commit/11b6c24dea5b76067fe18fe01793ab6e5c9539e5))
+
+
+### Bug Fixes
+
+* **events:** move Add to Task out of the canvas into the outline ([c7e3d18](https://github.com/frankfika/dailyflow/commit/c7e3d18eaae1bfd277375e26a7605741b0e42cd8))
+
+
+### Performance Improvements
+
+* **ux:** motion budget + keyboard polish ([fcc8f8c](https://github.com/frankfika/dailyflow/commit/fcc8f8cf413a45e4bf4e56be322415f63572a972))
+* **ux:** native-feel overhaul — data layer, window shell, visual tokens, motion/keyboard ([7f7ecc2](https://github.com/frankfika/dailyflow/commit/7f7ecc205bc19de45d9f04510ad567bf718035cd))
+
 ## [2.5.2](https://github.com/frankfika/dailyflow/compare/v2.5.1...v2.5.2) (2026-09-01)
 
 
