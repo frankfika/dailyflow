@@ -23,6 +23,7 @@ type Copy = {
   addToTask: string;
   taskBadge: string;
   tomorrow: string;
+  in3Days: string;
   nextWeek: string;
   pickDate: string;
   confirm: string;
@@ -63,6 +64,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: 'Add to Task',
     taskBadge: 'Task',
     tomorrow: 'Tomorrow',
+    in3Days: 'In 3 days',
     nextWeek: 'Next week',
     pickDate: 'Pick date',
     confirm: 'Schedule',
@@ -101,6 +103,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     addToTask: '添加为任务',
     taskBadge: '任务',
     tomorrow: '明天',
+    in3Days: '3 天后',
     nextWeek: '下周',
     pickDate: '选择日期',
     confirm: '安排',
@@ -959,8 +962,8 @@ export function EventCanvas({
                       copy={copy}
                       date={schedulePicker.date}
                       onChange={(d) => setSchedulePicker({ nodeId: activeNode.id, date: d })}
-                      onConfirm={async () => {
-                        await onSchedule(activeNode, schedulePicker.date);
+                      onConfirm={async (d) => {
+                        await onSchedule(activeNode, d);
                         setSchedulePicker(null);
                       }}
                       onCancel={() => setSchedulePicker(null)}

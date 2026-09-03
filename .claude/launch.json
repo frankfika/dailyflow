@@ -28,5 +28,11 @@
       "url": "http://localhost:47841",
       "port": 47841
     }
+    {
+      "name": "worktree-dev-all",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "PORT=47842 VITE_API_PROXY_TARGET=http://127.0.0.1:47842 npx concurrently \"npx vite --host=0.0.0.0 --port 47841 --strictPort\" \"npm run server\""],
+      "url": "http://localhost:47841",
+      "port": 47841
+    }
   ]
-}

@@ -92,7 +92,6 @@ describe('EventCanvas node actions', () => {
     expect(await screen.findByTestId('event-toolbar-schedule-popover')).toBeInTheDocument();
     expect(onSchedule).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('event-toolbar-schedule-popover-preset-1'));
-    fireEvent.click(screen.getByTestId('event-toolbar-schedule-popover-confirm'));
     await waitFor(() => expect(onSchedule).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'branch' }),
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),

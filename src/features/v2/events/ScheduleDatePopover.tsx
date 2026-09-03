@@ -4,8 +4,8 @@ export interface ScheduleDateCopy {
   pickDate: string;
   today: string;
   tomorrow: string;
+  in3Days: string;
   nextWeek: string;
-  cancel: string;
   confirm: string;
 }
 
@@ -13,7 +13,8 @@ interface ScheduleDatePopoverProps {
   copy: ScheduleDateCopy;
   date: string;
   onChange: (date: string) => void;
-  onConfirm: () => void | Promise<void>;
+  /** Receives the picked date — presets call it immediately (one click schedules). */
+  onConfirm: (date: string) => void | Promise<void>;
   onCancel: () => void;
   onClickAway: () => void;
   today: string;
@@ -25,9 +26,9 @@ interface ScheduleDatePopoverProps {
 }
 
 /**
- * Small date-picker popover used by both the EventCanvas node button and the
- * EventOutline row. Defaults to today; offers Today / Tomorrow / +3d / Next
- * week presets plus a native date picker for arbitrary dates.
+ * Date-picker menu used by the EventCanvas toolbar and the EventOutline row.
+ * One-click presets (label + the actual date it resolves to) schedule
+ * immediately; a native date input covers arbitrary dates behind 确认.
  */
 export function ScheduleDatePopover({
   copy,
@@ -46,69 +47,67 @@ export function ScheduleDatePopover({
     function onDoc(e: MouseEvent) {
       if (!ref.current?.contains(e.target as Node)) onClickAway();
     }
-    const id = window.setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
+    const id = window.setTimeout(() => {
+      document.addEventListener('mousedown', onDoc);
+      document.addEventListener('keydown', onKey);
+    }, 0);
     return () => {
       window.clearTimeout(id);
       document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
     };
-  }, [onClickAway]);
+  }, [onClickAway, onCancel]);
 
   const presets: Array<{ label: string; days: number }> = [
     { label: copy.today, days: 0 },
     { label: copy.tomorrow, days: 1 },
-    { label: '+3d', days: 3 },
+    { label: copy.in3Days, days: 3 },
     { label: copy.nextWeek, days: 7 },
   ];
 
   return (
     <div
       ref={ref}
-      className={`absolute right-0 z-40 w-56 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900 ${placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}
+      className={`absolute right-0 z-40 w-60 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900 ${placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}
       onClick={(e) => e.stopPropagation()}
       data-testid={testId}
     >
-      <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-        {copy.pickDate}
-      </div>
-      <div className="mb-2 grid grid-cols-4 gap-1">
-        {presets.map((p) => {
-          const value = shiftDate(today, p.days);
-          const active = value === date;
-          return (
-            <button
-              key={p.label}
-              type="button"
-              onClick={() => onChange(value)}
-              className={`rounded-md border px-1 py-1 text-[11px] font-medium ${active ? 'border-accent bg-accent/10 text-accent' : 'border-gray-200 text-gray-600 hover:border-accent/40 hover:text-accent dark:border-gray-700'}`}
-              data-testid={`${testId}-preset-${p.days}`}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-xs dark:border-gray-700"
-        aria-label={copy.pickDate}
-        data-testid={`${testId}-date-input`}
-      />
-      <div className="mt-2 flex items-center justify-end gap-1">
+      {presets.map((p) => {
+        const value = shiftDate(today, p.days);
+        const active = value === date;
+        return (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => void onConfirm(value)}
+            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[13px] ${active ? 'bg-accent/10 text-accent' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'}`}
+            data-testid={`${testId}-preset-${p.days}`}
+          >
+            <span className="font-medium">{p.label}</span>
+            <span className={`text-xs tabular-nums ${active ? 'text-accent' : 'text-gray-400'}`}>
+              {value.slice(5)}
+            </span>
+          </button>
+        );
+      })}
+      <div className="mt-1 flex items-center gap-1.5 border-t border-gray-100 px-1.5 pb-0.5 pt-2 dark:border-gray-800">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-xs dark:border-gray-700"
+          aria-label={copy.pickDate}
+          data-testid={`${testId}-date-input`}
+        />
         <button
           type="button"
-          onClick={onCancel}
-          className="rounded-md px-2 py-1 text-[12px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
-          data-testid={`${testId}-cancel`}
-        >
-          {copy.cancel}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          onClick={() => void onConfirm(date)}
+          className="shrink-0 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"
           data-testid={`${testId}-confirm`}
+          aria-label={copy.pickDate}
         >
           {copy.confirm}
         </button>
