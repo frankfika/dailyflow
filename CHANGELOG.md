@@ -5,6 +5,19 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0](https://github.com/frankfika/dailyflow/compare/v2.6.0...v2.7.0) (2026-09-03)
+
+
+### Features
+
+* **events:** rich Add-to-Task popover + smooth node motion ([5695b27](https://github.com/frankfika/dailyflow/commit/5695b274014285524b5f6e7eede1f89a290054dc))
+* **events:** task-creating popover with deadline/tags/priority/recurrence + smooth node motion ([7999501](https://github.com/frankfika/dailyflow/commit/7999501dca7ed9d61b190c979669095a4166bc48))
+
+
+### Bug Fixes
+
+* **events:** skip recurrence template when promote fails; clear drag-suppress timer race ([e1b0842](https://github.com/frankfika/dailyflow/commit/e1b08427309e327c906d1185ebcd668b3ebda2e1))
+
 ## [2.6.0](https://github.com/frankfika/dailyflow/compare/v2.5.2...v2.6.0) (2026-09-03)
 
 
