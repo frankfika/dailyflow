@@ -2341,6 +2341,7 @@ export default function App() {
         }}
         visible={isMobileView}
         onAddTask={() => taskInputFocusRef.current?.()}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
