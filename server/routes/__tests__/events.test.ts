@@ -467,6 +467,18 @@ describe.sequential('EFP-003 / EFP-005 routes /api/events', () => {
   });
 
   it('DELETE /api/events/:id removes the event and a second DELETE 404s', async () => {
+    // Stand up a fresh tmp workspace so we don't touch the real
+    // ~/.dailyflow/config.json. Without this mock the route's
+    // resolveWorkspaceRoot falls back to whatever loadConfig returns —
+    // a real path on machines that have a local install, which would
+    // silently create + delete an event in the user's real workspace.
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-events-route-delete-'));
+    vi.spyOn(config, 'loadConfig').mockResolvedValue({
+      workspaceRoot: tmpRoot,
+      dailyPathTemplate: 'daily/{date}.md',
+      rolloverTrigger: 'manual' as const,
+      rolloverSkipTags: [] as string[],
+    } as any);
     // Create a fresh event we own (the v1 fixture's events share the
     // workspace and would surface as "already gone" on the 2nd delete).
     const create = await withServer(app, (p) =>

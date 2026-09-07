@@ -20,6 +20,11 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => localStorage.setItem('df_sidebar_collapsed', 'true'));
     await page.reload({ waitUntil: 'domcontentloaded' });
+    // Park the mouse off the sidebar so the rail's hover-expand can't
+    // override the collapsed state. The default mouse position after reload
+    // is (0,0) which sits on the sidebar's left edge; the hover effect then
+    // reports the expanded width (~230px) instead of the compact 60px.
+    await page.mouse.move(1200, 400);
 
     await expect(page.getByTestId('nav-today')).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('sidebar-collapse')).toHaveCount(0);
@@ -34,6 +39,9 @@ test.describe('Sidebar viewport behavior (audit #11)', () => {
     await page.getByTestId('sidebar-collapse').click();
     await expect(page.getByTestId('sidebar-expand')).toBeVisible();
     await expect(page.getByTestId('nav-today')).toBeVisible();
+    // Move the mouse away again so the just-clicked hover state on the
+    // collapse button doesn't widen the rail before we measure.
+    await page.mouse.move(1200, 400);
     await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeCloseTo(60, 0);
   });
 
