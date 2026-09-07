@@ -1704,23 +1704,23 @@ export function SettingsModal({
                 </div>
 
                 <div className="space-y-3">
-                  {/* Sync Interval */}
+                  {/* Sync Interval — only manual is currently supported. The
+                      disabled single-option <select> used to live here; it
+                      looked like a real control but could never change. Show
+                      the value as a plain row instead so users don't try to
+                      click it. */}
                   <div>
-                    <label className="text-xs text-text-muted mb-1 block">
+                    <p className="text-xs text-text-muted mb-1">
                       {language === 'zh' ? '同步频率' : 'Sync Frequency'}
-                    </label>
+                    </p>
                     <p className="text-[12px] text-text-muted mb-1">
                       {language === 'zh'
                         ? '自动同步正在升级为带版本校验的保存机制，当前仅支持手动同步。'
                         : 'Automatic sync is being upgraded to version-aware saves; manual sync is currently available.'}
                     </p>
-                    <select
-                      value={0}
-                      disabled
-                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-                    >
-                      <option value={0}>{language === 'zh' ? '手动同步' : 'Manual Sync'}</option>
-                    </select>
+                    <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main">
+                      {language === 'zh' ? '手动同步' : 'Manual Sync'}
+                    </p>
                   </div>
 
                   {/* Repository */}

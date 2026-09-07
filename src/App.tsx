@@ -410,9 +410,6 @@ export default function App() {
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
   const eventsQuery = useEvents();
-  const handleTaskCreated = useCallback(() => {
-    void todayItemsQuery.refetch();
-  }, [todayItemsQuery]);
 
   const refreshEarlierOpenTasks = useCallback(async () => {
     const today = getTodayStr();
