@@ -5,6 +5,18 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0](https://github.com/frankfika/dailyflow/compare/v2.8.0...v2.9.0) (2026-09-07)
+
+
+### Features
+
+* **mobile:** add 'More' tab + sheet for Calendar/Memory/Team/Settings ([c01d61f](https://github.com/frankfika/dailyflow/commit/c01d61fe3a88f703d149fa7ecf2127e1f05749b9))
+
+
+### Bug Fixes
+
+* **today:** invalidate today-items query on rollover/init/tasksChanged + ux polish ([6b8660b](https://github.com/frankfika/dailyflow/commit/6b8660b682bf63fc632c8326005156201d2e04c4))
+
 ## [2.8.0](https://github.com/frankfika/dailyflow/compare/v2.7.0...v2.8.0) (2026-09-07)
 
 
