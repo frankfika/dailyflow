@@ -289,7 +289,10 @@ export default function App() {
       // route through the same adapter as the Sidebar: today/events are real
       // tabs, everything else opens as an overlay (UX S5 model).
       const goTo = (tab: AppTab) => {
-        if (tab === 'today' || tab === 'events') setActiveTab(tab);
+        if (tab === 'today' || tab === 'events') {
+          setActiveTab(tab);
+          setActiveOverlay(null);
+        }
         else setActiveOverlay(tab);
       };
       const current: AppTab = activeOverlay ?? activeTab;
@@ -1880,7 +1883,13 @@ export default function App() {
         setIsSidebarOpen={setIsSidebarOpen}
         activeTab={activeOverlay ?? activeTab}
         setActiveTab={(tab) => {
-          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          // Primary tabs are the app's real pages; landing on one from an
+          // overlay (Notes/AI/…) must leave the overlay, or clicking "Today"
+          // appears to do nothing.
+          if (tab === 'today' || tab === 'events') {
+            setActiveTab(tab);
+            setActiveOverlay(null);
+          }
           else setActiveOverlay(tab);
         }}
         currentFileDate={currentFileDate}
@@ -2027,7 +2036,90 @@ export default function App() {
               </div>
             )}
             {!isLoading && !loadError && (
-              activeTab === 'today' ? (
+              activeOverlay ? (
+                /* UX S5 revised: notes / AI chat / calendar / memory / team
+                   render as in-flow views, not floating overlays. The 2026-09
+                   audit feedback was unanimous — covering Today with a
+                   backdrop modal for a primary workspace feels like a popup,
+                   not navigation. Same content, no backdrop / scale chrome;
+                   the sidebar stays the way back. */
+                <motion.div
+                  key={`workspace-${activeOverlay}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="h-full min-h-0"
+                  data-testid={`workspace-${activeOverlay}`}
+                >
+                  {activeOverlay === 'notes' ? (
+                    <div className="flex h-full min-h-0 flex-col">
+                      <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
+                        {([
+                          ['notes', language === 'zh' ? '笔记' : 'Notes'],
+                          ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
+                        ] as const).map(([surface, label]) => (
+                          <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
+                      </div>
+                    </div>
+                  ) : activeOverlay === 'ai-chat' ? (
+                    <div className="h-full">
+                      <AIChat
+                        workspaceId={activeWorkspaceId || 'default'}
+                        language={language}
+                        activeContext={activeContext}
+                        tasks={contextFilteredTasks}
+                        notes={contextNotes}
+                        filesMap={filesMap}
+                        showToast={showToast}
+                        initialDraft={chatDraft}
+                        onDraftConsumed={() => setChatDraft(null)}
+                        onCreateMeetingNote={() => void openMeetingNote()}
+                        onNoteCreated={() => {
+                          const today = getTodayStr();
+                          notesApi.getByDate(today).then(dateNotes => {
+                            setDailyNotes(prev => {
+                              const others = prev.filter(n => n.date !== today);
+                              return [...others, ...dateNotes];
+                            });
+                          }).catch(err => console.error('Failed to refresh daily notes:', err));
+                          loadContextNotes();
+                        }}
+                      />
+                    </div>
+                  ) : activeOverlay === 'calendar' ? (
+                    <div className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6" data-testid="calendar-page">
+                      <CalendarWorkspace
+                        date={currentFileDate}
+                        setDate={setCurrentFileDate}
+                        language={language}
+                        onOpenLocalDate={(date) => {
+                          setCurrentFileDate(date);
+                          setActiveOverlay(null);
+                          setActiveTab('today');
+                        }}
+                        onManageConnections={() => {
+                          setConfigTab('sync');
+                          setShowSettings(true);
+                        }}
+                      />
+                    </div>
+                  ) : activeOverlay === 'memory' ? (
+                    <div className="h-full min-h-0 overflow-hidden">
+                      <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
+                    </div>
+                  ) : (
+                    <div className="h-full min-h-0 overflow-hidden">
+                      <TeamView language={language} showToast={showToast} />
+                    </div>
+                  )}
+                </motion.div>
+              ) : activeTab === 'today' ? (
                 <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-32 pt-5 md:px-8 md:pt-7 lg:px-12" data-testid="today-focus-scroll-region">
                   <motion.div
                     key="visual-today"
@@ -2295,7 +2387,13 @@ export default function App() {
         language={language}
         activeTab={activeOverlay ?? activeTab}
         setActiveTab={(tab) => {
-          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          // Primary tabs are the app's real pages; landing on one from an
+          // overlay (Notes/AI/…) must leave the overlay, or clicking "Today"
+          // appears to do nothing.
+          if (tab === 'today' || tab === 'events') {
+            setActiveTab(tab);
+            setActiveOverlay(null);
+          }
           else setActiveOverlay(tab);
         }}
         visible={isMobileView}
@@ -2304,128 +2402,8 @@ export default function App() {
 
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
-      {/* UX S5: everything except Today (home) and Events (canvas) is an
-          overlay. Esc or the backdrop closes it and lands back on home. */}
-      <AnimatePresence>
-        {activeOverlay && (
-          <motion.div
-            key="workspace-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-40 flex items-center justify-center p-0 md:p-6"
-            data-testid="workspace-overlay"
-          >
-            <div
-              className="absolute inset-0 bg-black/25"
-              onClick={() => setActiveOverlay(null)}
-              data-testid="overlay-backdrop"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 14, scale: 0.99 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              className="relative flex h-full w-full flex-col overflow-hidden rounded-none border border-border bg-background shadow-2xl md:rounded-xl"
-              data-testid={`overlay-${activeOverlay}`}
-            >
-              <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">
-                  {activeOverlay === 'notes'
-                    ? (language === 'zh' ? '笔记' : 'Notes')
-                    : activeOverlay === 'ai-chat'
-                      ? (language === 'zh' ? '问 AI' : 'Ask AI')
-                      : activeOverlay === 'calendar'
-                        ? (language === 'zh' ? '日历' : 'Calendar')
-                        : activeOverlay === 'memory'
-                          ? (language === 'zh' ? '记忆' : 'Memory')
-                          : (language === 'zh' ? '团队' : 'Team')}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveOverlay(null)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
-                  aria-label={language === 'zh' ? '关闭浮层' : 'Close overlay'}
-                  data-testid="overlay-close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                {activeOverlay === 'notes' ? (
-                  <div className="flex h-full min-h-0 flex-col">
-                    <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
-                      {([
-                        ['notes', language === 'zh' ? '笔记' : 'Notes'],
-                        ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
-                      ] as const).map(([surface, label]) => (
-                        <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
-                    </div>
-                  </div>
-                ) : activeOverlay === 'ai-chat' ? (
-                  <div className="h-full">
-                    <AIChat
-                      workspaceId={activeWorkspaceId || 'default'}
-                      language={language}
-                      activeContext={activeContext}
-                      tasks={contextFilteredTasks}
-                      notes={contextNotes}
-                      filesMap={filesMap}
-                      showToast={showToast}
-                      initialDraft={chatDraft}
-                      onDraftConsumed={() => setChatDraft(null)}
-                      onCreateMeetingNote={() => void openMeetingNote()}
-                      onNoteCreated={() => {
-                        const today = getTodayStr();
-                        notesApi.getByDate(today).then(dateNotes => {
-                          setDailyNotes(prev => {
-                            const others = prev.filter(n => n.date !== today);
-                            return [...others, ...dateNotes];
-                          });
-                        }).catch(err => console.error('Failed to refresh daily notes:', err));
-                        loadContextNotes();
-                      }}
-                    />
-                  </div>
-                ) : activeOverlay === 'calendar' ? (
-                  <div className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6" data-testid="calendar-page">
-                    <CalendarWorkspace
-                      date={currentFileDate}
-                      setDate={setCurrentFileDate}
-                      language={language}
-                      onOpenLocalDate={(date) => {
-                        setCurrentFileDate(date);
-                        setActiveOverlay(null);
-                        setActiveTab('today');
-                      }}
-                      onManageConnections={() => {
-                        setConfigTab('sync');
-                        setShowSettings(true);
-                      }}
-                    />
-                  </div>
-                ) : activeOverlay === 'memory' ? (
-                  <div className="h-full min-h-0 overflow-hidden">
-                    <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
-                  </div>
-                ) : (
-                  <div className="h-full min-h-0 overflow-hidden">
-                    <TeamView language={language} showToast={showToast} />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
+      {/* UX S5: everything except Today (home) and Events (canvas) is an
       <CommandPalette
         open={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}

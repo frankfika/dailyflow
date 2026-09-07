@@ -104,15 +104,8 @@ export function TodayBacklog({
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [showCompleted, setShowCompleted] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-
-  const toggleGroup = (key: string) => {
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
+  // Horizontal tabs: null means "follow default" (first tab).
+  const [selectedTabKey, setSelectedTabKey] = useState<string | null>(null);
 
   const openTasks = useMemo(
     () => tasks.filter(task => task.status === 'todo').sort(compareTasks),
@@ -186,13 +179,32 @@ export function TodayBacklog({
 
   const hasOpenWork = eventGroups.length > 0 || standaloneTasks.length > 0;
   const standaloneLabel = language === 'zh' ? '独立任务' : 'Standalone';
-  const openCountLabel = (count: number) => language === 'zh' ? `${count} 项待办` : `${count} open`;
-  const enterCanvasTitle = language === 'zh' ? '进入事件画布' : 'Open event canvas';
 
-  const renderGroupBody = (key: string, groupTasks: TodayTask[]) => {
-    if (collapsedGroups.has(key)) return null;
-    return <ul className="today-simple-list">{groupTasks.map(renderTask)}</ul>;
-  };
+  interface EventTab {
+    key: string;
+    title: string;
+    count: number;
+    tasks: TodayTask[];
+  }
+  const tabs = useMemo<EventTab[]>(() => {
+    const result: EventTab[] = eventGroups.map(({ group, openTasks: groupTasks }) => ({
+      key: group.mindmapId,
+      title: group.title,
+      count: groupTasks.length,
+      tasks: groupTasks,
+    }));
+    if (standaloneTasks.length > 0) {
+      result.push({ key: 'standalone', title: standaloneLabel, count: standaloneTasks.length, tasks: standaloneTasks });
+    }
+    return result;
+  }, [eventGroups, standaloneTasks, standaloneLabel]);
+
+  // Selected tab falls back to the first one when the stored key no longer
+  // exists (group disappeared / all its tasks completed).
+  const activeKey = selectedTabKey && tabs.some(tab => tab.key === selectedTabKey)
+    ? selectedTabKey
+    : tabs[0]?.key;
+  const activeTab = tabs.find(tab => tab.key === activeKey);
 
   return (
     <div className="today-backlog today-simple" data-testid="today-backlog">
@@ -218,72 +230,27 @@ export function TodayBacklog({
         </header>
 
         {hasOpenWork ? (
-          <div className="space-y-4" data-testid="today-execution-list">
-            {eventGroups.map(({ group, openTasks: groupTasks }) => {
-              const key = group.mindmapId;
-              const isCollapsed = collapsedGroups.has(key);
-              return (
-                <section key={key} className="today-event-group" data-testid={`today-event-group-${key}`}>
-                  <div className="today-event-head">
-                    {onOpenPlanningGroup ? (
-                      <button
-                        type="button"
-                        className="today-event-head-main"
-                        onClick={() => onOpenPlanningGroup(group)}
-                        title={enterCanvasTitle}
-                        data-testid={`today-event-head-${key}`}
-                      >
-                        <Network className="today-event-icon" aria-hidden="true" />
-                        <span className="today-event-title">{group.title}</span>
-                        <span className="today-event-count">{openCountLabel(groupTasks.length)}</span>
-                      </button>
-                    ) : (
-                      <div className="today-event-head-main" data-testid={`today-event-head-${key}`}>
-                        <Network className="today-event-icon" aria-hidden="true" />
-                        <span className="today-event-title">{group.title}</span>
-                        <span className="today-event-count">{openCountLabel(groupTasks.length)}</span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="today-event-collapse"
-                      onClick={() => toggleGroup(key)}
-                      aria-expanded={!isCollapsed}
-                      aria-label={`${isCollapsed
-                        ? (language === 'zh' ? '展开' : 'Expand')
-                        : (language === 'zh' ? '折叠' : 'Collapse')} ${group.title}`}
-                    >
-                      <ChevronDown className={`today-event-arrow ${isCollapsed ? 'is-collapsed' : ''}`} aria-hidden="true" />
-                    </button>
-                  </div>
-                  {renderGroupBody(key, groupTasks)}
-                </section>
-              );
-            })}
-
-            {standaloneTasks.length > 0 && (
-              <section className="today-event-group today-event-group-standalone" data-testid="today-event-group-standalone">
-                <div className="today-standalone-head">
-                  <span className="today-standalone-label">
-                    <Pin className="today-event-icon" aria-hidden="true" />
-                    {standaloneLabel}
-                  </span>
-                  <span className="today-event-count">{openCountLabel(standaloneTasks.length)}</span>
-                  <button
-                    type="button"
-                    className="today-event-collapse"
-                    onClick={() => toggleGroup('standalone')}
-                    aria-expanded={!collapsedGroups.has('standalone')}
-                    aria-label={`${collapsedGroups.has('standalone')
-                      ? (language === 'zh' ? '展开' : 'Expand')
-                      : (language === 'zh' ? '折叠' : 'Collapse')} ${standaloneLabel}`}
-                  >
-                    <ChevronDown className={`today-event-arrow ${collapsedGroups.has('standalone') ? 'is-collapsed' : ''}`} aria-hidden="true" />
-                  </button>
-                </div>
-                {renderGroupBody('standalone', standaloneTasks)}
-              </section>
-            )}
+          <div className="space-y-3" data-testid="today-execution-list">
+            <div className="today-event-tabs" role="tablist" aria-label={language === 'zh' ? '事件分组' : 'Event groups'}>
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab.key === activeKey}
+                  data-testid={`today-event-group-${tab.key}`}
+                  className={`today-event-tab ${tab.key === activeKey ? 'is-active' : ''}`}
+                  onClick={() => setSelectedTabKey(tab.key)}
+                >
+                  {tab.key === 'standalone'
+                    ? <Pin className="today-event-icon" aria-hidden="true" />
+                    : <Network className="today-event-icon" aria-hidden="true" />}
+                  <span className="today-event-title">{tab.title}</span>
+                  <span className="today-event-count">{tab.count}</span>
+                </button>
+              ))}
+            </div>
+            {activeTab && <ul className="today-simple-list">{activeTab.tasks.map(renderTask)}</ul>}
           </div>
         ) : (
           <div className="today-backlog-empty">

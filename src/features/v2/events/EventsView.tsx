@@ -227,7 +227,9 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
       onClick={open}
       onKeyDown={onKeyDown}
       aria-label={event.title}
-      className="group relative w-full cursor-pointer rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40"
+      // z-10 while the menu is open: the hover translate creates a stacking
+      // context, so without this the NEXT card paints over the dropdown.
+      className={`group relative w-full cursor-pointer rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40 ${menuOpen ? 'z-10' : ''}`}
       data-testid={`event-card-${event.id}`}
     >
       <div className="flex items-start justify-between gap-4">
@@ -248,7 +250,7 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
               aria-expanded={menuOpen}
               aria-label={language === 'zh' ? '更多动作' : 'More actions'}
               data-testid={`event-card-more-${event.id}`}
-              className="grid h-7 w-7 place-items-center rounded-md text-text-muted opacity-0 transition-opacity hover:bg-black/[0.05] group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100"
+              className="grid h-7 w-7 place-items-center rounded-md text-text-muted opacity-0 transition-opacity hover:bg-black/[0.05] group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100 max-[1024px]:h-[44px] max-[1024px]:w-[44px] max-[1024px]:opacity-100"
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
@@ -256,7 +258,7 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
               <div
                 role="menu"
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-9 z-30 min-w-40 overflow-hidden rounded-xl border border-border bg-white p-1.5 text-sm shadow-lg dark:bg-gray-900"
+                className="absolute right-0 top-9 z-40 min-w-40 overflow-hidden rounded-xl border border-border bg-white p-1.5 text-sm shadow-lg dark:bg-gray-900"
                 data-testid={`event-card-menu-${event.id}`}
               >
                 <button

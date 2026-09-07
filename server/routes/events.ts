@@ -19,7 +19,7 @@ import {
 } from '../services/eventExecutionService.js';
 import { createTopicSpace, deleteTopicSpace, getTopicSpace } from '../services/topicSpaces.js';
 import { convertStandaloneTaskToEventNode } from '../services/taskEventConversion.js';
-import { getMindMap, updateMindMap } from '../services/mindmaps.js';
+import { getMindMap, updateMindMap, deleteMindMap } from '../services/mindmaps.js';
 import { randomUUID } from 'node:crypto';
 import type { EventContext } from '../types/event.js';
 // Sprint 1 Gap 7: mirror v1 task completion back to the linked mindmap node.
@@ -477,11 +477,19 @@ router.delete('/:id', async (req, res) => {
     // projections to clean up once the delete succeeds.
     const space = await getTopicSpace(req.params.id);
     const ok = await deleteTopicSpace(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Event not found' });
+    // Legacy/standalone MindMaps surface as Event shells in listAllEvents;
+    // without this fallback they are listed but undeletable (404 forever).
+    const deletedMap = ok ? false : await deleteMindMap(req.params.id);
+    if (!ok && !deletedMap) return res.status(404).json({ error: 'Event not found' });
     // Best-effort: remove the event's scheduled Today-task lines from the
     // daily notes. Failure must not make the client think the delete
     // itself failed.
     if (space?.mindmapId) {
+      // The dominant mindmap is created 1:1 with the space, so it must go
+      // too — otherwise it survives as an orphaned "legacy shell" event and
+      // the deleted event reappears in the list (delete "not taking effect").
+      await deleteMindMap(space.mindmapId)
+        .catch(err => console.error('[events] failed to delete dominant mindmap:', err));
       await unscheduleAllNodeTasks({ mindmapId: space.mindmapId })
         .catch(err => console.error('[events] failed to remove scheduled node tasks:', err));
     }
