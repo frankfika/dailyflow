@@ -308,6 +308,33 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [activeTab, activeOverlay]);
+
+  // UX: Esc closes the workspace overlay (Notes / AI / Calendar / Memory /
+  // Team) and the Quick Note editor. The handler is intentionally global so
+  // it works on mobile (where the overlay owns the whole screen) without
+  // needing focus-trap plumbing. We skip when the user is typing in an
+  // input/textarea/contenteditable — Esc should clear the field first.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.isContentEditable) return;
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      }
+      if (showQuickNoteEditor) {
+        setShowQuickNoteEditor(false);
+        return;
+      }
+      if (activeOverlay) {
+        setActiveOverlay(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeOverlay, showQuickNoteEditor]);
   const [language, setLanguage] = useState<'en' | 'zh'>(() => {
     try {
       return localStorage.getItem('df_language') === 'zh' ? 'zh' : 'en';
@@ -851,16 +878,26 @@ export default function App() {
     loadTasksForDate(currentFileDate);
   }, [currentFileDate, loadTasksForDate]);
 
+  // Today's task list is projected from the Event adapter's `today-items`
+  // query (see `projectedTodayTasks`), and any write to today's tasks
+  // (cross-component tasksChanged event, daily init rollover, manual
+  // rollover) must invalidate that query — otherwise the new task stays
+  // invisible in Today until a stale-timeout refetch.
+  const refreshTodayProjection = useCallback(() => {
+    void todayItemsQuery.refetch();
+  }, [todayItemsQuery]);
+
   useEffect(() => {
     const reloadChangedDay = (event: Event) => {
       const changedDate = (event as CustomEvent<{ date?: string }>).detail?.date;
       if (!changedDate || changedDate === currentFileDate) {
         void loadTasksForDate(currentFileDate);
+        void refreshTodayProjection();
       }
     };
     window.addEventListener(DOMAIN_EVENTS.tasksChanged, reloadChangedDay);
     return () => window.removeEventListener(DOMAIN_EVENTS.tasksChanged, reloadChangedDay);
-  }, [currentFileDate, loadTasksForDate]);
+  }, [currentFileDate, loadTasksForDate, refreshTodayProjection]);
 
   useEffect(() => {
     if (!activeWorkspaceId || isFirstRun !== false || currentFileDate !== getTodayStr()) return;
@@ -870,14 +907,15 @@ export default function App() {
     dailyApi.initialize(currentFileDate, activeContext)
       .then(result => {
         if (result.recurringCreated > 0 || result.migratedCount > 0) {
-          return loadTasksForDate(currentFileDate);
+          void loadTasksForDate(currentFileDate);
+          void refreshTodayProjection();
         }
       })
       .catch(error => {
         initializedDaysRef.current.delete(key);
         console.error('Daily initialization failed', error);
       });
-  }, [activeContext, activeWorkspaceId, currentFileDate, isFirstRun, loadTasksForDate]);
+  }, [activeContext, activeWorkspaceId, currentFileDate, isFirstRun, loadTasksForDate, refreshTodayProjection]);
 
   const reloadFileList = useCallback(async () => {
     try {
@@ -1010,8 +1048,9 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
         const singleKeyActions: Record<string, () => void> = {
-          '1': () => setActiveTab('today'),
-          t: () => setActiveTab('today'),
+          '1': () => { setActiveTab('today'); setActiveOverlay(null); },
+          t: () => { setActiveTab('today'); setActiveOverlay(null); },
+          '2': () => { setActiveTab('events'); setActiveOverlay(null); },
           j: () => kbActionsRef.current.reflection(),
           r: () => kbActionsRef.current.rollover(),
           '3': () => setActiveOverlay('notes'),
@@ -1704,6 +1743,8 @@ export default function App() {
         setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
       }
       await refreshEarlierOpenTasks();
+      // Rollover adds tasks to today, so refresh the canonical Today projection.
+      void refreshTodayProjection();
       // S12: offer a quiet prompt bar for the day that was just archived
       // instead of interrupting with an auto-opened modal.
       if (!isReflectionPromptOptedOut()) {

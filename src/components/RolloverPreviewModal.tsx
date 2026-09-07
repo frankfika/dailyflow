@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
@@ -23,6 +24,24 @@ export function RolloverPreviewModal({
   onClose,
   onConfirm,
 }: RolloverPreviewModalProps) {
+  // Esc closes the modal (matches DailyReflectionModal / SettingsModal).
+  // Skipped while the rollover request is in flight so an accidental Esc
+  // doesn't abort a half-applied migration.
+  useEffect(() => {
+    if (!show || isRollingOver) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.isContentEditable) return;
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      }
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [show, isRollingOver, onClose]);
   return (
     <AnimatePresence>
       {show && preview && (
