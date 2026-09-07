@@ -13,7 +13,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { deriveLayout, entityPath, type V2Layout } from './paths.js';
-import { atomicWrite, readWithHash, sha256, type AtomicWriteResult } from './atomicWrite.js';
+import { atomicWrite, readWithHash, sha256, ConcurrentModificationError, type AtomicWriteResult } from './atomicWrite.js';
 import { AuditLog, type AuditEventKind, type AuditEvent } from './audit.js';
 import { parseFrontmatter, snakeToCamel } from './markdownParser.js';
 import {
@@ -412,23 +412,76 @@ export class V2Repository {
     const filePath = existingPath
       ?? entityPath(this.layout, 'note', '', validated.id, partitionDate);
     const content = serializeNoteDocument(validated);
-    // Round-trip drift guard: when the caller does not pin an expectedHash,
-    // anchor the conflict check to the actual on-disk hash captured right
-    // before the write. Without this, a note whose on-disk form differs from
-    // a clean re-serialization (e.g. an extra trailing newline left by an
-    // external editor or an older serializer) would refuse every save with
-    // ConcurrentModificationError, because serializeNoteDocument(parsed) is
-    // not byte-identical to the file it was parsed from. autoSaveVersion
-    // remains the primary concurrency guard; this just keeps the byte-level
-    // check honest about what "no change" means.
+    // Serializer drift guard: the conflict check compares bytes, but a note
+    // whose on-disk form differs from a clean re-serialization (e.g. an
+    // extra trailing newline left by an external editor or an older
+    // serializer) is not a real conflict. When an expectedHash mismatch
+    // occurs, re-serialize the on-disk document and treat a byte-identical
+    // result as drift (proceed with the write); anything else is a genuine
+    // concurrent modification. autoSaveVersion remains the primary
+    // concurrency guard; this keeps the byte-level check honest about what
+    // "no change" means without letting stale byte drift clobber real
+    // external edits.
     let expectedHash = opts.expectedHash;
     if (expectedHash === undefined && existingPath !== null) {
       const prior = await readWithHash(existingPath);
       expectedHash = prior?.hash;
     }
-    const result = await atomicWrite({ filePath, content, expectedHash });
+    let result: AtomicWriteResult;
+    try {
+      result = await atomicWrite({ filePath, content, expectedHash });
+    } catch (err) {
+      if (
+        err instanceof ConcurrentModificationError
+        && opts.expectedHash !== undefined
+        && existingPath !== null
+      ) {
+        const prior = await readWithHash(existingPath);
+        // Normalize the byte drift we are forgiving: trailing blank lines
+        // appended at end of file. The reader trims exactly one trailing
+        // \n from the body, so strip all of them before the semantic parse
+        // or the drift itself re-enters the parsed body and defeats the
+        // comparison.
+        const priorDoc = prior
+          ? this.parseNoteDocumentText(prior.content.replace(/\n+$/, ''))
+          : null;
+        // Drift, not a conflict: the on-disk file re-serializes to exactly
+        // the document the caller pinned its expectedHash against, so the
+        // only difference is byte-level serializer drift. Anything else is
+        // a genuine concurrent external edit.
+        if (prior && priorDoc && sha256(serializeNoteDocument(priorDoc)) === opts.expectedHash) {
+          result = await atomicWrite({ filePath, content, expectedHash: prior.hash });
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
     await this.appendAudit(opts, result);
     return result;
+  }
+
+  /** Parse on-disk note markdown into a NoteDocument, or null if malformed. */
+  private parseNoteDocumentText(text: string): NoteDocument | null {
+    try {
+      const { data, body } = parseFrontmatter(text);
+      if (!data || typeof data !== 'object') return null;
+      const d = data as Record<string, unknown>;
+      if (d.type !== 'note') return null;
+      // NoteDocumentSchema requires `body`. The serializer writes body to
+      // the markdown section only (frontmatter YAML scalar encoding would
+      // mangle multi-paragraph notes), so trim the trailing \n it adds.
+      const dataWithBody =
+        d.body === undefined || d.body === null || d.body === ''
+          ? { ...d, body: body.replace(/\n$/, '') }
+          : d;
+      const normalized = snakeToCamel<Record<string, unknown>>(dataWithBody);
+      const parsed = NoteDocumentSchema.safeParse(normalized);
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
   }
 
   async getNoteDocument(id: string): Promise<NoteDocument | null> {

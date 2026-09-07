@@ -27,7 +27,9 @@ import {
 } from '../../domain/v2/types.js';
 import {
   ConcurrentModificationError as RepoConcurrentModificationError,
+  sha256 as fileSha256,
 } from '../../repositories/v2/atomicWrite.js';
+import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 
 // Re-export the repository's error so callers can `instanceof` check
 // against the same class the routes layer catches.
@@ -255,14 +257,17 @@ export class NoteService {
       updatedAt: new Date().toISOString(),
       autoSaveVersion: existing.autoSaveVersion + 1,
     });
-    // expectedHash is intentionally omitted: the repository reads the
-    // actual on-disk hash right before writing so a file whose on-disk
-    // form differs from a clean re-serialization (e.g. an extra trailing
-    // newline left by an external editor or older serializer) does not
-    // falsely trip ConcurrentModificationError. The autoSaveVersion
-    // check at the top of this method is the primary concurrency guard;
-    // the in-process file write lock covers the rest.
-    await this.repo.saveNoteDocument(next);
+    // Pin the hash of a clean re-serialization of the note we just read.
+    // If the on-disk bytes drift from that form (e.g. an extra trailing
+    // newline left by an external editor or older serializer), the
+    // repository performs a semantic compare — re-serializing the on-disk
+    // document — and proceeds when the content is unchanged, while a
+    // genuine external edit still trips ConcurrentModificationError. The
+    // autoSaveVersion check at the top of this method is the primary
+    // concurrency guard; the in-process file write lock covers the rest.
+    await this.repo.saveNoteDocument(next, {
+      expectedHash: fileSha256(serializeNoteDocument(existing)),
+    });
     return next;
   }
 
@@ -274,8 +279,11 @@ export class NoteService {
       lastOpenedAt: new Date().toISOString(),
       updatedAt: note.updatedAt,
     });
-    // See update() above for why expectedHash is left to the repository.
-    await this.repo.saveNoteDocument(next);
+    // See update() above: the repository's semantic compare lets byte
+    // drift through while still catching genuine external edits.
+    await this.repo.saveNoteDocument(next, {
+      expectedHash: fileSha256(serializeNoteDocument(note)),
+    });
     return next;
   }
 

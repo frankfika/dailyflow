@@ -318,6 +318,35 @@ describe('note meeting capture service', () => {
     expect(request[1]?.headers).toBeUndefined();
   });
 
+  it('treats the siliconflow provider as OpenAI-compatible ASR', async () => {
+    const note = await new NoteService(repo).create({ body: '', kind: 'meeting' });
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      text: '硅基流动转写结果。',
+      segments: [{ start: 1, end: 5, speaker: '方辰', text: '硅基流动转写结果。' }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const fetchImpl = fetchMock as unknown as typeof fetch;
+
+    const result = await captureNoteMeeting(repo, note.id, {
+      audio: { data: Buffer.from('audio').toString('base64'), mimeType: 'audio/mpeg' },
+      transcription: {
+        mode: 'remote',
+        provider: 'siliconflow',
+        apiKey: 'secret',
+        baseUrl: 'https://api.siliconflow.cn/v1',
+        model: 'FunAudioLLM/SenseVoiceSmall',
+        diarize: false,
+      },
+    }, fetchImpl);
+
+    expect(result.transcriptionMode).toBe('remote');
+    expect(result.text).toBe('硅基流动转写结果。');
+    const request = fetchMock.mock.calls[0]!;
+    expect(request[0]).toBe('https://api.siliconflow.cn/v1/audio/transcriptions');
+    expect((request[1]?.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+    const form = request[1]?.body as FormData;
+    expect(form.get('model')).toBe('FunAudioLLM/SenseVoiceSmall');
+  });
+
   it('can transcribe an already-saved recording later without recapturing audio', async () => {
     const note = await new NoteService(repo).create({ body: 'manual notes', kind: 'meeting' });
     const captured = await captureNoteMeeting(repo, note.id, {

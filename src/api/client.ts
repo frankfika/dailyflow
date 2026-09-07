@@ -889,15 +889,16 @@ export const workspacesApi = {
           });
           // Click triggers the native picker.
           input.click();
-          // Fallback timeout — some browsers fire neither change nor cancel.
-          setTimeout(() => {
-            if (!resolved) { resolved = true; cleanup(); resolve(null); }
-          }, 5 * 60 * 1000);
+          // No fallback timeout: in every engine we target (Chromium,
+          // Safari/WKWebView >= 16.4, Firefox >= 91) dismissing the dialog
+          // fires `cancel`, so both outcomes are always reported. A timer
+          // here would discard a selection made while the user browses.
         });
         if (folderName) {
           // Resolve to a real path on the server. The server searches
           // ~/Documents, ~/Desktop, etc. so the user doesn't have to
           // type the full path.
+          let resolvedPath: string | null = null;
           try {
             const res = await fetch(`${API_BASE}/config/resolve-folder`, {
               method: 'POST',
@@ -906,12 +907,19 @@ export const workspacesApi = {
             });
             if (res.ok) {
               const data = await res.json();
-              if (data.path) return data.path;
+              resolvedPath = data.path || null;
             }
           } catch {
-            // fall through with raw name
+            // network error — handled below as "not found"
           }
-          return folderName;
+          if (!resolvedPath) {
+            // Fail loudly: returning the bare folder name here would feed
+            // callers a bogus relative path that silently misbehaves.
+            throw new Error(
+              '未在 ~/Documents、~/Desktop 或 ~ 下找到该文件夹，请把它移到这些位置后重试 / Folder not found under ~/Documents, ~/Desktop, or ~'
+            );
+          }
+          return resolvedPath;
         }
         return null;
       } catch {

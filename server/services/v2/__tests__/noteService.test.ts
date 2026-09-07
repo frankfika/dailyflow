@@ -16,7 +16,9 @@ import path from 'path';
 import os from 'os';
 import { V2Repository } from '../../../repositories/v2/repository';
 import { NoteService, NoteNotFoundError, ConcurrentModificationError } from '../noteService';
-import { ConcurrentModificationError as RepoConcurrentModificationError } from '../../../repositories/v2/atomicWrite';
+import { ConcurrentModificationError as RepoConcurrentModificationError, sha256 } from '../../../repositories/v2/atomicWrite';
+import { serializeNoteDocument } from '../../../repositories/v2/markdownSerializer';
+import { NoteDocumentSchema } from '../../../domain/v2/types';
 import type { Evidence, NoteDocument } from '../../../domain/v2/types';
 
 let workspace: string;
@@ -210,6 +212,36 @@ describe('update', () => {
 
     const reloaded = await repo.getNoteDocument(note.id);
     expect(reloaded?.body).toBe('first\nsecond\nthird');
+  });
+
+  // The counterpart to the drift test above: byte drift is forgiven, but a
+  // save whose pinned expectedHash no longer matches because an external
+  // editor (e.g. Obsidian) changed the note's actual content must still be
+  // rejected instead of silently clobbering the external edit. The conflict
+  // manifests at the repository level: a caller that read the note BEFORE
+  // the external edit pins a hash computed from that stale read.
+  it('throws ConcurrentModificationError over a genuinely externally-modified file', async () => {
+    const note = await svc.create({ body: 'first\nsecond' });
+    const filePath = await (repo as unknown as { findNoteDocumentPath: (id: string) => Promise<string | null> })
+      .findNoteDocumentPath(note.id);
+    expect(filePath).toBeTruthy();
+    const staleHash = sha256(serializeNoteDocument(note));
+
+    // External editor appends a new line to the note body.
+    const onDisk = await fs.readFile(filePath!, 'utf8');
+    await fs.writeFile(filePath!, onDisk + 'An external Obsidian edit.\n', 'utf8');
+
+    const stale = NoteDocumentSchema.parse({
+      ...note,
+      body: 'first\nsecond\nthird',
+      autoSaveVersion: note.autoSaveVersion + 1,
+      updatedAt: new Date().toISOString(),
+    });
+    await expect(repo.saveNoteDocument(stale, { expectedHash: staleHash }))
+      .rejects.toBeInstanceOf(RepoConcurrentModificationError);
+
+    // The external edit survives.
+    expect(await fs.readFile(filePath!, 'utf8')).toContain('An external Obsidian edit.');
   });
 
   it('keeps one stable file when the logical date moves across months', async () => {

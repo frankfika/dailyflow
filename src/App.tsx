@@ -307,7 +307,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeTab]);
+  }, [activeTab, activeOverlay]);
   const [language, setLanguage] = useState<'en' | 'zh'>(() => {
     try {
       return localStorage.getItem('df_language') === 'zh' ? 'zh' : 'en';
@@ -576,10 +576,14 @@ export default function App() {
     window.addEventListener('df:open-entity', open);
     window.addEventListener('df:close-entity', close);
     window.addEventListener('df:entity-open-original', openOriginal);
+    // NoteEditor task chips dispatch this to jump to the Memory overlay.
+    const openMemory = () => setActiveOverlay('memory');
+    window.addEventListener('df:open-memory', openMemory);
     return () => {
       window.removeEventListener('df:open-entity', open);
       window.removeEventListener('df:close-entity', close);
       window.removeEventListener('df:entity-open-original', openOriginal);
+      window.removeEventListener('df:open-memory', openMemory);
     };
   }, []);
 
@@ -2197,6 +2201,8 @@ export default function App() {
                     }}
                     linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => taskInputFocusRef.current?.()}
+                    starredTaskIds={starredTaskIds}
+                    onToggleStar={toggleStar}
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     completionPromptTaskIds={completionPromptTaskIds}

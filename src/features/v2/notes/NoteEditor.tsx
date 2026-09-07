@@ -483,19 +483,10 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     }
   };
   const openTaskInMemory = (id: string) => {
-    // Memory view surfaces all 'open' commitments; the easiest way to
-    // land on this specific one is a deep link into the Ask-AI / Memory
-    // tab with the commitment id pre-filled in the search bar.
-    try {
-      const url = `/memory?q=${encodeURIComponent(id)}`;
-      window.history.pushState({}, '', url);
-      onNotice?.(t.openInMemory, 'info');
-      // The Memory tab listens to window popstate / location change to
-      // surface the highlighted result.
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    } catch {
-      onNotice?.(t.openInMemory, 'info');
-    }
+    // Contract: App.tsx listens for 'df:open-memory' and opens the Memory
+    // overlay with the given query.
+    window.dispatchEvent(new CustomEvent('df:open-memory', { detail: { query: id } }));
+    onNotice?.(t.openInMemory, 'info');
   };
   const linkSelectedTask = async (value: string) => {
     if (!value || isLinkingTask) return;
@@ -872,9 +863,17 @@ function LinkedTaskChip({
 
   return (
     <span ref={wrapperRef} className="relative inline-flex">
-      <button
-        type="button"
+      {/* role="button" instead of <button> so the unlink X inside stays valid HTML */}
+      <span
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
         className={`inline-flex max-w-64 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
           completed
             ? 'border-border bg-surface-elevated/60 text-text-muted line-through'
@@ -903,7 +902,7 @@ function LinkedTaskChip({
         >
           <X size={10} />
         </button>
-      </button>
+      </span>
       {open && (
         <div
           className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-border bg-background p-2 text-xs shadow-md"

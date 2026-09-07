@@ -20,7 +20,9 @@ import {
 import type { V2Repository } from '../../repositories/v2/repository.js';
 import {
   ConcurrentModificationError,
+  sha256 as fileSha256,
 } from '../../repositories/v2/atomicWrite.js';
+import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
 import { assertSafeModelBaseUrl } from '../harness/aiTargetPolicy.js';
 
@@ -34,7 +36,7 @@ const AudioSchema = AudioMetadataSchema.extend({
 });
 
 const EndpointTranscriptionSchema = z.object({
-  provider: z.enum(['openai', 'deepgram', 'elevenlabs', 'openai-compatible']).optional().default('openai-compatible'),
+  provider: z.enum(['openai', 'deepgram', 'elevenlabs', 'openai-compatible', 'siliconflow']).optional().default('openai-compatible'),
   baseUrl: z.string().trim().min(1).max(2_000),
   model: z.string().trim().min(1).max(200),
   apiKey: z.string().max(20_000).optional(),
@@ -117,7 +119,7 @@ interface TranscriptionResponse {
 }
 
 interface TranscriptionConfig {
-  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'openai-compatible';
+  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'openai-compatible' | 'siliconflow';
   baseUrl: string;
   model: string;
   apiKey?: string;
@@ -275,7 +277,9 @@ function transcriptionUrl(baseUrl: string, allowLoopback = false): string {
 
 function providerUrl(config: TranscriptionConfig, allowLoopback: boolean): string {
   const provider = config.provider ?? 'openai-compatible';
-  if (provider === 'openai' || provider === 'openai-compatible') {
+  // siliconflow (https://api.siliconflow.cn/v1) exposes the OpenAI-compatible
+  // ASR surface: POST {base}/audio/transcriptions, Bearer auth, 'model' field.
+  if (provider === 'openai' || provider === 'openai-compatible' || provider === 'siliconflow') {
     return transcriptionUrl(config.baseUrl, allowLoopback);
   }
   if (allowLoopback) throw new Error('Local transcription endpoints must use the OpenAI-compatible provider.');
@@ -512,17 +516,17 @@ async function appendSourcesToNote(
         autoSaveVersion: current.autoSaveVersion + 1,
       });
       try {
-        // expectedHash is intentionally omitted; the repository reads
-        // the actual on-disk hash right before writing. Pinning a hash
-        // computed from serializeNoteDocument(current) here would false-
-        // trip ConcurrentModificationError whenever the on-disk form
-        // drifts from a clean re-serialization (e.g. an extra trailing
-        // newline). The retry loop above is the real concurrency guard.
+        // Pin the hash of a clean re-serialization of the note we just
+        // read. If the on-disk bytes drift from that form (e.g. an extra
+        // trailing newline), the repository's semantic compare lets the
+        // save through; a genuine external edit still trips
+        // ConcurrentModificationError and the retry loop below re-reads.
         await repo.saveNoteDocument(note, {
           auditKind: 'capture',
           auditActor: 'user',
           auditEntity: { type: 'note', id: note.id },
           auditData: { sourceIds },
+          expectedHash: fileSha256(serializeNoteDocument(current)),
         });
         return note;
       } catch (err) {

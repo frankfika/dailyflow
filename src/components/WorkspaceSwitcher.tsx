@@ -80,7 +80,11 @@ export function WorkspaceSwitcher({
       if (params.get('openPicker') === '1' || params.get('openWorkspacePicker') === '1') {
         // Open the centered modal so the user has a clear, findable entry
         // point. They click the orange button to fire the native picker —
-        // we don't auto-spawn a dialog the user might not see.
+        // we don't auto-spawn a dialog the user might not see. Also open
+        // the dropdown: the !open reset effect below runs on mount and
+        // would clobber pickingMode back to 'idle' otherwise.
+        setOpen(true);
+        setPickingMode('modal');
       }
     }
     const onOpen = () => setPickingMode('modal');

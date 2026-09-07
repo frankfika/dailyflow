@@ -14,9 +14,10 @@ import {
   convertStandaloneToEventNodeTask,
   undoConvertStandaloneToEventNodeTask,
   unscheduleNodeTask,
+  unscheduleAllNodeTasks,
   rescheduleNodeTask,
 } from '../services/eventExecutionService.js';
-import { createTopicSpace, deleteTopicSpace } from '../services/topicSpaces.js';
+import { createTopicSpace, deleteTopicSpace, getTopicSpace } from '../services/topicSpaces.js';
 import { convertStandaloneTaskToEventNode } from '../services/taskEventConversion.js';
 import { getMindMap, updateMindMap } from '../services/mindmaps.js';
 import { randomUUID } from 'node:crypto';
@@ -472,8 +473,18 @@ router.post('/actions/reschedule-node-task', async (req, res) => {
  */
 router.delete('/:id', async (req, res) => {
   try {
+    // Fetch the space first so we know which mindmap's scheduled node-task
+    // projections to clean up once the delete succeeds.
+    const space = await getTopicSpace(req.params.id);
     const ok = await deleteTopicSpace(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Event not found' });
+    // Best-effort: remove the event's scheduled Today-task lines from the
+    // daily notes. Failure must not make the client think the delete
+    // itself failed.
+    if (space?.mindmapId) {
+      await unscheduleAllNodeTasks({ mindmapId: space.mindmapId })
+        .catch(err => console.error('[events] failed to remove scheduled node tasks:', err));
+    }
     res.status(204).send();
   } catch (error: any) {
     console.error('[events] delete error:', error);

@@ -23,7 +23,7 @@
  */
 import { randomUUID } from 'crypto';
 import { loadConfig } from './config.js';
-import { readDailyNote, writeDailyNote } from './fileSystem.js';
+import { readDailyNote, writeDailyNote, listDailyNotes } from './fileSystem.js';
 import type { Task } from '../types/task.js';
 import {
   parseMarkdown,
@@ -438,6 +438,41 @@ export async function unscheduleNodeTask(params: {
     if (note) await writeDailyNote(params.scheduledDate, previousContent, cfg).catch(() => null);
     throw error;
   }
+}
+
+/**
+ * Remove every scheduled node-task projection that references the given
+ * mindmap from all daily notes. Used when an event (TopicSpace + mindmap)
+ * is deleted so its scheduled Today tasks do not linger. Reuses the same
+ * line-removal machinery as unscheduleNodeTask; the mindmap file itself is
+ * not touched.
+ */
+export async function unscheduleAllNodeTasks(params: {
+  mindmapId: string;
+  config?: Config;
+}): Promise<{ removed: number }> {
+  const cfg = await resolveConfig(params.config);
+  const dates = await listDailyNotes(cfg);
+  let removed = 0;
+  for (const date of dates) {
+    const note = await readDailyNote(date, cfg);
+    if (!note?.content) continue;
+    const taskLines = parseMarkdown(note.content)
+      .filter(t => t.originMindmapId === params.mindmapId && typeof t.line === 'number')
+      .map(t => t.line as number)
+      // Remove bottom-up so earlier line indices stay valid.
+      .sort((a, b) => b - a);
+    if (taskLines.length === 0) continue;
+    let content = note.content;
+    for (const line of taskLines) {
+      const next = removeTaskFromMarkdown(content, line);
+      if (next !== content) removed += 1;
+      content = next;
+    }
+    await writeDailyNote(date, content, cfg);
+  }
+  if (removed > 0) invalidateTaskIndex();
+  return { removed };
 }
 
 /** Move the same stable task projection to another day without duplication. */

@@ -1653,3 +1653,70 @@ button.today-event-head-main:hover { background: rgba(35, 120, 110, 0.13); }
   font-size: 0.66rem;
   color: var(--color-text-muted);
 }
+
+/* ==========================================================================
+   Today header date nav + proactive suggestions — restored from the v3.x
+   "today-home" snapshot (d36c26a). Only the classes still referenced by
+   App.tsx (date wrap/nav) and ProactiveSuggestionsCard (proactive card) are
+   kept; the rest of the today-home block was intentionally not merged.
+   ========================================================================== */
+
+.today-home-date-wrap {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.today-home-date-nav {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-surface);
+}
+
+.today-home-date-nav button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background 0.16s var(--ease-native), color 0.16s var(--ease-native), transform 0.16s var(--ease-native);
+}
+
+.today-home-date-nav button:hover:not(:disabled) {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.today-home-date-nav button:active:not(:disabled) { transform: scale(0.94); }
+.today-home-date-nav button:disabled { cursor: not-allowed; opacity: 0.3; }
+
+.today-proactive-card {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  box-shadow: none;
+}
+
+.today-proactive-icon { color: var(--color-accent); }
+
+.today-proactive-item {
+  margin-top: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-main);
+}

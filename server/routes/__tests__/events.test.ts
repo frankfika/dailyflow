@@ -487,4 +487,40 @@ describe.sequential('EFP-003 / EFP-005 routes /api/events', () => {
     const del2 = await withServer(app, (p) => request(p, 'DELETE', `/api/events/${id}`));
     expect(del2.status).toBe(404);
   });
+
+  it('DELETE /api/events/:id removes scheduled node-task lines from daily notes', async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-events-route-delete-tasks-'));
+    vi.spyOn(config, 'loadConfig').mockResolvedValue({
+      workspaceRoot: tmpRoot,
+      dailyPathTemplate: 'daily/{date}.md',
+      rolloverTrigger: 'manual' as const,
+      rolloverSkipTags: [] as string[],
+    } as any);
+    const sp = await createTopicSpace({ title: 'Doomed', context: 'work' });
+    const mmId = (sp as any).mindmapId as string;
+    expect(mmId).toBeTruthy();
+
+    const dailyDir = path.join(tmpRoot, 'daily');
+    await fs.mkdir(dailyDir, { recursive: true });
+    const today = '2026-08-18';
+    await fs.writeFile(
+      path.join(dailyDir, `${today}.md`),
+      [
+        `# ${today}`,
+        '',
+        `- [ ] Node task from event ^mm:${mmId} ^node:n1 ^id-t_node1`,
+        '- [ ] Keep me standalone ^id-t_keep1',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const del = await withServer(app, (p) => request(p, 'DELETE', `/api/events/${sp.id}`));
+    expect(del.status).toBe(204);
+
+    const content = await fs.readFile(path.join(dailyDir, `${today}.md`), 'utf-8');
+    expect(content).not.toContain('^mm:');
+    expect(content).not.toContain('Node task from event');
+    expect(content).toContain('Keep me standalone');
+  });
 });

@@ -60,7 +60,6 @@ interface TaskCardProps {
   onSetRecurrence?: (task: Task, recurrence: RecurrenceRule) => void;
   showCompletionPrompt?: boolean;
   onCompletionPromptClosed?: () => void;
-  homeMode?: boolean;
   /** Whether the task has been starred by the user; drives the star button. */
   isStarred?: boolean;
   /** Toggle the starred state. When provided, the star button is rendered. */
@@ -104,7 +103,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onShowLinkedNotes,
   showCompletionPrompt,
   onCompletionPromptClosed,
-  homeMode = false,
   isStarred = false,
   onToggleStar,
 }) => {
@@ -222,7 +220,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ layout: { type: 'spring', stiffness: 500, damping: 40 }, duration: 0.18 }}
-      className={`group transition-all ${homeMode ? 'today-task-card' : 'rounded-xl border shadow-[0_1px_2px_rgba(20,45,38,0.025)]'} ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/80 bg-surface-elevated hover:border-border-strong hover:shadow-[0_4px_16px_rgba(20,45,38,0.055)]'}`}
+      className={`group transition-all rounded-xl border shadow-[0_1px_2px_rgba(20,45,38,0.025)] ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/80 bg-surface-elevated hover:border-border-strong hover:shadow-[0_4px_16px_rgba(20,45,38,0.055)]'}`}
       data-testid={`task-card-${task.id}`}
       onKeyDown={handleCardKeyDown}
     >
@@ -230,7 +228,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          className={`today-task-checkbox mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check sm:h-7 sm:w-7 ${homeMode ? 'today-task-checkbox-home' : ''}`}
+          className={`today-task-checkbox mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check sm:h-7 sm:w-7`}
           title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
           aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
         >
@@ -280,13 +278,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 ))}
               </span>
             )}
-            {homeMode && task.tags?.filter(tag => !['tasks', 'work', 'life', 'delayed'].includes(tag)).map((tag) => (
-              <span key={tag} className="today-task-tag">#{tag}</span>
-            ))}
-            {homeMode && task.project && <span className="today-task-tag">{task.project}</span>}
-            {homeMode && task.priority && <span className="today-task-tag">{task.priority}</span>}
             {task.deadline && (
-              <span className={`inline-flex items-center gap-1 font-medium ${homeMode ? 'today-task-deadline' : isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
+              <span className={`inline-flex items-center gap-1 font-medium ${isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
                 <Calendar className="h-3 w-3" aria-hidden="true" />
                 <span title={task.deadline}>{deadlineLabel}</span>
               </span>
@@ -298,10 +291,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <button
             type="button"
             onClick={onToggleStar}
-            className={`mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors active:scale-95 sm:h-7 sm:w-7 ${homeMode ? '' : 'opacity-0 group-hover:opacity-100'} ${isStarred ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30' : 'text-text-muted hover:bg-black/[0.04] hover:text-amber-500'}`}
+            className={`mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors active:scale-95 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 ${isStarred ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30' : 'text-text-muted hover:bg-black/[0.04] hover:text-amber-500'}`}
             aria-label={isStarred
               ? (language === 'zh' ? '取消星标' : 'Unstar')
-              : (language === 'zh' ? '加星标（置顶到今天第一个 tab）' : 'Star (pin to today\'s first tab)')}
+              : (language === 'zh' ? '加星标' : 'Star')}
             aria-pressed={isStarred}
             data-testid={`task-star-toggle-${task.id}`}
             title={isStarred

@@ -585,36 +585,37 @@ export function MeetingNotePanel({
                 <span className="block">{t.setupSaveOnly}</span>
                 <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-400">{t.setupSaveOnlyHint}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const preset = MEETING_TRANSCRIPTION_PRESETS['siliconflow'];
-                  const next: MeetingTranscriptionSettings = {
-                    ...transcriptionSettings,
-                    mode: 'remote',
-                    remoteProvider: 'siliconflow',
-                    remoteBaseUrl: preset.baseUrl,
-                    remoteModel: preset.model,
-                  };
-                  setTranscriptionSettings(next);
-                  saveMeetingTranscriptionSettings(next);
-                  setShowTranscriptionSettings(true);
-                }}
-                className="rounded-md border border-amber-300 bg-background px-2.5 py-2 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
-                data-testid="setup-pick-siliconflow"
-              >
-                <span className="block">{t.setupRemote}</span>
-                <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const preset = MEETING_TRANSCRIPTION_PRESETS['siliconflow'];
+                    const next: MeetingTranscriptionSettings = {
+                      ...transcriptionSettings,
+                      mode: 'remote',
+                      remoteProvider: 'siliconflow',
+                      remoteBaseUrl: preset.baseUrl,
+                      remoteModel: preset.model,
+                    };
+                    setTranscriptionSettings(next);
+                    saveMeetingTranscriptionSettings(next);
+                    setShowTranscriptionSettings(true);
+                  }}
+                  className="rounded-md border border-amber-300 bg-background px-2.5 py-2 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                  data-testid="setup-pick-siliconflow"
+                >
+                  <span className="block">{t.setupRemote}</span>
+                  <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
+                </button>
                 <a
                   href={t.siliconflowCtaUrl}
                   target="_blank"
                   rel="noreferrer noopener"
-                  onClick={(event) => event.stopPropagation()}
-                  className="mt-1 inline-block text-[10px] underline text-amber-700 hover:text-amber-900 dark:text-amber-400"
+                  className="mt-1 block text-[10px] underline text-amber-700 hover:text-amber-900 dark:text-amber-400"
                 >
                   {t.siliconflowCta} ↗
                 </a>
-              </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {
