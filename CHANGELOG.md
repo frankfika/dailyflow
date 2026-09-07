@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1](https://github.com/frankfika/dailyflow/compare/v2.9.0...v2.9.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **ci:** two pre-existing flakes from v2.8.0 ([aff4014](https://github.com/frankfika/dailyflow/commit/aff4014772c847d4bbb1036a16e5093dacb24bfa))
+
 ## [2.9.0](https://github.com/frankfika/dailyflow/compare/v2.8.0...v2.9.0) (2026-09-07)
 
 
