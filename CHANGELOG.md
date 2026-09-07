@@ -5,6 +5,19 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0](https://github.com/frankfika/dailyflow/compare/v2.7.0...v2.8.0) (2026-09-07)
+
+
+### Features
+
+* voice transcription presets, event deletion, mobile tab bar, starred tasks ([d52e446](https://github.com/frankfika/dailyflow/commit/d52e446b4fdd0b960664fc60c363090315ab41c8))
+
+
+### Bug Fixes
+
+* resolve code-review findings from agent-work integration ([872415b](https://github.com/frankfika/dailyflow/commit/872415be23e49a613283df5d9026522f26015a08))
+* stop hijacking Cmd+Shift+R (browser hard-reload) outside Tauri ([710c48a](https://github.com/frankfika/dailyflow/commit/710c48a3ec34cee5cdfe13db2e6ce7fdf8b0b79c))
+
 ## [2.7.0](https://github.com/frankfika/dailyflow/compare/v2.6.0...v2.7.0) (2026-09-03)
 
 
