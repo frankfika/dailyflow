@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>DailyFlow · v3.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500&family=Long+Cang&family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&family=Inter:wght@300;400;500&family=Noto+Serif+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F4ECD7;
+    --paper-deep: #ECE2C8;
+    --ink: #2A2620;
+    --ink-2: #5A5346;
+    --muted: #998F7C;
+    --line: rgba(42,38,32,0.07);
+    --sage: #6E8862;
+    --amber: #B07C3A;
+    --font-base: "Inter", "Noto Serif SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+    --font-serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+    --font-hand: "Ma Shan Zheng", "Long Cang", "ZCOOL KuaiLe", "Caveat", cursive;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: var(--font-base);
+    font-weight: 300;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.9;
+    padding: 110px 24px 140px;
+    -webkit-font-smoothing: antialiased;
+    background: var(--paper-deep);
+    background-image:
+      radial-gradient(rgba(42,38,32,0.035) 1px, transparent 1.2px);
+    background-size: 16px 16px;
+  }
+
+  /* tiny corner toggle */
+  .toggle {
+    position: fixed;
+    top: 28px; right: 28px;
+    z-index: 10;
+    display: inline-flex;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px;
+  }
+  .toggle button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 300 11.5px/1 var(--font-base);
+    padding: 6px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .3s ease;
+  }
+  .toggle button.active { background: var(--sage); color: #fff; }
+  .toggle button .ic { font-family: var(--font-hand); font-size: 14px; }
+
+  /* tiny brand mark at top-left */
+  .brand {
+    position: fixed;
+    top: 32px; left: 32px;
+    z-index: 10;
+    font-family: var(--font-hand);
+    font-size: 16px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .brand b { color: var(--ink-2); font-weight: 500; }
+
+  /* ========== The page ========== */
+  .page {
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  /* ========== Date as page title (just text) ========== */
+  .date {
+    margin-bottom: 80px;
+  }
+  .date .num {
+    font-family: var(--font-serif);
+    font-size: 64px;
+    font-weight: 400;
+    color: var(--ink);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .date .month {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--muted);
+    margin-bottom: 8px;
+    letter-spacing: 4px;
+  }
+  .date .day {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 14px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ========== Intention (one handwritten line) ========== */
+  .intention {
+    margin: 0 0 100px;
+    font-family: var(--font-hand);
+    font-size: 26px;
+    color: var(--sage);
+    line-height: 1.5;
+  }
+  .intention .label {
+    color: var(--muted);
+    font-size: 14px;
+    font-family: var(--font-base);
+    margin-right: 12px;
+  }
+
+  /* ========== Task list (just text lines) ========== */
+  .tasks { margin: 0 0 100px; }
+  .task {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 18px 0;
+    border-bottom: 1px dotted var(--line);
+    cursor: pointer;
+  }
+  .task:last-child { border-bottom: none; }
+  .task:hover .box { background: var(--sage-faint); border-color: var(--sage); }
+  .box {
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+    border-radius: 4px 3px 4px 3px / 3px 4px 3px 4px;
+    border: 1.3px solid var(--muted);
+    margin-top: 6px;
+    transition: all .2s ease;
+    background: transparent;
+  }
+  .task .title { flex: 1; font-size: 17px; color: var(--ink); }
+  .task .note {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-family: var(--font-hand);
+    font-size: 16px;
+    white-space: nowrap;
+  }
+  .task .note.urgent { color: var(--amber); }
+  .task .note.sage { color: var(--sage); }
+
+  /* ========== Done (just a sentence) ========== */
+  .done {
+    padding: 30px 0 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .done .num { font-family: var(--font-hand); font-size: 20px; color: var(--sage); }
+
+  /* ========== Hand mode: more chill ========== */
+  body.hand .date .num,
+  body.hand .date .month {
+    font-family: var(--font-hand);
+    font-size: 88px;
+    font-weight: 400;
+    letter-spacing: 1px;
+  }
+  body.hand .date .month { font-size: 24px; letter-spacing: 2px; }
+  body.hand .date .day { font-family: var(--font-hand); font-size: 18px; }
+  body.hand .intention { font-size: 32px; }
+  body.hand .intention .label { font-family: var(--font-hand); font-size: 18px; }
+  body.hand .task .title { font-family: var(--font-hand); font-size: 21px; }
+  body.hand .task .note { font-size: 19px; }
+  body.hand .done { font-family: var(--font-hand); font-size: 18px; }
+  body.hand .done .num { font-size: 24px; }
+  body.hand .brand { color: var(--sage); font-size: 18px; }
+  body.hand .box { border-radius: 3px 4px 3px 4px / 4px 3px 4px 3px; }
+
+  /* ========== Note (bottom) ========== */
+  .note-card {
+    max-width: 540px;
+    margin: 120px auto 0;
+    padding: 22px 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.85;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .note-card .ttl {
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .note-card b { color: var(--ink); font-weight: 400; }
+  .note-card code { font-family: "Caveat", monospace; font-size: 14px; color: var(--sage); }
+
+  @media (max-width: 600px) {
+    body { padding: 80px 18px 100px; }
+    .date .num { font-size: 48px; }
+    body.hand .date .num { font-size: 60px; }
+    .intention { font-size: 22px; }
+    .task .title { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand"><b>DailyFlow</b></div>
+<div class="toggle" role="tablist">
+  <button type="button" class="active" data-mode="std">标准</button>
+  <button type="button" data-mode="hand"><span class="ic">A</span></button>
+</div>
+
+<main class="page">
+
+  <header class="date">
+    <div class="month">八月</div>
+    <div class="num">31</div>
+    <div class="day">2026 · 周一 · 第 32 周</div>
+  </header>
+
+  <div class="intention">
+    <span class="label">今天</span>把 DSH 跑通
+  </div>
+
+  <div class="tasks">
+    <div class="task">
+      <div class="box"></div>
+      <div class="title">完成 DSH 接入测试</div>
+      <div class="note urgent">今天截止</div>
+    </div>
+    <div class="task">
+      <div class="box"></div>
+      <div class="title">部署集成环境</div>
+      <div class="note">本周</div>
+    </div>
+    <div class="task">
+      <div class="box"></div>
+      <div class="title">给团队同步 Q3 路线图</div>
+      <div class="note urgent">昨天</div>
+    </div>
+    <div class="task">
+      <div class="box"></div>
+      <div class="title">写日报</div>
+      <div class="note sage">5 分钟</div>
+    </div>
+    <div class="task">
+      <div class="box"></div>
+      <div class="title">优化 onboarding 文案</div>
+      <div class="note">本周</div>
+    </div>
+  </div>
+
+  <div class="done">
+    <span>已经写完</span>
+    <span class="num">9</span>
+    <span>件小事</span>
+  </div>
+
+</main>
+
+<div class="note-card">
+  <span class="ttl">v3.5 · 极简</span>
+  这次砍掉了所有"看起来像 app"的东西：没有工具栏 / 切换按钮变角落小点 / 没有 AI 提示条 / 没有 section header / 没有进度条 / 没有脑图 emoji / 没有"已完成"图标 / 没有输入框边框 / 没有胶囊标签——整页只剩<b>一个日期 + 一行 intention + 一列任务 + 一行小结</b>。<br><br>
+  字体默认走 <code>Inter + Noto Serif SC</code>（克制、清晰），右上角小圆点切到 <code>Ma Shan Zheng + Long Cang</code>（手帐）。两种都是 chill，但没有任何 UI 元素在抢戏。<br><br>
+  配色只保留 2 个：<code>sage #6E8862</code>（"今天"/"完成"那个绿色）+ <code>amber #B07C3A</code>（"截止/紧急"那个橘色）。其他全是纸 + 墨。<br><br>
+  留白：日期下 <code>80px</code>，intention 下 <code>100px</code>，tasks 上下 <code>100px</code>，行高 <code>1.9</code>——比 v3.4 再 +30%。
+</div>
+
+<script>
+  const body = document.body;
+  const buttons = document.querySelectorAll('.toggle button');
+  buttons.forEach(b => {
+    b.addEventListener('click', () => {
+      buttons.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const mode = b.dataset.mode;
+      body.classList.toggle('hand', mode === 'hand');
+    });
+  });
+</script>
+
+</body>
+</html>

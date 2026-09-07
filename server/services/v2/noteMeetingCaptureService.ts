@@ -20,9 +20,7 @@ import {
 import type { V2Repository } from '../../repositories/v2/repository.js';
 import {
   ConcurrentModificationError,
-  sha256 as fileSha256,
 } from '../../repositories/v2/atomicWrite.js';
-import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 import { NoteNotFoundError } from './noteService.js';
 import { assertSafeModelBaseUrl } from '../harness/aiTargetPolicy.js';
 
@@ -514,8 +512,13 @@ async function appendSourcesToNote(
         autoSaveVersion: current.autoSaveVersion + 1,
       });
       try {
+        // expectedHash is intentionally omitted; the repository reads
+        // the actual on-disk hash right before writing. Pinning a hash
+        // computed from serializeNoteDocument(current) here would false-
+        // trip ConcurrentModificationError whenever the on-disk form
+        // drifts from a clean re-serialization (e.g. an extra trailing
+        // newline). The retry loop above is the real concurrency guard.
         await repo.saveNoteDocument(note, {
-          expectedHash: fileSha256(serializeNoteDocument(current)),
           auditKind: 'capture',
           auditActor: 'user',
           auditEntity: { type: 'note', id: note.id },

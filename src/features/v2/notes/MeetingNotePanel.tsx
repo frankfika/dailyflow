@@ -95,12 +95,17 @@ const COPY = {
     localConfigSaved: '本地转写设置已保存。',
     localNotReady: '本地转写尚未就绪，请确认执行程序和模型文件路径。',
     saveConfig: '保存并检测',
-    setupTitle: '先选好录音后的处理方式',
-    setupBody: '只录音不需要 AI 或 API Key。自动转写可使用 OpenAI、Deepgram、ElevenLabs 等远程服务（需要对应服务的 API Key），也可使用本地 whisper.cpp（无需 API Key）。',
-    setupRemote: '设置远程转写',
-    setupRemoteHint: '需要服务商 API Key',
-    setupLocal: '设置本地转写',
-    setupLocalHint: '无需 API Key',
+    setupTitle: '选一个就行 · 录音后怎么处理',
+    setupBody: '只录音不需要任何配置；想自动转写则选一个后面随时可以换。Ollama 跑的是 AI 聊天模型，不能转写语音，所以不在选项里。',
+    setupSaveOnly: '只保存录音',
+    setupSaveOnlyHint: '零配置 · 手动整理',
+    setupRemote: '云端转写（硅基流动 / OpenAI 等）',
+    setupRemoteHint: '需要 API Key · 推荐硅基流动（送 ¥9.9 体验金）',
+    setupLocal: '本地 Whisper（whisper.cpp）',
+    setupLocalHint: '免费 · 隐私 · 无需 API Key',
+    siliconflowCta: '硅基流动送 ¥9.9 体验金 · 中文识别强',
+    siliconflowCtaUrl: 'https://cloud.siliconflow.cn/account/ak',
+    localSetupHint: '需要 brew install whisper-cpp ffmpeg · 一个 ggml 模型',
     apiKeyRequired: '远程自动转写尚未启用：请填写所选服务商的 API Key。录音仍可正常保存。',
   },
   en: {
@@ -170,12 +175,17 @@ const COPY = {
     localConfigSaved: 'Local transcription settings saved.',
     localNotReady: 'Local transcription is not ready. Check the executable and model paths.',
     saveConfig: 'Save & check',
-    setupTitle: 'Choose what happens after recording',
-    setupBody: 'Recording and saving do not require AI or an API key. Automatic transcription can use OpenAI, Deepgram, or ElevenLabs with that provider’s API key, or local whisper.cpp without an API key.',
-    setupRemote: 'Set up remote transcription',
-    setupRemoteHint: 'Provider API key required',
-    setupLocal: 'Set up local transcription',
-    setupLocalHint: 'No API key required',
+    setupTitle: 'Pick one — what happens after recording',
+    setupBody: 'Saving a recording needs no setup. To auto-transcribe, pick one below — you can switch anytime. Note: Ollama runs chat models only, it cannot transcribe audio.',
+    setupSaveOnly: 'Save recording only',
+    setupSaveOnlyHint: 'Zero setup · write up later',
+    setupRemote: 'Cloud transcription (SiliconFlow / OpenAI …)',
+    setupRemoteHint: 'API key required · SiliconFlow gives ¥9.9 trial credit',
+    setupLocal: 'Local Whisper (whisper.cpp)',
+    setupLocalHint: 'Free · private · no API key',
+    siliconflowCta: 'SiliconFlow gives ¥9.9 trial credit · strong for Chinese',
+    siliconflowCtaUrl: 'https://cloud.siliconflow.cn/account/ak',
+    localSetupHint: 'Needs brew install whisper-cpp ffmpeg · one ggml model',
     apiKeyRequired: 'Remote transcription is not active yet. Add the selected provider’s API key; recording and saving still work.',
   },
 } as const;
@@ -561,19 +571,49 @@ export function MeetingNotePanel({
           <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="transcription-setup-callout">
             <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{t.setupTitle}</p>
             <p className="mt-1 text-[12px] leading-5 text-amber-800/90 dark:text-amber-300/90">{t.setupBody}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => {
-                  const next = { ...transcriptionSettings, mode: 'remote' as const };
+                  const next = { ...transcriptionSettings, mode: 'save-only' as const };
+                  setTranscriptionSettings(next);
+                  saveMeetingTranscriptionSettings(next);
+                }}
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-2 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                data-testid="setup-pick-save-only"
+              >
+                <span className="block">{t.setupSaveOnly}</span>
+                <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-400">{t.setupSaveOnlyHint}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const preset = MEETING_TRANSCRIPTION_PRESETS['siliconflow'];
+                  const next: MeetingTranscriptionSettings = {
+                    ...transcriptionSettings,
+                    mode: 'remote',
+                    remoteProvider: 'siliconflow',
+                    remoteBaseUrl: preset.baseUrl,
+                    remoteModel: preset.model,
+                  };
                   setTranscriptionSettings(next);
                   saveMeetingTranscriptionSettings(next);
                   setShowTranscriptionSettings(true);
                 }}
-                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-2 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                data-testid="setup-pick-siliconflow"
               >
                 <span className="block">{t.setupRemote}</span>
-                <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
+                <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-400">{t.setupRemoteHint}</span>
+                <a
+                  href={t.siliconflowCtaUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-1 inline-block text-[10px] underline text-amber-700 hover:text-amber-900 dark:text-amber-400"
+                >
+                  {t.siliconflowCta} ↗
+                </a>
               </button>
               <button
                 type="button"
@@ -583,7 +623,8 @@ export function MeetingNotePanel({
                   saveMeetingTranscriptionSettings(next);
                   setShowTranscriptionSettings(true);
                 }}
-                className="rounded-md border border-amber-300 bg-background px-2.5 py-1.5 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                className="rounded-md border border-amber-300 bg-background px-2.5 py-2 text-left text-[12px] font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200"
+                data-testid="setup-pick-local"
               >
                 <span className="block">{t.setupLocal}</span>
                 <span className="block font-normal text-amber-700 dark:text-amber-400">{t.setupLocalHint}</span>
@@ -788,6 +829,7 @@ export function MeetingNotePanel({
                   className="rounded-md border border-border bg-surface px-2 py-1.5 text-text-primary"
                 >
                   <option value="openai">OpenAI</option>
+            <option value="siliconflow">硅基流动 SiliconFlow（中文会议推荐）</option>
                   <option value="deepgram">Deepgram</option>
                   <option value="elevenlabs">ElevenLabs</option>
                   <option value="openai-compatible">OpenAI compatible</option>

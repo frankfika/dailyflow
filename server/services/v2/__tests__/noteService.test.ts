@@ -182,6 +182,36 @@ describe('update', () => {
     expect(reloaded?.commitmentIds).toEqual(['com_01KBBBBBBBBBBBBBBBB']);
   });
 
+  // Regression: a note whose on-disk form differs from a clean
+  // re-serialization (e.g. an extra trailing newline left by an external
+  // editor or an older serializer) used to refuse every save with
+  // ConcurrentModificationError, because the service hashed
+  // serializeNoteDocument(existing) as the expectedHash while atomicWrite
+  // compared against the raw file bytes. The repository now anchors the
+  // byte-level check to the actual on-disk hash when no expectedHash is
+  // pinned, so these edits round-trip cleanly.
+  it('saves through a non-canonical on-disk form (e.g. extra trailing newline)', async () => {
+    const note = await svc.create({ body: 'first\nsecond' });
+    // Rewriting the file directly simulates an external editor appending a
+    // blank line at the end, which the serializer's round-trip would not
+    // reproduce byte-for-byte.
+    const filePath = await (repo as unknown as { findNoteDocumentPath: (id: string) => Promise<string | null> })
+      .findNoteDocumentPath(note.id);
+    expect(filePath).toBeTruthy();
+    const onDisk = await fs.readFile(filePath!, 'utf8');
+    await fs.writeFile(filePath!, onDisk + '\n', 'utf8');
+
+    const updated = await svc.update(note.id, {
+      expectedAutoSaveVersion: note.autoSaveVersion,
+      body: 'first\nsecond\nthird',
+    });
+    expect(updated.autoSaveVersion).toBe(note.autoSaveVersion + 1);
+    expect(updated.body).toBe('first\nsecond\nthird');
+
+    const reloaded = await repo.getNoteDocument(note.id);
+    expect(reloaded?.body).toBe('first\nsecond\nthird');
+  });
+
   it('keeps one stable file when the logical date moves across months', async () => {
     const note = await svc.create({ body: 'dated note', date: '2026-07-29' });
     const updated = await svc.update(note.id, {

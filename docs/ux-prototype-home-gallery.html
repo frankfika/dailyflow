@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>DailyFlow 主页原型 · 5 版本对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Serif+SC:wght@400;500;600&family=Ma+Shan+Zheng&family=Caveat:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5EFE3;
+    --paper: #FBF6E9;
+    --ink: #2A2620;
+    --ink-2: #4A423A;
+    --muted: #998F7C;
+    --line: rgba(42,38,32,0.10);
+    --sage: #6E8862;
+    --amber: #B07C3A;
+    --font-base: "Inter", "Noto Serif SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+    --font-serif: "Noto Serif SC", "Songti SC", serif;
+    --font-hand: "Ma Shan Zheng", "Caveat", cursive;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-base);
+    font-weight: 300;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 60px 32px 100px;
+    background: var(--bg);
+    background-image: radial-gradient(rgba(42,38,32,0.035) 1px, transparent 1.2px);
+    background-size: 18px 18px;
+  }
+  .header {
+    max-width: 1400px;
+    margin: 0 auto 50px;
+  }
+  .header .stamp {
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .header .stamp b { color: var(--ink-2); }
+  .header h1 {
+    font-family: var(--font-serif);
+    font-size: 38px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.2;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+  }
+  .header p {
+    font-size: 15px;
+    color: var(--ink-2);
+    max-width: 760px;
+  }
+
+  .grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 36px;
+  }
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 16px 32px -22px rgba(42,38,32,0.18);
+    display: flex;
+    flex-direction: column;
+  }
+  .card .label {
+    padding: 22px 26px 14px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card .label .ver {
+    font-family: var(--font-hand);
+    font-size: 24px;
+    color: var(--sage);
+  }
+  .card .label .name {
+    font-family: var(--font-serif);
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.3px;
+  }
+  .card .label .vtag {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .card .desc {
+    padding: 14px 26px 18px;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    line-height: 1.7;
+  }
+  .card .desc b { color: var(--ink); font-weight: 500; }
+  .card .preview {
+    background: #2A2620;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    height: 360px;
+    overflow: hidden;
+    position: relative;
+  }
+  .card .preview img {
+    width: 100%;
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  .card .meta {
+    padding: 16px 26px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .card .meta a {
+    color: var(--sage);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .card .meta a:hover { text-decoration: underline; }
+  .card .modes {
+    display: flex;
+    gap: 8px;
+  }
+  .card .mode-tag {
+    font-size: 10.5px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2px 7px;
+  }
+
+  .footer {
+    max-width: 1400px;
+    margin: 60px auto 0;
+    padding: 24px 28px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.85;
+  }
+  .footer b { color: var(--ink-2); font-weight: 500; }
+
+  @media (max-width: 1000px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="stamp"><b>DailyFlow</b> · 主页原型 5 版本对比</div>
+  <h1>同一份任务，做了五种"chill"的方式</h1>
+  <p>从左到右、从上到下，越往下越像"翻开一页纸"，越不像"打开一个 app"。每张图都可以点开看实际效果（链接在卡片底部）。</p>
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <div class="label">
+      <span class="ver">v3.2</span>
+      <span class="name">chill 版</span>
+      <span class="vtag">基础</span>
+    </div>
+    <div class="desc">
+      <b>方向：</b>App 套纸面，给原设计加纸面背景 + 手写体 + 留白 + 一条切换按钮。<br>
+      <b>特点：</b>整体还是"一个 app"，只是被暖米色 + washi tape 装饰过。
+    </div>
+    <div class="preview">
+      <img src="ux-prototype-home-v3.2-std.png" alt="v3.2 standard">
+    </div>
+    <div class="meta">
+      <div class="modes">
+        <span class="mode-tag">标准</span>
+        <span class="mode-tag">手写</span>
+      </div>
+      <a href="ux-prototype-home-v3.2.html" target="_blank">打开 v3.2.html →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">
+      <span class="ver">v3.3</span>
+      <span class="name">chill+ 三档</span>
+      <span class="vtag">装饰</span>
+    </div>
+    <div class="desc">
+      <b>方向：</b>默认就 chill，加上纸夹 / 涂鸦 / 微旋转 / 不对称 checkbox。<br>
+      <b>特点：</b>三档切换（标准 / 手写 / 极简），是 5 版里装饰最多的一版。
+    </div>
+    <div class="preview">
+      <img src="ux-prototype-home-v3.3-std.png" alt="v3.3 standard">
+    </div>
+    <div class="meta">
+      <div class="modes">
+        <span class="mode-tag">标准</span>
+        <span class="mode-tag">手写</span>
+        <span class="mode-tag">极简</span>
+      </div>
+      <a href="ux-prototype-home-v3.3.html" target="_blank">打开 v3.3.html →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">
+      <span class="ver">v3.4</span>
+      <span class="name">笔记本版</span>
+      <span class="vtag">纸感</span>
+    </div>
+    <div class="desc">
+      <b>方向：</b>删掉侧栏，做成横线笔记本页 + 装订红线。<br>
+      <b>特点：</b>580px 宽、单列、有横线纸背景、pill 改成手写体彩色文本，开始不像 app。
+    </div>
+    <div class="preview">
+      <img src="ux-prototype-home-v3.4-std.png" alt="v3.4 standard">
+    </div>
+    <div class="meta">
+      <div class="modes">
+        <span class="mode-tag">标准</span>
+        <span class="mode-tag">手写</span>
+      </div>
+      <a href="ux-prototype-home-v3.4.html" target="_blank">打开 v3.4.html →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">
+      <span class="ver">v3.5</span>
+      <span class="name">极简版</span>
+      <span class="vtag">减法</span>
+    </div>
+    <div class="desc">
+      <b>方向：</b>把所有 UI 砍光：没工具栏 / AI 条 / section header / 进度条 / 胶囊。<br>
+      <b>特点：</b>只剩"日期 + intention + 任务列表 + 小结"，540px 宽，行高 1.9。
+    </div>
+    <div class="preview">
+      <img src="ux-prototype-home-v3.5-std.png" alt="v3.5 standard">
+    </div>
+    <div class="meta">
+      <div class="modes">
+        <span class="mode-tag">标准</span>
+        <span class="mode-tag">手写</span>
+      </div>
+      <a href="ux-prototype-home-v3.5.html" target="_blank">打开 v3.5.html →</a>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="label">
+      <span class="ver">v3.6</span>
+      <span class="name">写给自己的一封信</span>
+      <span class="vtag">散文</span>
+    </div>
+    <div class="desc">
+      <b>方向：</b>根本不是清单了——是今天早上写给自己的一封信。开篇"你好，今天"，落款"明天的你"。<br>
+      <b>特点：</b>没有 checkbox、没有 section header、没有 pill。任务只是散文里提到的几件事，靠手写小字注脚标紧急程度。
+    </div>
+    <div class="preview">
+      <img src="ux-prototype-home-v3.6-std.png" alt="v3.6 standard">
+    </div>
+    <div class="meta">
+      <div class="modes">
+        <span class="mode-tag">标准</span>
+        <span class="mode-tag">手写</span>
+      </div>
+      <a href="ux-prototype-home-v3.6.html" target="_blank">打开 v3.6.html →</a>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <b>怎么挑：</b>想最像 app、但要 chill → v3.2 / v3.3。想像个有质感的工具 → v3.4。想像翻一页笔记本 → v3.5。想像读一封信 → v3.6。<br>
+  截图都是缩略图，<b>实际效果请直接点卡片底部链接打开对应 .html 文件看</b>，浏览器里 100% 显示才有 chill 感。
+</div>
+
+</body>
+</html>

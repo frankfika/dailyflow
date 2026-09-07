@@ -40,22 +40,10 @@ interface ProactiveSuggestionsCardProps {
   onDismissAll?: () => void;
 }
 
-const SEVERITY_LABEL: Record<ProactiveProposal['severity'], { zh: string; en: string; cls: string }> = {
-  info: {
-    zh: '提示',
-    en: 'Info',
-    cls: 'border-sky-200/60 bg-sky-50/40 text-sky-700',
-  },
-  warning: {
-    zh: '建议',
-    en: 'Suggestion',
-    cls: 'border-amber-200/70 bg-amber-50/50 text-amber-700',
-  },
-  urgent: {
-    zh: '紧急',
-    en: 'Urgent',
-    cls: 'border-rose-200/70 bg-rose-50/50 text-rose-700',
-  },
+const SEVERITY_LABEL: Record<ProactiveProposal['severity'], { zh: string; en: string }> = {
+  info: { zh: '提示', en: 'Info' },
+  warning: { zh: '建议', en: 'Suggestion' },
+  urgent: { zh: '紧急', en: 'Urgent' },
 };
 
 const ACTION_BUTTON_CLS: Record<Suggestion['action'], string> = {
@@ -115,11 +103,11 @@ export function ProactiveSuggestionsCard({
     <section
       data-testid="proactive-suggestions-card"
       aria-label={isZh ? 'Agent 主动建议' : 'Agent proactive suggestions'}
-      className="mb-3 rounded-xl border border-accent/20 bg-gradient-to-br from-accent/[0.04] via-white/55 to-amber-50/40 p-3 shadow-sm"
+      className="today-proactive-card mb-3"
     >
       <header className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+          <Sparkles className="today-proactive-icon h-3.5 w-3.5" aria-hidden="true" />
           <h2 className="text-xs font-semibold text-text-heading">{headerText}</h2>
         </div>
         <div className="flex items-center gap-1">
@@ -167,12 +155,12 @@ export function ProactiveSuggestionsCard({
               key={proposal.id}
               data-testid="proposal-item"
               data-kind={proposal.kind}
-              className={`rounded-lg border ${sev.cls} px-3 py-2.5 transition-opacity ${busyId === proposal.id ? 'opacity-60' : ''}`}
+                  className={`today-proactive-item ${busyId === proposal.id ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <Lightbulb className="today-proactive-icon h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span className="text-xs font-semibold">{proposal.title}</span>
                   </div>
                   <p className="mt-1 text-[12px] leading-relaxed text-text-main/85">

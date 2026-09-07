@@ -37,6 +37,10 @@ interface TodayBacklogProps {
   tasks: TodayTask[];
   planningGroups?: TodayPlanningGroup[];
   onOpenPlanningGroup?: (group: TodayPlanningGroup, nodeId?: string) => void;
+  /** Task IDs the user has starred; drives the star button on each card. */
+  starredTaskIds?: Set<string>;
+  /** Toggle the starred state of a task. When provided, each task shows a star button. */
+  onToggleStar?: (taskId: string) => void;
   selectedDate: string;
   categories: string[];
   onToggleTask: (id: string, hostDate?: string) => void;
@@ -79,6 +83,8 @@ export function TodayBacklog({
   tasks,
   planningGroups = [],
   onOpenPlanningGroup,
+  starredTaskIds,
+  onToggleStar,
   selectedDate,
   categories,
   onToggleTask,
@@ -151,6 +157,8 @@ export function TodayBacklog({
     <li key={`${task.host_date ?? selectedDate}:${task.id}`} className="today-simple-task">
       <TaskCard
         task={task}
+        isStarred={starredTaskIds?.has(task.id)}
+        onToggleStar={onToggleStar ? () => onToggleStar(task.id) : undefined}
         spaceTitle={eventByTaskId.get(task.id)?.title}
         onOpenSpace={onOpenPlanningGroup && eventByTaskId.has(task.id)
           ? (nodeId) => onOpenPlanningGroup(eventByTaskId.get(task.id)!, nodeId)

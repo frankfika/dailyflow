@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   detail: null as Record<string, unknown> | null,
   create: vi.fn(async () => ({ id: 'event-new' })),
   applyOrganize: vi.fn(async () => ({ applied: true })),
+  deleteEvent: vi.fn(async () => undefined),
+  deletePending: false,
 }));
 
 vi.mock('../hooks/useEvents', () => ({
@@ -20,6 +22,7 @@ vi.mock('../hooks/useEvents', () => ({
   useAddEventSibling: () => ({ mutateAsync: vi.fn() }),
   useRenameEventNode: () => ({ mutateAsync: vi.fn() }),
   useDeleteEventNode: () => ({ mutateAsync: vi.fn() }),
+  useDeleteEvent: () => ({ mutateAsync: mocks.deleteEvent, isPending: mocks.deletePending }),
   useOutdentEventNode: () => ({ mutateAsync: vi.fn() }),
   useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
   useReorderEventNode: () => ({ mutateAsync: vi.fn() }),
@@ -50,6 +53,8 @@ describe('EventsView Event-first surface', () => {
     mocks.detail = null;
     mocks.create.mockClear();
     mocks.applyOrganize.mockClear();
+    mocks.deleteEvent.mockClear();
+    mocks.deletePending = false;
     vi.restoreAllMocks();
     window.localStorage.removeItem('dailyflow:events:outlineWidth');
   });
@@ -65,6 +70,28 @@ describe('EventsView Event-first surface', () => {
     expect(screen.queryByText('#hidden')).not.toBeInTheDocument();
     expect(screen.queryByText('Today')).not.toBeInTheDocument();
     expect(screen.queryByText(/Mind Map|Topic|Unclassified/i)).not.toBeInTheDocument();
+  });
+
+  it('opens a delete menu on each event card and removes the event after confirmation', async () => {
+    mocks.events = [EVENT];
+    render(<EventsView language="en" context="work" />);
+    const card = screen.getByTestId('event-card-event-1');
+    expect(card).toBeInTheDocument();
+
+    // The "more" trigger is hidden until the card is hovered; fire a
+    // mousedown/keydown cycle so the menu's outside-click listener doesn't
+    // immediately close it again.
+    const more = screen.getByTestId('event-card-more-event-1');
+    fireEvent.click(more);
+
+    const deleteBtn = await screen.findByTestId('event-card-delete-event-1');
+    expect(deleteBtn).toHaveTextContent('Delete event');
+    fireEvent.click(deleteBtn);
+
+    // The ConfirmDialog is shown and asks for explicit confirmation.
+    const dialog = await screen.findByTestId('confirm-dialog-confirm');
+    fireEvent.click(dialog);
+    await waitFor(() => expect(mocks.deleteEvent).toHaveBeenCalledWith({ eventId: 'event-1' }));
   });
 
   it('creates from title and immediately opens the one-canvas detail', async () => {

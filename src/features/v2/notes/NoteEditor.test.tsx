@@ -37,6 +37,12 @@ const mocks = vi.hoisted(() => ({
     commitmentId: 'com_01KCCCCCCCCCCCCCCCC',
     legacyTaskId: '2026-07-29#3',
   })),
+  completeCommitment: vi.fn(async () => ({
+    commitment: {
+      id: 'com_01KAAAAAAAAAAAAAAAA',
+      state: 'completed',
+    },
+  })),
 }));
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -47,6 +53,7 @@ vi.mock('../api/client', async (importOriginal) => {
     listLegacyTasks: mocks.listLegacyTasks,
     createCommitment: mocks.createCommitment,
     migrateLegacyTask: mocks.migrateLegacyTask,
+    completeCommitment: mocks.completeCommitment,
   };
 });
 
@@ -191,8 +198,9 @@ describe('NoteEditor Markdown and metadata', () => {
     });
   });
 
-  it('creates a task from the note and links it immediately', async () => {
-    renderEditor();
+  it('fires a success toast when a task is created and linked to the note', async () => {
+    const onNotice = vi.fn();
+    renderEditor(undefined, onNotice);
 
     const input = screen.getByTestId('note-create-task-input');
     fireEvent.change(input, { target: { value: 'Draft launch email' } });
@@ -207,6 +215,31 @@ describe('NoteEditor Markdown and metadata', () => {
     await waitFor(() => expect(mocks.schedule).toHaveBeenCalledWith({
       commitmentIds: ['com_01KBBBBBBBBBBBBBBBB'],
     }));
+    await waitFor(() =>
+      expect(onNotice).toHaveBeenCalledWith(
+        expect.stringContaining('Draft launch email'),
+        'success',
+      ),
+    );
+  });
+
+  it('fires a toast when an existing commitment is linked via the picker', async () => {
+    const onNotice = vi.fn();
+    renderEditor(undefined, onNotice);
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Ship the release' })).toBeInTheDocument(),
+    );
+    fireEvent.change(screen.getByTestId('note-task-picker'), {
+      target: { value: 'com_01KAAAAAAAAAAAAAAAA' },
+    });
+
+    await waitFor(() => expect(mocks.schedule).toHaveBeenCalledWith({
+      commitmentIds: ['com_01KAAAAAAAAAAAAAAAA'],
+    }));
+    await waitFor(() =>
+      expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Ship the release'), 'success'),
+    );
   });
 
   it('offers Today tasks and migrates the selected task before linking it', async () => {
@@ -230,7 +263,6 @@ describe('NoteEditor Markdown and metadata', () => {
       commitmentIds: ['com_01KCCCCCCCCCCCCCCCC'],
     }));
   });
-
   it('queues archive and restore with pending autosaves', async () => {
     const onDeleted = vi.fn();
     const { rerender } = renderEditor(onDeleted);

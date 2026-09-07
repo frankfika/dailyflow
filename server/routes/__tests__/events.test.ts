@@ -465,4 +465,26 @@ describe.sequential('EFP-003 / EFP-005 routes /api/events', () => {
     expect(r2.body?.reverted).toBe(false);
     expect(r2.body?.alreadyStandalone).toBe(true);
   });
+
+  it('DELETE /api/events/:id removes the event and a second DELETE 404s', async () => {
+    // Create a fresh event we own (the v1 fixture's events share the
+    // workspace and would surface as "already gone" on the 2nd delete).
+    const create = await withServer(app, (p) =>
+      request(p, 'POST', '/api/events', { title: 'Deletable', context: 'work' }),
+    );
+    expect(create.status).toBe(201);
+    const id = create.body?.id as string;
+    expect(id).toBeTruthy();
+
+    const del1 = await withServer(app, (p) => request(p, 'DELETE', `/api/events/${id}`));
+    expect(del1.status).toBe(204);
+
+    // After deletion, GET should 404 (the topic space file is gone).
+    const get = await withServer(app, (p) => request(p, 'GET', `/api/events/${id}`));
+    expect(get.status).toBe(404);
+
+    // A repeat delete is also a 404 (idempotent boundary on missing).
+    const del2 = await withServer(app, (p) => request(p, 'DELETE', `/api/events/${id}`));
+    expect(del2.status).toBe(404);
+  });
 });

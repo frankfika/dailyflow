@@ -442,6 +442,19 @@ export const eventsApi = {
     const payload = await res.json();
     return { event: payload?.event ?? payload };
   },
+  /**
+   * Delete an event (the underlying TopicSpace). The linked MindMap is
+   * left on disk per SPEC §3.1; the events list refetch will hide the
+   * event from the UI immediately. 204 on success, throws on failure.
+   */
+  async delete(eventId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+    });
+    if (res.status === 204) return;
+    if (res.status === 404) throw new Error('Event not found');
+    throw await httpError(res, 'Failed to delete event');
+  },
   async listTodayItems(date: string, context?: EventContext): Promise<{ items: TodayItem[] }> {
     const query = new URLSearchParams({ date });
     if (context) query.set('context', context);
@@ -831,6 +844,81 @@ export const workspacesApi = {
   },
 
   async pickFolder(): Promise<string | null> {
+    // Universal native folder picker via <input type="file" webkitdirectory>.
+    // This is the only approach that works in EVERY browser engine:
+    // Chromium, WebKit (Safari + Tauri WKWebView), and Firefox. It opens
+    // a real native Finder/Explorer dialog with no OS permissions needed,
+    // and gives us a real File object so the user can browse the full
+    // filesystem (the previous osascript and showDirectoryPicker paths
+    // both failed on this Mac because of TCC / WebView limitations).
+    const w: any = typeof window !== 'undefined' ? window : undefined;
+    if (w?.document) {
+      try {
+        const folderName = await new Promise<string | null>((resolve) => {
+          const input = w.document.createElement('input');
+          input.type = 'file';
+          // @ts-ignore — webkitdirectory is non-standard but supported
+          // by Chromium, Safari, and WKWebView. Firefox ignores it.
+          input.webkitdirectory = true;
+          input.style.position = 'fixed';
+          input.style.top = '-1000px';
+          input.style.opacity = '0';
+          w.document.body.appendChild(input);
+          let resolved = false;
+          const cleanup = () => {
+            if (input.parentNode) input.parentNode.removeChild(input);
+          };
+          input.onchange = () => {
+            resolved = true;
+            cleanup();
+            const files = input.files;
+            if (!files || files.length === 0) {
+              resolve(null);
+              return;
+            }
+            // webkitRelativePath is "FolderName/file.ext" — take the
+            // first segment as the picked folder's display name.
+            const rel = (files[0] as any).webkitRelativePath || '';
+            const name = rel.split('/')[0] || '';
+            resolve(name || null);
+          };
+          // If the user dismisses without choosing, onchange never fires.
+          // Use a focus listener to detect dialog close.
+          input.addEventListener('cancel', () => {
+            if (!resolved) { resolved = true; cleanup(); resolve(null); }
+          });
+          // Click triggers the native picker.
+          input.click();
+          // Fallback timeout — some browsers fire neither change nor cancel.
+          setTimeout(() => {
+            if (!resolved) { resolved = true; cleanup(); resolve(null); }
+          }, 5 * 60 * 1000);
+        });
+        if (folderName) {
+          // Resolve to a real path on the server. The server searches
+          // ~/Documents, ~/Desktop, etc. so the user doesn't have to
+          // type the full path.
+          try {
+            const res = await fetch(`${API_BASE}/config/resolve-folder`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: folderName }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.path) return data.path;
+            }
+          } catch {
+            // fall through with raw name
+          }
+          return folderName;
+        }
+        return null;
+      } catch {
+        // fall through to osascript
+      }
+    }
+    // Last-resort fallback: server-side osascript dialog.
     const res = await fetch(`${API_BASE}/config/choose-folder`);
     if (res.status === 400) return null;
     if (!res.ok) {

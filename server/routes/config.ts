@@ -196,9 +196,15 @@ router.get('/choose-folder', async (req, res) => {
     const platform = process.platform;
 
     if (platform === 'darwin') {
-      // macOS: use osascript
+      // macOS: osascript must run inside the user's Aqua/GUI session, otherwise
+      // it silently returns the last selected path without ever showing a
+      // dialog. dev servers often run under launchd / screen / tmux which are
+      // outside that session, so wrap the call in `launchctl asuser`.
+      // Simple, standard `choose folder`. The native dialog is a convenience;
+      // the UI exposes an in-page text input fallback that always works even
+      // when the dialog is hidden behind another app or never receives focus.
       const { stdout } = await execAsync(
-        `osascript -e 'POSIX path of (choose folder with prompt "Select DailyFlow Workspace")'`
+        `launchctl asuser ${os.userInfo().uid} osascript -e 'set f to choose folder with prompt "DailyFlow Select Workspace Folder"\nreturn POSIX path of f'`
       );
       chosenPath = stdout.trim();
     } else if (platform === 'linux') {
@@ -227,6 +233,44 @@ router.get('/choose-folder', async (req, res) => {
   } catch (error: any) {
     console.error('Error opening folder picker:', error);
     res.status(500).json({ error: error.message || 'Failed to open folder picker' });
+  }
+});
+
+/**
+ * POST /api/config/resolve-folder - resolve a folder name to a real path
+ * under the user's home directory. Used as the second step of the
+ * frontend File System Access API picker, which only returns the picked
+ * folder's display name (not its full path). The server searches a
+ * small set of common workspace locations and returns the first match.
+ */
+router.post('/resolve-folder', async (req, res) => {
+  try {
+    const { name } = req.body as { name?: string };
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Folder name is required' });
+    }
+    const folderName = name.trim();
+    const home = os.homedir();
+    const candidates = [
+      path.join(home, 'Documents', folderName),
+      path.join(home, 'Desktop', folderName),
+      path.join(home, folderName),
+      path.join(home, 'Documents', 'DailyFlow', folderName),
+    ];
+    for (const candidate of candidates) {
+      try {
+        const stats = await fs.stat(candidate);
+        if (stats.isDirectory()) {
+          return res.json({ path: candidate });
+        }
+      } catch {
+        // not found here, try next
+      }
+    }
+    return res.status(404).json({ error: `No folder named "${folderName}" found in Documents, Desktop, or home.` });
+  } catch (error: any) {
+    console.error('Error resolving folder:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot, Mic, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ModelLibrary } from './ModelLibrary';
@@ -831,13 +831,23 @@ export function SettingsModal({
     }
   };
 
-  if (!showSettings) return null;
-
   return (
-    <div className="fixed inset-0 bg-background backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AnimatePresence>
+    {showSettings && (
+    <motion.div
+      key="settings-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4"
+      style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 30 }}
         className="relative flex max-h-[90dvh] min-h-0 w-full max-w-2xl flex-col rounded-md border border-border bg-surface-white shadow-sm"
         role="dialog"
         aria-modal="true"
@@ -2282,6 +2292,8 @@ export function SettingsModal({
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   );
 }

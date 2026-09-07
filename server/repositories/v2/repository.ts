@@ -412,7 +412,21 @@ export class V2Repository {
     const filePath = existingPath
       ?? entityPath(this.layout, 'note', '', validated.id, partitionDate);
     const content = serializeNoteDocument(validated);
-    const result = await atomicWrite({ filePath, content, expectedHash: opts.expectedHash });
+    // Round-trip drift guard: when the caller does not pin an expectedHash,
+    // anchor the conflict check to the actual on-disk hash captured right
+    // before the write. Without this, a note whose on-disk form differs from
+    // a clean re-serialization (e.g. an extra trailing newline left by an
+    // external editor or an older serializer) would refuse every save with
+    // ConcurrentModificationError, because serializeNoteDocument(parsed) is
+    // not byte-identical to the file it was parsed from. autoSaveVersion
+    // remains the primary concurrency guard; this just keeps the byte-level
+    // check honest about what "no change" means.
+    let expectedHash = opts.expectedHash;
+    if (expectedHash === undefined && existingPath !== null) {
+      const prior = await readWithHash(existingPath);
+      expectedHash = prior?.hash;
+    }
+    const result = await atomicWrite({ filePath, content, expectedHash });
     await this.appendAudit(opts, result);
     return result;
   }

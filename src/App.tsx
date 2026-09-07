@@ -4,7 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, Loader2, Menu, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, FolderPlus, Loader2, Menu, RefreshCw, X } from 'lucide-react';
 import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
 import type { RecurrenceRule } from './api/client';
@@ -22,6 +22,7 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { ContextSwitcher } from './components/ContextSwitcher';
 import { AIChat } from './components/AIChat';
 import { TodayBacklog, type TodayPlanningGroup } from './components/TodayBacklog';
+import { MobileTabBar } from './components/MobileTabBar';
 import { DatePickerPopover } from './components/DatePickerPopover';
 import { TodayFocusBar } from './components/TodayFocusBar';
 import { DailyReflectionModal, type DailyReflectionTask } from './components/DailyReflectionModal';
@@ -45,6 +46,7 @@ import { EntityContextDrawer, type EntityRef } from './components/EntityContextD
 import { CommandPalette, type CommandId } from './components/CommandPalette';
 import { WorkspaceScopeProvider } from './workspaceScope';
 import { useTopicSpaces } from './hooks/useTopicSpaces';
+import { useTabDirection } from './hooks/useTabDirection';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Overlay title bar (tauri.conf.json "titleBarStyle": "Overlay"): mark the
@@ -101,6 +103,20 @@ async function verifyGithubConnection(repoUrl: string, token: string): Promise<b
   }
 }
 
+
+/**
+ * Canonical primary-tab ordering. Used by:
+ *   1. `useTabDirection` to derive horizontal slide direction so the
+ *      page-transition matches the user's mental stack (forward = slide
+ *      in from the right, back = slide in from the left).
+ *   2. Sidebar nav so the visual order matches the swipe order.
+ *
+ * Note: 'notes' is a meta-tab that mounts NotesView/InboxView internally;
+ * sub-tab direction is owned by NotesView and does not flow through here.
+ */
+export const TAB_ORDER = ['today', 'events', 'notes', 'ai-chat', 'calendar', 'memory', 'team'] as const;
+export type AppTab = typeof TAB_ORDER[number];
+
 export default function App() {
   const queryClient = useQueryClient();
   const todayStr = getTodayStr();
@@ -109,6 +125,27 @@ export default function App() {
   const [markdown, setMarkdown] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [earlierOpenTasks, setEarlierOpenTasks] = useState<Task[]>([]);
+  // Starred-task ids persist per browser so the user can pin important tasks
+  // across sessions. Keyed by taskId; cleared lazily (stale ids are ignored).
+  const [starredTaskIds, setStarredTaskIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('df:starredTasks');
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed.filter((x): x is string => typeof x === 'string'));
+    } catch { /* storage unavailable / corrupt */ }
+    return new Set();
+  });
+  useEffect(() => {
+    try { localStorage.setItem('df:starredTasks', JSON.stringify(Array.from(starredTaskIds))); } catch { /* ignore */ }
+  }, [starredTaskIds]);
+  const toggleStar = useCallback((taskId: string) => {
+    setStarredTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+      return next;
+    });
+  }, []);
   const [dailyNotes, setDailyNotes] = useState<NoteData[]>([]);
   // All notes for the current context, used by AI chat/floating panel so they
   // can find and reference notes beyond just the currently selected date.
@@ -125,6 +162,8 @@ export default function App() {
   // UX S5: notes / AI / calendar / memory / team render as overlays over the
   // permanent home; Esc (or the close button) returns to it.
   const [activeOverlay, setActiveOverlay] = useState<'notes' | 'ai-chat' | 'calendar' | 'memory' | 'team' | null>(null);
+  // The global Workspaces pill is hidden while an overlay tab owns the screen.
+  const showGlobalWorkspacesPill = !activeOverlay && activeTab === 'today';
   const [requestedEventId, setRequestedEventId] = useState<string | null>(null);
   // UX S8: node to highlight after a "来自 ↗" chip jump into the canvas.
   const [requestedNodeId, setRequestedNodeId] = useState<string | null>(null);
@@ -199,6 +238,76 @@ export default function App() {
 
   const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+  // Mobile-only viewport flag. Mirrors the Sidebar's tablet/desktop split
+  // but lives at the App level so the bottom tab bar can read it without
+  // re-implementing matchMedia. Resize events are debounced via rAF to
+  // avoid re-rendering the whole tree on every window-drag pixel.
+  const [isMobileView, setIsMobileView] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 640 : false,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let frame = 0;
+    const sync = () => {
+      const next = window.innerWidth <= 640;
+      setIsMobileView((prev) => (prev === next ? prev : next));
+    };
+    const onResize = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(sync);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Keyboard shortcuts for primary tab switching.
+  //   Cmd/Ctrl + 1 → Today
+  //   Cmd/Ctrl + 2 → Events
+  //   Cmd/Ctrl + 3 → Notes
+  //   Cmd/Ctrl + 4 → Ask AI
+  //   Cmd/Ctrl + Shift + [ / ] — previous / next primary tab (mirrors iOS
+  //     Safari's tab-switch shortcut).
+  // We intentionally skip the chord when the user is typing into an input
+  // / textarea / contenteditable so the shortcuts don't hijack normal text
+  // editing.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isTextEntry = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod) return;
+      if (isTextEntry(event.target)) return;
+      // Cycle through primary tabs with Cmd/Ctrl + Shift + [/]. Tab targets
+      // route through the same adapter as the Sidebar: today/events are real
+      // tabs, everything else opens as an overlay (UX S5 model).
+      const goTo = (tab: AppTab) => {
+        if (tab === 'today' || tab === 'events') setActiveTab(tab);
+        else setActiveOverlay(tab);
+      };
+      const current: AppTab = activeOverlay ?? activeTab;
+      if (event.shiftKey && (event.key === '[' || event.key === '{')) {
+        event.preventDefault();
+        const idx = TAB_ORDER.indexOf(current);
+        const nextIdx = idx <= 0 ? TAB_ORDER.length - 1 : idx - 1;
+        goTo(TAB_ORDER[nextIdx]);
+      } else if (event.shiftKey && (event.key === ']' || event.key === '}')) {
+        event.preventDefault();
+        const idx = TAB_ORDER.indexOf(current);
+        const nextIdx = idx === TAB_ORDER.length - 1 ? 0 : idx + 1;
+        goTo(TAB_ORDER[nextIdx]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeTab]);
   const [language, setLanguage] = useState<'en' | 'zh'>(() => {
     try {
       return localStorage.getItem('df_language') === 'zh' ? 'zh' : 'en';
@@ -206,6 +315,14 @@ export default function App() {
       return 'en';
     }
   });
+  const currentTimeLabel = useMemo(
+    () => new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date()),
+    [language],
+  );
 
   useEffect(() => {
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -266,6 +383,9 @@ export default function App() {
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
   const eventsQuery = useEvents();
+  const handleTaskCreated = useCallback(() => {
+    void todayItemsQuery.refetch();
+  }, [todayItemsQuery]);
 
   const refreshEarlierOpenTasks = useCallback(async () => {
     const today = getTodayStr();
@@ -1696,15 +1816,18 @@ export default function App() {
     >
       <div className="ambient-bg" aria-hidden="true" />
 
-      {/* Toast */}
+      {/* Toast — anchored top on desktop, anchored bottom on mobile
+          (matches iOS notification banners and stays closer to the thumb).
+          The .native-toast class in index.css already wires the responsive
+          top/bottom + safe-area offsets. */}
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.96 }}
+            initial={{ opacity: 0, y: -16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.96 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1.0] }}
-            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl text-[13px] font-medium pointer-events-none flex items-center gap-2.5 native-toast ${
+            exit={{ opacity: 0, y: -10, scale: 0.96 }}
+            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1.0] }}
+            className={`fixed left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl text-[13px] font-medium pointer-events-none flex items-center gap-2.5 native-toast backdrop-blur-md max-sm:translate-y-[50%] ${
               toast.type === 'error' ? 'text-[var(--color-danger)]' :
               toast.type === 'info' ? 'text-[var(--color-info)]' :
               'text-[var(--color-success)]'
@@ -1806,19 +1929,66 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col h-dvh bg-[var(--color-background)] relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}>
-        {/* Floating toggle button — show sidebar when hidden (Codex style) */}
-        {!isSidebarOpen && (
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="sidebar-reveal-button absolute left-3 top-3 z-20 flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border bg-surface-elevated text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 md:h-auto md:w-auto md:p-2"
-            title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
-            aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
-            data-testid="sidebar-reveal"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        )}
+      <main
+        className={`flex-1 flex flex-col h-dvh bg-[var(--color-background)] relative overflow-hidden min-w-0 w-full transition-[margin,colors] duration-300 ${!isSidebarOpen ? 'sidebar-collapsed-main' : ''}`}
+        style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}
+      >
+        {/* Floating toggle button — show sidebar when hidden (Codex style).
+            AnimatePresence gives a real exit animation; the safe-top CSS
+            variable keeps it under the notch on iOS / notched MacBooks. */}
+        <AnimatePresence>
+          {!isSidebarOpen && (
+            <motion.button
+              key="sidebar-reveal"
+              onClick={() => setIsSidebarOpen(true)}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+              className="sidebar-reveal-button absolute left-3 top-3 z-20 flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border bg-surface-elevated text-text-main shadow-sm transition-all hover:border-border-strong hover:text-text-heading active:scale-95 md:h-auto md:w-auto md:p-2"
+              style={{ top: 'calc(0.75rem + var(--safe-top))' }}
+              title={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
+              aria-label={language === 'zh' ? '显示侧边栏' : 'Show sidebar'}
+              data-testid="sidebar-reveal"
+            >
+              <Menu className="w-5 h-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* Global Workspaces pill — kept as a discoverable entry point on
+            tabs that don't already own the top-right area. On Events,
+            Calendar, Notes and AI Chat the page itself has a primary
+            action (New Event, New chat, …) that lives in the top-right and
+            would visually collide with this pill. The Today tab keeps its
+            own duplicate pill in its header, so showing the global one
+            too creates two pills in the same area. The sidebar's
+            WorkspaceSwitcher and the ⌘⇧P shortcut remain available
+            everywhere, so hiding the pill on those tabs doesn't lock
+            users out. AnimatePresence slides it in on mount and the
+            safe-top keeps it under the notch on iOS / notched MacBooks. */}
+        <AnimatePresence>
+          {workspaces.length > 0 && showGlobalWorkspacesPill && (
+            <motion.button
+              key="global-workspaces-pill"
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('dailyflow:open-workspace-picker'));
+              }}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+              data-testid="open-workspace-picker-pill-global"
+              className="absolute right-4 top-3 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-xs font-medium transition-colors active:scale-95"
+              style={{ top: 'calc(0.75rem + var(--safe-top))' }}
+              title={language === 'zh' ? '选择/添加工作区文件夹（快捷键 ⌘⇧P）' : 'Choose or add a workspace folder (⌘⇧P)'}
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>{language === 'zh' ? '工作区' : 'Workspaces'}</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* Every primary workspace uses the available pane width. Notes,
             AI Chat, Calendar and AI-Native own their internal scrolling; Today keeps
@@ -1863,15 +2033,15 @@ export default function App() {
                   >
                     <header className="titlebar space-y-3 border-b border-border/60 pb-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface p-0.5">
+                        <div className="today-home-date-wrap">
+                          <div className="today-home-date-nav">
                         <button
                           onClick={() => {
                             const d = new Date(`${currentFileDate}T00:00:00Z`);
                             d.setUTCDate(d.getUTCDate() - 1);
                             setCurrentFileDate(d.toISOString().split('T')[0]);
                           }}
-                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95"
+                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95 press-feedback"
                           title={language === 'zh' ? '前一天' : 'Previous Day'}
                         >
                           <ChevronLeft className="w-4 h-4" />
@@ -1888,7 +2058,7 @@ export default function App() {
                             }
                           }}
                           disabled={currentFileDate >= getTodayStr()}
-                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1.5 text-text-muted hover:text-text-heading hover:bg-black/5 rounded-md transition-all active:scale-95 press-feedback disabled:opacity-30 disabled:cursor-not-allowed"
                           title={language === 'zh' ? '后一天' : 'Next Day'}
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -2108,6 +2278,23 @@ export default function App() {
 
 
       </main>
+
+      {/* Mobile bottom tab bar — only shown on phones. Replaces the
+         sidebar's primary nav role on mobile so users can flip tabs
+         without opening an overlay. The `visible` prop is tied to the
+         viewport so it slides off the moment a tablet/desktop layout
+         takes over. */}
+      <MobileTabBar
+        language={language}
+        activeTab={activeOverlay ?? activeTab}
+        setActiveTab={(tab) => {
+          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          else setActiveOverlay(tab);
+        }}
+        visible={isMobileView}
+        onAddTask={() => taskInputFocusRef.current?.()}
+      />
+
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
       {/* UX S5: everything except Today (home) and Events (canvas) is an

@@ -63,6 +63,13 @@ export const MEETING_TRANSCRIPTION_PRESETS = {
     baseUrl: 'https://api.elevenlabs.io/v1',
     model: 'scribe_v2',
   },
+  'siliconflow': {
+    // 硅基流动 SiliconFlow — OpenAI-Whisper 兼容 ASR。
+    // 中文会议首选，注册送 ¥9.9 体验金，Key 在 https://cloud.siliconflow.cn/account/ak 申请。
+    // SenseVoiceSmall 多语种 + 中文识别强；TeleAI/TeleASR 中文为主。
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    model: 'FunAudioLLM/SenseVoiceSmall',
+  },
   'openai-compatible': {
     baseUrl: 'https://api.openai.com/v1',
     model: 'whisper-1',

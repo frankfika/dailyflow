@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>DailyFlow · v3.6</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500&family=Long+Cang&family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&family=Inter:wght@300;400&family=Noto+Serif+SC:wght@300;400;500&family=Newsreader:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F4ECD7;
+    --ink: #2A2620;
+    --ink-2: #4A423A;
+    --muted: #998F7C;
+    --line: rgba(42,38,32,0.08);
+    --sage: #6E8862;
+    --amber: #B07C3A;
+    --font-base: "Inter", "Noto Serif SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+    --font-serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+    --font-hand: "Ma Shan Zheng", "Long Cang", "ZCOOL KuaiLe", "Caveat", cursive;
+    --font-italic: "Newsreader", "Songti SC", serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: var(--font-base);
+    font-weight: 300;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 2.0;
+    padding: 120px 28px 160px;
+    -webkit-font-smoothing: antialiased;
+    background: var(--paper);
+    background-image:
+      radial-gradient(rgba(42,38,32,0.03) 1px, transparent 1.2px);
+    background-size: 18px 18px;
+  }
+
+  /* tiny corner brand */
+  .brand {
+    position: fixed;
+    top: 32px; left: 32px;
+    z-index: 10;
+    font-family: var(--font-hand);
+    font-size: 16px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .brand b { color: var(--ink-2); font-weight: 500; }
+
+  /* tiny corner toggle */
+  .toggle {
+    position: fixed;
+    top: 32px; right: 32px;
+    z-index: 10;
+    display: inline-flex;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px;
+  }
+  .toggle button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 300 11.5px/1 var(--font-base);
+    padding: 6px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .toggle button.active { background: var(--sage); color: #fff; }
+  .toggle button .ic { font-family: var(--font-hand); font-size: 14px; }
+
+  /* ========== The letter ========== */
+  .letter {
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  .date {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 80px;
+  }
+
+  .greeting {
+    font-family: var(--font-serif);
+    font-size: 28px;
+    font-weight: 400;
+    color: var(--ink);
+    margin-bottom: 60px;
+    line-height: 1.4;
+  }
+
+  .body-para {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    color: var(--ink);
+    line-height: 2.0;
+    margin-bottom: 50px;
+    font-weight: 300;
+  }
+  .body-para em {
+    font-style: italic;
+    color: var(--ink-2);
+  }
+  .body-para .accent { color: var(--sage); }
+  .body-para .warm { color: var(--amber); }
+
+  .things {
+    margin: 60px 0;
+    padding: 0;
+    list-style: none;
+  }
+  .things li {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    color: var(--ink);
+    line-height: 2.0;
+    padding: 8px 0;
+    padding-left: 20px;
+    position: relative;
+    font-weight: 300;
+  }
+  .things li::before {
+    content: "\00b7";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    color: var(--muted);
+  }
+  .things li .note {
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+    margin-left: 4px;
+  }
+  .things li .note.warm { color: var(--amber); }
+  .things li .note.sage { color: var(--sage); }
+
+  .closing {
+    margin-top: 80px;
+    font-family: var(--font-serif);
+    font-size: 17px;
+    color: var(--ink-2);
+    line-height: 2.0;
+    font-style: italic;
+  }
+
+  .sign {
+    margin-top: 60px;
+    font-family: var(--font-hand);
+    font-size: 22px;
+    color: var(--muted);
+  }
+
+  /* ========== Hand mode overrides ========== */
+  body.hand .date,
+  body.hand .greeting,
+  body.hand .body-para,
+  body.hand .things li,
+  body.hand .closing {
+    font-family: var(--font-hand);
+  }
+  body.hand .date { font-size: 18px; letter-spacing: 1px; }
+  body.hand .greeting { font-size: 36px; }
+  body.hand .body-para { font-size: 22px; }
+  body.hand .things li { font-size: 20px; }
+  body.hand .things li .note { font-size: 17px; }
+  body.hand .closing { font-size: 20px; }
+  body.hand .sign { color: var(--sage); font-size: 26px; }
+  body.hand .brand { color: var(--sage); font-size: 18px; }
+  body.hand .body-para em { font-style: normal; color: var(--ink-2); }
+
+  /* ========== Note card (bottom) ========== */
+  .note-card {
+    max-width: 540px;
+    margin: 140px auto 0;
+    padding: 22px 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.85;
+    border-top: 1px solid var(--line);
+  }
+  .note-card .ttl {
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .note-card b { color: var(--ink); font-weight: 400; }
+  .note-card code { font-family: "Caveat", monospace; font-size: 14px; color: var(--sage); }
+
+  @media (max-width: 600px) {
+    body { padding: 90px 20px 120px; }
+    .body-para { font-size: 16px; }
+    .greeting { font-size: 24px; }
+    .things li { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand"><b>DailyFlow</b></div>
+<div class="toggle" role="tablist">
+  <button type="button" class="active" data-mode="std">标准</button>
+  <button type="button" data-mode="hand"><span class="ic">A</span></button>
+</div>
+
+<main class="letter">
+
+  <div class="date">August 31 · 2026 · Monday</div>
+
+  <h1 class="greeting">你好，今天。</h1>
+
+  <p class="body-para">
+    这是 8 月的最后一个周一。窗外的光已经开始倾斜，空气里有一点点秋天的味道。
+  </p>
+
+  <p class="body-para">
+    今天的<em>唯一目标</em>是<em class="accent">把 DSH 跑通</em>。
+    这是一个月前答应团队的事，今天要给自己一个交代。其他的，<em>都是节奏</em>。
+  </p>
+
+  <ul class="things">
+    <li>完成 DSH 接入测试<span class="note warm">—— 今天截止</span></li>
+    <li>部署集成环境</li>
+    <li>给团队同步 Q3 路线图<span class="note warm">—— 拖了一天了</span></li>
+    <li>写日报<span class="note sage">—— 5 分钟</span></li>
+    <li>优化 onboarding 文案</li>
+  </ul>
+
+  <p class="body-para">
+    不必都做完。重要的那件做完，就赢了。
+  </p>
+
+  <p class="closing">
+    —— 已经写完 9 件小事。剩下的，<em>都是心跳</em>。
+  </p>
+
+  <div class="sign">明天的你</div>
+
+</main>
+
+<div class="note-card">
+  <span class="ttl">v3.6 · 写给自己的一封信</span>
+  前 4 版都在做"任务清单的 chill 化"——加胶带、加手写、砍 chrome。这次换了思路：<b>根本不是清单</b>，是<b>今天早上写给自己的一封信</b>。<br><br>
+  ① <b>没有 checkbox</b>——不是 todo list，是一封问候信。<br>
+  ② <b>没有大字日期</b>——只有一行英文 <code>AUGUST 31 · 2026 · MONDAY</code>，像信头的落款。<br>
+  ③ <b>没有 section header</b>——整页就是一段一段往下流的散文。<br>
+  ④ <b>没有 progress bar / pill / badge</b>——任务的紧迫感只通过<em class="note warm">"今天截止"</em>、<em class="note warm">"拖了一天了"</em>这些手写小字注脚表达，不靠色块。<br>
+  ⑤ <b>没有 completed UI</b>——只有一句"已经写完 9 件小事"，像结尾的注脚。<br>
+  ⑥ <b>落款是"明天的你"</b>——手写体，签在信末。整页像你写给明天自己的回信。<br><br>
+  字号：日期 14px（letter-spaced 2px）· 招呼 28px · 正文 18px · 列表 17px · 落款 22px（手写）。<br>
+  行高统一 2.0，段距 50—80px。配色只 2 个：sage（绿）+ amber（橘），其他全是纸 + 墨。<br><br>
+  切到 <b>A</b> 模式：所有正文都进手帐体——<b>整封信变成你的手写</b>。
+</div>
+
+<script>
+  const body = document.body;
+  const buttons = document.querySelectorAll('.toggle button');
+  buttons.forEach(b => {
+    b.addEventListener('click', () => {
+      buttons.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const mode = b.dataset.mode;
+      body.classList.toggle('hand', mode === 'hand');
+    });
+  });
+</script>
+
+</body>
+</html>

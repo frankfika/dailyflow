@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>DailyFlow 主页原型 · v3.4 笔记本版</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Long+Cang&family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&family=Shadows+Into+Light&family=Inter:wght@300;400;500&family=Noto+Serif+SC:wght@300;400;500&family=Reenie+Beanie&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F7F1E1;
+    --paper-deep: #EFE7D2;
+    --ink: #2D2A22;
+    --ink-2: #5A5346;
+    --muted: #9A917F;
+    --muted-2: #C4BBA6;
+    --line: rgba(45,42,34,0.08);
+    --sage: #6E8862;
+    --sage-soft: rgba(110,136,98,0.10);
+    --amber: #B07C3A;
+    --font-base: "Inter", "Noto Serif SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+    --font-serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+    --font-hand: "Ma Shan Zheng", "Long Cang", "ZCOOL KuaiLe", "Caveat", cursive;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: var(--font-base);
+    font-weight: 300;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.85;
+    padding: 80px 24px 120px;
+    -webkit-font-smoothing: antialiased;
+    background: var(--paper-deep);
+    background-image:
+      /* ruled paper lines - very subtle */
+      linear-gradient(180deg, transparent 0, transparent 47px, rgba(110,136,98,0.07) 47px, rgba(110,136,98,0.07) 48px, transparent 48px),
+      /* paper grain */
+      radial-gradient(rgba(45,42,34,0.04) 1px, transparent 1.2px);
+    background-size: 100% 48px, 14px 14px;
+  }
+
+  /* ========== Toolbar (minimal) ========== */
+  .toolbar {
+    max-width: 580px;
+    margin: 0 auto 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .toolbar .stamp {
+    font-family: var(--font-hand);
+    color: var(--muted);
+    font-size: 20px;
+    letter-spacing: 0.5px;
+  }
+  .toolbar .stamp b { color: var(--ink-2); font-weight: 500; }
+  .toggle {
+    display: inline-flex;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .toggle button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 300 12.5px/1 var(--font-base);
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .3s ease;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .toggle button:hover { color: var(--ink-2); }
+  .toggle button.active {
+    background: var(--sage);
+    color: #fff;
+  }
+  .toggle button .ic { font-family: var(--font-hand); font-size: 15px; line-height: 0; position: relative; top: 1px; }
+
+  /* ========== Notebook page ========== */
+  .page {
+    max-width: 580px;
+    margin: 0 auto;
+    position: relative;
+    padding: 0 12px;
+  }
+  /* the page itself sits on the ruled paper */
+  .page::before {
+    content: "";
+    position: absolute;
+    left: -42px; top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(176,124,58,0.22);
+  }
+  /* tiny tape strip at top */
+  .page::after {
+    content: "";
+    position: absolute;
+    top: -10px; left: 50%;
+    transform: translateX(-50%) rotate(-1.5deg);
+    width: 110px; height: 18px;
+    background: rgba(110,136,98,0.25);
+    border: 1px solid rgba(110,136,98,0.30);
+    z-index: 1;
+  }
+
+  /* ========== Date header (very chill) ========== */
+  .date-block {
+    margin: 30px 0 60px;
+    position: relative;
+  }
+  .date-day {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .date-title {
+    font-family: var(--font-serif);
+    font-size: 38px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+  }
+  .date-title .num {
+    font-family: var(--font-hand);
+    font-size: 60px;
+    font-weight: 400;
+    color: var(--ink);
+    margin: 0 6px;
+    position: relative;
+    top: 6px;
+  }
+  .date-meta {
+    margin-top: 22px;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .date-meta .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--muted-2); }
+  .date-meta .intention {
+    font-family: var(--font-hand);
+    color: var(--sage);
+    font-size: 22px;
+    margin-top: 18px;
+    display: inline-block;
+  }
+
+  /* ========== Sections (notebook entries) ========== */
+  .section { margin: 50px 0; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .section-head .label {
+    font-family: var(--font-hand);
+    font-size: 28px;
+    color: var(--ink);
+    font-weight: 400;
+    letter-spacing: 0.5px;
+  }
+  .section-head .meta {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.4px;
+  }
+  .section-head .line {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    margin-left: 4px;
+    position: relative;
+    top: -4px;
+  }
+
+  /* ========== Today focus - handwritten quote ========== */
+  .focus {
+    padding: 0;
+    margin: 0 0 12px;
+  }
+  .focus-quote {
+    font-family: var(--font-hand);
+    font-size: 24px;
+    color: var(--ink);
+    line-height: 1.5;
+    margin-bottom: 14px;
+    letter-spacing: 0.3px;
+  }
+  .focus-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .focus-progress .bar {
+    flex: 1;
+    height: 2px;
+    background: var(--line);
+    border-radius: 1px;
+    overflow: hidden;
+    position: relative;
+  }
+  .focus-progress .bar .fill {
+    position: absolute;
+    inset: 0 33% 0 0;
+    background: var(--sage);
+    border-radius: 1px;
+  }
+  .focus-progress .count {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .focus-progress .count b { color: var(--sage); font-weight: 500; }
+
+  /* ========== Suggestion - soft inline ========== */
+  .suggestion {
+    margin: 30px 0;
+    padding: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+  .suggestion .ico { color: var(--amber); font-size: 16px; }
+  .suggestion b { color: var(--ink); font-weight: 500; }
+  .suggestion .actions { margin-left: auto; display: flex; gap: 14px; }
+  .suggestion .btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 300 13px/1 var(--font-base);
+    padding: 4px 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--muted-2);
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+  .suggestion .btn.primary {
+    color: var(--sage);
+    text-decoration-color: var(--sage);
+  }
+  .suggestion .btn:hover { color: var(--ink); text-decoration-color: var(--ink); }
+
+  /* ========== Tasks as notebook entries ========== */
+  .task {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px dotted var(--line);
+    cursor: pointer;
+    transition: background .2s ease;
+  }
+  .task:last-child { border-bottom: none; }
+  .task:hover .checkbox { border-color: var(--sage); }
+  .task:hover { background: rgba(110,136,98,0.03); }
+  .checkbox {
+    width: 18px; height: 18px;
+    margin-top: 6px;
+    flex-shrink: 0;
+    background: transparent;
+    border-radius: 6px 5px 6px 5px / 5px 6px 5px 6px;
+    border: 1.5px solid var(--muted-2);
+    transition: all .2s ease;
+    position: relative;
+  }
+  .task-title {
+    flex: 1;
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .task-tag {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-hand);
+    font-size: 16px;
+    margin-left: 6px;
+  }
+  .task-tag.overdue { color: var(--amber); }
+  .task-tag.hot { color: var(--amber); }
+  .task-tag.deadline { color: var(--sage); }
+  .task-meta {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    margin-top: 6px;
+    font-family: var(--font-hand);
+    font-size: 16px;
+  }
+
+  /* ========== Group header (project name) ========== */
+  .group { margin: 44px 0 0; }
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .group-head .ico {
+    font-size: 18px;
+    color: var(--sage);
+  }
+  .group-head .name {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.3px;
+  }
+  .group-head .count {
+    font-family: var(--font-hand);
+    font-size: 17px;
+    color: var(--muted);
+  }
+  .group-head .arrow {
+    margin-left: auto;
+    color: var(--muted-2);
+    font-size: 11px;
+    transition: transform .25s ease;
+  }
+  .group-head.open .arrow { transform: rotate(180deg); }
+
+  /* ========== Completed ========== */
+  .completed {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--line);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .completed .num {
+    font-family: var(--font-hand);
+    font-size: 20px;
+    color: var(--sage);
+  }
+  .completed .arrow { margin-left: auto; }
+
+  /* ========== Input ========== */
+  .input {
+    margin: 70px 0 0;
+    padding: 18px 0 6px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .input .plus {
+    color: var(--sage);
+    font-size: 18px;
+    font-weight: 300;
+  }
+  .input .ph {
+    flex: 1;
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: var(--muted);
+  }
+  .input .ph .hint { color: var(--ink-2); }
+  .input .send {
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    transition: color .2s ease;
+  }
+  .input .send:hover { color: var(--sage); }
+
+  /* ========== Hand mode overrides ========== */
+  body.hand .date-title {
+    font-family: var(--font-hand);
+    font-size: 48px;
+    font-weight: 400;
+  }
+  body.hand .date-title .num {
+    font-size: 72px;
+  }
+  body.hand .group-head .name,
+  body.hand .section-head .label,
+  body.hand .toolbar .stamp {
+    font-family: var(--font-hand);
+  }
+  body.hand .group-head .name { font-size: 28px; }
+  body.hand .section-head .label { font-size: 32px; }
+  body.hand .toolbar .stamp { color: var(--sage); font-size: 22px; }
+  body.hand .task-title { font-family: var(--font-hand); font-size: 19px; }
+  body.hand .focus-quote { font-size: 28px; }
+  body.hand .checkbox { border-radius: 5px 7px 5px 7px / 7px 5px 7px 5px; }
+
+  /* ========== Note (bottom) ========== */
+  .note {
+    max-width: 580px;
+    margin: 80px auto 0;
+    padding: 24px 28px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.8;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    position: relative;
+  }
+  .note .ttl {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    color: var(--ink-2);
+    font-size: 13px;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .note b { color: var(--ink); font-weight: 500; }
+  .note code { font-family: "Caveat", monospace; font-size: 14px; color: var(--sage); }
+
+  @media (max-width: 600px) {
+    body { padding: 40px 16px 80px; background-size: 100% 44px, 12px 12px; }
+    .page { padding: 0 4px; }
+    .page::before { left: -20px; }
+    .date-title { font-size: 30px; }
+    .date-title .num { font-size: 48px; }
+    body.hand .date-title { font-size: 36px; }
+    body.hand .date-title .num { font-size: 56px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="stamp"><b>DailyFlow</b> · 笔记本版</div>
+  <div class="toggle" role="tablist" aria-label="字体风格">
+    <button type="button" class="active" data-mode="std">标准</button>
+    <button type="button" data-mode="hand"><span class="ic">A</span>手写</button>
+  </div>
+</div>
+
+<main class="page">
+
+  <!-- Date as page heading -->
+  <header class="date-block">
+    <div class="date-day">Monday · August 31</div>
+    <h1 class="date-title">
+      <span class="num">8</span>月<span class="num">31</span>日
+    </h1>
+    <div class="date-meta">
+      <span>第 32 周</span>
+      <span class="dot"></span>
+      <span>8:42</span>
+      <span class="dot"></span>
+      <span>工作日</span>
+    </div>
+    <div class="intention">今天 · 把 DSH 跑通</div>
+  </header>
+
+  <!-- AI suggestion - inline note -->
+  <div class="suggestion">
+    <span class="ico">💡</span>
+    <span><b>保密协议</b> 已逾期 5 天，建议排进今天</span>
+    <div class="actions">
+      <button class="btn primary">排进今天</button>
+      <button class="btn">忽略</button>
+    </div>
+  </div>
+
+  <!-- Today focus as section -->
+  <section class="section">
+    <div class="section-head">
+      <span class="label">今天 · 焦点</span>
+      <span class="meta">2 of 3 done</span>
+      <div class="line"></div>
+    </div>
+    <div class="focus">
+      <div class="focus-quote">DSH 接入测试 · 同步 Q3 · 写日报</div>
+      <div class="focus-progress">
+        <div class="bar"><div class="fill"></div></div>
+        <div class="count"><b>2</b> / 3</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Event group 1 -->
+  <section class="group">
+    <div class="group-head open">
+      <span class="ico">🧠</span>
+      <span class="name">DSH 接入项目</span>
+      <span class="count">2 项</span>
+      <span class="arrow">▾</span>
+    </div>
+    <div class="task-list">
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">完成 DSH 接入测试<span class="task-tag hot">🔥 紧急</span></div>
+        <div class="task-meta">今天截止</div>
+      </div>
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">部署集成环境<span class="task-tag">#dev</span></div>
+        <div class="task-meta">本周</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Event group 2 -->
+  <section class="group">
+    <div class="group-head">
+      <span class="ico">🧠</span>
+      <span class="name">Q3 路线图</span>
+      <span class="count">1 项</span>
+      <span class="arrow">▾</span>
+    </div>
+    <div class="task-list">
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">给团队同步 Q3 路线图<span class="task-tag overdue">逾期</span></div>
+        <div class="task-meta">昨天</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Standalone tasks -->
+  <section class="section">
+    <div class="section-head">
+      <span class="label">其他</span>
+      <span class="meta">2 项</span>
+      <div class="line"></div>
+    </div>
+    <div class="task-list">
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">写日报<span class="task-tag deadline">今天</span></div>
+        <div class="task-meta">5 分钟</div>
+      </div>
+      <div class="task">
+        <div class="checkbox"></div>
+        <div class="task-title">优化 onboarding 文案<span class="task-tag">#academy</span></div>
+        <div class="task-meta">本周</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Completed - just a line -->
+  <div class="completed">
+    <span>已写完</span>
+    <span class="num">9</span>
+    <span>件小事</span>
+    <span class="arrow">▾</span>
+  </div>
+
+  <!-- Input - looks like a notebook line -->
+  <div class="input">
+    <span class="plus">+</span>
+    <span class="ph"><span class="hint">写下一件事…</span>　或选一个事件节点</span>
+    <span class="send">➤</span>
+  </div>
+
+</main>
+
+<div class="note">
+  <span class="ttl">v3.4 · 笔记本版（做减法）</span>
+  核心思路：v3.3 之前的版本都是 <b>"App 套上纸面背景"</b>——再多的手写体和胶带也救不了"这是个 app"的底子。v3.4 改成 <b>"翻开一页真正的笔记本"</b>：<br><br>
+  ① <b>删掉侧栏</b>——没有 rail / logo / ⌘K 那一坨 chrome。整页只有正文和一条左侧红线。<br>
+  ② <b>单列、580px 宽</b>——比 v3.3 的 720px 再窄 20%，单手握持的笔记本宽度。<br>
+  ③ <b>横线纸背景</b>——CSS linear-gradient 画 48px 间距的横线 + 微小颗粒。这是真正的"横线纸"质感，不只是"米色背景"。<br>
+  ④ <b>删掉所有 pill</b>——"今天截止"/"紧急"/"#dev" 全部从胶囊色块改成手写体彩色文本，<b>贴着任务标题走</b>，不再隔成两个视觉单元。<br>
+  ⑤ <b>删掉 ⌘K / Work / ⋯ 那一行</b>——头部只剩日期 + 元信息 + 今天的 intention（手写）。<br>
+  ⑥ <b>section head 用手写体 + 横线收尾</b>——像笔记本的小标题，画一根渐弱的横线收尾。<br>
+  ⑦ <b>完成区只剩一句话</b>——"已写完 9 件小事"，没有图标 / 颜色块。<br>
+  ⑧ <b>唯一的视觉锚点</b>：左侧一条 amber 红线（笔记本装订线） + 顶部一条 sage 胶带。<br>
+  ⑨ <b>手写模式仍然保留</b>：所有数字 / 标签 / 标题都换成更"手帐"的手写中文。<br><br>
+  留白：section 之间 <code>44~50px</code>，task 之间 <code>14px</code>，整页行高 <code>1.85</code>——比 v3.3 再+15% 呼吸。
+</div>
+
+<script>
+  const body = document.body;
+  const buttons = document.querySelectorAll('.toggle button');
+  buttons.forEach(b => {
+    b.addEventListener('click', () => {
+      buttons.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const mode = b.dataset.mode;
+      body.classList.toggle('hand', mode === 'hand');
+    });
+  });
+  document.querySelectorAll('.group-head').forEach(h => {
+    h.addEventListener('click', () => h.classList.toggle('open'));
+  });
+</script>
+
+</body>
+</html>

@@ -335,7 +335,7 @@ router.post('/:id/nodes/:nodeId/promote-to-task', async (req, res) => {
       ...extractUserTags(node.text),
       // Extra tags from the promote body may arrive with markdown-style
       // leading '#' — normalize before the dedupe merge.
-      ...(body.tags ?? []).map(t => t.replace(/^#/, '')).filter(Boolean),
+      ...(body.tags ?? []).map(t => t.replace(/^#/, '').trim().toLowerCase()).filter(Boolean),
     ];
     // De-dup inherited vs user tags (case-insensitive, first wins).
     const seen = new Set<string>();

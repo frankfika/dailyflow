@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Search, Sparkles, Undo2, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Search, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { ulid } from 'ulid';
 import type { EventDetail, EventNode, EventSummary, MindMap, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
 import { mindmapsApi, organizeApi, recurringApi } from '../../../api/client';
@@ -9,6 +9,7 @@ import { queryKeys } from '../../../queryKeys';
 import { readEventMap, writeEventMap } from '../hooks/mindMapCache';
 import { OrganizeSuggestionModal } from '../../../components/MindMap/OrganizeSuggestionModal';
 import { MINDMAP_TEMPLATES } from '../../../components/MindMap/templates';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import {
   useAddEventChild,
   useAddEventSibling,
@@ -16,6 +17,7 @@ import {
   useSeedEventTemplate,
   useCompleteNodeTask,
   useCreateEvent,
+  useDeleteEvent,
   useDeleteEventNode,
   useEventById,
   useEvents,
@@ -50,10 +52,10 @@ export interface EventsViewProps {
 
 const TEXT = {
   en: {
-    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks',
+    title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks', deleteEvent: 'Delete event', deleteEventConfirm: 'Delete this event? This cannot be undone. The linked canvas stays on disk but the event is removed from the list.', deleteEventTitle: 'Delete event', delete: 'Delete',
   },
   zh: {
-    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务',
+    title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务', deleteEvent: '删除事件', deleteEventConfirm: '确定要删除这个事件吗？不可撤销。关联的画布会保留在本地，但事件会从列表中移除。', deleteEventTitle: '删除事件', delete: '删除',
   },
 } as const;
 
@@ -78,6 +80,23 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   const eventsQ = useEvents();
   const createEvent = useCreateEvent();
   const seedTemplate = useSeedEventTemplate();
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const deleteEvent = useDeleteEvent();
+  const requestDelete = useCallback((id: string, title: string) => setPendingDelete({ id, title }), []);
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    const targetId = pendingDelete.id;
+    try {
+      await deleteEvent.mutateAsync({ eventId: targetId });
+      setSelectedEventId((current) => (current === targetId ? null : current));
+      onNotice?.(language === 'zh' ? '已删除事件' : 'Event deleted', 'success');
+    } catch (err) {
+      onNotice?.(err instanceof Error ? err.message : t.loadError, 'error');
+    } finally {
+      setPendingDelete(null);
+    }
+  }, [pendingDelete, deleteEvent, onNotice, language, t.loadError]);
   const events = useMemo(
     () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
     [context, eventsQ.data?.events],
@@ -151,25 +170,114 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
               <button onClick={() => setCreating(true)} className="rounded-lg border border-gray-300 px-3.5 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900">{t.emptyAction}</button>
             </div>
           )}
-          {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} />}
-          {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} />}
+          {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} />}
+          {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} />}
         </div>
       </div>
+      <ConfirmDialog
+        show={pendingDelete !== null}
+        title={t.deleteEventTitle}
+        message={t.deleteEventConfirm}
+        confirmText={t.delete}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={deleteEvent.isPending}
+        onConfirm={() => { void confirmDelete(); }}
+        onCancel={cancelDelete}
+      />
     </section>
   );
 }
 
-function EventGroup({ title, events, language, onOpen, noActions, updated }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string }) {
-  return <div className="mb-8"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="space-y-2">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} />)}</div></div>;
+function EventGroup({ title, events, language, onOpen, noActions, updated, onDelete }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
+  return <div className="mb-8"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="space-y-2">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} onDelete={onDelete} />)}</div></div>;
 }
 
 function CompletedGroup(props: Parameters<typeof EventGroup>[0]) {
   const [open, setOpen] = useState(false);
-  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="space-y-2">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} />)}</div>}</div>;
+  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="space-y-2">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} onDelete={props.onDelete} />)}</div>}</div>;
 }
 
-function EventCard({ event, language, onOpen, noActions, updated }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string }) {
-  return <button onClick={() => onOpen(event.id)} className="w-full rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)]" data-testid={`event-card-${event.id}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3><p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p></div><span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span></div>{event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}{event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[11px] text-text-muted">#{tag}</span>)}</div>}</button>;
+function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
+  // The card is a <div role="button"> (not a <button>) so we can nest the
+  // "more" menu trigger inside it. We still need keyboard activation
+  // (Enter / Space) and focus styles to keep it accessible.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+  const open = () => onOpen(event.id);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={onKeyDown}
+      aria-label={event.title}
+      className="group relative w-full cursor-pointer rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40"
+      data-testid={`event-card-${event.id}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3>
+          <p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span>
+          {/* More menu trigger. Hidden until the card is hovered or focused
+              so the list stays calm; the menu reuses the global ConfirmDialog
+              for the destructive action itself. */}
+          <div className="relative" ref={moreRef}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label={language === 'zh' ? '更多动作' : 'More actions'}
+              data-testid={`event-card-more-${event.id}`}
+              className="grid h-7 w-7 place-items-center rounded-md text-text-muted opacity-0 transition-opacity hover:bg-black/[0.05] group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-9 z-30 min-w-40 overflow-hidden rounded-xl border border-border bg-white p-1.5 text-sm shadow-lg dark:bg-gray-900"
+                data-testid={`event-card-menu-${event.id}`}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onDelete(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled')); }}
+                  data-testid={`event-card-delete-${event.id}`}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {language === 'zh' ? '删除事件' : 'Delete event'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}
+      {event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}
+    </div>
+  );
 }
 
 function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void }) {

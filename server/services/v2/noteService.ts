@@ -27,9 +27,7 @@ import {
 } from '../../domain/v2/types.js';
 import {
   ConcurrentModificationError as RepoConcurrentModificationError,
-  sha256 as fileSha256,
 } from '../../repositories/v2/atomicWrite.js';
-import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.js';
 
 // Re-export the repository's error so callers can `instanceof` check
 // against the same class the routes layer catches.
@@ -257,9 +255,14 @@ export class NoteService {
       updatedAt: new Date().toISOString(),
       autoSaveVersion: existing.autoSaveVersion + 1,
     });
-    await this.repo.saveNoteDocument(next, {
-      expectedHash: fileSha256(serializeNoteDocument(existing)),
-    });
+    // expectedHash is intentionally omitted: the repository reads the
+    // actual on-disk hash right before writing so a file whose on-disk
+    // form differs from a clean re-serialization (e.g. an extra trailing
+    // newline left by an external editor or older serializer) does not
+    // falsely trip ConcurrentModificationError. The autoSaveVersion
+    // check at the top of this method is the primary concurrency guard;
+    // the in-process file write lock covers the rest.
+    await this.repo.saveNoteDocument(next);
     return next;
   }
 
@@ -271,9 +274,8 @@ export class NoteService {
       lastOpenedAt: new Date().toISOString(),
       updatedAt: note.updatedAt,
     });
-    await this.repo.saveNoteDocument(next, {
-      expectedHash: fileSha256(serializeNoteDocument(note)),
-    });
+    // See update() above for why expectedHash is left to the repository.
+    await this.repo.saveNoteDocument(next);
     return next;
   }
 

@@ -131,14 +131,25 @@ describe('MeetingNotePanel', () => {
     render(<MeetingNotePanel note={note()} />);
 
     expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('do not require AI or an API key');
-    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('provider’s API key');
+    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('needs no setup');
+    // Ollama cannot transcribe audio, the callout must say so explicitly
+    expect(screen.getByTestId('transcription-setup-callout')).toHaveTextContent('Ollama');
     expect(screen.getByRole('button', { name: 'Start recording' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Set up remote transcription/ }));
+    // 3-card picker exposes save-only, cloud, and local buttons
+    expect(screen.getByTestId('setup-pick-save-only')).toBeInTheDocument();
+    expect(screen.getByTestId('setup-pick-siliconflow')).toBeInTheDocument();
+    expect(screen.getByTestId('setup-pick-local')).toBeInTheDocument();
+    // SiliconFlow card points at the ¥9.9 trial credit page
+    expect(screen.getByTestId('setup-pick-siliconflow')).toHaveTextContent('SiliconFlow');
+
+    // Picking the SiliconFlow card opens the settings panel and pre-selects it as provider
+    fireEvent.click(screen.getByTestId('setup-pick-siliconflow'));
     expect(screen.getByRole('combobox', { name: 'Transcription mode' })).toBeInTheDocument();
     expect(screen.getByText(/Add the selected provider’s API key/)).toBeInTheDocument();
     expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://api.siliconflow.cn/v1')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('FunAudioLLM/SenseVoiceSmall')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close transcription settings' }));
     expect(screen.queryByRole('combobox', { name: 'Transcription mode' })).not.toBeInTheDocument();
   });

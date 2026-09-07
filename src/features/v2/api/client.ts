@@ -243,7 +243,7 @@ export type MeetingTranscriptionMode = 'save-only' | 'saved-only' | 'remote' | '
 
 export interface MeetingTranscriptionRequest {
   mode: MeetingTranscriptionMode;
-  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'openai-compatible';
+  provider?: 'openai' | 'deepgram' | 'elevenlabs' | 'siliconflow' | 'openai-compatible';
   engine?: 'whisper.cpp';
   modelId?: 'base' | 'small' | 'medium' | string;
   model?: string;

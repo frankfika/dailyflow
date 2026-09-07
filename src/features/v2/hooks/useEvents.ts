@@ -600,6 +600,34 @@ export function useDeleteEventNode(): UseMutationResult<
   });
 }
 
+
+/**
+ * Delete an entire Event (and the underlying TopicSpace). After the
+ * mutation the event detail cache is dropped and the events-list
+ * query is invalidated so the card disappears immediately. The
+ * associated MindMap stays on disk per SPEC §3.1 (TODO: archive
+ * it once the MindMap type carries an `archived` flag).
+ */
+export function useDeleteEvent(): UseMutationResult<
+  void,
+  Error,
+  { eventId: string }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId }) => {
+      await eventsApi.delete(eventId);
+    },
+    onSuccess: (_data, vars) => {
+      // Drop the event detail so a back-navigation can't show a ghost.
+      qc.removeQueries({ queryKey: queryKeys.event(vars.eventId) });
+      // Force the list to refetch (it was already invalidated optimistically
+      // by the caller clearing `selectedEventId`).
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    },
+  });
+}
+
 /**
  * Outdent: move `nodeId` up one level so it becomes a sibling of its current
  * parent (right after the parent). The subtree moves with it. Root and

@@ -251,6 +251,62 @@ describe.sequential('POST /api/mindmaps/:id/nodes/:nodeId/promote-to-task', () =
     expect(res.body.error).toMatch(/root/i);
   });
 
+
+  it('merges extra tags supplied via the body into the new task', async () => {
+    const { createTopicSpace } = await import('../../services/topicSpaces.js');
+    const { getMindMap, updateMindMap } = await import('../../services/mindmaps.js');
+    const space = await createTopicSpace({ title: 'Extra tags' });
+    const map = await getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    const branchId = 'n_branch_extra';
+    await updateMindMap(space.mindmapId, {
+      nodes: [
+        ...map.nodes,
+        { id: branchId, text: '准备BP', position: { x: 1, y: 0 }, kind: 'branch' },
+      ],
+      edges: [...map.edges, { id: 'e_extra', source: map.rootId, target: branchId }],
+    });
+    const date = '2026-08-09';
+    const res = await withServer(app, (p) =>
+      request(p, 'POST', `/api/mindmaps/${space.mindmapId}/nodes/${branchId}/promote-to-task`, {
+        date,
+        tags: ['Review', 'Launch ', '', 'launch'],
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.task.tags).toContain('review');
+    expect(res.body.task.tags).toContain('launch');
+    const filePath = path.join(tmpRoot, 'Daily', '2026', '08', `${date}.md`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    const lineWithTask = content.split('\n').find((l) => l.includes(res.body.task.id));
+    expect(lineWithTask).toBeDefined();
+    expect(lineWithTask).toContain('#review');
+    expect(lineWithTask).toContain('#launch');
+  });
+
+  it('rejects non-array tags payload', async () => {
+    const { createTopicSpace } = await import('../../services/topicSpaces.js');
+    const { getMindMap, updateMindMap } = await import('../../services/mindmaps.js');
+    const space = await createTopicSpace({ title: 'Bad tags' });
+    const map = await getMindMap(space.mindmapId);
+    if (!map) throw new Error('map not found');
+    const branchId = 'n_branch_bad';
+    await updateMindMap(space.mindmapId, {
+      nodes: [
+        ...map.nodes,
+        { id: branchId, text: 'branch', position: { x: 1, y: 0 }, kind: 'branch' },
+      ],
+      edges: [...map.edges, { id: 'e_bad', source: map.rootId, target: branchId }],
+    });
+    const res = await withServer(app, (p) =>
+      request(p, 'POST', `/api/mindmaps/${space.mindmapId}/nodes/${branchId}/promote-to-task`, {
+        date: '2026-08-09',
+        tags: 'launch',
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('inherits tag ancestors and merges them with user-supplied tags', async () => {
     const { createTopicSpace } = await import('../../services/topicSpaces.js');
     const { updateMindMap, getMindMap } = await import('../../services/mindmaps.js');

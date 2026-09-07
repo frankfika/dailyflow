@@ -20,7 +20,7 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 import { ResizeHandle } from './ResizeHandle';
@@ -174,6 +174,88 @@ export function Sidebar({
   const isTablet = viewport === 'tablet';
   const isDesktop = viewport === 'desktop';
 
+  // Edge swipe: a right-swipe from the left edge of the viewport opens
+  // the mobile sidebar. Mirrors iOS / Android system edge gestures so the
+  // hamburger button isn't the only way to expose the sidebar. We track
+  // touchstart / touchmove / touchend manually so we can ignore swipes
+  // that began on an interactive element (button / link / input) —
+  // otherwise tapping a chip and dragging right would yank the sidebar in.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) return;
+    const EDGE_PX = 24;
+    const MIN_DRAG = 60;
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+    const isOnInteractive = (el: EventTarget | null) =>
+      el instanceof HTMLElement && Boolean(el.closest('button, a, input, select, textarea, [role="button"]'));
+    const onStart = (event: TouchEvent) => {
+      if (isSidebarOpen) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (touch.clientX > EDGE_PX) return;
+      if (isOnInteractive(event.target)) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      tracking = true;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!tracking) return;
+      // Cancel the gesture if it starts looking like a vertical scroll.
+      const touch = event.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dy) > Math.abs(dx) * 1.4) tracking = false;
+    };
+    const onEnd = (event: TouchEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      if (dx >= MIN_DRAG) setIsSidebarOpen(true);
+    };
+    // Close-on-swipe-left: only registered when the sidebar is open.
+    let closeStartX = 0;
+    let closeTracking = false;
+    const onCloseStart = (event: TouchEvent) => {
+      if (!isSidebarOpen) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      // Only initiate the close gesture if the touch starts within the
+      // sidebar (left half of the viewport) — otherwise the user is
+      // probably trying to swipe content.
+      if (touch.clientX > window.innerWidth * 0.5) return;
+      if (isOnInteractive(event.target)) return;
+      closeStartX = touch.clientX;
+      closeTracking = true;
+    };
+    const onCloseEnd = (event: TouchEvent) => {
+      if (!closeTracking) return;
+      closeTracking = false;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - closeStartX;
+      if (dx <= -MIN_DRAG) setIsSidebarOpen(false);
+    };
+    if (isSidebarOpen) {
+      window.addEventListener('touchstart', onCloseStart, { passive: true });
+      window.addEventListener('touchend', onCloseEnd, { passive: true });
+    }
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchstart', onCloseStart);
+      window.removeEventListener('touchend', onCloseEnd);
+    };
+  }, [isMobile, isSidebarOpen, setIsSidebarOpen]);
+
   // compact = persistent 60px icon strip on tablet and desktop. Primary
   // navigation must remain discoverable after the expanded sidebar closes.
   const isCompact = !isMobile && !isSidebarOpen;
@@ -184,7 +266,12 @@ export function Sidebar({
   // Hover-expand: meaningful whenever the icon rail is compact. Letting motion own the
   // width keeps the click-toggle and hover-expand animations in lockstep.
   const [hoverExpanded, setHoverExpanded] = useState(false);
-  const showExpandedWidth = isExpanded || (isCompact && hoverExpanded);
+  // Effective layout state. On hover-expand we want the full-width +
+  // labels (so the rail reveals what each icon means), not just a wider
+  // icon strip. `showLabels` is the single source of truth for "should
+  // the nav items render their text labels right now?".
+  const showLabels = isExpanded || (isCompact && hoverExpanded);
+  const showExpandedWidth = showLabels;
 
   // --- Esc to close on mobile / tablet overlay ---
   useEffect(() => {
@@ -271,9 +358,14 @@ export function Sidebar({
   // Tablet: width 60 ↔ 230 (icon strip ↔ overlay).
   // Desktop: width 60 ↔ 230 in flow; it never reaches zero.
   const motionInitial = false; // don't replay on every prop change
+  // Spring on mobile (slide-out feels "snappy"); tween on tablet/desktop so
+  // the resize handle stays accurate. Snappier duration (0.22s) feels
+  // closer to native dock auto-hide timing.
   const motionTransition = isResizing
     ? { duration: 0 }
-    : { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] as const };
+    : isMobile
+      ? ({ type: 'spring' as const, stiffness: 340, damping: 32 })
+      : ({ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] as const });
   const expandedWidth = isDesktop ? desktopWidth : FULL_WIDTH;
 
   let motionAnimate: { x?: string; width?: number; marginLeft?: string };
@@ -335,6 +427,8 @@ export function Sidebar({
         initial={motionInitial}
         animate={motionAnimate}
         transition={motionTransition}
+        onMouseEnter={() => isCompact && setHoverExpanded(true)}
+        onMouseLeave={() => setHoverExpanded(false)}
         onClick={(e) => {
           // Keep navigation and utility buttons usable in compact mode.
           // Expanding from their bubbled click used to reopen the overlay
@@ -432,8 +526,15 @@ export function Sidebar({
 
           {/* Workspace switcher — only when expanded (otherwise the
               select element is too cramped to be usable). */}
-          {workspaceSwitcher && !isCompact && (
-            <div className="mb-3 px-1.5">{workspaceSwitcher}</div>
+          {workspaceSwitcher && (
+            <div className={isCompact ? 'mb-3 flex justify-center' : 'mb-3 px-1.5'}>
+              {isCompact
+                ? // cloneElement injects `compact` so the same WorkspaceSwitcher
+                  // renders an icon-only trigger and pops its dropdown out to
+                  // the right of the 60px sidebar.
+                  React.cloneElement(workspaceSwitcher as React.ReactElement<{ compact?: boolean }>, { compact: true })
+                : workspaceSwitcher}
+            </div>
           )}
 
           {/* UX S10: ⌘K sits at the top of the icon rail — the design's
@@ -478,12 +579,20 @@ export function Sidebar({
                       onClick={action}
                       data-testid={`nav-${tab}`}
                       data-active={active}
-                      className={`nav-item flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${active ? 'bg-accent/10 text-accent font-semibold' : 'text-text-main hover:bg-black/[0.03]'}`}
+                      className={`nav-item relative flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${active ? 'text-accent font-semibold' : 'text-text-main hover:bg-black/[0.03]'}`}
                       title={isCompact ? label : undefined}
                       aria-label={label}
                     >
-                      <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      {!isCompact && <span className="overflow-hidden whitespace-nowrap">{label}</span>}
+                      {active && (
+                        <motion.span
+                          layoutId="sidebar-nav-active"
+                          className="absolute inset-0 rounded-lg bg-accent/10"
+                          transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <Icon className="relative w-4 h-4 shrink-0" aria-hidden="true" />
+                      {showLabels && <span className="relative overflow-hidden whitespace-nowrap">{label}</span>}
                     </button>
                   </li>
                 );
@@ -500,7 +609,7 @@ export function Sidebar({
                   aria-label={language === 'zh' ? '更多' : 'More'}
                 >
                   <MoreHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  {!isCompact && (
+                  {showLabels && (
                     <>
                       <span className="flex-1 overflow-hidden whitespace-nowrap">{language === 'zh' ? '更多' : 'More'}</span>
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
@@ -525,18 +634,30 @@ export function Sidebar({
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
                       { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
                       { tab: 'team', label: language === 'zh' ? '团队' : 'Team', icon: Users },
-                    ] as const).map(({ tab, label, icon: Icon }) => (
-                      <li key={tab}>
-                        <button
-                          onClick={() => handleNavClick(tab)}
-                          data-testid={`nav-${tab}`}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${activeTab === tab ? 'bg-accent/10 font-medium text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {label}
-                        </button>
-                      </li>
-                    ))}
+                    ] as const).map(({ tab, label, icon: Icon }) => {
+                      const active = activeTab === tab;
+                      return (
+                        <li key={tab}>
+                          <button
+                            onClick={() => handleNavClick(tab)}
+                            data-testid={`nav-${tab}`}
+                            data-active={active}
+                            className={`relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${active ? 'font-medium text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
+                          >
+                            {active && (
+                              <motion.span
+                                layoutId="sidebar-nav-active"
+                                className="absolute inset-0 rounded-md bg-accent/10"
+                                transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                                aria-hidden="true"
+                              />
+                            )}
+                            <Icon className="relative h-3.5 w-3.5" />
+                            <span className="relative">{label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
                     {onOpenSettings && (
                       <li>
                         <button
@@ -567,41 +688,41 @@ export function Sidebar({
                 className="mt-auto pt-3 border-t border-border/60 space-y-3 overflow-hidden"
               >
                 {onContextChange && (
-                  <div>
-                    <div
-                      role="tablist"
-                      aria-label={language === 'zh' ? '上下文' : 'Context'}
-                      className="grid grid-cols-2 gap-0.5 p-0.5 bg-black/[0.03] border border-border/50 rounded-lg"
+                  <div
+                    role="tablist"
+                    aria-label={language === 'zh' ? '上下文' : 'Context'}
+                    className="relative grid grid-cols-2 gap-0.5 p-0.5 bg-black/[0.03] border border-border/50 rounded-lg"
+                  >
+                    {/* Shared layout pill — slides between Work / Life with
+                       a spring transition so the context flip reads as one
+                       motion instead of two buttons swapping colors. */}
+                    <motion.span
+                      layoutId="context-pill"
+                      className="pointer-events-none absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] bg-surface rounded-md shadow-sm"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                      style={{ left: activeContext === 'work' ? 2 : 'calc(50% + 0px)' }}
+                      aria-hidden="true"
+                    />
+                    <button
+                      role="tab"
+                      aria-selected={activeContext === 'work'}
+                      onClick={() => onContextChange('work')}
+                      data-testid="mode-work"
+                      className={`relative flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${activeContext === 'work' ? 'text-accent' : 'text-text-muted hover:text-text-heading'}`}
                     >
-                      <button
-                        role="tab"
-                        aria-selected={activeContext === 'work'}
-                        onClick={() => onContextChange('work')}
-                        data-testid="mode-work"
-                        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-all active:scale-95 ${isMobile ? 'min-h-[44px]' : ''} ${
-                          activeContext === 'work'
-                            ? 'bg-surface text-accent shadow-sm'
-                            : 'text-text-muted hover:text-text-heading'
-                        }`}
-                      >
-                        <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
-                        {language === 'zh' ? '工作' : 'Work'}
-                      </button>
-                      <button
-                        role="tab"
-                        aria-selected={activeContext === 'life'}
-                        onClick={() => onContextChange('life')}
-                        data-testid="mode-life"
-                        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-all active:scale-95 ${isMobile ? 'min-h-[44px]' : ''} ${
-                          activeContext === 'life'
-                            ? 'bg-surface text-accent shadow-sm'
-                            : 'text-text-muted hover:text-text-heading'
-                        }`}
-                      >
-                        <Heart className="w-3.5 h-3.5" aria-hidden="true" />
-                        {language === 'zh' ? '生活' : 'Life'}
-                      </button>
-                    </div>
+                      <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
+                      {language === 'zh' ? '工作' : 'Work'}
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={activeContext === 'life'}
+                      onClick={() => onContextChange('life')}
+                      data-testid="mode-life"
+                      className={`relative flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${activeContext === 'life' ? 'text-accent' : 'text-text-muted hover:text-text-heading'}`}
+                    >
+                      <Heart className="w-3.5 h-3.5" aria-hidden="true" />
+                      {language === 'zh' ? '生活' : 'Life'}
+                    </button>
                   </div>
                 )}
 

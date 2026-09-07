@@ -16,7 +16,7 @@ import {
   unscheduleNodeTask,
   rescheduleNodeTask,
 } from '../services/eventExecutionService.js';
-import { createTopicSpace } from '../services/topicSpaces.js';
+import { createTopicSpace, deleteTopicSpace } from '../services/topicSpaces.js';
 import { convertStandaloneTaskToEventNode } from '../services/taskEventConversion.js';
 import { getMindMap, updateMindMap } from '../services/mindmaps.js';
 import { randomUUID } from 'node:crypto';
@@ -456,6 +456,27 @@ router.post('/actions/reschedule-node-task', async (req, res) => {
     })));
   } catch (error: any) {
     console.error('[events] reschedule error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/events/:id
+ *
+ * EFP-005 delete counterpart. The event is stored as a TopicSpace
+ * (work/life context) plus a dominant MindMap; deleting the event
+ * removes the TopicSpace file and orphans the MindMap on disk for
+ * now (SPEC §3.1: "mindmap 标 archived 不删"). Once the
+ * MindMap type grows an `archived` flag we will also flip that here
+ * so the orphan stops being discoverable.
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const ok = await deleteTopicSpace(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Event not found' });
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('[events] delete error:', error);
     res.status(error?.status ?? 500).json({ error: error.message });
   }
 });

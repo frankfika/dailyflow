@@ -175,7 +175,10 @@ describe.sequential('WorkspaceSwitcher', () => {
     );
 
     fireEvent.click(screen.getByText('Alpha'));
-    fireEvent.click(screen.getByText(/Choose another folder/i));
+    // The sidebar "Add another folder" button now fires the native picker
+    // directly (one click → system dialog), so a single click is enough.
+    // The pickFolder() call is mocked to return the path immediately.
+    fireEvent.click(screen.getByTestId('workspace-add-folder-modal'));
 
     await waitFor(() => {
       expect(workspacesApi.create).toHaveBeenCalledWith('path', '/some/existing/path');

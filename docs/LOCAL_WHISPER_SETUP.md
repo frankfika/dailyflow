@@ -90,3 +90,10 @@ Open **Settings → Transcription** and pick **OpenAI Whisper (cloud)**. DailyFl
 ## 7. Why local-first matters
 
 Slide 05 of the roadshow deck promises "0 byte uploads" for recordings — keeping the audio path on-device is the only way that promise stays honest. The backend already separates the local transcription route (`POST /api/v2/notes/:id/meeting/transcribe-local`) from the remote capture path, so once the local backend is configured DailyFlow never has a reason to send the audio over the network.
+
+---
+
+## See also
+
+- **[SILICONFLOW_TRANSCRIPTION.md](./SILICONFLOW_TRANSCRIPTION.md)** — 中文会议首选云端方案，注册送 ¥9.9 体验金，无需装模型。
+- **`docs/VOICE_NOTE_REVIEW_2026-09-06.md`** — 2026-09-06 review 与小白推荐三档方案。

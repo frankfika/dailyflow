@@ -12,6 +12,7 @@ import {
   Network,
   Repeat,
   Sparkles,
+  Star,
   Trash2,
   X,
 } from 'lucide-react';
@@ -59,6 +60,11 @@ interface TaskCardProps {
   onSetRecurrence?: (task: Task, recurrence: RecurrenceRule) => void;
   showCompletionPrompt?: boolean;
   onCompletionPromptClosed?: () => void;
+  homeMode?: boolean;
+  /** Whether the task has been starred by the user; drives the star button. */
+  isStarred?: boolean;
+  /** Toggle the starred state. When provided, the star button is rendered. */
+  onToggleStar?: () => void;
 }
 
 function timestampNow(): string {
@@ -98,6 +104,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onShowLinkedNotes,
   showCompletionPrompt,
   onCompletionPromptClosed,
+  homeMode = false,
+  isStarred = false,
+  onToggleStar,
 }) => {
   const isDone = task.status === 'done';
   const [editingContent, setEditingContent] = useState(false);
@@ -213,7 +222,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ layout: { type: 'spring', stiffness: 500, damping: 40 }, duration: 0.18 }}
-      className={`group rounded-xl border shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/80 bg-surface-elevated hover:border-border-strong hover:shadow-[0_4px_16px_rgba(20,45,38,0.055)]'}`}
+      className={`group transition-all ${homeMode ? 'today-task-card' : 'rounded-xl border shadow-[0_1px_2px_rgba(20,45,38,0.025)]'} ${isDone ? 'border-border/40 bg-surface opacity-65' : 'border-border/80 bg-surface-elevated hover:border-border-strong hover:shadow-[0_4px_16px_rgba(20,45,38,0.055)]'}`}
       data-testid={`task-card-${task.id}`}
       onKeyDown={handleCardKeyDown}
     >
@@ -221,16 +230,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          className="mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check sm:h-7 sm:w-7"
+          className={`today-task-checkbox mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.03] active:scale-95 group/check sm:h-7 sm:w-7 ${homeMode ? 'today-task-checkbox-home' : ''}`}
           title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
           aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
         >
           {isDone ? (
-            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-md bg-emerald-500 text-white">
+            <span className="today-task-check-complete flex h-[18px] w-[18px] items-center justify-center rounded-md bg-emerald-500 text-white">
               <Check className="h-3 w-3" strokeWidth={2.5} />
             </span>
           ) : (
-            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-border-strong bg-surface-elevated text-transparent transition-colors group-hover/check:border-accent group-hover/check:text-accent/70">
+            <span className="today-task-check-empty flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-border-strong bg-surface-elevated text-transparent transition-colors group-hover/check:border-accent group-hover/check:text-accent/70">
               <Check className="h-3 w-3" strokeWidth={2.5} />
             </span>
           )}
@@ -271,8 +280,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 ))}
               </span>
             )}
+            {homeMode && task.tags?.filter(tag => !['tasks', 'work', 'life', 'delayed'].includes(tag)).map((tag) => (
+              <span key={tag} className="today-task-tag">#{tag}</span>
+            ))}
+            {homeMode && task.project && <span className="today-task-tag">{task.project}</span>}
+            {homeMode && task.priority && <span className="today-task-tag">{task.priority}</span>}
             {task.deadline && (
-              <span className={`inline-flex items-center gap-1 font-medium ${isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
+              <span className={`inline-flex items-center gap-1 font-medium ${homeMode ? 'today-task-deadline' : isOverdue ? 'text-[var(--color-danger)]' : 'text-text-muted'}`}>
                 <Calendar className="h-3 w-3" aria-hidden="true" />
                 <span title={task.deadline}>{deadlineLabel}</span>
               </span>
@@ -280,6 +294,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
+        {onToggleStar && (
+          <button
+            type="button"
+            onClick={onToggleStar}
+            className={`mt-0.5 flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors active:scale-95 sm:h-7 sm:w-7 ${homeMode ? '' : 'opacity-0 group-hover:opacity-100'} ${isStarred ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30' : 'text-text-muted hover:bg-black/[0.04] hover:text-amber-500'}`}
+            aria-label={isStarred
+              ? (language === 'zh' ? '取消星标' : 'Unstar')
+              : (language === 'zh' ? '加星标（置顶到今天第一个 tab）' : 'Star (pin to today\'s first tab)')}
+            aria-pressed={isStarred}
+            data-testid={`task-star-toggle-${task.id}`}
+            title={isStarred
+              ? (language === 'zh' ? '取消星标' : 'Unstar')
+              : (language === 'zh' ? '加星标' : 'Star')}
+          >
+            <Star className={`h-4 w-4 ${isStarred ? 'fill-current' : ''}`} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setShowDetails(value => !value)}

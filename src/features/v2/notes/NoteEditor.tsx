@@ -23,6 +23,7 @@ import { Spinner, Badge } from '../components/States';
 import {
   createCommitment,
   listCommitments,
+  completeCommitment as completeCommitmentApi,
   listLegacyTasks,
   migrateLegacyTask,
   type Commitment,
@@ -111,6 +112,13 @@ const COPY = {
     dailyTasks: 'Today / 每日任务（选择后迁移并关联）',
     workItems: '任务',
     relationError: '任务关联失败，请重试',
+    taskCreated: '任务已创建并关联',
+    taskLinked: '已关联到笔记',
+    taskUnlinked: '已取消关联',
+    openInMemory: '在 Memory 里查看',
+    markDone: '标记完成',
+    markDoneSuccess: '任务已完成',
+    taskActions: '任务操作',
     moreProperties: '更多属性',
     removeTag: '移除标签',
     unlinkTask: '取消关联任务',
@@ -160,6 +168,13 @@ const COPY = {
     dailyTasks: 'Today / daily tasks (migrate & link)',
     workItems: 'Tasks',
     relationError: 'Could not link the task. Please try again.',
+    taskCreated: 'Task created and linked',
+    taskLinked: 'Linked to note',
+    taskUnlinked: 'Unlinked from note',
+    openInMemory: 'Open in Memory',
+    markDone: 'Mark done',
+    markDoneSuccess: 'Task completed',
+    taskActions: 'Task actions',
     moreProperties: 'More properties',
     removeTag: 'Remove tag',
     unlinkTask: 'Unlink task',
@@ -397,7 +412,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     if (!id || linkedCommitmentIds.includes(id)) return;
     setRelationError(null);
     const saved = await saveMetadata({ commitmentIds: [...linkedCommitmentIds, id] });
-    if (!saved) setRelationError(t.relationError);
+    if (!saved) {
+      setRelationError(t.relationError);
+      onNotice?.(t.relationError, 'error');
+      return false;
+    }
+    const linked = commitmentById.get(id);
+    onNotice?.(
+      linked ? `${t.taskLinked}：${linked.title}` : t.taskLinked,
+      'success',
+    );
+    return true;
   };
   const createAndLinkTask = async () => {
     const title = taskDraft.trim();
@@ -418,11 +443,58 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           ? { items: [commitment, ...current.items], total: current.total + 1 }
           : { items: [commitment], total: 1 },
       );
-      await linkCommitment(commitment.id);
+      const linked = await linkCommitment(commitment.id);
+      if (linked) {
+        onNotice?.(`${t.taskCreated}：${commitment.title}`, 'success');
+      }
     } catch {
       setRelationError(t.relationError);
+      onNotice?.(t.relationError, 'error');
     } finally {
       setIsLinkingTask(false);
+    }
+  };
+  const markTaskDone = async (id: string) => {
+    const linked = commitmentById.get(id);
+    setIsLinkingTask(true);
+    try {
+      await completeCommitmentApi(id, {
+        outcomeKind: 'completed',
+        outcomeSummary: linked?.title ?? 'completed from note',
+      });
+      // Mark locally so the chip flips to "completed" without waiting for the refetch.
+      queryClient.setQueryData<{ items: Commitment[]; total: number }>(
+        queryKeys.commitments(workspaceId),
+        (current) => current
+          ? {
+              items: current.items.map((c) =>
+                c.id === id ? { ...c, state: 'completed', updatedAt: new Date().toISOString() } : c,
+              ),
+              total: current.total,
+            }
+          : current,
+      );
+      await commitments.refetch();
+      onNotice?.(t.markDoneSuccess, 'success');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.relationError, 'error');
+    } finally {
+      setIsLinkingTask(false);
+    }
+  };
+  const openTaskInMemory = (id: string) => {
+    // Memory view surfaces all 'open' commitments; the easiest way to
+    // land on this specific one is a deep link into the Ask-AI / Memory
+    // tab with the commitment id pre-filled in the search bar.
+    try {
+      const url = `/memory?q=${encodeURIComponent(id)}`;
+      window.history.pushState({}, '', url);
+      onNotice?.(t.openInMemory, 'info');
+      // The Memory tab listens to window popstate / location change to
+      // surface the highlighted result.
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    } catch {
+      onNotice?.(t.openInMemory, 'info');
     }
   };
   const linkSelectedTask = async (value: string) => {
@@ -446,6 +518,7 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       }
     } catch {
       setRelationError(t.relationError);
+      onNotice?.(t.relationError, 'error');
     } finally {
       setIsLinkingTask(false);
     }
@@ -568,6 +641,8 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
                     id={id}
                     task={task}
                     unlinkLabel={t.unlinkTask}
+                    onMarkDone={() => void markTaskDone(id)}
+                    onOpenInMemory={() => openTaskInMemory(id)}
                     onRemove={() => void saveMetadata({
                       commitmentIds: linkedCommitmentIds.filter((item) => item !== id),
                     })}
@@ -769,32 +844,119 @@ function LinkedTaskChip({
   id,
   task,
   unlinkLabel,
+  onMarkDone,
+  onOpenInMemory,
   onRemove,
 }: {
   id: string;
   task?: Commitment;
   unlinkLabel: string;
+  onMarkDone: () => void;
+  onOpenInMemory: () => void;
   onRemove: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const fullTitle = task?.title ?? id;
+  const due = task?.dueAt ? new Date(task.dueAt).toLocaleDateString() : '';
+  const completed = task?.state === 'completed';
+
   return (
-    <span
-      className="inline-flex max-w-64 items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[12px] text-text-heading"
-      title={task?.title ?? id}
-    >
-      <span className="truncate">{task?.title ?? id}</span>
-      {task?.state && (
-        <span className="shrink-0 text-[9px] uppercase tracking-wide text-text-muted">
-          {task.state}
-        </span>
-      )}
+    <span ref={wrapperRef} className="relative inline-flex">
       <button
         type="button"
-        onClick={onRemove}
-        className="shrink-0 rounded-full p-0.5 text-text-muted hover:bg-black/5 hover:text-text-heading dark:hover:bg-white/10"
-        aria-label={`${unlinkLabel}: ${task?.title ?? id}`}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex max-w-64 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+          completed
+            ? 'border-border bg-surface-elevated/60 text-text-muted line-through'
+            : 'border-border bg-surface-elevated text-text-heading hover:border-accent hover:bg-accent/5'
+        }`}
+        title={fullTitle + (due ? ` · due ${due}` : '')}
+        aria-haspopup="true"
+        aria-expanded={open}
+        data-testid={`note-task-chip-${id}`}
       >
-        <X size={10} />
+        <span className="truncate">{fullTitle}</span>
+        {task?.state && (
+          <span className="shrink-0 text-[9px] uppercase tracking-wide text-text-muted">
+            {task.state}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          className="shrink-0 rounded-full p-0.5 text-text-muted hover:bg-black/5 hover:text-text-heading dark:hover:bg-white/10"
+          aria-label={`${unlinkLabel}: ${fullTitle}`}
+          data-testid={`note-task-unlink-${id}`}
+        >
+          <X size={10} />
+        </button>
       </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-border bg-background p-2 text-xs shadow-md"
+          data-testid={`note-task-popover-${id}`}
+        >
+          <p className="font-semibold text-text-heading">{fullTitle}</p>
+          {task?.outcome && task.outcome !== fullTitle && (
+            <p className="mt-1 text-[11px] text-text-muted">{task.outcome}</p>
+          )}
+          {due && (
+            <p className="mt-1 text-[11px] text-text-muted">due {due}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {!completed && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMarkDone();
+                  setOpen(false);
+                }}
+                className="rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white hover:opacity-90"
+                data-testid={`note-task-done-${id}`}
+              >
+                ✓ Mark done
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenInMemory();
+                setOpen(false);
+              }}
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-heading hover:bg-surface-elevated"
+              data-testid={`note-task-open-${id}`}
+            >
+              Open in Memory ↗
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove();
+                setOpen(false);
+              }}
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-surface-elevated"
+            >
+              {unlinkLabel}
+            </button>
+          </div>
+        </div>
+      )}
     </span>
   );
 }
