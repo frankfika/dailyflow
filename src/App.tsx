@@ -978,7 +978,8 @@ export default function App() {
   // creates a canonical v2 meeting note and opens its recording panel.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'r') {
+      // ⌘⇧R is browser hard-reload — only claim it inside Tauri.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'r' && '__TAURI_INTERNALS__' in window) {
         e.preventDefault();
         void openMeetingNote();
         return;
