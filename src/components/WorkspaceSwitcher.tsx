@@ -268,26 +268,22 @@ export function WorkspaceSwitcher({
 
   return (
     <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => void browseAndAdd()}
-        disabled={pickingBusy}
-        className={
-          compact
-            ? 'w-full mt-1 mb-2 flex items-center justify-center p-1.5 rounded-md text-text-muted hover:bg-accent/15 hover:text-accent transition-colors disabled:opacity-50'
-            : 'w-full mb-2 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-[12px] font-medium text-white bg-accent hover:bg-accent/90 transition-colors shadow-sm disabled:opacity-50'
-        }
-        title={language === 'zh' ? '选择其他文件夹（直接弹系统选择框）' : 'Add another folder (opens the system folder picker directly)'}
-        aria-label={language === 'zh' ? '添加其他文件夹' : 'Add another folder'}
-        data-testid="workspace-add-folder-modal"
-      >
-        {compact ? <FolderPlus className="w-4 h-4" /> : (
-          <>
-            <FolderPlus className="w-3.5 h-3.5" />
-            <span>{language === 'zh' ? '添加其他文件夹' : 'Add another folder'}</span>
-          </>
-        )}
-      </button>
+      {/* Adding a folder lives in the dropdown menu ("添加其他文件夹…") — a
+          prominent primary button up here is noise once you already have
+          workspaces. Compact rail keeps the icon affordance. */}
+      {compact && (
+        <button
+          type="button"
+          onClick={() => void browseAndAdd()}
+          disabled={pickingBusy}
+          className="w-full mt-1 mb-2 flex items-center justify-center p-1.5 rounded-md text-text-muted hover:bg-accent/15 hover:text-accent transition-colors disabled:opacity-50"
+          title={language === 'zh' ? '选择其他文件夹（直接弹系统选择框）' : 'Add another folder (opens the system folder picker directly)'}
+          aria-label={language === 'zh' ? '添加其他文件夹' : 'Add another folder'}
+          data-testid="workspace-add-folder-modal"
+        >
+          <FolderPlus className="w-4 h-4" />
+        </button>
+      )}
       {!compact && (
         <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-text-muted">
           {language === 'zh' ? '工作区' : 'Workspace'}
