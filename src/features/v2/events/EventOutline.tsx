@@ -581,7 +581,9 @@ function OutlineItem({
           the row; task rows keep a persistent date chip in the flow instead. */}
       <div
         className={`absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm transition-opacity dark:border-gray-700 dark:bg-gray-900 ${
-          schedulePickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          // While the row is being edited the cluster would sit on top of the
+          // text being typed — hide it (and make it unclickable) until blur.
+          schedulePickerOpen ? 'opacity-100' : isEditing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
       >
         {!isRoot && !row.node.execution && onOpenSchedulePicker && (
           <div className="relative shrink-0">
