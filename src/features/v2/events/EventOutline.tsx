@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, ListTodo, Plus } from 'lucide-react';
+import { Check, ChevronRight, ListTodo, Plus, Trash2 } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
 import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { getTodayStr } from '../../../utils/tagColors';
@@ -7,6 +7,7 @@ import { getTodayStr } from '../../../utils/tagColors';
 type Copy = {
   addChild: string;
   addSibling: string;
+  deleteNode: string;
   empty: string;
   rootPlaceholder: string;
   untitled: string;
@@ -24,6 +25,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
   en: {
     addChild: 'Add child',
     addSibling: 'Add sibling',
+    deleteNode: 'Delete node',
     empty: 'No steps yet.',
     rootPlaceholder: 'Type the first step…',
     untitled: 'Untitled',
@@ -39,6 +41,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
   zh: {
     addChild: '添加子节点',
     addSibling: '添加同级',
+    deleteNode: '删除节点',
     empty: '还没有步骤。',
     rootPlaceholder: '输入第一个步骤…',
     untitled: '无标题',
@@ -329,6 +332,7 @@ export function EventOutline({
               else inputRefs.current.delete(root.node.id);
             }}
             onAddChild={() => void onAddChild(root.node.id, '').then(onStartEdit)}
+            onDelete={undefined}
             onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === root.node.id ? null : { nodeId: root.node.id, date: today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === root.node.id}
             schedulePicker={schedulePicker?.nodeId === root.node.id ? (
@@ -381,6 +385,7 @@ export function EventOutline({
             }}
             onAddChild={() => void onAddChild(row.node.id, '').then(onStartEdit)}
             onAddSibling={() => void onAddSibling(row.node.id, '').then(onStartEdit)}
+            onDelete={onDelete}
             onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === row.node.id ? null : { nodeId: row.node.id, date: today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === row.node.id}
             schedulePicker={schedulePicker?.nodeId === row.node.id ? (
@@ -458,6 +463,7 @@ interface OutlineItemProps {
   inputRef: (el: HTMLInputElement | null) => void;
   onAddChild: () => void;
   onAddSibling?: () => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onOpenSchedulePicker?: () => void;
   schedulePickerOpen?: boolean;
   schedulePicker?: React.ReactNode;
@@ -486,6 +492,7 @@ function OutlineItem({
   inputRef,
   onAddChild,
   onAddSibling,
+  onDelete,
   onOpenSchedulePicker,
   schedulePickerOpen,
   schedulePicker,
@@ -612,6 +619,19 @@ function OutlineItem({
             aria-label={copy.addSibling}
           >
             <Plus className="h-3 w-3" />
+          </button>
+        )}
+
+        {!isRoot && onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); void onDelete(row.node.id); }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-transparent text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-900 dark:hover:bg-red-950/40"
+            title={copy.deleteNode}
+            aria-label={copy.deleteNode}
+            data-testid={`outline-delete-${row.node.id}`}
+          >
+            <Trash2 className="h-3 w-3" />
           </button>
         )}
       </div>
