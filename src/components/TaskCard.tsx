@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { Task } from '../types/task';
 import type { RecurrenceRule } from '../api/client';
-import { getTagColor, getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/tagColors';
 import { TagInput } from './TagInput';
 
 const SUPPRESS_KEY = 'df_suppress_completion_comments';
@@ -459,9 +459,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {task.description && <p className="mb-2 whitespace-pre-wrap text-[12px] leading-relaxed text-text-muted">{task.description}</p>}
 
               <div className="mb-2 flex flex-wrap gap-1.5">
-                {task.tags?.filter(tag => !['tasks', 'work', 'life'].includes(tag)).map(tag => (
-                  <span key={tag} className={`rounded-md border bg-transparent px-1.5 py-0.5 text-[11px] font-medium ${getTagColor(tag)}`}>#{tag}</span>
-                ))}
+                {/* Tags render once, in the attribute-bar TagInput above — chips
+                    here were a duplicate display. */}
                 {task.project && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted">{task.project}</span>}
                 {task.priority && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] capitalize text-text-muted">{task.priority}</span>}
                 {task.source_date && task.source_date !== currentFileDate && (
@@ -572,7 +571,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     </button>
                   )}
                   {([
-                    ['decompose', language === 'zh' ? '拆解成子任务' : 'Subtasks'],
+                    // ponytail: 'decompose' (拆解成子任务) hidden — not wanted for now,
+                    // restore when subtasks ship.
                     ['rewrite', language === 'zh' ? '改写更清晰' : 'Rewrite'],
                     ['summarize', language === 'zh' ? '总结' : 'Summarize'],
                   ] as const).map(([action, label]) => (

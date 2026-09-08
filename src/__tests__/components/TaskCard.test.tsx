@@ -41,12 +41,14 @@ vi.mock('../../utils/tagColors', () => ({
 }));
 
 vi.mock('../../components/TagInput', () => ({
-  TagInput: ({ value, onChange }: any) =>
-    React.createElement('input', {
-      'data-testid': 'taginput-field',
-      value: value?.join(',') || '',
-      onChange: (e: any) => onChange(e.target.value.split(',')),
-    }),
+  TagInput: ({ tags, onChange }: any) =>
+    React.createElement('div', null,
+      React.createElement('span', { 'data-testid': 'taginput-tags' }, (tags || []).join(' ')),
+      React.createElement('input', {
+        'data-testid': 'taginput-field',
+        onChange: (e: any) => onChange(e.target.value.split(',')),
+      }),
+    ),
 }));
 
 const baseTask = {
@@ -151,7 +153,8 @@ describe('TaskCard progressive disclosure', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
     expect(screen.getByText('Hidden detail')).toBeInTheDocument();
     expect(screen.getByText('Hidden note')).toBeInTheDocument();
-    expect(screen.getByText('#planning')).toBeInTheDocument();
+    // Tags display once, as TagInput chips in the attribute bar (no # prefix).
+    expect(screen.getByTestId('taginput-tags')).toHaveTextContent('planning');
   });
 
   it('labels tasks without an Event as Standalone', () => {
