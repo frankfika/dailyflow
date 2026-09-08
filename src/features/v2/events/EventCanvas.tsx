@@ -779,7 +779,7 @@ export function EventCanvas({
           return (
             <div
               key={node.id}
-              className={`absolute ${!isDragging && animSuppressId !== node.id ? 'event-node-pos' : ''}`}
+              className={`group/node absolute ${!isDragging && animSuppressId !== node.id ? 'event-node-pos' : ''}`}
               style={{ left: node.canvasX, top: node.canvasY, width: NODE_W, transform: dragTransform, zIndex: isDragging ? 30 : undefined, boxShadow: isDragging ? 'var(--shadow-lg, 0 10px 24px rgba(0,0,0,0.14))' : undefined }}
               data-testid={`event-node-${node.id}`}
               onPointerDown={(e) => { handleNodePointerDown(e, node); }}
@@ -901,6 +901,20 @@ export function EventCanvas({
                     data-no-drag="true"
                   >
                     <Plus className="h-3 w-3" />
+                  </button>
+                )}
+                {!isEventRoot && (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); void onDelete(node.id); }}
+                    className="absolute -right-2 -top-2 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-400 opacity-0 shadow-sm transition-opacity hover:border-red-200 hover:bg-red-50 hover:text-red-600 group-hover/node:opacity-100 dark:border-gray-600 dark:bg-gray-900"
+                    aria-label={copy.deleteNode}
+                    title={copy.deleteNode}
+                    data-no-drag="true"
+                    data-testid={`event-node-delete-${node.id}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 )}
               </div>
