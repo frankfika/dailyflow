@@ -24,7 +24,6 @@ vi.mock('lucide-react', () => ({
   Check: () => React.createElement('span', { 'data-testid': 'icon-check' }),
   ChevronRight: () => React.createElement('span', { 'data-testid': 'icon-chevron-right' }),
   CornerUpRight: () => React.createElement('span', { 'data-testid': 'icon-corner' }),
-  Edit2: () => React.createElement('span', { 'data-testid': 'icon-edit' }),
   FileText: () => React.createElement('span', { 'data-testid': 'icon-file' }),
   MessageSquare: () => React.createElement('span', { 'data-testid': 'icon-msg' }),
   MoreHorizontal: () => React.createElement('span', { 'data-testid': 'icon-more' }),
@@ -77,7 +76,7 @@ const createProps = (overrides: any = {}) => ({
 });
 
 describe('TaskCard inline keyboard shortcuts (UX_DESIGN §12)', () => {
-  const detailsProps = (overrides: any = {}) => createProps({ onSetRecurrence: vi.fn(), ...overrides });
+  const detailsProps = (overrides: any = {}) => createProps(overrides);
 
   function openDetails() {
     fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
@@ -103,17 +102,11 @@ describe('TaskCard inline keyboard shortcuts (UX_DESIGN §12)', () => {
     expect(document.activeElement?.getAttribute('type')).toBe('date');
   });
 
-  it('T focuses the tag input, R opens the recurrence popover and saves a rule', () => {
-    const onSetRecurrence = vi.fn();
-    render(<TaskCard {...detailsProps({ onSetRecurrence })} />);
+  it('T focuses the tag input', () => {
+    render(<TaskCard {...detailsProps()} />);
     openDetails();
     keyOnCard('t');
     expect(document.activeElement?.getAttribute('data-testid')).toBe('taginput-field');
-    keyOnCard('r');
-    expect(screen.getByTestId('task-recurrence-pop-task-1')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('task-recurrence-weekly-task-1'));
-    fireEvent.click(screen.getByTestId('task-recurrence-save-task-1'));
-    expect(onSetRecurrence).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), { type: 'weekly', weekdays: [1, 2, 3, 4, 5] });
   });
 
   it('keys typed inside inputs are ignored', () => {
@@ -310,8 +303,7 @@ describe('TaskCard editing', () => {
     render(<TaskCard {...props} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
-    const editBtn = screen.getByTestId('icon-edit').parentElement;
-    fireEvent.click(editBtn!);
+    fireEvent.keyDown(screen.getByTestId('task-card-task-1'), { key: 'e' });
 
     // Should show textarea with current title
     const textarea = screen.getByDisplayValue('Test task');
@@ -337,8 +329,7 @@ describe('TaskCard editing', () => {
     render(<TaskCard {...props} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
-    const editBtn = screen.getByTestId('icon-edit').parentElement;
-    fireEvent.click(editBtn!);
+    fireEvent.keyDown(screen.getByTestId('task-card-task-1'), { key: 'e' });
 
     const textarea = screen.getByDisplayValue('Test task');
     fireEvent.change(textarea, { target: { value: 'Modified' } });
@@ -346,46 +337,6 @@ describe('TaskCard editing', () => {
 
     expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByText('Test task')).toBeInTheDocument();
-  });
-});
-
-describe('TaskCard delete', () => {
-  it('confirms before deleting', async () => {
-    const onDelete = vi.fn();
-
-    const props = createProps({ onDelete });
-    render(<TaskCard {...props} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
-    const deleteBtn = screen.getByTestId('icon-trash').parentElement;
-    fireEvent.click(deleteBtn!);
-
-    // Confirm state shows "Delete" and "Cancel" buttons
-    const confirmBtn = screen.getByText(/Delete/i);
-    fireEvent.click(confirmBtn!);
-
-    await waitFor(() => {
-      expect(onDelete).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it('cancels delete when confirm is declined', async () => {
-    const onDelete = vi.fn();
-
-    const props = createProps({ onDelete });
-    render(<TaskCard {...props} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
-    const deleteBtn = screen.getByTestId('icon-trash').parentElement;
-    fireEvent.click(deleteBtn!);
-
-    // Click cancel to abort
-    const cancelBtn = screen.getByText(/Cancel/i);
-    fireEvent.click(cancelBtn!);
-
-    await waitFor(() => {
-      expect(onDelete).not.toHaveBeenCalled();
-    });
   });
 });
 
@@ -411,62 +362,4 @@ describe('TaskCard inline attribute bar (UX S3)', () => {
     });
   });
 
-  it('marks a task done from the expanded panel', async () => {
-    const onToggle = vi.fn();
-    render(<TaskCard {...createProps({ onToggle })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
-
-    fireEvent.click(screen.getByTestId('task-card-complete-task-1'));
-    expect(onToggle).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('TaskCard convert to project (UX S7)', () => {
-  const baseTask = {
-    id: 't_conv',
-    title: 'Finish DSH integration',
-    status: 'todo',
-    source_date: '2026-09-01',
-  };
-
-  function renderCard(overrides: Partial<Parameters<typeof TaskCard>[0]> = {}) {
-    return render(
-      <TaskCard
-        task={baseTask as never}
-        language="en"
-        categories={[]}
-        currentFileDate="2026-09-01"
-        onToggle={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        {...overrides}
-      />,
-    );
-  }
-
-  it('hides the convert button for tasks that already live on a canvas', () => {
-    renderCard({ task: { ...baseTask, originMindmapId: 'mm_1' } as never, onConvertToProject: vi.fn() });
-    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
-    expect(screen.queryByTestId('task-convert-project-t_conv')).not.toBeInTheDocument();
-  });
-
-  it('opens the confirm dialog and submits title plus extra nodes', async () => {
-    const onConvertToProject = vi.fn(async () => {});
-    renderCard({ onConvertToProject });
-    fireEvent.click(screen.getByTestId('task-details-toggle-t_conv'));
-    fireEvent.click(screen.getByTestId('task-convert-project-t_conv'));
-
-    const dialog = screen.getByTestId('task-convert-dialog-t_conv');
-    expect(dialog).toHaveTextContent(/Convert this task into a project/i);
-    expect((screen.getByTestId('task-convert-title-t_conv') as HTMLInputElement).value).toBe('Finish DSH integration');
-
-    fireEvent.change(screen.getByTestId('task-convert-nodes-t_conv'), { target: { value: 'Write tests\nReview\n' } });
-    fireEvent.click(screen.getByTestId('task-convert-confirm-t_conv'));
-
-    await vi.waitFor(() => expect(onConvertToProject).toHaveBeenCalledWith(expect.objectContaining({ id: 't_conv' }), {
-      title: 'Finish DSH integration',
-      extraNodes: ['Write tests', 'Review'],
-    }));
-    await vi.waitFor(() => expect(screen.queryByTestId('task-convert-dialog-t_conv')).not.toBeInTheDocument());
-  });
 });

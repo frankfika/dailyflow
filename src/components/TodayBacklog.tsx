@@ -45,13 +45,9 @@ interface TodayBacklogProps {
   categories: string[];
   onToggleTask: (id: string, hostDate?: string) => void;
   onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
-  onDeleteTask: (id: string, hostDate?: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
-  onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   /** UX S7: convert the task into a new project event. */
-  onConvertToProject?: (task: TodayTask, opts: { title: string; extraNodes: string[] }) => Promise<void>;
-  onSetRecurrence?: (task: TodayTask, recurrence: RecurrenceRule) => void;
   onAddTask: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
@@ -86,11 +82,7 @@ export function TodayBacklog({
   categories,
   onToggleTask,
   onEditTask,
-  onDeleteTask,
   onUnlinkFromSpace,
-  onAiAction,
-  onConvertToProject,
-  onSetRecurrence,
   onAddTask,
   language,
   isToday,
@@ -155,13 +147,9 @@ export function TodayBacklog({
         currentFileDate={selectedDate}
         onToggle={() => onToggleTask(task.id, task.host_date)}
         onEdit={updates => onEditTask(task.id, updates, task.host_date)}
-        onDelete={() => onDeleteTask(task.id, task.host_date)}
         onUnlinkFromSpace={onUnlinkFromSpace
           ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
           : undefined}
-        onAiAction={onAiAction}
-        onConvertToProject={onConvertToProject}
-        onSetRecurrence={onSetRecurrence}
         showCompletionPrompt={completionPromptTaskIds.has(task.id)}
         onCompletionPromptClosed={() => onCompletionPromptClosed?.(task.id)}
       />

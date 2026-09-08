@@ -31,7 +31,6 @@ function renderBacklog(tasks: Array<{
       categories={[]}
       onToggleTask={noop}
       onEditTask={noop}
-      onDeleteTask={noop}
       onAddTask={noop}
       language="en"
       isToday
@@ -136,8 +135,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         categories={[]}
         onToggleTask={noop}
         onEditTask={noop}
-        onDeleteTask={noop}
-              onAddTask={noop}
+                onAddTask={noop}
         language="en"
         isToday
       />,
@@ -182,8 +180,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         categories={[]}
         onToggleTask={noop}
         onEditTask={noop}
-        onDeleteTask={noop}
-              onAddTask={noop}
+                onAddTask={noop}
         language="en"
         isToday
       />,
@@ -202,8 +199,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         categories={[]}
         onToggleTask={noop}
         onEditTask={noop}
-        onDeleteTask={noop}
-              onAddTask={noop}
+                onAddTask={noop}
         language="en"
         isToday
       />,

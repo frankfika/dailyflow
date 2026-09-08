@@ -7,7 +7,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, FolderPlus, Loader2, Menu, RefreshCw, X } from 'lucide-react';
 import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
-import type { RecurrenceRule } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
 import { getTodayStr } from './utils/tagColors';
@@ -1240,62 +1239,6 @@ export default function App() {
     showToast(language === 'zh' ? 'AI 已选好今天的焦点' : 'AI picked your focus', 'success');
   };
 
-  const handleTaskAiAction = async (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => {
-    const body = [task.title, task.description].filter(Boolean).join('\n');
-    try {
-      if (action === 'decompose') {
-        const result = await runAiAction('split_tasks', body);
-        const arr = Array.isArray(result) ? result : [];
-        const subtasks = arr
-          .map((item: any) => String(item?.title ?? '').trim())
-          .filter(Boolean)
-          .slice(0, 8);
-        if (subtasks.length === 0) {
-          showToast(language === 'zh' ? 'AI 没有拆出子任务' : 'AI produced no subtasks', 'info');
-          return;
-        }
-        for (const [idx, title] of subtasks.entries()) {
-          try {
-            await tasksApi.create(currentFileDate, {
-              id: `t_${Date.now()}_${idx}`,
-              title,
-              status: 'todo',
-              tags: task.tags?.length ? [...task.tags] : [activeContext],
-              source_date: currentFileDate,
-              parentTaskId: task.id,
-              deadline: task.deadline,
-            } as Task);
-          } catch (err) {
-            console.error('Failed to create subtask', err);
-          }
-        }
-        await refreshDayFromServer();
-        await todayItemsQuery.refetch();
-        showToast(language === 'zh' ? `已拆解出 ${subtasks.length} 个子任务` : `Added ${subtasks.length} subtasks`, 'success');
-      } else if (action === 'rewrite') {
-        const result = await runAiAction('rewrite_task', body) as { title?: string; description?: string };
-        const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : task.title;
-        await handleEditTask(task.id, {
-          title,
-          ...(typeof result?.description === 'string' && result.description.trim() ? { description: result.description.trim() } : {}),
-        }, task.host_date);
-      } else {
-        const comments = (task.comments ?? []).map(comment => comment.text).join('\n');
-        const result = await runAiAction('summarize_task', body, comments || undefined) as { summary?: string };
-        const summary = (result?.summary ?? '').trim();
-        if (!summary) throw new Error(language === 'zh' ? 'AI 没有给出总结' : 'AI produced no summary');
-        const now = new Date();
-        const pad = (value: number) => String(value).padStart(2, '0');
-        const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        await handleEditTask(task.id, {
-          comments: [...(task.comments ?? []), { text: summary, timestamp: stamp }],
-        }, task.host_date);
-      }
-    } catch (e: any) {
-      console.error('Task AI action failed', e);
-      showToast(e?.message || (language === 'zh' ? 'AI 操作失败' : 'AI action failed'), 'error');
-    }
-  };
 
 
   // When date changes, load tasks
@@ -1503,40 +1446,9 @@ export default function App() {
   };
 
   /** UX S7: task → new project event, then jump into its canvas. */
-  const handleConvertTaskToProject = async (task: Task, opts: { title: string; extraNodes: string[] }) => {
-    try {
-      const result = await eventsApi.convertTaskToEvent({
-        taskId: task.id,
-        scheduledDate: task.host_date || currentFileDate,
-        title: opts.title,
-        context: (activeContext as 'work' | 'life'),
-        extraNodes: opts.extraNodes,
-      });
-      await todayItemsQuery.refetch();
-      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
-      setRequestedEventId(result.eventId);
-      setActiveTab('events');
-    } catch (e: any) {
-      console.error('Convert to project failed', e);
-      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to convert to project'), 'error');
-    }
-  };
 
   /** UX_DESIGN §12: task inline "R" — save a recurrence rule (creates a
    * recurring template, same as adding a task with a rule from the input bar). */
-  const handleSetTaskRecurrence = (task: Task, recurrence: RecurrenceRule) => {
-    void recurringApi.create({
-      title: task.title,
-      description: task.description,
-      tags: task.tags,
-      recurrence,
-    }).then(() => {
-      showToast(language === 'zh' ? '重复规则已保存，任务将按规则自动生成' : 'Recurrence saved — tasks will be generated on schedule', 'success');
-    }).catch((e: any) => {
-      console.error('Failed to save recurrence', e);
-      showToast(e?.message || (language === 'zh' ? '重复规则保存失败' : 'Failed to save recurrence'), 'error');
-    });
-  };
 
   /** UX_DESIGN §2: ⋯ menu "转成项目" — create a project event from the draft. */
   const handleDraftToProject = async (title: string) => {
@@ -1573,29 +1485,6 @@ export default function App() {
     }
   };
 
-  const handleDeleteTask = async (id: string, hostDate?: string) => {
-    const targetDate = hostDate ?? currentFileDate;
-    try {
-      await tasksApi.delete(id, targetDate);
-      // Refresh markdown and re-sync tasks
-      const data = await filesApi.get(targetDate);
-      if (data) {
-        if (targetDate === currentFileDate) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-        } else {
-          setEarlierOpenTasks(prev => prev.filter(task => !(task.id === id && task.host_date === targetDate)));
-        }
-        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
-      }
-      showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
-      await todayItemsQuery.refetch();
-    } catch (e) {
-      console.error('Failed to delete task', e);
-      showToast(language === 'zh' ? '删除失败' : 'Failed to delete task', 'error');
-    }
-  };
 
   const handleManualRollover = async () => {
     try {
@@ -2259,11 +2148,7 @@ export default function App() {
                     categories={categories}
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
-                    onDeleteTask={handleDeleteTask}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
-                    onAiAction={handleTaskAiAction}
-                    onConvertToProject={handleConvertTaskToProject}
-                    onSetRecurrence={handleSetTaskRecurrence}
                     onAddTask={() => taskInputFocusRef.current?.()}
                     starredTaskIds={starredTaskIds}
                     onToggleStar={toggleStar}
