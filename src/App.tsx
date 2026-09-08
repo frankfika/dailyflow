@@ -186,15 +186,6 @@ export default function App() {
   // point creates and opens a meeting note instead of mounting the retired
   // standalone meeting modal, which used a different API and storage tree.
 
-  const taskLinkedNotesCount = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const note of dailyNotes) {
-      for (const taskId of note.linkedTaskIds) {
-        map[taskId] = (map[taskId] || 0) + 1;
-      }
-    }
-    return map;
-  }, [dailyNotes]);
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   // Background sync is intentionally disabled until it has version-aware
   // writes. Saving a captured date/content pair on a timer can overwrite a
@@ -2269,29 +2260,10 @@ export default function App() {
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
                     onDeleteTask={handleDeleteTask}
-                    onCreateLinkedNote={(taskId) => {
-                      setEditingDailyNote(null);
-                      setPrefillLinkedTaskId(taskId);
-                      setShowQuickNoteEditor(true);
-                    }}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
                     onAiAction={handleTaskAiAction}
                     onConvertToProject={handleConvertTaskToProject}
                     onSetRecurrence={handleSetTaskRecurrence}
-                    onShowLinkedNotes={(taskId) => {
-                      // Open the task's newest linked note in the quick note
-                      // editor — linked notes live in the per-date note store,
-                      // not the v2 Notes overlay, so filtering that list would
-                      // show nothing.
-                      const linked = dailyNotes
-                        .filter(n => (n.linkedTaskIds ?? []).includes(taskId))
-                        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
-                      if (linked[0]) {
-                        setEditingDailyNote(linked[0]);
-                        setShowQuickNoteEditor(true);
-                      }
-                    }}
-                    linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => taskInputFocusRef.current?.()}
                     starredTaskIds={starredTaskIds}
                     onToggleStar={toggleStar}

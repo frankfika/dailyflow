@@ -6,12 +6,10 @@ import {
   Check,
   ChevronRight,
   Edit2,
-  FileText,
   MessageSquare,
   MoreHorizontal,
   Network,
   Repeat,
-  Sparkles,
   Star,
   Trash2,
   X,
@@ -32,7 +30,6 @@ interface TaskCardProps {
   language: 'en' | 'zh';
   categories: string[];
   currentFileDate: string;
-  linkedNotesCount?: number;
   /** Event title for tasks created from an Event map. */
   spaceTitle?: string;
   /** Opens the shared mind note that owns this task; receives the node id. */
@@ -50,8 +47,6 @@ interface TaskCardProps {
     project?: string;
   }) => void;
   onDelete: () => void;
-  onCreateLinkedNote?: () => void;
-  onShowLinkedNotes?: () => void;
   /** UX S6 AI actions: decompose / rewrite / summarize. Omit to hide the row. */
   onAiAction?: (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   /** UX S7: convert the task into a new project event and open its canvas. */
@@ -89,7 +84,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   language,
   categories,
   currentFileDate,
-  linkedNotesCount = 0,
   spaceTitle,
   onOpenSpace,
   onUnlinkFromSpace,
@@ -99,8 +93,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onAiAction,
   onConvertToProject,
   onSetRecurrence,
-  onCreateLinkedNote,
-  onShowLinkedNotes,
   showCompletionPrompt,
   onCompletionPromptClosed,
   isStarred = false,
@@ -224,7 +216,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       data-testid={`task-card-${task.id}`}
       onKeyDown={handleCardKeyDown}
     >
-      <div className="flex min-h-[54px] items-start gap-2.5 px-3 py-2.5">
+      {/* The whole header row toggles the details panel; interactive children
+          (checkbox, star, ⋯, links) are excluded via the closest-button guard. */}
+      <div
+        className="flex min-h-[54px] cursor-pointer items-start gap-2.5 px-3 py-2.5"
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('button, input, a, label, textarea')) return;
+          setShowDetails(value => !value);
+        }}
+      >
         <button
           type="button"
           onClick={onToggle}
@@ -332,104 +332,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               />
             </label>
             <TagInput tags={task.tags || []} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />
-            {onSetRecurrence && (
-              <div className="relative inline-flex">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[12px] text-text-muted hover:text-text-heading"
-                  data-testid={`task-recurrence-${task.id}`}
-                  onClick={() => setRecOpen(value => !value)}
-                >
-                  <Repeat className="h-3 w-3" />
-                  {language === 'zh' ? '重复' : 'Repeat'}
-                </button>
-                {recOpen && (
-                  <div
-                    className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-border bg-surface p-2 shadow-lg"
-                    data-testid={`task-recurrence-pop-${task.id}`}
-                  >
-                    <div className="flex flex-wrap items-center gap-1">
-                      {(['daily', 'weekly', 'monthly'] as const).map(type => (
-                        <button
-                          key={type}
-                          type="button"
-                          className={`rounded-md px-2 py-1 text-[12px] font-medium ${
-                            recRule?.type === type ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
-                          }`}
-                          data-testid={`task-recurrence-${type}-${task.id}`}
-                          onClick={() => {
-                            if (type === 'weekly') {
-                              setRecRule({ type: 'weekly', weekdays: [1, 2, 3, 4, 5] });
-                            } else if (type === 'monthly') {
-                              setRecRule({ type: 'monthly', dayOfMonth: new Date().getDate() });
-                            } else {
-                              setRecRule({ type: 'daily' });
-                            }
-                          }}
-                        >
-                          {type === 'daily' ? (language === 'zh' ? '每天' : 'Daily')
-                            : type === 'weekly' ? (language === 'zh' ? '每周' : 'Weekly')
-                              : (language === 'zh' ? '每月' : 'Monthly')}
-                        </button>
-                      ))}
-                    </div>
-                    {recRule?.type === 'weekly' && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                        {['日', '一', '二', '三', '四', '五', '六'].map((letter, index) => {
-                          const selected = recRule.weekdays.includes(index);
-                          return (
-                            <button
-                              key={letter}
-                              type="button"
-                              className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                                selected ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
-                              }`}
-                              onClick={() => {
-                                const next = selected
-                                  ? recRule.weekdays.filter(day => day !== index)
-                                  : [...recRule.weekdays, index].sort((a, b) => a - b);
-                                setRecRule(next.length > 0 ? { type: 'weekly', weekdays: next } : null);
-                              }}
-                            >
-                              {letter}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {recRule?.type === 'monthly' && (
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-text-muted">
-                        {language === 'zh' ? '每月几号' : 'Day of month'}
-                        <input
-                          type="number"
-                          min={1}
-                          max={31}
-                          className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 outline-none"
-                          value={recRule.dayOfMonth}
-                          onChange={(event) => {
-                            const day = Number(event.target.value);
-                            if (day >= 1 && day <= 31) setRecRule({ type: 'monthly', dayOfMonth: day });
-                          }}
-                        />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="mt-2 w-full rounded-md bg-accent/15 px-2 py-1 text-[12px] font-semibold text-accent disabled:opacity-40"
-                      data-testid={`task-recurrence-save-${task.id}`}
-                      disabled={!recRule}
-                      onClick={() => {
-                        if (recRule) onSetRecurrence(task, recRule);
-                        setRecRule(null);
-                        setRecOpen(false);
-                      }}
-                    >
-                      {language === 'zh' ? '保存重复规则' : 'Save recurrence'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {editingContent ? (
@@ -547,14 +449,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
               )}
 
-              {(onAiAction || onConvertToProject) && (
-                <div className="mb-2 flex flex-wrap items-center gap-1 border-t border-border/40 pt-2" data-testid={`task-ai-row-${task.id}`}>
-                  {onAiAction && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                      <Sparkles className="h-3 w-3" />
-                      {language === 'zh' ? 'AI 帮你' : 'AI'}
-                    </span>
-                  )}
+              <div className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-2">
                   {onConvertToProject && !task.originMindmapId && !task.spaceId && (
                     <button
                       type="button"
@@ -564,7 +459,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         setConvertNodes('');
                         setShowConvert(true);
                       }}
-                      className="rounded-md border border-border/70 px-2 py-1 text-[12px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading disabled:opacity-50"
                       data-testid={`task-convert-project-${task.id}`}
                     >
                       {language === 'zh' ? '转成项目' : 'To project'}
@@ -584,16 +479,110 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         setAiBusy(action);
                         void onAiAction?.(task, action).finally(() => setAiBusy(null));
                       }}
-                      className="rounded-md border border-border/70 px-2 py-1 text-[12px] text-text-muted transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading disabled:opacity-50"
                       data-testid={`task-ai-${action}-${task.id}`}
                     >
                       {aiBusy === action ? (language === 'zh' ? '处理中…' : 'Working…') : label}
                     </button>
                   ))}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-2">
+                  {onSetRecurrence && (
+                    <div className="relative inline-flex">
+                      <button
+                        type="button"
+                        onClick={() => setRecOpen(value => !value)}
+                        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading"
+                        data-testid={`task-recurrence-${task.id}`}
+                      >
+                        <Repeat className="h-3.5 w-3.5" />
+                        {language === 'zh' ? '重复' : 'Repeat'}
+                      </button>
+                      {recOpen && (
+                        <div
+                          className="absolute bottom-full left-0 z-30 mb-1 w-64 rounded-lg border border-border bg-surface p-2 shadow-lg"
+                          data-testid={`task-recurrence-pop-${task.id}`}
+                        >
+                          <div className="flex flex-wrap items-center gap-1">
+                            {(['daily', 'weekly', 'monthly'] as const).map(type => (
+                              <button
+                                key={type}
+                                type="button"
+                                className={`rounded-md px-2 py-1 text-[12px] font-medium ${
+                                  recRule?.type === type ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
+                                }`}
+                                data-testid={`task-recurrence-${type}-${task.id}`}
+                                onClick={() => {
+                                  if (type === 'weekly') {
+                                    setRecRule({ type: 'weekly', weekdays: [1, 2, 3, 4, 5] });
+                                  } else if (type === 'monthly') {
+                                    setRecRule({ type: 'monthly', dayOfMonth: new Date().getDate() });
+                                  } else {
+                                    setRecRule({ type: 'daily' });
+                                  }
+                                }}
+                              >
+                                {type === 'daily' ? (language === 'zh' ? '每天' : 'Daily')
+                                  : type === 'weekly' ? (language === 'zh' ? '每周' : 'Weekly')
+                                    : (language === 'zh' ? '每月' : 'Monthly')}
+                              </button>
+                            ))}
+                          </div>
+                          {recRule?.type === 'weekly' && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                              {['日', '一', '二', '三', '四', '五', '六'].map((letter, index) => {
+                                const selected = recRule.weekdays.includes(index);
+                                return (
+                                  <button
+                                    key={letter}
+                                    type="button"
+                                    className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                                      selected ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-black/5'
+                                    }`}
+                                    onClick={() => {
+                                      const next = selected
+                                        ? recRule.weekdays.filter(day => day !== index)
+                                        : [...recRule.weekdays, index].sort((a, b) => a - b);
+                                      setRecRule(next.length > 0 ? { type: 'weekly', weekdays: next } : null);
+                                    }}
+                                  >
+                                    {letter}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {recRule?.type === 'monthly' && (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-text-muted">
+                              {language === 'zh' ? '每月几号' : 'Day of month'}
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 outline-none"
+                                value={recRule.dayOfMonth}
+                                onChange={(event) => {
+                                  const day = Number(event.target.value);
+                                  if (day >= 1 && day <= 31) setRecRule({ type: 'monthly', dayOfMonth: day });
+                                }}
+                              />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="mt-2 w-full rounded-md bg-accent/15 px-2 py-1 text-[12px] font-semibold text-accent disabled:opacity-40"
+                            data-testid={`task-recurrence-save-${task.id}`}
+                            disabled={!recRule}
+                            onClick={() => {
+                              if (recRule) onSetRecurrence(task, recRule);
+                              setRecRule(null);
+                              setRecOpen(false);
+                            }}
+                          >
+                            {language === 'zh' ? '保存重复规则' : 'Save recurrence'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowComment(true)}
@@ -603,17 +592,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     <MessageSquare className="h-3.5 w-3.5" />
                     {language === 'zh' ? '备注' : 'Comment'}
                   </button>
-                  {onCreateLinkedNote && (
-                    <button type="button" onClick={onCreateLinkedNote} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
-                      <FileText className="h-3.5 w-3.5" />
-                      {language === 'zh' ? '新建关联笔记' : 'Link note'}
-                    </button>
-                  )}
-                  {linkedNotesCount > 0 && (
-                    <button type="button" onClick={onShowLinkedNotes} className="rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading">
-                      {language === 'zh' ? `查看笔记 ${linkedNotesCount}` : `View notes ${linkedNotesCount}`}
-                    </button>
-                  )}
                   {!isDone && (
                     <button type="button" onClick={() => setEditingContent(true)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03] hover:text-text-heading" aria-label={language === 'zh' ? '编辑任务' : 'Edit task'}>
                       <Edit2 className="h-3.5 w-3.5" />

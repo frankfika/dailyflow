@@ -32,9 +32,6 @@ function renderBacklog(tasks: Array<{
       onToggleTask={noop}
       onEditTask={noop}
       onDeleteTask={noop}
-      onCreateLinkedNote={noop}
-      onShowLinkedNotes={noop}
-      linkedNotesCount={() => 0}
       onAddTask={noop}
       language="en"
       isToday
@@ -140,10 +137,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         onToggleTask={noop}
         onEditTask={noop}
         onDeleteTask={noop}
-        onCreateLinkedNote={noop}
-        onShowLinkedNotes={noop}
-        linkedNotesCount={() => 0}
-        onAddTask={noop}
+              onAddTask={noop}
         language="en"
         isToday
       />,
@@ -189,10 +183,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         onToggleTask={noop}
         onEditTask={noop}
         onDeleteTask={noop}
-        onCreateLinkedNote={noop}
-        onShowLinkedNotes={noop}
-        linkedNotesCount={() => 0}
-        onAddTask={noop}
+              onAddTask={noop}
         language="en"
         isToday
       />,
@@ -212,10 +203,7 @@ describe('TodayBacklog Event-first execution flow', () => {
         onToggleTask={noop}
         onEditTask={noop}
         onDeleteTask={noop}
-        onCreateLinkedNote={noop}
-        onShowLinkedNotes={noop}
-        linkedNotesCount={() => 0}
-        onAddTask={noop}
+              onAddTask={noop}
         language="en"
         isToday
       />,

@@ -46,15 +46,12 @@ interface TodayBacklogProps {
   onToggleTask: (id: string, hostDate?: string) => void;
   onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
   onDeleteTask: (id: string, hostDate?: string) => void;
-  onCreateLinkedNote: (taskId: string) => void;
-  onShowLinkedNotes: (taskId: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
   onAiAction?: (task: TodayTask, action: 'decompose' | 'rewrite' | 'summarize') => Promise<void>;
   /** UX S7: convert the task into a new project event. */
   onConvertToProject?: (task: TodayTask, opts: { title: string; extraNodes: string[] }) => Promise<void>;
   onSetRecurrence?: (task: TodayTask, recurrence: RecurrenceRule) => void;
-  linkedNotesCount: (taskId: string) => number;
   onAddTask: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
@@ -90,13 +87,10 @@ export function TodayBacklog({
   onToggleTask,
   onEditTask,
   onDeleteTask,
-  onCreateLinkedNote,
-  onShowLinkedNotes,
   onUnlinkFromSpace,
   onAiAction,
   onConvertToProject,
   onSetRecurrence,
-  linkedNotesCount,
   onAddTask,
   language,
   isToday,
@@ -159,12 +153,9 @@ export function TodayBacklog({
         language={language}
         categories={categories}
         currentFileDate={selectedDate}
-        linkedNotesCount={linkedNotesCount(task.id)}
         onToggle={() => onToggleTask(task.id, task.host_date)}
         onEdit={updates => onEditTask(task.id, updates, task.host_date)}
         onDelete={() => onDeleteTask(task.id, task.host_date)}
-        onCreateLinkedNote={() => onCreateLinkedNote(task.id)}
-        onShowLinkedNotes={() => onShowLinkedNotes(task.id)}
         onUnlinkFromSpace={onUnlinkFromSpace
           ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
           : undefined}

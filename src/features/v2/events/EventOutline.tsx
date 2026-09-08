@@ -508,7 +508,7 @@ function OutlineItem({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
+      className={`group relative flex items-center gap-1 px-2 py-0.5 transition-[padding] duration-150 hover:pr-[104px] ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
       style={{ paddingLeft: `${12 + row.depth * 18}px` }}
       data-testid={`outline-row-${row.node.id}`}
       data-task-row={isTaskRow || undefined}
@@ -578,7 +578,9 @@ function OutlineItem({
       )}
 
       {/* Hover action cluster — absolute so it never reserves blank width in
-          the row; task rows keep a persistent date chip in the flow instead. */}
+          the row; task rows keep a persistent date chip in the flow instead.
+          On hover the row itself gains matching right padding, so the text
+          reflows out of the cluster's way instead of being covered by it. */}
       <div
         className={`absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm transition-opacity dark:border-gray-700 dark:bg-gray-900 ${
           // While the row is being edited the cluster would sit on top of the
@@ -590,14 +592,13 @@ function OutlineItem({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-              className="flex h-5 items-center gap-1 rounded-md bg-accent/10 px-1.5 text-[11px] font-medium text-accent hover:bg-accent/20"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent hover:bg-accent/20"
               title={copy.addToTask}
               aria-label={copy.addToTask}
               aria-expanded={schedulePickerOpen}
               data-testid={`outline-add-task-${row.node.id}`}
             >
               <ListTodo className="h-3 w-3" />
-              {copy.addToTask}
             </button>
             {schedulePickerOpen && schedulePicker}
           </div>
