@@ -458,10 +458,44 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <>
               {task.description && <p className="mb-2 whitespace-pre-wrap text-[12px] leading-relaxed text-text-muted">{task.description}</p>}
 
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {task.tags?.filter(tag => !['tasks', 'work', 'life'].includes(tag)).map(tag => (
-                  <span key={tag} className={`rounded-md border bg-transparent px-1.5 py-0.5 text-[11px] font-medium ${getTagColor(tag)}`}>#{tag}</span>
-                ))}
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                {/* The "tasks" tag is a markdown-container marker, never user
+                    intent — always drop it. The context tags (work / life) are
+                    kept when they're the ONLY label, so the user still has a
+                    visible "this lives in <context>" hint; once any real tag
+                    exists they're hidden because the bottom-left context
+                    switcher already covers that information. */}
+                {(() => {
+                  const userTags = (task.tags ?? []).filter(
+                    (tag) => tag !== 'tasks',
+                  );
+                  const customTags = userTags.filter(
+                    (tag) => !['work', 'life'].includes(tag),
+                  );
+                  const contextOnly = customTags.length === 0
+                    ? userTags.find((tag) => ['work', 'life'].includes(tag))
+                    : undefined;
+                  return (
+                    <>
+                      {customTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className={`rounded-md border bg-transparent px-1.5 py-0.5 text-[11px] font-medium ${getTagColor(tag)}`}
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                      {contextOnly && (
+                        <span
+                          className="rounded-md border border-border px-1.5 py-0.5 text-[11px] capitalize text-text-muted"
+                          data-testid="task-card-context-tag"
+                        >
+                          {contextOnly}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
                 {task.project && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted">{task.project}</span>}
                 {task.priority && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] capitalize text-text-muted">{task.priority}</span>}
                 {task.source_date && task.source_date !== currentFileDate && (

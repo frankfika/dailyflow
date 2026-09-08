@@ -467,3 +467,50 @@ describe('TaskCard convert to project (UX S7)', () => {
     await vi.waitFor(() => expect(screen.queryByTestId('task-convert-dialog-t_conv')).not.toBeInTheDocument());
   });
 });
+
+describe('TaskCard tag rendering', () => {
+  function openDetails() {
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+  }
+
+  it('shows a context tag when the task only has work/life', () => {
+    render(<TaskCard {...createProps({
+      task: { ...baseTask, tags: ['work'] },
+    })} />);
+    openDetails();
+    const ctx = screen.getByTestId('task-card-context-tag');
+    expect(ctx.textContent).toBe('work');
+  });
+
+  it('shows work as a subtle context pill when no other tags', () => {
+    render(<TaskCard {...createProps({
+      task: { ...baseTask, tags: ['work'] },
+    })} />);
+    openDetails();
+    // The work tag must be present, but as a context pill, not as a
+    // #work pill (which would collide with user-meaningful tags).
+    const pills = screen.queryAllByText(/^#work$/);
+    expect(pills).toHaveLength(0);
+    expect(screen.getByTestId('task-card-context-tag')).toBeInTheDocument();
+  });
+
+  it('hides the work/life context tag when the task has real tags', () => {
+    render(<TaskCard {...createProps({
+      task: { ...baseTask, tags: ['work', 'urgent'] },
+    })} />);
+    openDetails();
+    // urgent is a real user tag → show as #urgent
+    expect(screen.getByText('#urgent')).toBeInTheDocument();
+    // work is just context → hide (covered by the sidebar switcher)
+    expect(screen.queryByTestId('task-card-context-tag')).not.toBeInTheDocument();
+  });
+
+  it('strips the "tasks" markdown-container tag', () => {
+    render(<TaskCard {...createProps({
+      task: { ...baseTask, tags: ['tasks', 'planning'] },
+    })} />);
+    openDetails();
+    expect(screen.queryByText('#tasks')).not.toBeInTheDocument();
+    expect(screen.getByText('#planning')).toBeInTheDocument();
+  });
+});
