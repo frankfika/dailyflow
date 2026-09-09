@@ -5,6 +5,22 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0](https://github.com/frankfika/dailyflow/compare/v2.9.2...v2.10.0) (2026-09-09)
+
+
+### Features
+
+* click task row to toggle details; simplify card panel; outline hover no longer covers text ([f240af3](https://github.com/frankfika/dailyflow/commit/f240af3d4eb048f901b2e6e5b79c9deb4caef94e))
+* hover delete button on mindmap canvas nodes ([f1793a4](https://github.com/frankfika/dailyflow/commit/f1793a42c0aa017af8a1907699c628bd02bf878e))
+* UI polish — task details, outline/canvas delete, nav fixes ([34c5702](https://github.com/frankfika/dailyflow/commit/34c57028e95550a7903bec75cae9e2a7f5ba7921))
+* visible delete button on event outline rows ([52e0357](https://github.com/frankfika/dailyflow/commit/52e0357a3aadf1705c157df1334cac4e3cdba3a2))
+
+
+### Bug Fixes
+
+* hide outline hover-action cluster while a row is being edited ([08d9519](https://github.com/frankfika/dailyflow/commit/08d951963923f9c48da70cc499020d9b15c8a329))
+* simplify TaskCard details — dedupe tags, drop subtasks action ([60c1399](https://github.com/frankfika/dailyflow/commit/60c1399da10eca9aa197a8e1c60236a322f42f82))
+
 ## [2.9.2](https://github.com/frankfika/dailyflow/compare/v2.9.1...v2.9.2) (2026-09-08)
 
 
