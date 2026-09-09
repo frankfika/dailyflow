@@ -1,25 +1,23 @@
-import type { CSSProperties } from 'react';
-
 // ---------------------------------------------------------------------------
-// Abstract art cover for a gallery card. A literal mind-map thumbnail can't
-// carry a cover (1–3 node maps render as a couple of lonely dots), so this is
-// a designed tile instead: layered gradient wash + soft glowing orbs laid out
-// on a deterministic golden-angle spiral + a ghost monogram. Pure CSS, no
-// data fetching; the orb count loosely reflects the event's task load.
+// Abstract poster cover for a gallery card. A literal mind-map thumbnail can't
+// carry a cover (1–3 node maps render as lonely specks), and translucent
+// washes read as an empty white tile — so the cover is a *solid* tinted
+// poster instead: hand-tuned light/dark gradient pairs, concentric rings
+// anchored off-canvas, and a big ghost monogram. Pure CSS, no data fetching.
 // ---------------------------------------------------------------------------
 
 interface Palette {
-  /** Cover gradient wash, corner → transparent. */
-  wash: string;
-  /** Two orb fill colors (used inside radial-gradients). */
-  orbs: [string, string];
+  light: string;
+  dark: string;
+  /** Motif/monogram ink at 30% (light) — dark mode always uses white/10. */
+  ink: string;
 }
 
 const PALETTES: Palette[] = [
-  { wash: 'from-[#23877B]/20 via-[#23877B]/6 to-transparent', orbs: ['#2aa79a', '#7fd8cd'] },
-  { wash: 'from-sky-500/18 via-sky-500/5 to-transparent', orbs: ['#38a8e8', '#93d3f7'] },
-  { wash: 'from-violet-500/18 via-violet-500/5 to-transparent', orbs: ['#8b5cf6', '#c4a9fb'] },
-  { wash: 'from-amber-500/18 via-amber-500/5 to-transparent', orbs: ['#e0932c', '#f4c983'] },
+  { light: 'from-[#d7ece7] to-[#a3d6cb]', dark: 'dark:from-[#12322d] dark:to-[#1d4f47]', ink: 'text-[#23877B]/35 dark:text-white/10' },
+  { light: 'from-[#d9e7fb] to-[#a4c6ef]', dark: 'dark:from-[#152436] dark:to-[#1e3c5c]', ink: 'text-[#2f7fd0]/35 dark:text-white/10' },
+  { light: 'from-[#e6ddf6] to-[#c0abe9]', dark: 'dark:from-[#241c3d] dark:to-[#372a5b]', ink: 'text-[#7c4fd0]/35 dark:text-white/10' },
+  { light: 'from-[#fae9c8] to-[#f2ca8f]', dark: 'dark:from-[#382a11] dark:to-[#59431a]', ink: 'text-[#c07f1d]/40 dark:text-white/10' },
 ];
 
 function hash(seed: string): number {
@@ -28,40 +26,25 @@ function hash(seed: string): number {
   return h;
 }
 
-function orbStyle(cx: number, cy: number, size: number, color: string, opacity: number): CSSProperties {
-  return {
-    left: `${cx}%`,
-    top: `${cy}%`,
-    width: `${size}%`,
-    aspectRatio: '1',
-    transform: 'translate(-50%, -50%)',
-    background: `radial-gradient(circle at 35% 35%, ${color}, ${color}00 70%)`,
-    opacity,
-    filter: 'blur(6px)',
-  };
-}
-
-export function EventCover({ id, title, total }: { id: string; title: string; total: number }) {
+export function EventCover({ id, title }: { id: string; title: string }) {
   const seed = hash(id);
-  const palette = PALETTES[seed % PALETTES.length];
-  const orbCount = Math.min(3 + Math.min(total, 6), 6);
-  const orbs = Array.from({ length: orbCount }, (_, i) => {
-    // Golden-angle spiral: evenly "random" spread that never clumps.
-    const angle = ((seed % 360) + i * 137.508) * (Math.PI / 180);
-    const radius = 14 + ((i * 29 + seed) % 22);
-    const cx = 50 + Math.cos(angle) * radius * 1.6;
-    const cy = 50 + Math.sin(angle) * radius * 0.9;
-    const size = 26 - (i % 3) * 6 + (seed % 7);
-    const color = palette.orbs[i % palette.orbs.length];
-    const opacity = 0.55 - (i % 3) * 0.13;
-    return <div key={i} className="absolute rounded-full" style={orbStyle(cx, cy, size, color, opacity)} />;
-  });
+  const p = PALETTES[seed % PALETTES.length];
+  const letter = title.trim().charAt(0).toUpperCase() || '·';
 
   return (
-    <div className={`relative h-full w-full overflow-hidden bg-gradient-to-br ${palette.wash}`} aria-hidden="true" data-testid="event-cover">
-      {orbs}
-      <span className="absolute -bottom-4 right-2 select-none text-[88px] font-bold leading-none tracking-tighter text-black/[0.05] dark:text-white/[0.06]">
-        {title.trim().charAt(0).toUpperCase() || '·'}
+    <div
+      className={`relative h-full w-full overflow-hidden bg-gradient-to-br ${p.light} ${p.dark}`}
+      aria-hidden="true"
+      data-testid="event-cover"
+    >
+      {/* Concentric rings anchored off-canvas bottom-left: structural weight
+          that spans the tile no matter how sparse the event is. */}
+      <div className={`absolute -bottom-24 -left-16 h-56 w-56 rounded-full border-[10px] ${p.ink} opacity-60`} />
+      <div className={`absolute -bottom-16 -left-8 h-40 w-40 rounded-full border-[8px] ${p.ink} opacity-40`} />
+      <div className="absolute -bottom-6 left-2 h-24 w-24 rounded-full bg-black/[0.06] dark:bg-white/10" />
+      {/* Ghost monogram anchors the right side. */}
+      <span className={`absolute -bottom-5 right-1 select-none text-[110px] font-bold leading-none tracking-tighter ${p.ink}`}>
+        {letter}
       </span>
     </div>
   );

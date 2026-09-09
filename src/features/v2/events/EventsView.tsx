@@ -236,7 +236,7 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
       {/* Gallery cover: an abstract art tile (gradient wash + glow orbs +
           ghost monogram), tinted per event. */}
       <div className="relative h-36 shrink-0 border-b border-border/60 text-black/[0.55] dark:text-white/25">
-        <EventCover id={event.id} title={event.title} total={event.progress.total} />
+        <EventCover id={event.id} title={event.title} />
         {/* More menu lives on the cover so the body stays clean. Hidden
             until hover/focus; the destructive action reuses ConfirmDialog. */}
         <div className="absolute right-2 top-2" ref={moreRef}>
