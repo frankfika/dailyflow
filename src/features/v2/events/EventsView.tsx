@@ -716,11 +716,11 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         onClick={() => setContextPreviewOpen(true)}
         title={language === 'zh' ? 'AI 推进这个事件' : 'AI push this event forward'}
         aria-label={language === 'zh' ? 'AI 推进' : 'AI push forward'}
-        className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/10"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2 text-sm font-medium text-accent hover:bg-accent/10 sm:px-3"
         data-testid="event-agent-run-open"
       >
         <Sparkles className="h-4 w-4" />
-        {language === 'zh' ? 'AI 推进' : 'AI'}
+        <span className="hidden sm:inline">{language === 'zh' ? 'AI 推进' : 'AI'}</span>
       </button>
       <button
         type="button"
@@ -755,7 +755,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       >
         {outlineVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
       </button>
-      {searchOpen ? <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-56 rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-accent dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
+      {searchOpen ? <div className="relative w-40 sm:w-56"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} aria-label={t.search} className="w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-8 pr-8 text-sm outline-none focus:border-accent dark:border-gray-700" /><button onClick={() => { setSearchOpen(false); setQuery(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400" aria-label="Close search"><X className="h-4 w-4" /></button>{query && matches.length === 0 && <div className="absolute right-0 top-11 w-40 sm:w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-400 shadow-lg dark:border-gray-700 dark:bg-gray-900">{t.noMatch}</div>}</div> : <button onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.search}><Search className="h-4 w-4" /></button>}
       <div className="relative">
         <button onClick={() => setMoreOpen((value) => !value)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t.more} aria-expanded={moreOpen} data-testid="event-more-toggle"><MoreHorizontal className="h-4 w-4" /></button>
         {moreOpen && (

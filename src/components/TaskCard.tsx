@@ -306,7 +306,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 onChange={event => onEdit({ deadline: event.target.value || undefined })}
               />
             </label>
-            <TagInput tags={task.tags || []} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />
+            <TagInput tags={(task.tags || []).filter(tag => tag !== 'tasks')} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />
           </div>
 
           {editingContent ? (

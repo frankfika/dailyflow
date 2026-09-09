@@ -363,3 +363,15 @@ describe('TaskCard inline attribute bar (UX S3)', () => {
   });
 
 });
+
+describe('TaskCard tag rendering', () => {
+  it('renders tags once, in the attribute-bar TagInput, minus the tasks marker', () => {
+    render(<TaskCard {...createProps({
+      task: { ...baseTask, tags: ['work', 'urgent', 'tasks'] },
+    })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+    expect(screen.getByTestId('taginput-tags')).toHaveTextContent('work urgent');
+    expect(screen.getByTestId('taginput-tags')).not.toHaveTextContent('tasks');
+  });
+});
+

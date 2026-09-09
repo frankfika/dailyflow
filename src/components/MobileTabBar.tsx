@@ -20,9 +20,10 @@
  *     result reads as one consistent motion language across the app.
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, ListTodo, MessageCircle, Sparkles, Plus } from 'lucide-react';
-import { useCallback } from 'react';
+import { FileText, ListTodo, MessageCircle, MoreHorizontal, Plus, Sparkles } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import type { AppTab } from '../App';
+import { MobileMoreSheet } from './MobileMoreSheet';
 
 interface MobileTabBarProps {
   language: 'en' | 'zh';
@@ -32,6 +33,8 @@ interface MobileTabBarProps {
   visible: boolean;
   /** Open the today-task quick-add sheet. */
   onAddTask?: () => void;
+  /** Open the Settings modal. Surfaced through the "More" sheet. */
+  onOpenSettings?: () => void;
 }
 
 const PRIMARY_TABS: ReadonlyArray<{
@@ -45,17 +48,27 @@ const PRIMARY_TABS: ReadonlyArray<{
   { id: 'ai-chat', label: { en: 'Ask AI', zh: '问 AI' }, icon: MessageCircle },
 ] as const;
 
+/** Tabs reachable through the "More" sheet. The "More" tab in the bar
+ *  highlights while any of these is active so the user keeps a sense
+ *  of "where am I" when the sheet is dismissed. */
+const MORE_TAB_IDS: ReadonlySet<AppTab> = new Set(['calendar', 'memory', 'team']);
+
 export function MobileTabBar({
   language,
   activeTab,
   setActiveTab,
   visible,
   onAddTask,
+  onOpenSettings,
 }: MobileTabBarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
   const handleClick = useCallback(
     (tab: AppTab) => () => setActiveTab(tab),
     [setActiveTab],
   );
+
+  const isMoreActive = moreOpen || MORE_TAB_IDS.has(activeTab);
 
   // Slide the bar off-screen when not visible (mount/unmount keeps the
   // motion consistent with the other "auto-disappearing" chrome).
@@ -101,6 +114,27 @@ export function MobileTabBar({
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              aria-label={language === 'zh' ? '更多' : 'More'}
+              data-testid="mobile-tab-more"
+              className={`relative flex min-h-[44px] min-w-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-[10px] font-medium transition-colors active:scale-95 ${
+                isMoreActive ? 'text-accent' : 'text-text-muted hover:text-text-heading'
+              }`}
+            >
+              {isMoreActive && (
+                <motion.span
+                  layoutId="mobile-tab-active"
+                  className="absolute inset-0.5 rounded-lg bg-accent-light"
+                  transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                  aria-hidden="true"
+                />
+              )}
+              <MoreHorizontal className="relative h-4 w-4" aria-hidden="true" />
+              <span className="relative">{language === 'zh' ? '更多' : 'More'}</span>
+            </button>
             {onAddTask && (
               <button
                 type="button"
@@ -117,6 +151,14 @@ export function MobileTabBar({
           </div>
         </motion.nav>
       )}
+      <MobileMoreSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        language={language}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onOpenSettings={onOpenSettings}
+      />
     </AnimatePresence>
   );
 }
