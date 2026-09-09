@@ -700,19 +700,22 @@ export async function listAllEvents(workspaceRoot: string): Promise<EventSummary
   const representedSpaceIds = new Set<string>();
   for (const fp of files) {
     const ev = await summarizeTopicSpaceAsEvent(workspaceRoot, fp);
+    const space = await readTopicSpaceFileSafe(workspaceRoot, fp);
+    // Record the id even when summarizing fails: what matters for the
+    // shell rule below is whether the space *file* still exists.
+    if (space?.id) representedSpaceIds.add(space.id);
     if (!ev) continue;
     events.push(ev);
-    representedSpaceIds.add(ev.id);
-    const space = await readTopicSpaceFileSafe(workspaceRoot, fp);
     if (space?.mindmapId) representedMindmapIds.add(space.mindmapId);
   }
 
   // Legacy/standalone maps are Event shells too. A map already owned by a
   // TopicSpace is deliberately omitted so one conceptual Event has one row.
+  // A map whose spaceId points at a space file that no longer exists is the
+  // residue of a deleted Event — it must not resurrect as a shell row.
   const maps = await scanMindMapsDir(workspaceRoot);
   for (const map of maps) {
-    if (representedMindmapIds.has(map.id)) continue;
-    if (map.spaceId && representedSpaceIds.has(map.spaceId)) continue;
+    if (representedMindmapIds.has(map.id) || (map.spaceId && !representedSpaceIds.has(map.spaceId))) continue;
     const space = standaloneMapAsSpace(map);
     const progress = await computeProgressFromSpace(workspaceRoot, space, map);
     events.push({

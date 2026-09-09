@@ -27,7 +27,7 @@
       "runtimeArgs": ["vite", "--host=0.0.0.0", "--port", "47841", "--strictPort"],
       "url": "http://localhost:47841",
       "port": 47841
-    }
+    },
     {
       "name": "worktree-dev-all",
       "runtimeExecutable": "sh",
@@ -35,4 +35,4 @@
       "url": "http://localhost:47841",
       "port": 47841
     }
-  ]
+  ]}
