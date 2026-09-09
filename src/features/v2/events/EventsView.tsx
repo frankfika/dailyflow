@@ -33,7 +33,7 @@ import {
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
-import { EventMapPreview } from './EventMapPreview';
+import { EventCover } from './EventCover';
 import { AgentRunPanel } from './AgentRunPanel';
 import { ResizeHandle } from '../../../components/ResizeHandle';
 import { EventOperatorContextPreview, type ContextRef } from './EventOperatorContextPreview';
@@ -233,9 +233,10 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
       className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface-elevated text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[0_8px_24px_rgba(20,45,38,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40 ${menuOpen ? 'z-10' : ''}`}
       data-testid={`event-card-${event.id}`}
     >
-      {/* Gallery cover: a miniature of the event's own mind map. */}
-      <div className="relative h-32 shrink-0 border-b border-border/60 bg-surface text-black/[0.55] dark:text-white/25">
-        {event.mindmapId ? <EventMapPreview mindmapId={event.mindmapId} title={event.title} /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#23877B]/10 via-transparent to-black/[0.02]"><span className="select-none text-2xl font-semibold text-[#23877B]/40">{event.title.trim().charAt(0).toUpperCase() || '·'}</span></div>}
+      {/* Gallery cover: an abstract art tile (gradient wash + glow orbs +
+          ghost monogram), tinted per event. */}
+      <div className="relative h-36 shrink-0 border-b border-border/60 text-black/[0.55] dark:text-white/25">
+        <EventCover id={event.id} title={event.title} total={event.progress.total} />
         {/* More menu lives on the cover so the body stays clean. Hidden
             until hover/focus; the destructive action reuses ConfirmDialog. */}
         <div className="absolute right-2 top-2" ref={moreRef}>
@@ -271,13 +272,13 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
           )}
         </div>
       </div>
-      <div className="flex flex-1 flex-col px-4 py-3">
+      <div className="flex flex-1 flex-col px-4 py-3.5">
         <div className="flex items-start justify-between gap-3">
           <h3 className="min-w-0 truncate text-sm font-semibold text-text-heading">{event.title}</h3>
-          <span className="shrink-0 text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span>
+          <span className="shrink-0 rounded-md bg-black/[0.04] px-1.5 py-0.5 text-[11px] tabular-nums text-text-muted dark:bg-white/[0.06]">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span>
         </div>
-        {event.progress.total > 0 && <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}
-        <div className="mt-2.5 flex min-h-5 items-center justify-between gap-2">
+        {event.progress.total > 0 && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/[0.05]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}
+        <div className="mt-auto flex min-h-5 items-center justify-between gap-2 pt-3">
           <div className="flex gap-1.5 overflow-hidden">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="shrink-0 rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>
           <span className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500">{updated} {relativeTime(event.updatedAt, language)}</span>
         </div>
