@@ -7,7 +7,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, FolderOpen, FolderPlus, Loader2, Menu, RefreshCw, X } from 'lucide-react';
 import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiApi, workspacesApi, dailyApi, eventsApi, dispatchDomainEvent, DOMAIN_EVENTS, reportsApi } from './api/client';
 import type { Workspace } from './api/client';
-import type { RecurrenceRule } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
 import { getTodayStr } from './utils/tagColors';
@@ -186,15 +185,6 @@ export default function App() {
   // point creates and opens a meeting note instead of mounting the retired
   // standalone meeting modal, which used a different API and storage tree.
 
-  const taskLinkedNotesCount = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const note of dailyNotes) {
-      for (const taskId of note.linkedTaskIds) {
-        map[taskId] = (map[taskId] || 0) + 1;
-      }
-    }
-    return map;
-  }, [dailyNotes]);
   const [lastSyncedMD, setLastSyncedMD] = useState('');
   // Background sync is intentionally disabled until it has version-aware
   // writes. Saving a captured date/content pair on a timer can overwrite a
@@ -289,7 +279,10 @@ export default function App() {
       // route through the same adapter as the Sidebar: today/events are real
       // tabs, everything else opens as an overlay (UX S5 model).
       const goTo = (tab: AppTab) => {
-        if (tab === 'today' || tab === 'events') setActiveTab(tab);
+        if (tab === 'today' || tab === 'events') {
+          setActiveTab(tab);
+          setActiveOverlay(null);
+        }
         else setActiveOverlay(tab);
       };
       const current: AppTab = activeOverlay ?? activeTab;
@@ -1282,62 +1275,6 @@ export default function App() {
     showToast(language === 'zh' ? 'AI 已选好今天的焦点' : 'AI picked your focus', 'success');
   };
 
-  const handleTaskAiAction = async (task: Task, action: 'decompose' | 'rewrite' | 'summarize') => {
-    const body = [task.title, task.description].filter(Boolean).join('\n');
-    try {
-      if (action === 'decompose') {
-        const result = await runAiAction('split_tasks', body);
-        const arr = Array.isArray(result) ? result : [];
-        const subtasks = arr
-          .map((item: any) => String(item?.title ?? '').trim())
-          .filter(Boolean)
-          .slice(0, 8);
-        if (subtasks.length === 0) {
-          showToast(language === 'zh' ? 'AI 没有拆出子任务' : 'AI produced no subtasks', 'info');
-          return;
-        }
-        for (const [idx, title] of subtasks.entries()) {
-          try {
-            await tasksApi.create(currentFileDate, {
-              id: `t_${Date.now()}_${idx}`,
-              title,
-              status: 'todo',
-              tags: task.tags?.length ? [...task.tags] : [activeContext],
-              source_date: currentFileDate,
-              parentTaskId: task.id,
-              deadline: task.deadline,
-            } as Task);
-          } catch (err) {
-            console.error('Failed to create subtask', err);
-          }
-        }
-        await refreshDayFromServer();
-        await todayItemsQuery.refetch();
-        showToast(language === 'zh' ? `已拆解出 ${subtasks.length} 个子任务` : `Added ${subtasks.length} subtasks`, 'success');
-      } else if (action === 'rewrite') {
-        const result = await runAiAction('rewrite_task', body) as { title?: string; description?: string };
-        const title = typeof result?.title === 'string' && result.title.trim() ? result.title.trim() : task.title;
-        await handleEditTask(task.id, {
-          title,
-          ...(typeof result?.description === 'string' && result.description.trim() ? { description: result.description.trim() } : {}),
-        }, task.host_date);
-      } else {
-        const comments = (task.comments ?? []).map(comment => comment.text).join('\n');
-        const result = await runAiAction('summarize_task', body, comments || undefined) as { summary?: string };
-        const summary = (result?.summary ?? '').trim();
-        if (!summary) throw new Error(language === 'zh' ? 'AI 没有给出总结' : 'AI produced no summary');
-        const now = new Date();
-        const pad = (value: number) => String(value).padStart(2, '0');
-        const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        await handleEditTask(task.id, {
-          comments: [...(task.comments ?? []), { text: summary, timestamp: stamp }],
-        }, task.host_date);
-      }
-    } catch (e: any) {
-      console.error('Task AI action failed', e);
-      showToast(e?.message || (language === 'zh' ? 'AI 操作失败' : 'AI action failed'), 'error');
-    }
-  };
 
 
   // When date changes, load tasks
@@ -1545,40 +1482,9 @@ export default function App() {
   };
 
   /** UX S7: task → new project event, then jump into its canvas. */
-  const handleConvertTaskToProject = async (task: Task, opts: { title: string; extraNodes: string[] }) => {
-    try {
-      const result = await eventsApi.convertTaskToEvent({
-        taskId: task.id,
-        scheduledDate: task.host_date || currentFileDate,
-        title: opts.title,
-        context: (activeContext as 'work' | 'life'),
-        extraNodes: opts.extraNodes,
-      });
-      await todayItemsQuery.refetch();
-      showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
-      setRequestedEventId(result.eventId);
-      setActiveTab('events');
-    } catch (e: any) {
-      console.error('Convert to project failed', e);
-      showToast(e?.message || (language === 'zh' ? '转成项目失败' : 'Failed to convert to project'), 'error');
-    }
-  };
 
   /** UX_DESIGN §12: task inline "R" — save a recurrence rule (creates a
    * recurring template, same as adding a task with a rule from the input bar). */
-  const handleSetTaskRecurrence = (task: Task, recurrence: RecurrenceRule) => {
-    void recurringApi.create({
-      title: task.title,
-      description: task.description,
-      tags: task.tags,
-      recurrence,
-    }).then(() => {
-      showToast(language === 'zh' ? '重复规则已保存，任务将按规则自动生成' : 'Recurrence saved — tasks will be generated on schedule', 'success');
-    }).catch((e: any) => {
-      console.error('Failed to save recurrence', e);
-      showToast(e?.message || (language === 'zh' ? '重复规则保存失败' : 'Failed to save recurrence'), 'error');
-    });
-  };
 
   /** UX_DESIGN §2: ⋯ menu "转成项目" — create a project event from the draft. */
   const handleDraftToProject = async (title: string) => {
@@ -1615,29 +1521,6 @@ export default function App() {
     }
   };
 
-  const handleDeleteTask = async (id: string, hostDate?: string) => {
-    const targetDate = hostDate ?? currentFileDate;
-    try {
-      await tasksApi.delete(id, targetDate);
-      // Refresh markdown and re-sync tasks
-      const data = await filesApi.get(targetDate);
-      if (data) {
-        if (targetDate === currentFileDate) {
-          setMarkdown(data.content);
-          setTasks(data.tasks as Task[]);
-          setLastSyncedMD(data.content);
-        } else {
-          setEarlierOpenTasks(prev => prev.filter(task => !(task.id === id && task.host_date === targetDate)));
-        }
-        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
-      }
-      showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
-      await todayItemsQuery.refetch();
-    } catch (e) {
-      console.error('Failed to delete task', e);
-      showToast(language === 'zh' ? '删除失败' : 'Failed to delete task', 'error');
-    }
-  };
 
   const handleManualRollover = async () => {
     try {
@@ -1918,7 +1801,13 @@ export default function App() {
         setIsSidebarOpen={setIsSidebarOpen}
         activeTab={activeOverlay ?? activeTab}
         setActiveTab={(tab) => {
-          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          // Primary tabs are the app's real pages; landing on one from an
+          // overlay (Notes/AI/…) must leave the overlay, or clicking "Today"
+          // appears to do nothing.
+          if (tab === 'today' || tab === 'events') {
+            setActiveTab(tab);
+            setActiveOverlay(null);
+          }
           else setActiveOverlay(tab);
         }}
         currentFileDate={currentFileDate}
@@ -2065,7 +1954,90 @@ export default function App() {
               </div>
             )}
             {!isLoading && !loadError && (
-              activeTab === 'today' ? (
+              activeOverlay ? (
+                /* UX S5 revised: notes / AI chat / calendar / memory / team
+                   render as in-flow views, not floating overlays. The 2026-09
+                   audit feedback was unanimous — covering Today with a
+                   backdrop modal for a primary workspace feels like a popup,
+                   not navigation. Same content, no backdrop / scale chrome;
+                   the sidebar stays the way back. */
+                <motion.div
+                  key={`workspace-${activeOverlay}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="h-full min-h-0"
+                  data-testid={`workspace-${activeOverlay}`}
+                >
+                  {activeOverlay === 'notes' ? (
+                    <div className="flex h-full min-h-0 flex-col">
+                      <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
+                        {([
+                          ['notes', language === 'zh' ? '笔记' : 'Notes'],
+                          ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
+                        ] as const).map(([surface, label]) => (
+                          <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
+                      </div>
+                    </div>
+                  ) : activeOverlay === 'ai-chat' ? (
+                    <div className="h-full">
+                      <AIChat
+                        workspaceId={activeWorkspaceId || 'default'}
+                        language={language}
+                        activeContext={activeContext}
+                        tasks={contextFilteredTasks}
+                        notes={contextNotes}
+                        filesMap={filesMap}
+                        showToast={showToast}
+                        initialDraft={chatDraft}
+                        onDraftConsumed={() => setChatDraft(null)}
+                        onCreateMeetingNote={() => void openMeetingNote()}
+                        onNoteCreated={() => {
+                          const today = getTodayStr();
+                          notesApi.getByDate(today).then(dateNotes => {
+                            setDailyNotes(prev => {
+                              const others = prev.filter(n => n.date !== today);
+                              return [...others, ...dateNotes];
+                            });
+                          }).catch(err => console.error('Failed to refresh daily notes:', err));
+                          loadContextNotes();
+                        }}
+                      />
+                    </div>
+                  ) : activeOverlay === 'calendar' ? (
+                    <div className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6" data-testid="calendar-page">
+                      <CalendarWorkspace
+                        date={currentFileDate}
+                        setDate={setCurrentFileDate}
+                        language={language}
+                        onOpenLocalDate={(date) => {
+                          setCurrentFileDate(date);
+                          setActiveOverlay(null);
+                          setActiveTab('today');
+                        }}
+                        onManageConnections={() => {
+                          setConfigTab('sync');
+                          setShowSettings(true);
+                        }}
+                      />
+                    </div>
+                  ) : activeOverlay === 'memory' ? (
+                    <div className="h-full min-h-0 overflow-hidden">
+                      <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
+                    </div>
+                  ) : (
+                    <div className="h-full min-h-0 overflow-hidden">
+                      <TeamView language={language} showToast={showToast} />
+                    </div>
+                  )}
+                </motion.div>
+              ) : activeTab === 'today' ? (
                 <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-32 pt-5 md:px-8 md:pt-7 lg:px-12" data-testid="today-focus-scroll-region">
                   <motion.div
                     key="visual-today"
@@ -2214,30 +2186,7 @@ export default function App() {
                     categories={categories}
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
-                    onDeleteTask={handleDeleteTask}
-                    onCreateLinkedNote={(taskId) => {
-                      setEditingDailyNote(null);
-                      setPrefillLinkedTaskId(taskId);
-                      setShowQuickNoteEditor(true);
-                    }}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
-                    onAiAction={handleTaskAiAction}
-                    onConvertToProject={handleConvertTaskToProject}
-                    onSetRecurrence={handleSetTaskRecurrence}
-                    onShowLinkedNotes={(taskId) => {
-                      // Open the task's newest linked note in the quick note
-                      // editor — linked notes live in the per-date note store,
-                      // not the v2 Notes overlay, so filtering that list would
-                      // show nothing.
-                      const linked = dailyNotes
-                        .filter(n => (n.linkedTaskIds ?? []).includes(taskId))
-                        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
-                      if (linked[0]) {
-                        setEditingDailyNote(linked[0]);
-                        setShowQuickNoteEditor(true);
-                      }
-                    }}
-                    linkedNotesCount={(taskId) => taskLinkedNotesCount[taskId] || 0}
                     onAddTask={() => taskInputFocusRef.current?.()}
                     starredTaskIds={starredTaskIds}
                     onToggleStar={toggleStar}
@@ -2333,7 +2282,13 @@ export default function App() {
         language={language}
         activeTab={activeOverlay ?? activeTab}
         setActiveTab={(tab) => {
-          if (tab === 'today' || tab === 'events') setActiveTab(tab);
+          // Primary tabs are the app's real pages; landing on one from an
+          // overlay (Notes/AI/…) must leave the overlay, or clicking "Today"
+          // appears to do nothing.
+          if (tab === 'today' || tab === 'events') {
+            setActiveTab(tab);
+            setActiveOverlay(null);
+          }
           else setActiveOverlay(tab);
         }}
         visible={isMobileView}
@@ -2343,128 +2298,8 @@ export default function App() {
 
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
-      {/* UX S5: everything except Today (home) and Events (canvas) is an
-          overlay. Esc or the backdrop closes it and lands back on home. */}
-      <AnimatePresence>
-        {activeOverlay && (
-          <motion.div
-            key="workspace-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-40 flex items-center justify-center p-0 md:p-6"
-            data-testid="workspace-overlay"
-          >
-            <div
-              className="absolute inset-0 bg-black/25"
-              onClick={() => setActiveOverlay(null)}
-              data-testid="overlay-backdrop"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 14, scale: 0.99 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              className="relative flex h-full w-full flex-col overflow-hidden rounded-none border border-border bg-background shadow-2xl md:rounded-xl"
-              data-testid={`overlay-${activeOverlay}`}
-            >
-              <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">
-                  {activeOverlay === 'notes'
-                    ? (language === 'zh' ? '笔记' : 'Notes')
-                    : activeOverlay === 'ai-chat'
-                      ? (language === 'zh' ? '问 AI' : 'Ask AI')
-                      : activeOverlay === 'calendar'
-                        ? (language === 'zh' ? '日历' : 'Calendar')
-                        : activeOverlay === 'memory'
-                          ? (language === 'zh' ? '记忆' : 'Memory')
-                          : (language === 'zh' ? '团队' : 'Team')}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveOverlay(null)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-heading"
-                  aria-label={language === 'zh' ? '关闭浮层' : 'Close overlay'}
-                  data-testid="overlay-close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                {activeOverlay === 'notes' ? (
-                  <div className="flex h-full min-h-0 flex-col">
-                    <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/95 px-1 py-2">
-                      {([
-                        ['notes', language === 'zh' ? '笔记' : 'Notes'],
-                        ['inbox', language === 'zh' ? '待处理来源' : 'Inbox'],
-                      ] as const).map(([surface, label]) => (
-                        <button key={surface} onClick={() => setNotesSurface(surface)} className={`min-h-[44px] rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0 md:text-xs ${notesSurface === surface ? 'bg-accent text-white' : 'text-text-muted hover:bg-black/5'}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      {notesSurface === 'inbox' ? <InboxView language={language} /> : <NotesView language={language} sidebarOpen={isSidebarOpen} onNotice={showToast} requestedNoteId={requestedV2NoteId} />}
-                    </div>
-                  </div>
-                ) : activeOverlay === 'ai-chat' ? (
-                  <div className="h-full">
-                    <AIChat
-                      workspaceId={activeWorkspaceId || 'default'}
-                      language={language}
-                      activeContext={activeContext}
-                      tasks={contextFilteredTasks}
-                      notes={contextNotes}
-                      filesMap={filesMap}
-                      showToast={showToast}
-                      initialDraft={chatDraft}
-                      onDraftConsumed={() => setChatDraft(null)}
-                      onCreateMeetingNote={() => void openMeetingNote()}
-                      onNoteCreated={() => {
-                        const today = getTodayStr();
-                        notesApi.getByDate(today).then(dateNotes => {
-                          setDailyNotes(prev => {
-                            const others = prev.filter(n => n.date !== today);
-                            return [...others, ...dateNotes];
-                          });
-                        }).catch(err => console.error('Failed to refresh daily notes:', err));
-                        loadContextNotes();
-                      }}
-                    />
-                  </div>
-                ) : activeOverlay === 'calendar' ? (
-                  <div className="h-full min-h-0 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6" data-testid="calendar-page">
-                    <CalendarWorkspace
-                      date={currentFileDate}
-                      setDate={setCurrentFileDate}
-                      language={language}
-                      onOpenLocalDate={(date) => {
-                        setCurrentFileDate(date);
-                        setActiveOverlay(null);
-                        setActiveTab('today');
-                      }}
-                      onManageConnections={() => {
-                        setConfigTab('sync');
-                        setShowSettings(true);
-                      }}
-                    />
-                  </div>
-                ) : activeOverlay === 'memory' ? (
-                  <div className="h-full min-h-0 overflow-hidden">
-                    <MemoryView workspaceId={activeWorkspaceId || 'default'} language={language} />
-                  </div>
-                ) : (
-                  <div className="h-full min-h-0 overflow-hidden">
-                    <TeamView language={language} showToast={showToast} />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
+      {/* UX S5: everything except Today (home) and Events (canvas) is an
       <CommandPalette
         open={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}

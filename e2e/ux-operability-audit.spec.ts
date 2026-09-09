@@ -188,19 +188,24 @@ test.describe('Today UX operability audit', () => {
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });
 
-  test('b. event group head navigates to the Events/mindmap canvas and back to Today', async ({ page }) => {
+  test('b. event task jumps to the Events/mindmap canvas and back to Today', async ({ page }) => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    const groupHead = page.locator('[data-testid^="today-event-head-"]').first();
-    await expect(groupHead).toBeVisible();
-    await expect(groupHead).toContainText(EVENT_TITLE);
+    // Event-grouped tasks live under their event tab; the tab shows the
+    // event title. Open the tab, then follow the task's event chip into the
+    // mindmap canvas.
+    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"])').first();
+    await expect(eventTab).toBeVisible();
+    await expect(eventTab).toContainText(EVENT_TITLE);
+    await eventTab.click();
 
-    await groupHead.click();
+    const eventChip = page.locator(`[data-testid="task-card-event-${seeded.eventTaskIds[0]}"]`);
+    await expect(eventChip).toBeVisible();
+    await eventChip.click();
 
-    // Observable signal of the mindmap canvas: clicking the group head opens
-    // the event detail view (heading + canvas). `events-surface` only exists
-    // on the events LIST view; the drill-down renders EventCanvas directly.
+    // Observable signal of the mindmap canvas: the drill-down renders
+    // EventCanvas directly (events-surface only exists on the events LIST).
     const canvas = page.getByTestId('event-canvas');
     await expect(canvas).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: EVENT_TITLE })).toBeVisible();
@@ -210,33 +215,31 @@ test.describe('Today UX operability audit', () => {
     await expect(page.getByTestId('today-focus-scroll-region')).toBeVisible();
     await expect(page.getByTestId('today-focus-bar')).toBeVisible();
     await expect(page.getByTestId('today-backlog')).toBeVisible();
-    await expect(page.getByRole('heading', { name: EVENT_TASKS[0] })).toBeVisible();
+    await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });
 
-  test('c. event group collapse hides its task titles, expand brings them back', async ({ page }) => {
+  test('c. event tabs switch the task list between groups', async ({ page }) => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    const eventGroup = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"])').first();
-    await expect(eventGroup).toBeVisible();
+    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"])').first();
+    const standaloneTab = page.getByTestId('today-event-group-standalone');
+    await expect(eventTab).toBeVisible();
+    await expect(standaloneTab).toBeVisible();
 
-    const toggleButton = eventGroup.locator('button.today-event-collapse');
-    await expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(eventGroup).toContainText(EVENT_TASKS[0]);
+    // The event tab is active first and shows only its own tasks.
+    await expect(eventTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
+    await expect(page.getByTestId('today-backlog')).not.toContainText(STANDALONE_TASKS[0]);
 
-    await toggleButton.click();
-    await expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
-    await expect(eventGroup).not.toContainText(EVENT_TASKS[0]);
-    await expect(eventGroup).not.toContainText(EVENT_TASKS[2]);
-    // The rest of the page is unaffected.
+    // Switching to Standalone swaps the visible task list.
+    await standaloneTab.click();
+    await expect(standaloneTab).toHaveAttribute('aria-selected', 'true');
+    await expect(eventTab).toHaveAttribute('aria-selected', 'false');
     await expect(page.getByTestId('today-backlog')).toContainText(STANDALONE_TASKS[0]);
-
-    await toggleButton.click();
-    await expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(eventGroup).toContainText(EVENT_TASKS[0]);
-    await expect(eventGroup).toContainText(EVENT_TASKS[2]);
+    await expect(page.getByTestId('today-backlog')).not.toContainText(EVENT_TASKS[0]);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });

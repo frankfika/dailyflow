@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, ListTodo, Plus } from 'lucide-react';
+import { Check, ChevronRight, ListTodo, Plus, Trash2 } from 'lucide-react';
 import type { EventDetail, EventNode } from '../../../api/client';
 import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { getTodayStr } from '../../../utils/tagColors';
@@ -7,6 +7,7 @@ import { getTodayStr } from '../../../utils/tagColors';
 type Copy = {
   addChild: string;
   addSibling: string;
+  deleteNode: string;
   empty: string;
   rootPlaceholder: string;
   untitled: string;
@@ -24,6 +25,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
   en: {
     addChild: 'Add child',
     addSibling: 'Add sibling',
+    deleteNode: 'Delete node',
     empty: 'No steps yet.',
     rootPlaceholder: 'Type the first step…',
     untitled: 'Untitled',
@@ -39,6 +41,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
   zh: {
     addChild: '添加子节点',
     addSibling: '添加同级',
+    deleteNode: '删除节点',
     empty: '还没有步骤。',
     rootPlaceholder: '输入第一个步骤…',
     untitled: '无标题',
@@ -329,6 +332,7 @@ export function EventOutline({
               else inputRefs.current.delete(root.node.id);
             }}
             onAddChild={() => void onAddChild(root.node.id, '').then(onStartEdit)}
+            onDelete={undefined}
             onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === root.node.id ? null : { nodeId: root.node.id, date: today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === root.node.id}
             schedulePicker={schedulePicker?.nodeId === root.node.id ? (
@@ -381,6 +385,7 @@ export function EventOutline({
             }}
             onAddChild={() => void onAddChild(row.node.id, '').then(onStartEdit)}
             onAddSibling={() => void onAddSibling(row.node.id, '').then(onStartEdit)}
+            onDelete={onDelete}
             onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === row.node.id ? null : { nodeId: row.node.id, date: today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === row.node.id}
             schedulePicker={schedulePicker?.nodeId === row.node.id ? (
@@ -458,6 +463,7 @@ interface OutlineItemProps {
   inputRef: (el: HTMLInputElement | null) => void;
   onAddChild: () => void;
   onAddSibling?: () => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onOpenSchedulePicker?: () => void;
   schedulePickerOpen?: boolean;
   schedulePicker?: React.ReactNode;
@@ -486,6 +492,7 @@ function OutlineItem({
   inputRef,
   onAddChild,
   onAddSibling,
+  onDelete,
   onOpenSchedulePicker,
   schedulePickerOpen,
   schedulePicker,
@@ -501,7 +508,7 @@ function OutlineItem({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 px-2 py-0.5 ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
+      className={`group relative flex items-center gap-1 px-2 py-0.5 transition-[padding] duration-150 hover:pr-[104px] ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
       style={{ paddingLeft: `${12 + row.depth * 18}px` }}
       data-testid={`outline-row-${row.node.id}`}
       data-task-row={isTaskRow || undefined}
@@ -571,24 +578,27 @@ function OutlineItem({
       )}
 
       {/* Hover action cluster — absolute so it never reserves blank width in
-          the row; task rows keep a persistent date chip in the flow instead. */}
+          the row; task rows keep a persistent date chip in the flow instead.
+          On hover the row itself gains matching right padding, so the text
+          reflows out of the cluster's way instead of being covered by it. */}
       <div
         className={`absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm transition-opacity dark:border-gray-700 dark:bg-gray-900 ${
-          schedulePickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          // While the row is being edited the cluster would sit on top of the
+          // text being typed — hide it (and make it unclickable) until blur.
+          schedulePickerOpen ? 'opacity-100' : isEditing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
       >
         {!isRoot && !row.node.execution && onOpenSchedulePicker && (
           <div className="relative shrink-0">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-              className="flex h-5 items-center gap-1 rounded-md bg-accent/10 px-1.5 text-[11px] font-medium text-accent hover:bg-accent/20"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent hover:bg-accent/20"
               title={copy.addToTask}
               aria-label={copy.addToTask}
               aria-expanded={schedulePickerOpen}
               data-testid={`outline-add-task-${row.node.id}`}
             >
               <ListTodo className="h-3 w-3" />
-              {copy.addToTask}
             </button>
             {schedulePickerOpen && schedulePicker}
           </div>
@@ -612,6 +622,19 @@ function OutlineItem({
             aria-label={copy.addSibling}
           >
             <Plus className="h-3 w-3" />
+          </button>
+        )}
+
+        {!isRoot && onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); void onDelete(row.node.id); }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-transparent text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-900 dark:hover:bg-red-950/40"
+            title={copy.deleteNode}
+            aria-label={copy.deleteNode}
+            data-testid={`outline-delete-${row.node.id}`}
+          >
+            <Trash2 className="h-3 w-3" />
           </button>
         )}
       </div>

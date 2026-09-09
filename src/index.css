@@ -1024,42 +1024,47 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-simple-completed > button:hover { color: var(--color-text-heading); }
 .today-simple-completed .today-simple-list { padding-top: 0.45rem; }
 
-/* Today event groups — v3.1 "任务按事件/脑图分组" (组头 = 画布入口) */
-.today-event-group {
-  overflow: hidden;
+/* Today event tabs — v3.2 横向事件分组（不占纵向空间，选中才展开任务） */
+.today-event-tabs {
+  display: flex;
+  gap: 0.375rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.today-event-tabs::-webkit-scrollbar { display: none; }
+.today-event-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
+  border-radius: 9999px;
   background: var(--color-surface);
-}
-.today-event-head {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.35rem 0.25rem 0.25rem;
-  background: var(--color-accent-light);
-  border-bottom: 1px solid var(--color-border);
-}
-.today-event-head-main {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.25rem;
-  padding: 0.25rem 0.5rem;
-  border: 0;
-  border-radius: 0.55rem;
-  background: transparent;
-  color: var(--color-text-heading);
-  text-align: left;
-  font-size: 0.8rem;
-  font-weight: 650;
-}
-button.today-event-head-main {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 0.2s var(--ease-native);
+  transition: background 0.2s var(--ease-native), color 0.2s var(--ease-native), border-color 0.2s var(--ease-native);
 }
-button.today-event-head-main:hover { background: rgba(35, 120, 110, 0.13); }
+.today-event-tab:hover { background: rgba(35, 120, 110, 0.10); }
+/* Touch standard is ~44px; desktop keeps the compact pill. */
+@media (max-width: 1024px) {
+  .today-event-tab {
+    min-height: 44px;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+  }
+}
+.today-event-tab.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.today-event-tab.is-active .today-event-icon { color: #fff; }
+.today-event-tab .today-event-count { font-size: 0.65rem; }
 .today-event-icon {
   height: 0.85rem;
   width: 0.85rem;
@@ -1074,38 +1079,7 @@ button.today-event-head-main:hover { background: rgba(35, 120, 110, 0.13); }
   font-weight: 550;
   font-variant-numeric: tabular-nums;
 }
-.today-event-collapse {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 2rem;
-  width: 2rem;
-  flex-shrink: 0;
-  border: 0;
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.today-event-collapse:hover { background: rgba(35, 120, 110, 0.10); }
-.today-event-arrow { height: 1rem; width: 1rem; transition: transform 0.2s var(--ease-native); }
-.today-event-arrow.is-collapsed { transform: rotate(-90deg); }
-.today-standalone-head {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0.5rem;
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 650;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.today-standalone-label { display: inline-flex; align-items: center; gap: 0.4rem; flex: 1; }
-.today-event-group-standalone {
-  background: transparent;
-  border-style: dashed;
-}
+.today-event-tab.is-active .today-event-count { color: rgba(255, 255, 255, 0.8); }
 
 @media (max-width: 768px) {
   .today-simple-section-header { align-items: center; }

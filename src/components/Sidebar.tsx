@@ -266,6 +266,40 @@ export function Sidebar({
   // Hover-expand: meaningful whenever the icon rail is compact. Letting motion own the
   // width keeps the click-toggle and hover-expand animations in lockstep.
   const [hoverExpanded, setHoverExpanded] = useState(false);
+  // Debounced hover-expand: brushing past the rail shouldn't flap it
+  // open/closed. Both timers are cancellable and cleared on unmount.
+  const hoverOpenTimerRef = useRef<number | null>(null);
+  const hoverCloseTimerRef = useRef<number | null>(null);
+  const clearHoverTimer = (ref: React.MutableRefObject<number | null>) => {
+    if (ref.current !== null) {
+      window.clearTimeout(ref.current);
+      ref.current = null;
+    }
+  };
+  useEffect(
+    () => () => {
+      clearHoverTimer(hoverOpenTimerRef);
+      clearHoverTimer(hoverCloseTimerRef);
+    },
+    []
+  );
+  const handleRailMouseEnter = useCallback(() => {
+    if (!isCompact) return;
+    clearHoverTimer(hoverCloseTimerRef);
+    if (hoverOpenTimerRef.current !== null) return;
+    hoverOpenTimerRef.current = window.setTimeout(() => {
+      hoverOpenTimerRef.current = null;
+      setHoverExpanded(true);
+    }, 120);
+  }, [isCompact]);
+  const handleRailMouseLeave = useCallback(() => {
+    clearHoverTimer(hoverOpenTimerRef);
+    if (hoverCloseTimerRef.current !== null) return;
+    hoverCloseTimerRef.current = window.setTimeout(() => {
+      hoverCloseTimerRef.current = null;
+      setHoverExpanded(false);
+    }, 200);
+  }, []);
   // Effective layout state. On hover-expand we want the full-width +
   // labels (so the rail reveals what each icon means), not just a wider
   // icon strip. `showLabels` is the single source of truth for "should
@@ -427,8 +461,8 @@ export function Sidebar({
         initial={motionInitial}
         animate={motionAnimate}
         transition={motionTransition}
-        onMouseEnter={() => isCompact && setHoverExpanded(true)}
-        onMouseLeave={() => setHoverExpanded(false)}
+        onMouseEnter={handleRailMouseEnter}
+        onMouseLeave={handleRailMouseLeave}
         onClick={(e) => {
           // Keep navigation and utility buttons usable in compact mode.
           // Expanding from their bubbled click used to reopen the overlay
@@ -546,7 +580,7 @@ export function Sidebar({
               type="button"
               onClick={onOpenCommandPalette}
               data-testid="sidebar-command-palette"
-              className={`mb-2 mx-1 flex items-center rounded-lg border border-border/80 bg-background/60 text-text-muted transition-colors hover:border-border-strong hover:text-text-heading ${isCompact ? 'justify-center p-2' : 'gap-2 px-2.5 py-2'} ${isMobile ? 'min-h-[44px]' : ''}`}
+              className={`mb-2 mx-1 flex items-center rounded-lg border border-border/80 bg-background/60 text-text-muted transition-colors hover:border-border-strong hover:text-text-heading ${isCompact ? 'justify-center p-2' : 'gap-2 px-2.5 py-1.5'} ${isMobile ? 'min-h-[44px]' : ''}`}
               title={isCompact ? (language === 'zh' ? '搜索 / 命令 ⌘K' : 'Search / commands ⌘K') : undefined}
               aria-label={language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
             >
@@ -563,7 +597,7 @@ export function Sidebar({
           {/* The default path stays intentionally small. Secondary workspaces
               remain available behind one explicit disclosure. */}
           <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <ul className="space-y-1 text-[13px]">
+            <ul className="space-y-0.5 text-[13px]">
               {([
                 { tab: 'today', label: language === 'zh' ? '今天' : 'Today', icon: ListTodo, action: goToToday },
                 { tab: 'events', label: language === 'zh' ? '事件' : 'Events', icon: Sparkles, action: () => handleNavClick('events') },
@@ -579,7 +613,15 @@ export function Sidebar({
                       onClick={action}
                       data-testid={`nav-${tab}`}
                       data-active={active}
-                      className={`nav-item relative flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${active ? 'text-accent font-semibold' : 'text-text-main hover:bg-black/[0.03]'}`}
+                      style={
+                        // Inline style is required because index.css's
+                        // .nav-item[data-active="true"] rule would otherwise
+                        // out-specify the bg-accent/text-white utilities.
+                        active && isCompact
+                          ? { backgroundColor: 'var(--color-accent)', color: '#fff' }
+                          : undefined
+                      }
+                      className={`nav-item relative flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-1.5'} ${active ? (isCompact ? 'font-semibold shadow-sm' : 'text-accent font-semibold') : 'text-text-main hover:bg-black/[0.03]'}`}
                       title={isCompact ? label : undefined}
                       aria-label={label}
                     >
@@ -589,7 +631,11 @@ export function Sidebar({
                           className="absolute inset-0 rounded-lg bg-accent/10"
                           transition={{ type: 'spring', stiffness: 360, damping: 30 }}
                           aria-hidden="true"
-                        />
+                        >
+                          {!isCompact && (
+                            <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent" />
+                          )}
+                        </motion.span>
                       )}
                       <Icon className="relative w-4 h-4 shrink-0" aria-hidden="true" />
                       {showLabels && <span className="relative overflow-hidden whitespace-nowrap">{label}</span>}
@@ -604,7 +650,7 @@ export function Sidebar({
                   onClick={handleMoreClick}
                   data-testid="nav-more"
                   aria-expanded={showMore}
-                  className={`nav-item flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'} ${isAdvancedTab ? 'text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
+                  className={`nav-item flex w-full items-center rounded-lg text-left transition-colors ${isMobile ? 'min-h-[44px]' : ''} ${isCompact ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-1.5'} ${isAdvancedTab ? 'text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
                   title={isCompact ? (language === 'zh' ? '更多' : 'More') : undefined}
                   aria-label={language === 'zh' ? '更多' : 'More'}
                 >

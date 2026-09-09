@@ -118,7 +118,9 @@ describe('EventCanvas node actions', () => {
     const toolbar = screen.getByTestId('event-node-toolbar');
     fireEvent.click(within(toolbar).getByRole('button', { name: /More/ }));
     expect(screen.getByRole('button', { name: 'Remove from day' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete node' })).toBeInTheDocument();
+    // The toolbar More menu keeps Delete node; a hover delete button also
+    // exists on each non-root node (event-node-delete-*).
+    expect(within(toolbar).getByRole('button', { name: 'Delete node' })).toBeInTheDocument();
   });
 
   it('adds a child from the focused inline input', () => {
