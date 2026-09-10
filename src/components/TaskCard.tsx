@@ -8,13 +8,16 @@ import {
   MessageSquare,
   MoreHorizontal,
   Network,
+  Pencil,
   Star,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { Task } from '../types/task';
 import type { RecurrenceRule } from '../api/client';
 import { getTodayStr } from '../utils/tagColors';
 import { TagInput } from './TagInput';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const SUPPRESS_KEY = 'df_suppress_completion_comments';
 
@@ -45,6 +48,8 @@ interface TaskCardProps {
   }) => void;
   showCompletionPrompt?: boolean;
   onCompletionPromptClosed?: () => void;
+  /** Permanently delete the task. When provided, a Delete action is shown. */
+  onDelete?: () => void;
   /** Whether the task has been starred by the user; drives the star button. */
   isStarred?: boolean;
   /** Toggle the starred state. When provided, the star button is rendered. */
@@ -81,6 +86,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onEdit,
   showCompletionPrompt,
   onCompletionPromptClosed,
+  onDelete,
   isStarred = false,
   onToggleStar,
 }) => {
@@ -92,6 +98,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [editContent, setEditContent] = useState(task.title + (task.description ? `\n${task.description}` : ''));
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState(task.deadline || '');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
   const deadlineInputRef = useRef<HTMLInputElement>(null);
 
@@ -309,6 +316,35 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <TagInput tags={(task.tags || []).filter(tag => tag !== 'tasks')} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />
           </div>
 
+          {/* Visible edit / delete actions. Title editing used to be
+              keyboard-only (E after expanding) — nobody could find it. */}
+          {(onDelete || !isDone) && (
+            <div className="mb-2 flex items-center justify-end gap-2">
+              {!isDone && (
+                <button
+                  type="button"
+                  onClick={() => setEditingContent(true)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-text-muted hover:bg-black/[0.04] hover:text-text-heading"
+                  data-testid={`task-edit-${task.id}`}
+                >
+                  <Pencil className="h-3 w-3" />
+                  {language === 'zh' ? '编辑' : 'Edit'}
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  data-testid={`task-delete-${task.id}`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {language === 'zh' ? '删除' : 'Delete'}
+                </button>
+              )}
+            </div>
+          )}
+
           {editingContent ? (
             <div className="space-y-3">
               <textarea
@@ -428,6 +464,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        show={confirmingDelete}
+        title={language === 'zh' ? '删除任务' : 'Delete task'}
+        message={language === 'zh' ? `确定要删除「${task.title}」吗？不可撤销。` : `Delete "${task.title}"? This cannot be undone.`}
+        confirmText={language === 'zh' ? '删除' : 'Delete'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        onConfirm={() => { setConfirmingDelete(false); onDelete?.(); }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
     </motion.article>
   );

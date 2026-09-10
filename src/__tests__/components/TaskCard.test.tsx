@@ -15,6 +15,9 @@ vi.mock('motion/react', () => ({
     article: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
       React.createElement('article', props, children),
   },
+  // ConfirmDialog (rendered by TaskCard for the delete action) animates with
+  // AnimatePresence.
+  AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
 // Mock lucide-react icons as simple spans
@@ -28,6 +31,7 @@ vi.mock('lucide-react', () => ({
   MessageSquare: () => React.createElement('span', { 'data-testid': 'icon-msg' }),
   MoreHorizontal: () => React.createElement('span', { 'data-testid': 'icon-more' }),
   Network: () => React.createElement('span', { 'data-testid': 'icon-network' }),
+  Pencil: () => React.createElement('span', { 'data-testid': 'icon-pencil' }),
   Repeat: () => React.createElement('span', { 'data-testid': 'icon-repeat' }),
   Trash2: () => React.createElement('span', { 'data-testid': 'icon-trash' }),
   X: () => React.createElement('span', { 'data-testid': 'icon-x' }),
