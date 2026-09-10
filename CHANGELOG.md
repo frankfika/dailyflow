@@ -5,6 +5,14 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1](https://github.com/frankfika/dailyflow/compare/v2.11.0...v2.11.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **app:** remove unclosed JSX comment that silently disabled Settings and Cmd+K palette ([#75](https://github.com/frankfika/dailyflow/issues/75)) ([d39d1c2](https://github.com/frankfika/dailyflow/commit/d39d1c2762f104835b4cfe143c6079ba574c2fa0))
+* **today:** stale persisted projection could hide tasks on cold start ([#76](https://github.com/frankfika/dailyflow/issues/76)) ([b78911c](https://github.com/frankfika/dailyflow/commit/b78911ce06844da4cad7f6b0edc17ba9200e1e8b))
+
 ## [2.11.0](https://github.com/frankfika/dailyflow/compare/v2.10.0...v2.11.0) (2026-09-10)
 
 
