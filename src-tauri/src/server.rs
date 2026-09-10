@@ -3,19 +3,49 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-pub struct ServerProcess(pub Mutex<Option<Child>>);
+pub struct ServerProcess {
+    child: Mutex<Option<Child>>,
+    shutting_down: AtomicBool,
+}
 
 impl ServerProcess {
+    pub fn new(child: Child) -> Self {
+        Self {
+            child: Mutex::new(Some(child)),
+            shutting_down: AtomicBool::new(false),
+        }
+    }
+
     pub fn shutdown(&self) {
-        if let Some(mut child) = self.0.lock().ok().and_then(|mut guard| guard.take()) {
+        self.shutting_down.store(true, Ordering::SeqCst);
+        if let Some(mut child) = self.child.lock().ok().and_then(|mut guard| guard.take()) {
             if let Err(error) = child.kill() {
                 eprintln!("Failed to stop local server process {}: {}", child.id(), error);
             }
             let _ = child.wait();
+        }
+    }
+
+    /// Briefly lock the state and report whether the child has exited.
+    /// Called from the watchdog; never holds the lock long enough to block
+    /// `shutdown`.
+    fn poll_exited(&self) -> Option<bool> {
+        let mut guard = self.child.lock().ok()?;
+        match guard.as_mut() {
+            Some(child) => Some(child.try_wait().ok().flatten().is_some()),
+            None => None, // shutdown took the child
+        }
+    }
+
+    fn replace(&self, child: Child) {
+        if let Ok(mut guard) = self.child.lock() {
+            *guard = Some(child);
         }
     }
 }
@@ -173,7 +203,38 @@ pub fn setup_server(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
     let handle = app.handle().clone();
     match start_server(&handle) {
         Ok(server) => {
-            app.manage(ServerProcess(Mutex::new(Some(server))));
+            app.manage(ServerProcess::new(server));
+            // Watchdog: the sidecar can die mid-session (port race, crash,
+            // OOM) and the webview then shows "Failed to load tasks" forever.
+            // Poll without holding the lock; a non-zero exit means a crash,
+            // so respawn after a short backoff. A clean exit (code 0) means
+            // the server found another healthy instance on its port and
+            // retired itself — do not respawn in that case.
+            let watchdog_handle = handle;
+            std::thread::spawn(move || loop {
+                std::thread::sleep(Duration::from_millis(500));
+                let Some(state) = watchdog_handle.try_state::<ServerProcess>() else {
+                    return;
+                };
+                match state.poll_exited() {
+                    Some(false) | None => continue,
+                    Some(true) => {}
+                }
+                if state.shutting_down.load(Ordering::SeqCst) {
+                    return;
+                }
+                eprintln!("[watchdog] local server exited unexpectedly; restarting…");
+                std::thread::sleep(Duration::from_secs(2));
+                match start_server(&watchdog_handle) {
+                    Ok(child) => {
+                        eprintln!("[watchdog] local server restarted, PID: {}", child.id());
+                        state.replace(child);
+                    }
+                    Err(error) => {
+                        eprintln!("[watchdog] restart failed: {}", error);
+                    }
+                }
+            });
             Ok(())
         }
         Err(e) => {

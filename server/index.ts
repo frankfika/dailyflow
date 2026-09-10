@@ -122,7 +122,39 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
+// Keep the sidecar alive through stray async errors: a crashed server means
+// "Failed to load tasks" for the whole app until restart, which is strictly
+// worse than logging and continuing.
+process.on('uncaughtException', (error) => {
+  console.error('[server] uncaught exception (kept alive):', error);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandled rejection (kept alive):', reason);
+});
+
 // 启动服务器
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`DailyFlow server running on http://localhost:${PORT}`);
+});
+
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    // Port taken: if a healthy DailyFlow API already answers there (duplicate
+    // app launch, leftover process from an upgrade), serving is already
+    // covered — exit cleanly so the Tauri watchdog does not respawn us.
+    console.error(`[server] Port ${PORT} already in use; probing existing instance…`);
+    fetch(`http://127.0.0.1:${PORT}/health`)
+      .then((res) => {
+        if (res.ok) {
+          console.error('[server] Existing DailyFlow API is healthy; exiting without serving.');
+          process.exit(0);
+        }
+        console.error('[server] Port is occupied by something else; exiting with failure.');
+        process.exit(1);
+      })
+      .catch(() => process.exit(1));
+    return;
+  }
+  console.error('[server] listen error:', error);
+  process.exit(1);
 });
