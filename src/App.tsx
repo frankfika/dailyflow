@@ -2335,8 +2335,6 @@ export default function App() {
 
       <EntityContextDrawer ref={entityDrawerRef} onClose={() => setEntityDrawerRef(null)} />
 
-
-      {/* UX S5: everything except Today (home) and Events (canvas) is an
       <CommandPalette
         open={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
