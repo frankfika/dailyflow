@@ -5,6 +5,21 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0](https://github.com/frankfika/dailyflow/compare/v2.10.0...v2.11.0) (2026-09-10)
+
+
+### Features
+
+* **events:** poster-style solid covers with ring motif ([1bd37e8](https://github.com/frankfika/dailyflow/commit/1bd37e8f85699c4545ce25d84e0922e8ea40a45d))
+* **events:** replace literal mindmap thumbnails with abstract art covers ([f9eb908](https://github.com/frankfika/dailyflow/commit/f9eb9086f595c26cd82156f3a422dabbdecc8ffb))
+* **tasks/events:** task edit+delete UI, poster event covers, offline-safe Today projection ([b500b0c](https://github.com/frankfika/dailyflow/commit/b500b0c7cbe4d61b0513b5060fdb696bbc2d8a61))
+* **tasks:** visible edit/delete actions; keep Today fresh when offline ([6164b05](https://github.com/frankfika/dailyflow/commit/6164b05cd08544274d64b7c0d1bf389428c9952a))
+
+
+### Bug Fixes
+
+* **events:** stop deleted events resurrecting as shells; gallery-style event list ([216f02a](https://github.com/frankfika/dailyflow/commit/216f02a8b565d2b617ef791856b9caeafa44948f))
+
 ## [2.10.0](https://github.com/frankfika/dailyflow/compare/v2.9.2...v2.10.0) (2026-09-09)
 
 
