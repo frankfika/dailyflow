@@ -82,6 +82,11 @@ export function useTodayItems(date: string, context?: 'work' | 'life'): UseQuery
     queryKey: [...queryKeys.todayItems(date, 'v2'), context ?? 'all'],
     queryFn: () => eventsApi.listTodayItems(date, context),
     staleTime: 10 * 60_000,
+    // The persisted localStorage cache can hold a projection snapshot taken
+    // while the daily note was edited outside the app (or before a crash).
+    // Stale data still renders during the refetch, and the API is local, so
+    // always revalidate on mount rather than trusting a ≤10-min-old snapshot.
+    refetchOnMount: 'always',
     retry: 1,
   });
 }
