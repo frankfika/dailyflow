@@ -1390,7 +1390,7 @@ export default function App() {
       comments?: { text: string; timestamp: string }[];
       tags?: string[];
       deadline?: string;
-      priority?: 'high' | 'medium' | 'low';
+      priority?: 'high' | 'medium' | 'low' | '';
       project?: string;
     },
     hostDate?: string

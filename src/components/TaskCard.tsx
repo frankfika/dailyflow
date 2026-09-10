@@ -43,7 +43,7 @@ interface TaskCardProps {
     comments?: { text: string; timestamp: string }[];
     tags?: string[];
     deadline?: string;
-    priority?: 'high' | 'medium' | 'low';
+    priority?: 'high' | 'medium' | 'low' | '';
     project?: string;
   }) => void;
   showCompletionPrompt?: boolean;
@@ -98,6 +98,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [editContent, setEditContent] = useState(task.title + (task.description ? `\n${task.description}` : ''));
   const [editTags, setEditTags] = useState<string[]>(task.tags || []);
   const [editDeadline, setEditDeadline] = useState(task.deadline || '');
+  const [editPriority, setEditPriority] = useState(task.priority || '');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
   const deadlineInputRef = useRef<HTMLInputElement>(null);
@@ -141,12 +142,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     setEditContent(task.title + (task.description ? `\n${task.description}` : ''));
     setEditTags(task.tags || []);
     setEditDeadline(task.deadline || '');
+    setEditPriority(task.priority || '');
   }, [task, editingContent]);
+
+  // Double-click the title: the fastest path into editing — no expand, no
+  // hunting for the button in the details panel.
+  const startEdit = () => {
+    if (!isDone) {
+      setShowDetails(true);
+      setEditingContent(true);
+    }
+  };
 
   const cancelEdit = () => {
     setEditContent(task.title + (task.description ? `\n${task.description}` : ''));
     setEditTags(task.tags || []);
     setEditDeadline(task.deadline || '');
+    setEditPriority(task.priority || '');
     setEditingContent(false);
   };
 
@@ -161,6 +173,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       description: lines.slice(1).join('\n').trim() || '',
       tags: editTags,
       deadline: editDeadline || undefined,
+      // '' clears the priority; undefined leaves it untouched.
+      priority: editPriority as 'high' | 'medium' | 'low' | '',
     });
     setEditingContent(false);
   };
@@ -226,7 +240,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </button>
 
         <div className="min-w-0 flex-1">
-          <h3 className={`break-words text-[14px] font-medium leading-snug ${isDone ? 'text-text-muted line-through' : 'text-text-heading'}`}>
+          <h3
+            onDoubleClick={(event) => {
+              // Keep the dblclick from toggling details twice via the header
+              // row's onClick.
+              event.stopPropagation();
+              startEdit();
+            }}
+            className={`break-words text-[14px] font-medium leading-snug ${isDone ? 'text-text-muted line-through' : 'text-text-heading'} ${isDone ? '' : 'cursor-text'}`}
+            title={isDone ? undefined : (language === 'zh' ? '双击编辑' : 'Double-click to edit')}
+            data-testid={`task-title-${task.id}`}
+          >
             {task.title}
           </h3>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
@@ -352,19 +376,40 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 value={editContent}
                 onChange={event => setEditContent(event.target.value)}
                 onKeyDown={event => {
-                  if (event.key === 'Escape' && !event.nativeEvent.isComposing) cancelEdit();
+                  if (event.nativeEvent.isComposing) return;
+                  if (event.key === 'Escape') cancelEdit();
+                  // ⌘/Ctrl+Enter saves; plain Enter keeps writing multi-line
+                  // titles + descriptions.
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    submitEdit();
+                  }
                 }}
                 rows={Math.max(2, editContent.split('\n').length)}
-                placeholder={language === 'zh' ? '任务标题…' : 'Task title…'}
+                placeholder={language === 'zh' ? '标题（换行后的内容作为描述）' : 'Title (lines after the first become the description)'}
                 className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text-heading outline-none focus:border-accent"
               />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={cancelEdit} className="rounded-lg px-3 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03]">
-                  {language === 'zh' ? '取消' : 'Cancel'}
-                </button>
-                <button type="button" onClick={submitEdit} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white">
-                  {language === 'zh' ? '保存' : 'Save'}
-                </button>
+              <div className="flex items-center justify-between gap-2">
+                <select
+                  value={editPriority}
+                  onChange={event => setEditPriority(event.target.value)}
+                  aria-label={language === 'zh' ? '优先级' : 'Priority'}
+                  className="rounded-lg border border-border bg-surface px-2 py-1.5 text-[12px] text-text-muted outline-none focus:border-accent"
+                  data-testid={`task-priority-select-${task.id}`}
+                >
+                  <option value="">{language === 'zh' ? '无优先级' : 'No priority'}</option>
+                  <option value="high">{language === 'zh' ? '高' : 'High'}</option>
+                  <option value="medium">{language === 'zh' ? '中' : 'Medium'}</option>
+                  <option value="low">{language === 'zh' ? '低' : 'Low'}</option>
+                </select>
+                <div className="flex gap-2">
+                  <button type="button" onClick={cancelEdit} className="rounded-lg px-3 py-1.5 text-[12px] text-text-muted hover:bg-black/[0.03]">
+                    {language === 'zh' ? '取消' : 'Cancel'}
+                  </button>
+                  <button type="button" onClick={submitEdit} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white">
+                    {language === 'zh' ? '保存' : 'Save'}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

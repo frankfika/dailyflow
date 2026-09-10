@@ -230,7 +230,8 @@ export const tasksApi = {
       comments?: { text: string; timestamp: string }[];
       tags?: string[];
       deadline?: string;
-      priority?: 'high' | 'medium' | 'low';
+      /** `''` clears the priority tag. */
+      priority?: 'high' | 'medium' | 'low' | '';
       project?: string;
     }
   ): Promise<void> {
