@@ -33,6 +33,7 @@ import {
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
 import { EventOutline } from './EventOutline';
+import { EventCover } from './EventCover';
 import { AgentRunPanel } from './AgentRunPanel';
 import { ResizeHandle } from '../../../components/ResizeHandle';
 import { EventOperatorContextPreview, type ContextRef } from './EventOperatorContextPreview';
@@ -189,12 +190,12 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
 }
 
 function EventGroup({ title, events, language, onOpen, noActions, updated, onDelete }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
-  return <div className="mb-8"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="space-y-2">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} onDelete={onDelete} />)}</div></div>;
+  return <div className="mb-10"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} onDelete={onDelete} />)}</div></div>;
 }
 
 function CompletedGroup(props: Parameters<typeof EventGroup>[0]) {
   const [open, setOpen] = useState(false);
-  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="space-y-2">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} onDelete={props.onDelete} />)}</div>}</div>;
+  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} onDelete={props.onDelete} />)}</div>}</div>;
 }
 
 function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
@@ -229,55 +230,59 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
       aria-label={event.title}
       // z-10 while the menu is open: the hover translate creates a stacking
       // context, so without this the NEXT card paints over the dropdown.
-      className={`group relative w-full cursor-pointer rounded-xl border border-border/80 bg-surface-elevated px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_5px_18px_rgba(20,45,38,0.055)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40 ${menuOpen ? 'z-10' : ''}`}
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface-elevated text-left shadow-[0_1px_2px_rgba(20,45,38,0.025)] transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[0_8px_24px_rgba(20,45,38,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#23877B]/40 ${menuOpen ? 'z-10' : ''}`}
       data-testid={`event-card-${event.id}`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-text-heading">{event.title}</h3>
-          <p className="mt-1 text-xs text-text-muted">{updated} {formatDate(event.updatedAt, language)}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-xs tabular-nums text-text-muted">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span>
-          {/* More menu trigger. Hidden until the card is hovered or focused
-              so the list stays calm; the menu reuses the global ConfirmDialog
-              for the destructive action itself. */}
-          <div className="relative" ref={moreRef}>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label={language === 'zh' ? '更多动作' : 'More actions'}
-              data-testid={`event-card-more-${event.id}`}
-              className="grid h-7 w-7 place-items-center rounded-md text-text-muted opacity-0 transition-opacity hover:bg-black/[0.05] group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100 max-[1024px]:h-[44px] max-[1024px]:w-[44px] max-[1024px]:opacity-100"
+      {/* Gallery cover: an abstract art tile (gradient wash + glow orbs +
+          ghost monogram), tinted per event. */}
+      <div className="relative h-36 shrink-0 border-b border-border/60 text-black/[0.55] dark:text-white/25">
+        <EventCover id={event.id} title={event.title} />
+        {/* More menu lives on the cover so the body stays clean. Hidden
+            until hover/focus; the destructive action reuses ConfirmDialog. */}
+        <div className="absolute right-2 top-2" ref={moreRef}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={language === 'zh' ? '更多动作' : 'More actions'}
+            data-testid={`event-card-more-${event.id}`}
+            className="grid h-7 w-7 place-items-center rounded-md bg-surface-elevated/80 text-text-muted opacity-0 shadow-sm backdrop-blur transition-opacity hover:bg-black/[0.05] group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100 max-[1024px]:h-[44px] max-[1024px]:w-[44px] max-[1024px]:opacity-100"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute right-0 top-9 z-40 min-w-40 overflow-hidden rounded-xl border border-border bg-white p-1.5 text-sm shadow-lg dark:bg-gray-900"
+              data-testid={`event-card-menu-${event.id}`}
             >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-9 z-40 min-w-40 overflow-hidden rounded-xl border border-border bg-white p-1.5 text-sm shadow-lg dark:bg-gray-900"
-                data-testid={`event-card-menu-${event.id}`}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onDelete(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled')); }}
+                data-testid={`event-card-delete-${event.id}`}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setMenuOpen(false); onDelete(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled')); }}
-                  data-testid={`event-card-delete-${event.id}`}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {language === 'zh' ? '删除事件' : 'Delete event'}
-                </button>
-              </div>
-            )}
-          </div>
+                <Trash2 className="h-4 w-4" />
+                {language === 'zh' ? '删除事件' : 'Delete event'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      {event.progress.total > 0 && <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.045]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}
-      {event.effectiveTags.length > 0 && <div className="mt-2.5 flex gap-1.5">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>}
+      <div className="flex flex-1 flex-col px-4 py-3.5">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 truncate text-sm font-semibold text-text-heading">{event.title}</h3>
+          <span className="shrink-0 rounded-md bg-black/[0.04] px-1.5 py-0.5 text-[11px] tabular-nums text-text-muted dark:bg-white/[0.06]">{event.progress.total ? `${event.progress.done} / ${event.progress.total}` : noActions}</span>
+        </div>
+        {event.progress.total > 0 && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/[0.05]"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(event.progress.done / event.progress.total * 100)}%` }} /></div>}
+        <div className="mt-auto flex min-h-5 items-center justify-between gap-2 pt-3">
+          <div className="flex gap-1.5 overflow-hidden">{event.effectiveTags.slice(0, 2).map((tag) => <span key={tag} className="shrink-0 rounded-md border border-border/70 bg-black/[0.025] px-1.5 py-0.5 text-[10px] text-text-muted">#{tag}</span>)}</div>
+          <span className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500">{updated} {relativeTime(event.updatedAt, language)}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -916,3 +921,16 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
 
 function CenteredState({ icon, text }: { icon?: React.ReactNode; text: string }) { return <div className="flex h-full min-h-64 items-center justify-center gap-2 text-sm text-gray-400">{icon}{text}</div>; }
 function formatDate(value: string, language: 'en' | 'zh') { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' }).format(date); }
+function relativeTime(value: string, language: 'en' | 'zh') {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const rtf = new Intl.RelativeTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { numeric: 'auto' });
+  const diffMs = date.getTime() - Date.now();
+  const minutes = Math.round(diffMs / 60_000);
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, 'minute');
+  const hours = Math.round(diffMs / 3_600_000);
+  if (Math.abs(hours) < 24) return rtf.format(hours, 'hour');
+  const days = Math.round(diffMs / 86_400_000);
+  if (Math.abs(days) < 30) return rtf.format(days, 'day');
+  return formatDate(value, language);
+}

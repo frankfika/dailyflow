@@ -873,9 +873,15 @@ export default function App() {
   // (cross-component tasksChanged event, daily init rollover, manual
   // rollover) must invalidate that query — otherwise the new task stays
   // invisible in Today until a stale-timeout refetch.
-  const refreshTodayProjection = useCallback(() => {
-    void todayItemsQuery.refetch();
-  }, [todayItemsQuery]);
+  const refreshTodayProjection = useCallback(async () => {
+    const result = await todayItemsQuery.refetch();
+    if (result.isError) {
+      // Refetch failed (e.g. offline moment): TanStack keeps the stale
+      // projection, which would mask the local task state we just updated.
+      // Reset so Today falls back to the local list until the API returns.
+      queryClient.resetQueries({ queryKey: ['today-items'] });
+    }
+  }, [todayItemsQuery, queryClient]);
 
   useEffect(() => {
     const reloadChangedDay = (event: Event) => {
@@ -1204,7 +1210,7 @@ export default function App() {
     setBrainDumpText('');
     if (created > 0) {
       try { await refreshDayFromServer(); } catch { /* non-fatal */ }
-      await todayItemsQuery.refetch();
+      await refreshTodayProjection();
       showToast(language === 'zh' ? `已加入 ${created} 个任务` : `Added ${created} tasks`, 'success');
     } else {
       showToast(language === 'zh' ? '添加失败' : 'Failed to add tasks', 'error');
@@ -1278,8 +1284,31 @@ export default function App() {
 
 
   // When date changes, load tasks
-  const handleToggleTask = async (id: string, hostDate?: string) => {
+  // Delete a task from its host daily note. The server also demotes the
+  // task's mind-map node back to a branch, so Event-derived tasks delete
+  // cleanly. Mirrors handleToggleTask's post-write markdown resync.
+  const handleDeleteTask = async (id: string, hostDate?: string) => {
     const targetDate = hostDate ?? currentFileDate;
+    try {
+      await tasksApi.delete(id, targetDate);
+      const data = await filesApi.get(targetDate);
+      if (data) {
+        if (targetDate === currentFileDate) {
+          setMarkdown(data.content);
+          setTasks(data.tasks as Task[]);
+          setLastSyncedMD(data.content);
+        }
+        setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
+      }
+      setEarlierOpenTasks(prev => prev.filter(t => !(t.id === id && t.host_date === targetDate)));
+      await refreshTodayProjection();
+      showToast(language === 'zh' ? '任务已删除' : 'Task deleted', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : (language === 'zh' ? '删除任务失败' : 'Failed to delete task'), 'error');
+    }
+  };
+
+  const handleToggleTask = async (id: string, hostDate?: string) => {    const targetDate = hostDate ?? currentFileDate;
     const task = hostDate && hostDate !== currentFileDate
       ? earlierOpenTasks.find(t => t.id === id && t.host_date === hostDate)
       : projectedTodayTasks?.find(t => t.id === id) ?? tasks.find(t => t.id === id);
@@ -1315,7 +1344,7 @@ export default function App() {
           }
           setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
-        await todayItemsQuery.refetch();
+        await refreshTodayProjection();
         // Prompt for completion comment when task is newly done and has no comment yet
         // (check both legacy single `comment` and the timestamped `comments` list).
         const hasAnyComment = !!task.comment || !!(task.comments && task.comments.length > 0);
@@ -1393,7 +1422,7 @@ export default function App() {
           setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
         }
         showToast(language === 'zh' ? '任务已更新' : 'Task updated', 'success');
-        await todayItemsQuery.refetch();
+        await refreshTodayProjection();
         return;
       } catch (e: any) {
         lastError = e;
@@ -1472,7 +1501,14 @@ export default function App() {
         }
       }
       showToast(language === 'zh' ? '任务已添加' : 'Task added', 'success');
-      await todayItemsQuery.refetch();
+      const result = await todayItemsQuery.refetch();
+      if (result.isError || !result.data?.items?.some(item => item.taskId === newTask.id)) {
+        // Projection refetch failed or came back stale (e.g. offline moment):
+        // TanStack keeps the old projection, which would hide the task we just
+        // saved. Reset it so Today falls back to the local task list, which
+        // already contains the new task.
+        queryClient.resetQueries({ queryKey: ['today-items'] });
+      }
     } catch (e) {
       console.error('Failed to add task', e);
       // Roll back the optimistic row on failure.
@@ -1490,7 +1526,7 @@ export default function App() {
   const handleDraftToProject = async (title: string) => {
     try {
       const event = await eventsApi.create({ title, context: (activeContext as 'work' | 'life') });
-      await todayItemsQuery.refetch();
+      await refreshTodayProjection();
       showToast(language === 'zh' ? '项目已创建' : 'Project created', 'success');
       setRequestedEventId(event.id);
       setActiveTab('events');
@@ -1514,7 +1550,7 @@ export default function App() {
         setFilesMap(prev => ({ ...prev, [targetDate]: data.content }));
       }
       showToast(language === 'zh' ? '已移出事件' : 'Removed from event', 'success');
-      await todayItemsQuery.refetch();
+      await refreshTodayProjection();
     } catch (e) {
       console.error('Failed to remove task from event', e);
       showToast(language === 'zh' ? '移出事件失败' : 'Failed to remove from event', 'error');
@@ -2186,6 +2222,7 @@ export default function App() {
                     categories={categories}
                     onToggleTask={handleToggleTask}
                     onEditTask={handleEditTask}
+                    onDeleteTask={handleDeleteTask}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
                     onAddTask={() => taskInputFocusRef.current?.()}
                     starredTaskIds={starredTaskIds}

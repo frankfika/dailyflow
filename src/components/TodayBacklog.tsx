@@ -45,6 +45,8 @@ interface TodayBacklogProps {
   categories: string[];
   onToggleTask: (id: string, hostDate?: string) => void;
   onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
+  /** Permanently delete a task from its host daily note. */
+  onDeleteTask?: (id: string, hostDate?: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
   /** UX S7: convert the task into a new project event. */
@@ -82,6 +84,7 @@ export function TodayBacklog({
   categories,
   onToggleTask,
   onEditTask,
+  onDeleteTask,
   onUnlinkFromSpace,
   onAddTask,
   language,
@@ -147,6 +150,7 @@ export function TodayBacklog({
         currentFileDate={selectedDate}
         onToggle={() => onToggleTask(task.id, task.host_date)}
         onEdit={updates => onEditTask(task.id, updates, task.host_date)}
+        onDelete={onDeleteTask ? () => onDeleteTask(task.id, task.host_date) : undefined}
         onUnlinkFromSpace={onUnlinkFromSpace
           ? () => onUnlinkFromSpace(task.id, task.host_date || selectedDate)
           : undefined}
