@@ -5,6 +5,36 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2](https://github.com/frankfika/dailyflow/compare/v2.11.1...v2.11.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* **reliability:** sidecar crash recovery + always-revalidate queries ([#78](https://github.com/frankfika/dailyflow/issues/78)) ([18875bb](https://github.com/frankfika/dailyflow/commit/18875bb580186065bb9382f5fc0ecf18d39315fe))
+
+## [2.11.1](https://github.com/frankfika/dailyflow/compare/v2.11.0...v2.11.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **app:** remove unclosed JSX comment that silently disabled Settings and Cmd+K palette ([#75](https://github.com/frankfika/dailyflow/issues/75)) ([d39d1c2](https://github.com/frankfika/dailyflow/commit/d39d1c2762f104835b4cfe143c6079ba574c2fa0))
+* **today:** stale persisted projection could hide tasks on cold start ([#76](https://github.com/frankfika/dailyflow/issues/76)) ([b78911c](https://github.com/frankfika/dailyflow/commit/b78911ce06844da4cad7f6b0edc17ba9200e1e8b))
+
+## [2.11.0](https://github.com/frankfika/dailyflow/compare/v2.10.0...v2.11.0) (2026-09-10)
+
+
+### Features
+
+* **events:** poster-style solid covers with ring motif ([1bd37e8](https://github.com/frankfika/dailyflow/commit/1bd37e8f85699c4545ce25d84e0922e8ea40a45d))
+* **events:** replace literal mindmap thumbnails with abstract art covers ([f9eb908](https://github.com/frankfika/dailyflow/commit/f9eb9086f595c26cd82156f3a422dabbdecc8ffb))
+* **tasks/events:** task edit+delete UI, poster event covers, offline-safe Today projection ([b500b0c](https://github.com/frankfika/dailyflow/commit/b500b0c7cbe4d61b0513b5060fdb696bbc2d8a61))
+* **tasks:** visible edit/delete actions; keep Today fresh when offline ([6164b05](https://github.com/frankfika/dailyflow/commit/6164b05cd08544274d64b7c0d1bf389428c9952a))
+
+
+### Bug Fixes
+
+* **events:** stop deleted events resurrecting as shells; gallery-style event list ([216f02a](https://github.com/frankfika/dailyflow/commit/216f02a8b565d2b617ef791856b9caeafa44948f))
+
 ## [2.10.0](https://github.com/frankfika/dailyflow/compare/v2.9.2...v2.10.0) (2026-09-09)
 
 
