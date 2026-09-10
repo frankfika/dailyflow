@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0](https://github.com/frankfika/dailyflow/compare/v2.12.0...v2.13.0) (2026-09-10)
+
+
+### Features
+
+* **tasks:** faster, fuller editing in TaskCard ([#82](https://github.com/frankfika/dailyflow/issues/82)) ([11d40f4](https://github.com/frankfika/dailyflow/commit/11d40f4303547c8f4c5ca1aee022a3351a42c69f))
+
 ## [2.12.0](https://github.com/frankfika/dailyflow/compare/v2.11.2...v2.12.0) (2026-09-10)
 
 
