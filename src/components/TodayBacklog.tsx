@@ -44,7 +44,7 @@ interface TodayBacklogProps {
   selectedDate: string;
   categories: string[];
   onToggleTask: (id: string, hostDate?: string) => void;
-  onEditTask: (id: string, updates: Partial<TodayTask>, hostDate?: string) => void;
+  onEditTask: (id: string, updates: Omit<Partial<TodayTask>, 'priority'> & { priority?: 'high' | 'medium' | 'low' | '' }, hostDate?: string) => void;
   /** Permanently delete a task from its host daily note. */
   onDeleteTask?: (id: string, hostDate?: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
