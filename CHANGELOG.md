@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2](https://github.com/frankfika/dailyflow/compare/v2.11.1...v2.11.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* **reliability:** sidecar crash recovery + always-revalidate queries ([#78](https://github.com/frankfika/dailyflow/issues/78)) ([18875bb](https://github.com/frankfika/dailyflow/commit/18875bb580186065bb9382f5fc0ecf18d39315fe))
+
 ## [2.11.1](https://github.com/frankfika/dailyflow/compare/v2.11.0...v2.11.1) (2026-09-10)
 
 
