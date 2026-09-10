@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0](https://github.com/frankfika/dailyflow/compare/v2.11.2...v2.12.0) (2026-09-10)
+
+
+### Features
+
+* **reliability:** dynamic sidecar port + self-healing fetch + single-instance ([#80](https://github.com/frankfika/dailyflow/issues/80)) ([5d00905](https://github.com/frankfika/dailyflow/commit/5d00905305fe9d34eab3f24248e222f50b01c42d))
+
 ## [2.11.2](https://github.com/frankfika/dailyflow/compare/v2.11.1...v2.11.2) (2026-09-10)
 
 
