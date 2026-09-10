@@ -79,7 +79,7 @@ describe('API Client', () => {
       await expect(eventsApi.list()).resolves.toEqual({ events: [event] });
       await expect(eventsApi.getById('ev_1')).resolves.toEqual({ event });
       await expect(eventsApi.listTodayItems('2026-08-10', 'life')).resolves.toEqual({ items: [{ id: 'today_1' }] });
-      expect(fetch).toHaveBeenNthCalledWith(3, '/api/events/today-items?date=2026-08-10&context=life');
+      expect(fetch).toHaveBeenNthCalledWith(3, '/api/events/today-items?date=2026-08-10&context=life', undefined);
     });
 
     it('uses Event semantic command endpoints for unschedule and reschedule', async () => {

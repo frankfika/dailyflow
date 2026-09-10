@@ -1,4 +1,8 @@
 /// <reference types="vite/client" />
+// healingFetch resolves the shell-assigned sidecar port and rewrites request
+// URLs at send time, so the literal below is just a build-time default; the
+// live value comes from the Rust shell (see src/api/base.ts).
+import { healingFetch as fetch } from './base';
 const API_BASE = import.meta.env.DEV
   ? '/api'
   : `${import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:47832'}/api`;
