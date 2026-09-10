@@ -3,7 +3,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
@@ -11,15 +11,25 @@ use tauri_plugin_dialog::DialogExt;
 
 pub struct ServerProcess {
     child: Mutex<Option<Child>>,
+    port: AtomicU16,
     shutting_down: AtomicBool,
 }
 
 impl ServerProcess {
-    pub fn new(child: Child) -> Self {
+    pub fn new(child: Child, port: u16) -> Self {
         Self {
             child: Mutex::new(Some(child)),
+            port: AtomicU16::new(port),
             shutting_down: AtomicBool::new(false),
         }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port.load(Ordering::SeqCst)
+    }
+
+    fn set_port(&self, port: u16) {
+        self.port.store(port, Ordering::SeqCst);
     }
 
     pub fn shutdown(&self) {
@@ -124,7 +134,18 @@ fn ensure_executable(_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
+/// Grab a free TCP port from the OS so two DailyFlow launches (or a watchdog
+/// respawn racing a lingering process) can never collide on a fixed port.
+fn pick_free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .map(|addr| addr.port())
+        .unwrap_or(47832)
+}
+
+/// Spawn the sidecar on a fresh free port. Returns the child and the port so
+/// the caller can publish it to the webview.
+pub fn start_server(app_handle: &tauri::AppHandle) -> Result<(Child, u16), String> {
     let resource_path = app_handle
         .path()
         .resource_dir()
@@ -142,19 +163,26 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         ensure_executable(path)?;
     }
 
+    let port = pick_free_port();
+
     // 1. Prefer the Node runtime bundled with the app (production builds).
     if let Some(node_path) = bundled_node_path(&resource_path) {
         ensure_executable(&node_path)?;
         let mut command = Command::new(&node_path);
         command.arg(&script_path).current_dir(&resource_path);
         command.env("NODE_ENV", "production");
+        command.env("PORT", port.to_string());
         if let Some(path) = bundled_lark_cli.as_deref() {
             command.env("LARK_CLI_PATH", path);
         }
         match command.spawn() {
             Ok(child) => {
-                println!("Server started with bundled Node runtime, PID: {}", child.id());
-                return Ok(child);
+                println!(
+                    "Server started with bundled Node runtime, PID: {} port: {}",
+                    child.id(),
+                    port
+                );
+                return Ok((child, port));
             }
             Err(e) => {
                 eprintln!(
@@ -182,13 +210,14 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
         let mut command = Command::new(node_path);
         command.arg(&script_path).current_dir(&resource_path);
         command.env("NODE_ENV", "production");
+        command.env("PORT", port.to_string());
         if let Some(path) = bundled_lark_cli.as_deref() {
             command.env("LARK_CLI_PATH", path);
         }
         match command.spawn() {
             Ok(child) => {
-                println!("Server started with system Node fallback, PID: {}", child.id());
-                return Ok(child);
+                println!("Server started with system Node fallback, PID: {} port: {}", child.id(), port);
+                return Ok((child, port));
             }
             Err(e) => {
                 last_err = format!("Failed to start server with '{}': {}", node_path, e);
@@ -202,14 +231,13 @@ pub fn start_server(app_handle: &tauri::AppHandle) -> Result<Child, String> {
 pub fn setup_server(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
     match start_server(&handle) {
-        Ok(server) => {
-            app.manage(ServerProcess::new(server));
-            // Watchdog: the sidecar can die mid-session (port race, crash,
-            // OOM) and the webview then shows "Failed to load tasks" forever.
-            // Poll without holding the lock; a non-zero exit means a crash,
-            // so respawn after a short backoff. A clean exit (code 0) means
-            // the server found another healthy instance on its port and
-            // retired itself — do not respawn in that case.
+        Ok((server, port)) => {
+            app.manage(ServerProcess::new(server, port));
+            // Watchdog: the sidecar can die mid-session (crash, OOM). Poll
+            // without holding the lock; a non-zero exit means a crash, so
+            // respawn after a short backoff on a FRESH port (pick_free_port
+            // runs again inside start_server). A clean exit (code 0) means
+            // the server retired itself deliberately — do not respawn.
             let watchdog_handle = handle;
             std::thread::spawn(move || loop {
                 std::thread::sleep(Duration::from_millis(500));
@@ -226,8 +254,9 @@ pub fn setup_server(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
                 eprintln!("[watchdog] local server exited unexpectedly; restarting…");
                 std::thread::sleep(Duration::from_secs(2));
                 match start_server(&watchdog_handle) {
-                    Ok(child) => {
-                        eprintln!("[watchdog] local server restarted, PID: {}", child.id());
+                    Ok((child, port)) => {
+                        eprintln!("[watchdog] local server restarted, PID: {} port: {}", child.id(), port);
+                        state.set_port(port);
                         state.replace(child);
                     }
                     Err(error) => {

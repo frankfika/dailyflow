@@ -314,3 +314,9 @@ pub fn set_git_remote(repo_url: String, state: State<AppState>) -> Result<(), St
     let config = state.config.lock().map_err(|e| e.to_string())?;
     git_service::set_git_remote(&config.workspace_root, &repo_url)
 }
+
+// Sidecar
+#[tauri::command]
+pub fn get_server_port(state: tauri::State<crate::server::ServerProcess>) -> u16 {
+    state.port()
+}

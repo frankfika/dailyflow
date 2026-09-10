@@ -15,6 +15,14 @@ use tauri::Manager;
 
 pub fn run() {
     let app = tauri::Builder::default()
+        // Must be the first registered plugin: a second launch now focuses
+        // the existing window instead of starting a second sidecar writing
+        // to the same workspace files.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
@@ -47,6 +55,7 @@ pub fn run() {
             commands::sync_git,
             commands::init_git_repo,
             commands::set_git_remote,
+            commands::get_server_port,
         ])
         .setup(|app| {
             // Ensure config directory exists
