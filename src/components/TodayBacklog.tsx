@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, Network, Pin, Plus, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Layers, Network, Pin, Plus, Sparkles } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { RecurrenceRule } from '../api/client';
 
@@ -162,6 +162,7 @@ export function TodayBacklog({
 
   const hasOpenWork = eventGroups.length > 0 || standaloneTasks.length > 0;
   const standaloneLabel = language === 'zh' ? '独立任务' : 'Standalone';
+  const allLabel = language === 'zh' ? '全部' : 'All';
 
   interface EventTab {
     key: string;
@@ -170,17 +171,20 @@ export function TodayBacklog({
     tasks: TodayTask[];
   }
   const tabs = useMemo<EventTab[]>(() => {
-    const result: EventTab[] = eventGroups.map(({ group, openTasks: groupTasks }) => ({
-      key: group.mindmapId,
-      title: group.title,
-      count: groupTasks.length,
-      tasks: groupTasks,
-    }));
+    const result: EventTab[] = [{ key: 'all', title: allLabel, count: openTasks.length, tasks: openTasks }];
+    for (const { group, openTasks: groupTasks } of eventGroups) {
+      result.push({
+        key: group.mindmapId,
+        title: group.title,
+        count: groupTasks.length,
+        tasks: groupTasks,
+      });
+    }
     if (standaloneTasks.length > 0) {
       result.push({ key: 'standalone', title: standaloneLabel, count: standaloneTasks.length, tasks: standaloneTasks });
     }
     return result;
-  }, [eventGroups, standaloneTasks, standaloneLabel]);
+  }, [openTasks, eventGroups, standaloneTasks, allLabel, standaloneLabel]);
 
   // Selected tab falls back to the first one when the stored key no longer
   // exists (group disappeared / all its tasks completed).
@@ -225,9 +229,11 @@ export function TodayBacklog({
                   className={`today-event-tab ${tab.key === activeKey ? 'is-active' : ''}`}
                   onClick={() => setSelectedTabKey(tab.key)}
                 >
-                  {tab.key === 'standalone'
-                    ? <Pin className="today-event-icon" aria-hidden="true" />
-                    : <Network className="today-event-icon" aria-hidden="true" />}
+                  {tab.key === 'all'
+                    ? <Layers className="today-event-icon" aria-hidden="true" />
+                    : tab.key === 'standalone'
+                      ? <Pin className="today-event-icon" aria-hidden="true" />
+                      : <Network className="today-event-icon" aria-hidden="true" />}
                   <span className="today-event-title">{tab.title}</span>
                   <span className="today-event-count">{tab.count}</span>
                 </button>
