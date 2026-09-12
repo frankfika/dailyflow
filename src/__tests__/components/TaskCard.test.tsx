@@ -366,6 +366,18 @@ describe('TaskCard inline attribute bar (UX S3)', () => {
     });
   });
 
+  it('clears the deadline with an empty string, not undefined', async () => {
+    const onEdit = vi.fn();
+    render(<TaskCard {...createProps({ onEdit, task: { ...baseTask, deadline: '2024-01-05' } })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Task details and actions' }));
+
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '' } });
+
+    await waitFor(() => {
+      expect(onEdit).toHaveBeenCalledWith({ deadline: '' });
+    });
+  });
+
 });
 
 describe('TaskCard tag rendering', () => {

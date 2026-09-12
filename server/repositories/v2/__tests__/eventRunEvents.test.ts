@@ -60,4 +60,30 @@ describe('durable Event Operator RuntimeEvent log', () => {
     await seedRun(repo);
     await expect(repo.pageEventOperatorRunEvents(RUN_ID, { afterCursor: 'oops' })).rejects.toMatchObject({ code: 'invalid_cursor' });
   });
+
+  it('assigns increasing cursors across sequential appends and returns the original on duplicate fingerprints', async () => {
+    const repo = repository();
+    await seedRun(repo);
+    const first = await persistRuntimeEvent(repo, RUN_ID, { type: 'phase.changed', phase: 'collect', at: '2026-08-26T00:00:01.000Z' });
+    const second = await persistRuntimeEvent(repo, RUN_ID, { type: 'phase.changed', phase: 'retrieve', at: '2026-08-26T00:00:02.000Z' });
+    expect(first.appended).toBe(true);
+    expect(second.appended).toBe(true);
+    expect(Number(second.event.cursor)).toBeGreaterThan(Number(first.event.cursor));
+    const dupe = await persistRuntimeEvent(repo, RUN_ID, { type: 'phase.changed', phase: 'collect', at: '2026-08-26T00:00:01.000Z' });
+    expect(dupe.appended).toBe(false);
+    expect(dupe.event).toEqual(first.event);
+  });
+
+  it('still appends after the JSONL log file is deleted (cache rebuild)', async () => {
+    const repo = repository();
+    await seedRun(repo);
+    const before = await persistRuntimeEvent(repo, RUN_ID, { type: 'phase.changed', phase: 'collect', at: '2026-08-26T00:00:01.000Z' });
+    expect(before.appended).toBe(true);
+    await fs.rm(path.join(root, '.dailyflow', 'agent-run-events', `${RUN_ID}.jsonl`), { force: true });
+    const after = await persistRuntimeEvent(repo, RUN_ID, { type: 'phase.changed', phase: 'retrieve', at: '2026-08-26T00:00:02.000Z' });
+    expect(after.appended).toBe(true);
+    const stored = await repo.readEventOperatorRunEvents(RUN_ID);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].cursor).toBe(after.event.cursor);
+  });
 });

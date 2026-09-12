@@ -83,6 +83,9 @@ import {
 } from '../../domain/v2/eventRunEvents.js';
 
 const runEventAppendTails = new Map<string, Promise<void>>();
+// In-process cache for append-side dedup/cursors; safe because appends are
+// serialized per file via runEventAppendTails. Rebuilt lazily from disk.
+const runEventLogCache = new Map<string, { maxCursor: number; byFingerprint: Map<string, StoredRunEvent> }>();
 
 export interface WorkspaceContext {
   root: string;
@@ -672,7 +675,8 @@ export class V2Repository {
       return DailyPlanSchema.parse(normalized) as DailyPlan;
     } catch (err: any) {
       if (err && err.code === 'ENOENT') return null;
-      throw err;
+      console.warn(`getPlanByDate: skipping malformed plan file for ${date}:`, err instanceof Error ? err.message : String(err));
+      return null;
     }
   }
 
@@ -817,12 +821,22 @@ export class V2Repository {
     runEventAppendTails.set(filePath, tail);
     await previous.catch(() => undefined);
     try {
-      const existing = await this.readEventOperatorRunEvents(input.runId);
-      const duplicate = existing.find((item) => item.fingerprint === input.fingerprint);
+      let cache = runEventLogCache.get(filePath);
+      if (cache) {
+        // Drop the cache if the log file vanished so cursors/fingerprints rebuild.
+        try { await fs.stat(filePath); } catch { runEventLogCache.delete(filePath); cache = undefined; }
+      }
+      if (!cache) {
+        const existing = await this.readEventOperatorRunEvents(input.runId);
+        cache = {
+          maxCursor: existing.reduce((max, item) => Math.max(max, Number(item.cursor)), 0),
+          byFingerprint: new Map(existing.map((item) => [item.fingerprint, item])),
+        };
+        runEventLogCache.set(filePath, cache);
+      }
+      const duplicate = cache.byFingerprint.get(input.fingerprint);
       if (duplicate) return { event: duplicate, appended: false };
-      const nextSequence = existing.length === 0
-        ? 1
-        : Math.max(...existing.map((item) => Number(item.cursor))) + 1;
+      const nextSequence = cache.maxCursor + 1;
       const event = StoredRunEventSchema.parse({
         ...input,
         schemaVersion: 1,
@@ -831,6 +845,8 @@ export class V2Repository {
       });
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.appendFile(filePath, `${JSON.stringify(event)}\n`, 'utf8');
+      cache.maxCursor = nextSequence;
+      cache.byFingerprint.set(event.fingerprint, event);
       // Keep the Run's recovery pointer in sync with the durable log. This is
       // written inside the append critical section, so a lower cursor cannot
       // race and overwrite a newer one.

@@ -1,6 +1,7 @@
 import { readDailyNote, writeDailyNote, listDailyNotes } from './fileSystem.js';
 import { generateMarkdown, appendTaskToMarkdown, updateTaskInMarkdown } from './parser.js';
 import { withDateLocks } from './lock.js';
+import { invalidateTaskIndex } from './taskIndex.js';
 import { taskMatchesContext } from '../utils/contextFilter.js';
 import type { Task, Config, RolloverPreview } from '../types/task.js';
 
@@ -197,6 +198,8 @@ export async function applyRollover(
       for (const update of sourceUpdates) {
         await writeDailyNote(update.date, update.content, config);
       }
+      // Task ids just moved across dates — drop the stale id→date memo.
+      invalidateTaskIndex();
     }
 
     return {

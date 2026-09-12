@@ -9,6 +9,7 @@ import {
   writeDailyNote,
   listDailyNotes,
 } from '../fileSystem.js';
+import { updateTaskInMarkdown } from '../parser.js';
 import type { Config } from '../../types/task.js';
 
 const TEST_DIR = path.join(os.tmpdir(), 'dailyflow-test-' + Date.now());
@@ -109,7 +110,7 @@ describe('writeDailyNote + readDailyNote', () => {
     expect(note).toBeNull();
   });
 
-  it('deduplicates migrated task lines that only differ by id', async () => {
+  it('deduplicates migrated task lines in the returned list without rewriting the file', async () => {
     const content = [
       '## Tasks',
       '',
@@ -124,10 +125,44 @@ describe('writeDailyNote + readDailyNote', () => {
     expect(note).not.toBeNull();
     expect(note!.tasks).toHaveLength(1);
     expect(note!.tasks[0].title).toBe('准备推特kol');
+    // A read must be pure: original content returned, file untouched.
+    expect(note!.content).toBe(content);
 
     const filePath = getDailyNotePath('2026-06-01', TEST_CONFIG);
-    const cleaned = await fs.readFile(filePath, 'utf-8');
-    expect(cleaned.match(/准备推特kol/g)?.length).toBe(1);
+    const onDisk = await fs.readFile(filePath, 'utf-8');
+    expect(onDisk).toBe(content);
+  });
+
+  it('task.line indexes the returned content even when duplicates exist', async () => {
+    // Duplicate line first, then a distinct task after it. If dedupe ever
+    // returns rewritten content with stale line numbers, PATCH-style
+    // callers (updateTaskInMarkdown(content, task.line, ...)) would edit
+    // the wrong line.
+    const content = [
+      '## Tasks',
+      '',
+      '- [ ] Dup task #work',
+      '- [ ] Dup task #work',
+      '- [ ] Follow-up task',
+      '',
+    ].join('\n');
+
+    await writeDailyNote('2026-06-02', content, TEST_CONFIG);
+
+    const note = await readDailyNote('2026-06-02', TEST_CONFIG);
+    expect(note).not.toBeNull();
+    expect(note!.tasks).toHaveLength(2);
+
+    const followUp = note!.tasks.find(t => t.title === 'Follow-up task');
+    expect(followUp?.line).toBeDefined();
+    const line = followUp!.line!;
+    // The task's line must point at its own line in the returned content.
+    expect(note!.content.split('\n')[line]).toContain('Follow-up task');
+
+    const updated = updateTaskInMarkdown(note!.content, line, 'done');
+    expect(updated).toContain('- [x] Follow-up task');
+    // The duplicates above it must be untouched.
+    expect(updated.match(/- \[ \] Dup task #work/g)?.length).toBe(2);
   });
 
   it('creates nested directories automatically', async () => {

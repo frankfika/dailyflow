@@ -67,22 +67,39 @@ function getViewportMode(width: number): ViewportMode {
   return 'desktop';
 }
 
-function readStoredCollapse(): boolean | null {
+// Collapse preference is stored per viewport mode: collapsing the sidebar
+// on a narrow window must not hide it forever when the window is widened
+// again. Legacy shape was a single boolean — treat it as applying to both.
+function readStoredCollapse(mode: 'tablet' | 'desktop'): boolean | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === null) return null;
-    const parsed = JSON.parse(raw);
-    return typeof parsed === 'boolean' ? parsed : null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed === 'boolean') return parsed;
+    if (parsed && typeof parsed === 'object') {
+      const value = (parsed as Record<string, unknown>)[mode];
+      return typeof value === 'boolean' ? value : null;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-function writeStoredCollapse(collapsed: boolean): void {
+function writeStoredCollapse(mode: 'tablet' | 'desktop', collapsed: boolean): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsed));
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    const base: Record<string, boolean> =
+      parsed && typeof parsed === 'object'
+        ? { ...(parsed as Record<string, boolean>) }
+        : typeof parsed === 'boolean'
+          ? { tablet: parsed, desktop: parsed }
+          : {};
+    base[mode] = collapsed;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
   } catch {
     /* localStorage may be unavailable (private mode) — ignore */
   }
@@ -145,26 +162,30 @@ export function Sidebar({
     return () => window.removeEventListener('resize', compute);
   }, []);
 
-  // --- Restore user preference once on mount (tablet / desktop) ---
-  // App.tsx already seeds isSidebarOpen with a sensible viewport default;
-  // this effect applies the user's persisted choice on top of that.
-  const restoredRef = useRef(false);
+  // --- Adapt to the viewport (tablet / desktop) ---
+  // Each mode remembers its own collapse choice; without one, desktop
+  // defaults open and tablet closed. Runs on mount AND whenever the mode
+  // flips, so narrowing then re-widening the window brings the nav back
+  // instead of leaving it stuck in whatever state it started in.
+  const lastModeRef = useRef<ViewportMode | null>(null);
   useEffect(() => {
-    if (restoredRef.current) return;
-    if (viewport === 'mobile') return;
-    const stored = readStoredCollapse();
-    if (stored === null) return;
-    restoredRef.current = true;
+    if (viewport === 'mobile') {
+      lastModeRef.current = viewport;
+      return;
+    }
+    if (lastModeRef.current === viewport) return;
+    lastModeRef.current = viewport;
+    const stored = readStoredCollapse(viewport);
     // storage records `collapsed` (true = sidebar hidden). isSidebarOpen
     // is the inverse.
-    setIsSidebarOpen(!stored);
+    setIsSidebarOpen(stored === null ? viewport === 'desktop' : !stored);
   }, [viewport, setIsSidebarOpen]);
 
-  // --- Persist user toggles on tablet / desktop ---
+  // --- Persist user toggles for the current mode (tablet / desktop) ---
   const persistToggle = useCallback(
     (next: boolean) => {
       if (viewport === 'mobile') return;
-      writeStoredCollapse(!next);
+      writeStoredCollapse(viewport, !next);
     },
     [viewport]
   );

@@ -185,6 +185,39 @@ describe.sequential('EFP-002 event adapter (read-only)', () => {
     });
   });
 
+  describe('synthetic ids — stable across unrelated line shifts', () => {
+    let root: string;
+
+    beforeAll(async () => {
+      root = await fs.mkdtemp(path.join(os.tmpdir(), 'df-adapter-synthid-'));
+    });
+    afterAll(async () => { await fs.rm(root, { recursive: true, force: true }); });
+
+    const writeNote = async (lines: string[]) => {
+      const dir = path.join(root, 'Daily', '2026', '08');
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, '2026-08-10.md'), lines.join('\n'), 'utf-8');
+    };
+
+    it('inserting an unrelated task above does not change synthetic ids', async () => {
+      await writeNote(['## Tasks', '', '- [ ] Alpha task', '- [ ] Beta task', '']);
+      const before = await listStandaloneTasks(root, '2026-08-10');
+      const betaBefore = before.find(t => t.title === 'Beta task')!.id;
+
+      await writeNote(['## Tasks', '', '- [ ] Unrelated new task', '- [ ] Alpha task', '- [ ] Beta task', '']);
+      const after = await listStandaloneTasks(root, '2026-08-10');
+      expect(after.find(t => t.title === 'Beta task')!.id).toBe(betaBefore);
+      expect(after.find(t => t.title === 'Alpha task')!.id).toBe(before.find(t => t.title === 'Alpha task')!.id);
+    });
+
+    it('duplicate titles without ^id- get distinct ids', async () => {
+      await writeNote(['## Tasks', '', '- [ ] Same title', '- [ ] Same title', '']);
+      const tasks = await listStandaloneTasks(root, '2026-08-10');
+      expect(tasks).toHaveLength(2);
+      expect(tasks[0].id).not.toBe(tasks[1].id);
+    });
+  });
+
   describe('scenario 4 — no Workspaces, two daily tasks with id but no origin (orphan set)', () => {
     let root: string;
     let dispose: () => Promise<void>;

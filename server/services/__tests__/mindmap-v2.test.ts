@@ -206,6 +206,33 @@ describe.sequential('mindmap v2', () => {
     expect(next?.taskId).toBeUndefined();
   });
 
+  it('updateMindMap writes atomically: valid JSON on disk and no leftover .tmp files', async () => {
+    const created = await createMindMap({ title: 'Atomic' });
+    await updateMindMap(created.id, { title: 'Atomic updated' });
+
+    const dir = path.join(tmpRoot, '.dailyflow', 'mindmaps');
+    const entries = await fs.readdir(dir);
+    expect(entries.filter(e => e.endsWith('.tmp'))).toEqual([]);
+    expect(entries).toEqual([`${created.id}.json`]);
+
+    const onDisk = JSON.parse(await fs.readFile(path.join(dir, `${created.id}.json`), 'utf-8'));
+    expect(onDisk.title).toBe('Atomic updated');
+    expect(onDisk.version).toBe(2);
+  });
+
+  it('updateMindMap cleans up the temp file when the write fails', async () => {
+    const created = await createMindMap({ title: 'Fail' });
+    const dir = path.join(tmpRoot, '.dailyflow', 'mindmaps');
+    // Force rename to fail by turning the target path into a directory.
+    const filePath = path.join(dir, `${created.id}.json`);
+    await fs.rm(filePath);
+    await fs.mkdir(filePath);
+
+    await expect(updateMindMap(created.id, { title: 'Boom' })).rejects.toThrow();
+    const entries = await fs.readdir(dir);
+    expect(entries.filter(e => e.endsWith('.tmp'))).toEqual([]);
+  });
+
   it('serializes concurrent full-map and single-node updates without losing either change', async () => {
     const created = await createMindMap({ title: 'Before' });
     const branch = {

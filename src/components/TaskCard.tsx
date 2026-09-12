@@ -172,8 +172,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       title: lines[0].trim(),
       description: lines.slice(1).join('\n').trim() || '',
       tags: editTags,
-      deadline: editDeadline || undefined,
-      // '' clears the priority; undefined leaves it untouched.
+      // '' clears the deadline/priority; undefined leaves it untouched.
+      deadline: editDeadline,
       priority: editPriority as 'high' | 'medium' | 'low' | '',
     });
     setEditingContent(false);
@@ -334,7 +334,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 aria-label={language === 'zh' ? '截止日期' : 'Deadline'}
                 className="border-0 bg-transparent outline-none"
                 value={task.deadline || ''}
-                onChange={event => onEdit({ deadline: event.target.value || undefined })}
+                // '' clears the deadline server-side; undefined means "keep".
+                onChange={event => onEdit({ deadline: event.target.value })}
               />
             </label>
             <TagInput tags={(task.tags || []).filter(tag => tag !== 'tasks')} onChange={tags => onEdit({ tags })} availableTags={categories} language={language} />

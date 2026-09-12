@@ -12,9 +12,11 @@
  * becomes hot we can add an mtime-based invalidation layer.
  *
  * Concurrency: the build is single-flighted with a memoized promise so
- * two simultaneous requests share one scan. Callers that mutate the
- * underlying files (task create / delete / space binding) call
- * `invalidateTaskIndex()` to drop the memo; the next caller rebuilds.
+ * two simultaneous requests share one scan. The memo is keyed by the
+ * resolved workspaceRoot so switching workspaces never serves the old
+ * workspace's mapping. Callers that mutate the underlying files (task
+ * create / delete / space binding) call `invalidateTaskIndex()` to drop
+ * the memo; the next caller rebuilds.
  */
 import { loadConfig } from './config.js';
 import { listDailyNotes, readDailyNote } from './fileSystem.js';
@@ -34,21 +36,30 @@ export interface TaskWithDate {
  */
 export type TaskDateIndex = Map<string, string>;
 
-let indexPromise: Promise<TaskDateIndex> | null = null;
+let indexCache: { key: string | null; promise: Promise<TaskDateIndex> } | null = null;
 
 /**
  * Build (or return the cached) `taskId → date` index for the active
  * workspace. The scan reads every daily note listed by
  * `listDailyNotes` and records each task's host date.
  *
+ * The cache is keyed by the resolved workspaceRoot: when the active
+ * workspace changes, the next call rebuilds against the new root
+ * instead of serving the previous workspace's mapping.
+ *
  * Tasks with duplicated ids across files (a rare corruption) resolve
  * to the most recently-modified file's date — we log a warning and
  * keep the last one so the index stays consistent.
  */
 export async function getTaskDateIndex(): Promise<TaskDateIndex> {
-  if (indexPromise) return indexPromise;
-  indexPromise = buildTaskDateIndex();
-  return indexPromise;
+  const workspaceRoot = (await loadConfig()).workspaceRoot;
+  // key === null marks a test-injected index, which stays valid until
+  // explicitly invalidated (matches the pre-keying semantics).
+  if (indexCache && (indexCache.key === null || indexCache.key === workspaceRoot)) {
+    return indexCache.promise;
+  }
+  indexCache = { key: workspaceRoot, promise: buildTaskDateIndex() };
+  return indexCache.promise;
 }
 
 async function buildTaskDateIndex(): Promise<TaskDateIndex> {
@@ -80,7 +91,7 @@ async function buildTaskDateIndex(): Promise<TaskDateIndex> {
  * from disk. Cheap to call; only triggers work on the next read.
  */
 export function invalidateTaskIndex(): void {
-  indexPromise = null;
+  indexCache = null;
 }
 
 /**
@@ -138,5 +149,5 @@ export async function resolveTasksWithDates(
  * skip the filesystem scan. Not exported through the route layer.
  */
 export function __setIndexForTests(index: TaskDateIndex | null): void {
-  indexPromise = index ? Promise.resolve(index) : null;
+  indexCache = index ? { key: null, promise: Promise.resolve(index) } : null;
 }

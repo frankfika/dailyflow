@@ -20,6 +20,7 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import { ulid } from 'ulid';
 import { loadConfig } from './config.js';
 import type { MindMap, MindMapInput, MindMapNode, MindMapEdge, MindMapNodeKind } from '../types/mindmap.js';
@@ -64,8 +65,26 @@ async function readMapFile(filePath: string): Promise<MindMap> {
   return JSON.parse(raw) as MindMap;
 }
 
+// Atomic write: temp file in the same dir + fsync + rename, so a crash
+// mid-write can never truncate the only copy of a map (which would make
+// the event silently disappear from listings).
 async function writeMapFile(filePath: string, map: MindMap): Promise<void> {
-  await fs.writeFile(filePath, JSON.stringify(map, null, 2), 'utf-8');
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    const handle = await fs.open(tempPath, 'w');
+    try {
+      await handle.writeFile(JSON.stringify(map, null, 2), 'utf-8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(tempPath, filePath);
+  } finally {
+    await fs.rm(tempPath, { force: true }).catch(() => undefined);
+  }
 }
 
 /**

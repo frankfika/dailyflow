@@ -137,9 +137,22 @@ export function useScheduleEventNode(): UseMutationResult<
       if (!taskId) {
         const updated = await mindmapsApi.promoteNodeToTask(mindmapId, nodeId, { date, deadline, priority, tags });
         writeEventMap(qc, updated);
+        return;
+      }
+      // Same day (or no fromDate to move from): persist any metadata change
+      // instead of silently dropping it.
+      const updates: EditNodeTaskInput['updates'] = {};
+      if (deadline !== undefined) updates.deadline = deadline;
+      if (priority !== undefined) updates.priority = priority;
+      if (tags && tags.length > 0) updates.tags = tags;
+      if (Object.keys(updates).length > 0) {
+        await eventsApi.editNodeTask({ taskId, scheduledDate: date, updates });
       }
     },
     onMutate: async (vars) => {
+      // Only a reschedule or a fresh promote changes the cached execution; a
+      // same-day metadata edit (or a true no-op) must not rewrite the cache.
+      if (vars.taskId && (!vars.fromDate || vars.fromDate === vars.date)) return undefined;
       const key = queryKeys.event(vars.eventId);
       const prev = qc.getQueryData<{ event: EventDetail | null }>(key);
       if (!prev?.event) return undefined;
