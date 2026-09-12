@@ -49,11 +49,12 @@ describe('TodayBacklog Event-first execution flow', () => {
     ], true);
 
     const list = screen.getByTestId('today-execution-list');
-    // Tabs exist for both the event and standalone tasks...
+    // The "All" tab comes first and is selected by default, so every open
+    // task renders; per-event and standalone tabs filter it down.
+    expect(screen.getByTestId('today-event-group-all')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('today-event-group-map-1')).toBeInTheDocument();
     expect(screen.getByTestId('today-event-group-standalone')).toBeInTheDocument();
-    // ...but only the selected tab's tasks render as cards.
-    expect(within(list).getAllByRole('article')).toHaveLength(1);
+    expect(within(list).getAllByRole('article')).toHaveLength(2);
     expect(screen.queryByTestId('today-planning')).not.toBeInTheDocument();
     expect(screen.queryByText('Linked plans')).not.toBeInTheDocument();
   });
@@ -64,12 +65,10 @@ describe('TodayBacklog Event-first execution flow', () => {
       { id: 'standalone', title: 'Buy groceries', status: 'todo' },
     ], true);
 
-    // Default tab = the event group, so its task's chip shows the event.
+    // Default tab = All, so both chips are visible without switching.
     expect(screen.getByTestId('task-card-event-planned')).toHaveTextContent('Launch event');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Launch');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Marketing');
-    // Standalone tasks live behind their tab; switch to it to see the chip.
-    fireEvent.click(screen.getByTestId('today-event-group-standalone'));
     expect(screen.getByTestId('task-card-event-standalone')).toHaveTextContent('Standalone');
   });
 
@@ -141,13 +140,21 @@ describe('TodayBacklog Event-first execution flow', () => {
       />,
     );
 
+    const allTab = screen.getByTestId('today-event-group-all');
+    expect(allTab).toHaveTextContent('All');
+    expect(allTab).toHaveTextContent('3');
+    expect(allTab).toHaveAttribute('aria-selected', 'true');
+
+    // Default tab = All; every open task renders below.
+    const list = screen.getByTestId('today-execution-list');
+    expect(within(list).getByText('Write launch brief')).toBeInTheDocument();
+    expect(within(list).getByText('Buy groceries')).toBeInTheDocument();
+
+    // The event tab filters the pane to its own tasks.
     const eventTab = screen.getByTestId('today-event-group-map-1');
     expect(eventTab).toHaveTextContent('Launch event');
     expect(eventTab).toHaveTextContent('2');
-    expect(eventTab).toHaveAttribute('aria-selected', 'true');
-
-    // Default tab = first event group; only its tasks render below.
-    const list = screen.getByTestId('today-execution-list');
+    fireEvent.click(eventTab);
     expect(within(list).getByText('Write launch brief')).toBeInTheDocument();
     expect(within(list).queryByText('Buy groceries')).not.toBeInTheDocument();
 
@@ -189,8 +196,8 @@ describe('TodayBacklog Event-first execution flow', () => {
     fireEvent.click(screen.getByTestId('today-event-group-standalone'));
     expect(screen.getByTestId('today-execution-list')).toHaveTextContent('Buy groceries');
 
-    // Completing the event's tasks removes its tab; pane follows the first
-    // remaining tab instead of going empty.
+    // Completing the event's tasks removes its tab; the explicitly selected
+    // standalone tab still exists, so the pane stays on it.
     rerender(
       <TodayBacklog
         tasks={[{ ...tasks[0], status: 'done' as const }, tasks[1]]}

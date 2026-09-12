@@ -195,7 +195,7 @@ test.describe('Today UX operability audit', () => {
     // Event-grouped tasks live under their event tab; the tab shows the
     // event title. Open the tab, then follow the task's event chip into the
     // mindmap canvas.
-    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"])').first();
+    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"]):not([data-testid="today-event-group-all"])').first();
     await expect(eventTab).toBeVisible();
     await expect(eventTab).toContainText(EVENT_TITLE);
     await eventTab.click();
@@ -224,12 +224,20 @@ test.describe('Today UX operability audit', () => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"])').first();
+    const allTab = page.getByTestId('today-event-group-all');
+    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"]):not([data-testid="today-event-group-all"])').first();
     const standaloneTab = page.getByTestId('today-event-group-standalone');
+    await expect(allTab).toBeVisible();
     await expect(eventTab).toBeVisible();
     await expect(standaloneTab).toBeVisible();
 
-    // The event tab is active first and shows only its own tasks.
+    // The All tab is active first and shows every open task.
+    await expect(allTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
+    await expect(page.getByTestId('today-backlog')).toContainText(STANDALONE_TASKS[0]);
+
+    // The event tab filters the list to its own tasks.
+    await eventTab.click();
     await expect(eventTab).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
     await expect(page.getByTestId('today-backlog')).not.toContainText(STANDALONE_TASKS[0]);
