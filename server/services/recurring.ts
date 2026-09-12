@@ -6,6 +6,7 @@ import { appendTaskToMarkdown } from './parser.js';
 import { loadConfig } from './config.js';
 import type { Config } from '../types/task.js';
 import { withDateLock } from './lock.js';
+import { invalidateTaskIndex } from './taskIndex.js';
 
 export interface RecurringTask {
   id: string;
@@ -96,7 +97,10 @@ export async function instantiateRecurringTasks(date: string, suppliedConfig?: C
       }, date);
       created++;
     }
-    if (created > 0) await writeDailyNote(date, content, config);
+    if (created > 0) {
+      await writeDailyNote(date, content, config);
+      invalidateTaskIndex();
+    }
     return { created };
   });
 }

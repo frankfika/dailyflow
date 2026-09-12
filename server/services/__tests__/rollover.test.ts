@@ -1,11 +1,37 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { previewRollover, applyRollover } from '../rollover.js';
+import { getTaskDateIndex, invalidateTaskIndex, __setIndexForTests } from '../taskIndex.js';
 import type { Config } from '../../types/task.js';
 
 const TEST_DIR = path.join(os.tmpdir(), 'dailyflow-rollover-test-' + Date.now());
+const TEST_CONFIG_DIR = path.join(os.tmpdir(), 'dailyflow-rollover-config-' + Date.now());
+
+let previousConfigFile: string | undefined;
+
+beforeAll(async () => {
+  // getTaskDateIndex resolves its workspace through loadConfig, so point
+  // the shared config file at the same temp workspace as TEST_CONFIG.
+  previousConfigFile = process.env.DAILYFLOW_CONFIG_FILE;
+  process.env.DAILYFLOW_CONFIG_FILE = path.join(TEST_CONFIG_DIR, 'config.json');
+  await fs.mkdir(TEST_CONFIG_DIR, { recursive: true });
+  await fs.writeFile(process.env.DAILYFLOW_CONFIG_FILE, JSON.stringify({
+    workspaces: [{ id: 'ws_test', name: 'Test', path: TEST_DIR, createdAt: '2026-01-01T00:00:00.000Z' }],
+    activeWorkspaceId: 'ws_test',
+  }), 'utf-8');
+});
+
+afterAll(async () => {
+  invalidateTaskIndex();
+  if (previousConfigFile === undefined) {
+    delete process.env.DAILYFLOW_CONFIG_FILE;
+  } else {
+    process.env.DAILYFLOW_CONFIG_FILE = previousConfigFile;
+  }
+  await fs.rm(TEST_CONFIG_DIR, { recursive: true, force: true });
+});
 
 const TEST_CONFIG: Config = {
   workspaceRoot: TEST_DIR,
@@ -242,8 +268,21 @@ describe('applyRollover', () => {
     expect(targetContent).toContain('#deadline:2026-05-10');
   });
 
+  it('invalidates the cross-date task index after migrating tasks', async () => {
+    await writeNote('2026-05-04', '- [ ] Task that moves ^id-rollover-idx\n');
+    // A stale index that knows nothing about the task yet.
+    __setIndexForTests(new Map());
+
+    const result = await applyRollover('2026-05-05', TEST_CONFIG);
+    expect(result.migratedCount).toBe(1);
+
+    // If applyRollover had not invalidated, the injected (stale) index
+    // would still be served here and this lookup would miss.
+    const index = await getTaskDateIndex();
+    expect(index.get('rollover-idx')).toBe('2026-05-05');
+  });
+
   it('preserves original source_date across multi-day rollover chains', async () => {
-    // Task originally from May 1, sat unfinished on May 2 (already migrated once).
     // Rolling over to May 3 must keep source_date = May 1, NOT overwrite to May 2.
     await writeNote('2026-05-02', '- [ ] Long-running task ↗ migrated:2026-05-01\n');
 

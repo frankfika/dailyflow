@@ -30,6 +30,22 @@ function md5Like(s: string): string {
   return hashStr(s);
 }
 
+// Synthetic ids for tasks without an explicit ^id- marker. Position-based
+// ids (title:date:lineIndex) change whenever an unrelated line is inserted
+// above, so instead we hash the title and disambiguate duplicates with an
+// occurrence counter — same scheme as parser.ts (`t_<hash>`, `_N` suffix).
+// ponytail: removing one of several identical-title lines still renumbers
+// the rest; the durable fix is persisting ^id- on every write.
+function createSyntheticIdGen(date: string): (title: string) => string {
+  const seen = new Map<string, number>();
+  return (title: string) => {
+    const base = md5Like(`${title}:${date}`);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return n === 0 ? base : `${base}_${n + 1}`;
+  };
+}
+
 function parseScalar(value: string): any {
   const trimmed = value.trim();
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
@@ -822,6 +838,7 @@ export async function listTodayItems(
 
   const rawTasks = parseRawTaskLines(content);
   const items: TodayItem[] = [];
+  const synthId = createSyntheticIdGen(date);
 
   for (let i = 0; i < rawTasks.length; i++) {
     const { line, category } = rawTasks[i];
@@ -837,7 +854,7 @@ export async function listTodayItems(
 
     const mmId = extractMmFromLine(line);
     const nodeId = extractNodeFromLine(line);
-    const taskId = extractIdFromLine(line) || md5Like(`${resolved.title}:${date}:${i}`);
+    const taskId = extractIdFromLine(line) || synthId(resolved.title);
 
     if (mmId && nodeId) {
       const map = await readMindMapSafe(workspaceRoot, mmId);
@@ -893,7 +910,7 @@ export async function listTodayItems(
 
       const standaloneId = extractIdFromLine(line)
         ? `standalone:${extractIdFromLine(line)!}`
-        : `standalone:${md5Like(`${resolved.title}:${date}:${i}`)}`;
+        : `standalone:${synthId(resolved.title)}`;
 
       items.push({
         kind: 'standalone',
@@ -922,6 +939,7 @@ export async function listStandaloneTasks(
 
   const rawTasks = parseRawTaskLines(content);
   const tasks: StandaloneTask[] = [];
+  const synthId = createSyntheticIdGen(date);
 
   for (let i = 0; i < rawTasks.length; i++) {
     const { line, category } = rawTasks[i];
@@ -943,7 +961,7 @@ export async function listStandaloneTasks(
     if (context && !matchesStandaloneContext(manualTags, context)) continue;
 
     const explicitTaskId = extractIdFromLine(line);
-    const id = explicitTaskId || md5Like(`${resolved.title}:${date}:${i}`);
+    const id = explicitTaskId || synthId(resolved.title);
 
     tasks.push({
       id,

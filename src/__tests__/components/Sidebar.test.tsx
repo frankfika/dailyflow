@@ -118,3 +118,41 @@ describe('Sidebar desktop compact mode', () => {
     expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Sidebar viewport adaptation', () => {
+  const setWidth = (width: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  };
+  const mockStorage = (stored: string | null) => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: { getItem: vi.fn().mockReturnValue(stored), setItem: vi.fn() },
+    });
+  };
+
+  it('re-opens the sidebar when widening from tablet to desktop with no desktop pref', () => {
+    // Only a tablet collapse pref is stored — desktop must fall back to open.
+    mockStorage('{"tablet":true}');
+    setWidth(800);
+    render(<SidebarHarness />);
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveAttribute('data-state', 'compact');
+
+    setWidth(1440);
+    fireEvent(window, new Event('resize'));
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).not.toHaveAttribute('data-state', 'compact');
+  });
+
+  it('keeps the sidebar collapsed on desktop when the desktop pref says so', () => {
+    mockStorage('{"desktop":true}');
+    setWidth(1440);
+    render(<SidebarHarness />);
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveAttribute('data-state', 'compact');
+  });
+
+  it('reads the legacy boolean pref as applying to every mode', () => {
+    mockStorage('true');
+    setWidth(800);
+    render(<SidebarHarness />);
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveAttribute('data-state', 'compact');
+  });
+});

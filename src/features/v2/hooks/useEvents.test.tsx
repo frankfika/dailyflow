@@ -106,6 +106,63 @@ describe('event node schedule mutations (optimistic cache writes)', () => {
     expect(cached?.event?.nodes[0]?.execution?.scheduledDate).toBe('2026-09-03');
   });
 
+  it('persists a metadata edit when scheduled onto the same day', async () => {
+    const client = setup();
+    const { result } = renderHook(() => useScheduleEventNode(), { wrapper: makeWrapper(client) });
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ updated: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        eventId: event.id,
+        mindmapId: event.mindmapId,
+        nodeId: 'node_1',
+        date: '2026-09-03',
+        taskId: 'task_1',
+        fromDate: '2026-09-03',
+        deadline: '2026-09-20',
+      });
+    });
+
+    const editCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/events/actions/edit-node-task'));
+    expect(editCall).toBeDefined();
+    expect(JSON.parse(String(editCall![1]?.body))).toEqual({
+      taskId: 'task_1',
+      scheduledDate: '2026-09-03',
+      updates: { deadline: '2026-09-20' },
+    });
+    // The cache must not be optimistically rewritten for a same-day edit.
+    const cached = client.getQueryData<{ event: EventDetail | null }>(queryKeys.event(event.id));
+    expect(cached?.event?.nodes[0]?.execution?.scheduledDate).toBe('2026-09-03');
+  });
+
+  it('does nothing — no fetch, no cache write — when nothing changes', async () => {
+    const client = setup();
+    const { result } = renderHook(() => useScheduleEventNode(), { wrapper: makeWrapper(client) });
+
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        eventId: event.id,
+        mindmapId: event.mindmapId,
+        nodeId: 'node_1',
+        date: '2026-09-03',
+        taskId: 'task_1',
+        fromDate: '2026-09-03',
+      });
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const cached = client.getQueryData<{ event: EventDetail | null }>(queryKeys.event(event.id));
+    expect(cached?.event).toBe(event);
+  });
+
   it('removes the execution optimistically when a node is unscheduled', async () => {
     const client = setup();
     const { result } = renderHook(() => useUnscheduleEventNode(), { wrapper: makeWrapper(client) });

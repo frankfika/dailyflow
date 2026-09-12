@@ -85,41 +85,24 @@ export async function readDailyNote(date: string, config: Config): Promise<Daily
     if (!isWithinRoot(realFile, realRoot)) throw new Error('Invalid file path');
     const content = await fs.readFile(filePath, 'utf-8');
     const stats = await fs.stat(filePath);
-    let tasks = parseMarkdown(content);
+    const parsed = parseMarkdown(content);
 
-    // Deduplicate: remove tasks whose raw markdown line is identical
+    // Deduplicate the returned task list by raw markdown line. This is
+    // intentionally pure: a read must never rewrite the file (it races
+    // with locked writers, and callers pair `content` with `task.line`,
+    // so line numbers must keep indexing the ORIGINAL content).
     const lines = content.split('\n');
     const seen = new Set<string>();
-    const duplicateLines: number[] = [];
-    const uniqueTasks: typeof tasks = [];
-    for (const task of tasks) {
+    const tasks: typeof parsed = [];
+    for (const task of parsed) {
       if (task.line === undefined) {
-        uniqueTasks.push(task);
+        tasks.push(task);
         continue;
       }
-      const rawLine = lines[task.line];
-      const dedupeKey = dedupeTaskLineKey(rawLine);
-      if (seen.has(dedupeKey)) {
-        duplicateLines.push(task.line);
-      } else {
-        seen.add(dedupeKey);
-        uniqueTasks.push(task);
-      }
-    }
-
-    // If duplicates found, remove them from the file
-    if (duplicateLines.length > 0) {
-      const linesToRemove = new Set(duplicateLines);
-      const cleanedLines = lines.filter((_, idx) => !linesToRemove.has(idx));
-      const cleanedContent = cleanedLines.join('\n');
-      await writeDailyNote(date, cleanedContent, config);
-      tasks = uniqueTasks;
-      return {
-        date,
-        content: cleanedContent,
-        tasks,
-        lastModified: stats.mtime
-      };
+      const dedupeKey = dedupeTaskLineKey(lines[task.line]);
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      tasks.push(task);
     }
 
     return {

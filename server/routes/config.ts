@@ -7,6 +7,7 @@ import {
   generateWorkspaceId,
   type ConfigPatch,
 } from '../services/config.js';
+import { invalidateTaskIndex } from '../services/taskIndex.js';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -519,11 +520,13 @@ router.delete('/workspaces/:id', async (req, res) => {
         activeWorkspaceId: '',
         workspaceRoot: '',
       });
+      invalidateTaskIndex();
       return res.json({ success: true, cleared: true, activeWorkspaceId: '' });
     }
 
     const nextActive = config.activeWorkspaceId === id ? remaining[0].id : config.activeWorkspaceId;
     await saveConfig({ ...config, workspaces: remaining, activeWorkspaceId: nextActive });
+    invalidateTaskIndex();
     res.json({ success: true, activeWorkspaceId: nextActive });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -544,6 +547,7 @@ router.post('/workspaces/:id/activate', async (req, res) => {
     if (!result.ok) return res.status(400).json({ error: result.error });
 
     await saveConfig({ ...config, activeWorkspaceId: id, workspaceRoot: target.path });
+    invalidateTaskIndex();
     res.json({ success: true, workspace: target });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
