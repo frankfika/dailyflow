@@ -228,15 +228,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           title={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
           aria-label={isDone ? (language === 'zh' ? '标记为未完成' : 'Mark as todo') : (language === 'zh' ? '标记为完成' : 'Mark as done')}
         >
-          {isDone ? (
-            <span className="today-task-check-complete flex h-[18px] w-[18px] items-center justify-center rounded-md bg-emerald-500 text-white">
-              <Check className="h-3 w-3" strokeWidth={2.5} />
-            </span>
-          ) : (
-            <span className="today-task-check-empty flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-border-strong bg-surface-elevated text-transparent transition-colors group-hover/check:border-accent group-hover/check:text-accent/70">
-              <Check className="h-3 w-3" strokeWidth={2.5} />
-            </span>
-          )}
+          <motion.span
+            key={isDone ? 'done' : 'todo'}
+            initial={{ scale: 0.55, opacity: 0.4 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 720, damping: 22, mass: 0.6 }}
+            className={isDone
+              ? 'today-task-check-complete flex h-[18px] w-[18px] items-center justify-center rounded-md bg-emerald-500 text-white'
+              : 'today-task-check-empty flex h-[18px] w-[18px] items-center justify-center rounded-md border-[1.5px] border-border-strong bg-surface-elevated text-transparent transition-colors group-hover/check:border-accent group-hover/check:text-accent/70'}
+          >
+            <Check className="h-3 w-3" strokeWidth={2.5} />
+          </motion.span>
         </button>
 
         <div className="min-w-0 flex-1">

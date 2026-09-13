@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { Check, ChevronDown, Layers, Network, Pin, Plus, Sparkles } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { RecurrenceRule } from '../api/client';
@@ -239,16 +240,33 @@ export function TodayBacklog({
                 </button>
               ))}
             </div>
-            {activeTab && <ul className="today-simple-list">{activeTab.tasks.map(renderTask)}</ul>}
+            {activeTab && (
+              <motion.ul
+                key={activeKey}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
+                className="today-simple-list"
+              >
+                {activeTab.tasks.map(renderTask)}
+              </motion.ul>
+            )}
           </div>
         ) : (
           <div className="today-backlog-empty">
-            <Sparkles className="h-4 w-4" />
+            <motion.div
+              aria-hidden="true"
+              animate={{ scale: [1, 1.08, 1], rotate: [0, -4, 0, 4, 0] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              className="text-accent"
+            >
+              <Sparkles className="h-4 w-4" />
+            </motion.div>
             <p>{isToday
               ? (language === 'zh' ? '今天还没有任务。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
               : (language === 'zh' ? '这一天没有任务。' : 'No open tasks on this day.')}</p>
             {isToday && (
-              <button onClick={onAddTask} className="today-backlog-empty-cta">
+              <button onClick={onAddTask} className="today-backlog-empty-cta transition-transform active:scale-[0.97]">
                 {language === 'zh' ? '添加任务' : 'Add one thing'}
               </button>
             )}

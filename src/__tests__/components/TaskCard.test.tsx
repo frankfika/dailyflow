@@ -14,6 +14,8 @@ vi.mock('motion/react', () => ({
       React.createElement('div', props, children),
     article: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
       React.createElement('article', props, children),
+    span: ({ children, layout, initial, animate, exit, transition, ...props }: any) =>
+      React.createElement('span', props, children),
   },
   // ConfirmDialog (rendered by TaskCard for the delete action) animates with
   // AnimatePresence.
