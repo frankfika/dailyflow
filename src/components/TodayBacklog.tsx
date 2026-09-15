@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, ChevronDown, Layers, Network, Pin, Plus, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Network, Pin, Plus, Sparkles, X } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { RecurrenceRule } from '../api/client';
 
@@ -49,8 +49,12 @@ interface TodayBacklogProps {
   /** Permanently delete a task from its host daily note. */
   onDeleteTask?: (id: string, hostDate?: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
-  /** UX S6 AI actions on the expanded card (decompose / rewrite / summarize). */
-  /** UX S7: convert the task into a new project event. */
+  /** Add a new task directly to an event's canvas, bound to a fresh node
+   *  (`useCreateTaskForNode` on the server). When provided, each event
+   *  section shows its own inline "+ Add to {event}" input. */
+  onAddToEvent?: (group: TodayPlanningGroup, title: string) => void | Promise<void>;
+  /** Add a standalone task — used by the empty state CTA and the section
+   *  header fallback when onAddToEvent isn't wired. */
   onAddTask: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
@@ -87,6 +91,7 @@ export function TodayBacklog({
   onEditTask,
   onDeleteTask,
   onUnlinkFromSpace,
+  onAddToEvent,
   onAddTask,
   language,
   isToday,
@@ -94,8 +99,10 @@ export function TodayBacklog({
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [showCompleted, setShowCompleted] = useState(false);
-  // Horizontal tabs: null means "follow default" (first tab).
-  const [selectedTabKey, setSelectedTabKey] = useState<string | null>(null);
+  // Per-section collapse state, keyed by group id. Defaults to all expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Which event section has its inline "+ Add" input open. Mutually exclusive.
+  const [activeAddSection, setActiveAddSection] = useState<string | null>(null);
 
   const openTasks = useMemo(
     () => tasks.filter(task => task.status === 'todo').sort(compareTasks),
@@ -136,6 +143,15 @@ export function TodayBacklog({
     return lookup;
   }, [planningGroups]);
 
+  const toggleCollapsed = (key: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const renderTask = (task: TodayTask) => (
     <li key={`${task.host_date ?? selectedDate}:${task.id}`} className="today-simple-task">
       <TaskCard
@@ -163,36 +179,6 @@ export function TodayBacklog({
 
   const hasOpenWork = eventGroups.length > 0 || standaloneTasks.length > 0;
   const standaloneLabel = language === 'zh' ? '独立任务' : 'Standalone';
-  const allLabel = language === 'zh' ? '全部' : 'All';
-
-  interface EventTab {
-    key: string;
-    title: string;
-    count: number;
-    tasks: TodayTask[];
-  }
-  const tabs = useMemo<EventTab[]>(() => {
-    const result: EventTab[] = [{ key: 'all', title: allLabel, count: openTasks.length, tasks: openTasks }];
-    for (const { group, openTasks: groupTasks } of eventGroups) {
-      result.push({
-        key: group.mindmapId,
-        title: group.title,
-        count: groupTasks.length,
-        tasks: groupTasks,
-      });
-    }
-    if (standaloneTasks.length > 0) {
-      result.push({ key: 'standalone', title: standaloneLabel, count: standaloneTasks.length, tasks: standaloneTasks });
-    }
-    return result;
-  }, [openTasks, eventGroups, standaloneTasks, allLabel, standaloneLabel]);
-
-  // Selected tab falls back to the first one when the stored key no longer
-  // exists (group disappeared / all its tasks completed).
-  const activeKey = selectedTabKey && tabs.some(tab => tab.key === selectedTabKey)
-    ? selectedTabKey
-    : tabs[0]?.key;
-  const activeTab = tabs.find(tab => tab.key === activeKey);
 
   return (
     <div className="today-backlog today-simple" data-testid="today-backlog">
@@ -208,48 +194,41 @@ export function TodayBacklog({
             <span aria-label={language === 'zh' ? `${openTasks.length} 个待办` : `${openTasks.length} open tasks`}>
               {openTasks.length}
             </span>
-            {isToday && (
-              <button type="button" onClick={onAddTask} className="today-simple-add">
-                <Plus className="h-3.5 w-3.5" />
-                {language === 'zh' ? '添加任务' : 'Add task'}
-              </button>
-            )}
           </div>
         </header>
 
         {hasOpenWork ? (
           <div className="space-y-3" data-testid="today-execution-list">
-            <div className="today-event-tabs" role="tablist" aria-label={language === 'zh' ? '事件分组' : 'Event groups'}>
-              {tabs.map(tab => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab.key === activeKey}
-                  data-testid={`today-event-group-${tab.key}`}
-                  className={`today-event-tab ${tab.key === activeKey ? 'is-active' : ''}`}
-                  onClick={() => setSelectedTabKey(tab.key)}
-                >
-                  {tab.key === 'all'
-                    ? <Layers className="today-event-icon" aria-hidden="true" />
-                    : tab.key === 'standalone'
-                      ? <Pin className="today-event-icon" aria-hidden="true" />
-                      : <Network className="today-event-icon" aria-hidden="true" />}
-                  <span className="today-event-title">{tab.title}</span>
-                  <span className="today-event-count">{tab.count}</span>
-                </button>
-              ))}
-            </div>
-            {activeTab && (
-              <motion.ul
-                key={activeKey}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
-                className="today-simple-list"
-              >
-                {activeTab.tasks.map(renderTask)}
-              </motion.ul>
+            {eventGroups.map(({ group, openTasks: groupTasks }) => {
+              const isCollapsed = collapsed.has(group.mindmapId);
+              return (
+                <EventSection
+                  key={group.mindmapId}
+                  group={group}
+                  tasks={groupTasks}
+                  isCollapsed={isCollapsed}
+                  onToggleCollapsed={() => toggleCollapsed(group.mindmapId)}
+                  onOpenPlanningGroup={onOpenPlanningGroup}
+                  language={language}
+                  isToday={isToday}
+                  showAddInput={activeAddSection === group.mindmapId}
+                  onRequestAdd={() => setActiveAddSection(group.mindmapId)}
+                  onCancelAdd={() => setActiveAddSection(null)}
+                  onAddToEvent={onAddToEvent}
+                  renderTask={renderTask}
+                />
+              );
+            })}
+
+            {standaloneTasks.length > 0 && (
+              <StandaloneSection
+                tasks={standaloneTasks}
+                isCollapsed={collapsed.has('__standalone__')}
+                onToggleCollapsed={() => toggleCollapsed('__standalone__')}
+                language={language}
+                standaloneLabel={standaloneLabel}
+                renderTask={renderTask}
+              />
             )}
           </div>
         ) : (
@@ -289,6 +268,207 @@ export function TodayBacklog({
           </button>
           {showCompleted && <ul className="today-simple-list">{completedTasks.map(renderTask)}</ul>}
         </section>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Event section — collapsible container that owns one event's tasks plus its
+// own inline "+ Add to {event}" affordance. Clicking the header opens the
+// event canvas (replacing the chip-on-card click); the trailing chevron
+// toggles collapse.
+// ---------------------------------------------------------------------------
+
+interface EventSectionProps {
+  group: TodayPlanningGroup;
+  tasks: TodayTask[];
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+  onOpenPlanningGroup?: (group: TodayPlanningGroup, nodeId?: string) => void;
+  language: 'en' | 'zh';
+  isToday: boolean;
+  showAddInput: boolean;
+  onRequestAdd: () => void;
+  onCancelAdd: () => void;
+  onAddToEvent?: (group: TodayPlanningGroup, title: string) => void | Promise<void>;
+  renderTask: (task: TodayTask) => React.ReactNode;
+}
+
+function EventSection({
+  group,
+  tasks,
+  isCollapsed,
+  onToggleCollapsed,
+  onOpenPlanningGroup,
+  language,
+  isToday,
+  showAddInput,
+  onRequestAdd,
+  onCancelAdd,
+  onAddToEvent,
+  renderTask,
+}: EventSectionProps) {
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (showAddInput) inputRef.current?.focus();
+  }, [showAddInput]);
+
+  const submit = async () => {
+    const title = draft.trim();
+    if (!title || !onAddToEvent) return;
+    setSubmitting(true);
+    try {
+      await onAddToEvent(group, title);
+      setDraft('');
+      onCancelAdd();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const addLabel = language === 'zh' ? `添加到 ${group.title}` : `Add to ${group.title}`;
+  const placeholder = language === 'zh' ? `${group.title} 的任务…` : `Task for ${group.title}…`;
+
+  return (
+    <div
+      className="today-event-section"
+      data-testid={`today-section-${group.mindmapId}`}
+    >
+      <div className="today-event-section-header">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={!isCollapsed}
+          aria-label={`${isCollapsed ? (language === 'zh' ? '展开' : 'Expand') : (language === 'zh' ? '收起' : 'Collapse')} ${group.title}`}
+          className="today-event-section-chevron"
+        >
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenPlanningGroup?.(group)}
+          className="today-event-section-title"
+          data-testid={`today-section-title-${group.mindmapId}`}
+          title={language === 'zh' ? '打开事件画布' : 'Open event canvas'}
+        >
+          <Network className="today-event-icon" aria-hidden="true" />
+          <span className="truncate">{group.title}</span>
+          <span className="today-event-section-count">{tasks.length}</span>
+        </button>
+      </div>
+      {!isCollapsed && (
+        <ul className="today-event-section-list">
+          {tasks.map(renderTask)}
+          {isToday && onAddToEvent && (
+            <li className="today-event-section-add">
+              {showAddInput ? (
+                <div className="today-event-add-form">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={draft}
+                    onChange={event => setDraft(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.nativeEvent.isComposing) return;
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void submit();
+                      } else if (event.key === 'Escape') {
+                        setDraft('');
+                        onCancelAdd();
+                      }
+                    }}
+                    placeholder={placeholder}
+                    disabled={submitting}
+                    className="today-event-add-input"
+                    data-testid={`today-event-add-input-${group.mindmapId}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={!draft.trim() || submitting}
+                    className="today-event-add-submit"
+                    aria-label={language === 'zh' ? '确认添加' : 'Confirm add'}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDraft(''); onCancelAdd(); }}
+                    disabled={submitting}
+                    className="today-event-add-cancel"
+                    aria-label={language === 'zh' ? '取消' : 'Cancel'}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onRequestAdd}
+                  className="today-event-add-trigger"
+                  data-testid={`today-event-add-trigger-${group.mindmapId}`}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {addLabel}
+                </button>
+              )}
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Standalone section — collapsible list of unlinked tasks. No inline add;
+// the global TodayInputBar at the bottom handles standalone creation.
+// ---------------------------------------------------------------------------
+
+interface StandaloneSectionProps {
+  tasks: TodayTask[];
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+  language: 'en' | 'zh';
+  standaloneLabel: string;
+  renderTask: (task: TodayTask) => React.ReactNode;
+}
+
+function StandaloneSection({
+  tasks,
+  isCollapsed,
+  onToggleCollapsed,
+  language,
+  standaloneLabel,
+  renderTask,
+}: StandaloneSectionProps) {
+  return (
+    <div className="today-standalone-section" data-testid="today-section-standalone">
+      <div className="today-event-section-header">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={!isCollapsed}
+          aria-label={`${isCollapsed ? (language === 'zh' ? '展开' : 'Expand') : (language === 'zh' ? '收起' : 'Collapse')} ${standaloneLabel}`}
+          className="today-event-section-chevron"
+        >
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+        </button>
+        <span className="today-event-section-title" data-testid="today-section-title-standalone">
+          <Pin className="today-event-icon" aria-hidden="true" />
+          <span className="truncate">{standaloneLabel}</span>
+          <span className="today-event-section-count">{tasks.length}</span>
+        </span>
+      </div>
+      {!isCollapsed && (
+        <ul className="today-event-section-list">
+          {tasks.map(renderTask)}
+        </ul>
       )}
     </div>
   );
