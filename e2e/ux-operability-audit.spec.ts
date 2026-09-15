@@ -192,13 +192,12 @@ test.describe('Today UX operability audit', () => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    // Event-grouped tasks live under their event tab; the tab shows the
-    // event title. Open the tab, then follow the task's event chip into the
-    // mindmap canvas.
-    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"]):not([data-testid="today-event-group-all"])').first();
-    await expect(eventTab).toBeVisible();
-    await expect(eventTab).toContainText(EVENT_TITLE);
-    await eventTab.click();
+    // Events now render as collapsible sections (no more horizontal tabs);
+    // every event section title is visible at once. The title is the affordance
+    // that opens the canvas (it replaces the old tab click).
+    const eventSection = page.locator('[data-testid^="today-section-title-"]:not([data-testid="today-section-title-standalone"])').first();
+    await expect(eventSection).toBeVisible();
+    await expect(eventSection).toContainText(EVENT_TITLE);
 
     const eventChip = page.locator(`[data-testid="task-card-event-${seeded.eventTaskIds[0]}"]`);
     await expect(eventChip).toBeVisible();
@@ -220,34 +219,34 @@ test.describe('Today UX operability audit', () => {
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });
 
-  test('c. event tabs switch the task list between groups', async ({ page }) => {
+  test('c. event sections show their own tasks alongside Standalone', async ({ page }) => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    const allTab = page.getByTestId('today-event-group-all');
-    const eventTab = page.locator('[data-testid^="today-event-group-"]:not([data-testid="today-event-group-standalone"]):not([data-testid="today-event-group-all"])').first();
-    const standaloneTab = page.getByTestId('today-event-group-standalone');
-    await expect(allTab).toBeVisible();
-    await expect(eventTab).toBeVisible();
-    await expect(standaloneTab).toBeVisible();
+    // Every section (event + standalone) is rendered simultaneously — no tab
+    // gating. Each section title is visible up front, and its tasks render
+    // below it without filtering.
+    const eventSection = page.locator('[data-testid^="today-section-title-"]:not([data-testid="today-section-title-standalone"])').first();
+    const standaloneSection = page.getByTestId('today-section-title-standalone');
+    await expect(eventSection).toBeVisible();
+    await expect(standaloneSection).toBeVisible();
 
-    // The All tab is active first and shows every open task.
-    await expect(allTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
-    await expect(page.getByTestId('today-backlog')).toContainText(STANDALONE_TASKS[0]);
+    const backlog = page.getByTestId('today-backlog');
+    await expect(backlog).toContainText(EVENT_TASKS[0]);
+    await expect(backlog).toContainText(STANDALONE_TASKS[0]);
 
-    // The event tab filters the list to its own tasks.
-    await eventTab.click();
-    await expect(eventTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('today-backlog')).toContainText(EVENT_TASKS[0]);
-    await expect(page.getByTestId('today-backlog')).not.toContainText(STANDALONE_TASKS[0]);
+    // Each event section carries its own "+ Add to {event}" trigger so the
+    // user can add a task directly to that event without going through the
+    // standalone input.
+    const addTrigger = page.locator('[data-testid^="today-event-add-trigger-"]').first();
+    await expect(addTrigger).toBeVisible();
 
-    // Switching to Standalone swaps the visible task list.
-    await standaloneTab.click();
-    await expect(standaloneTab).toHaveAttribute('aria-selected', 'true');
-    await expect(eventTab).toHaveAttribute('aria-selected', 'false');
-    await expect(page.getByTestId('today-backlog')).toContainText(STANDALONE_TASKS[0]);
-    await expect(page.getByTestId('today-backlog')).not.toContainText(EVENT_TASKS[0]);
+    // Collapsing a section hides its tasks but keeps the title visible.
+    const chevron = page.locator('[data-testid^="today-section-"] button[aria-expanded]').first();
+    await chevron.click();
+    await expect(backlog).not.toContainText(EVENT_TASKS[0]);
+    await chevron.click();
+    await expect(backlog).toContainText(EVENT_TASKS[0]);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });
