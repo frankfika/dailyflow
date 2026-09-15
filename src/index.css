@@ -1081,6 +1081,144 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .today-event-tab.is-active .today-event-count { color: rgba(255, 255, 255, 0.8); }
 
+/* Today event sections — v3.3 events-as-containers layout.
+   Each event is a collapsible section (header + task list + inline add). */
+.today-event-section,
+.today-standalone-section {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.today-event-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  background: linear-gradient(180deg, rgba(35, 120, 110, 0.04), transparent);
+}
+.today-event-section-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  transition: background 0.15s var(--ease-native);
+  cursor: pointer;
+}
+.today-event-section-chevron:hover { background: rgba(35, 120, 110, 0.08); }
+.today-event-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-heading);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s var(--ease-native);
+}
+.today-event-section-title:hover { background: rgba(35, 120, 110, 0.08); }
+/* Standalone section title isn't clickable — drop the cursor + hover. */
+.today-standalone-section .today-event-section-title {
+  cursor: default;
+}
+.today-standalone-section .today-event-section-title:hover { background: transparent; }
+.today-event-section-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.6));
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+}
+.today-event-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.5rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.today-event-section-add { padding: 0 0.25rem; }
+.today-event-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s var(--ease-native), border-color 0.15s var(--ease-native), color 0.15s var(--ease-native);
+}
+.today-event-add-trigger:hover {
+  background: rgba(35, 120, 110, 0.06);
+  border-color: rgba(35, 120, 110, 0.3);
+  color: var(--color-accent);
+}
+.today-event-add-form {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.5));
+}
+.today-event-add-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: 0.82rem;
+  color: var(--color-text-heading);
+  padding: 0.25rem 0.1rem;
+}
+.today-event-add-input::placeholder { color: var(--color-text-muted); opacity: 0.7; }
+.today-event-add-submit,
+.today-event-add-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.5rem;
+  width: 1.5rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s var(--ease-native);
+}
+.today-event-add-submit {
+  background: var(--color-accent);
+  color: #fff;
+}
+.today-event-add-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+.today-event-add-submit:not(:disabled):hover { background: rgba(35, 120, 110, 0.85); }
+.today-event-add-cancel {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.today-event-add-cancel:hover { background: rgba(0, 0, 0, 0.05); }
+@media (max-width: 768px) {
+  .today-event-add-trigger { min-height: 44px; }
+  .today-event-add-submit,
+  .today-event-add-cancel { height: 2rem; width: 2rem; }
+}
+
 @media (max-width: 768px) {
   .today-simple-section-header { align-items: center; }
   .today-simple-add,

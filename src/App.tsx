@@ -35,7 +35,7 @@ import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
 import { EventsView } from './features/v2/events/EventsView';
 import { TeamView } from './components/TeamView';
-import { useEvents, useTodayItems } from './features/v2/hooks/useEvents';
+import { useEvents, useTodayItems, useCreateTaskForNode } from './features/v2/hooks/useEvents';
 import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
@@ -403,6 +403,7 @@ export default function App() {
   const [activeContext, setActiveContext] = useState<'work' | 'life'>('work');
   const todayItemsQuery = useTodayItems(currentFileDate, activeContext);
   const eventsQuery = useEvents();
+  const createTaskForNode = useCreateTaskForNode();
 
   const refreshEarlierOpenTasks = useCallback(async () => {
     const today = getTodayStr();
@@ -928,6 +929,36 @@ export default function App() {
       console.error('Failed to reload file list', e);
     }
   }, []);
+
+  const handleAddToEvent = useCallback(async (group: TodayPlanningGroup, title: string) => {
+    // Each "+ Add to {event}" creates a fresh canvas node + binds a task to
+    // it (server `createTaskForNode`). A unique node id per task keeps the
+    // canvas 1:1 with task items and avoids the "node text overwritten"
+    // footgun in server/services/eventExecutionService.ts:bindNodeAndSpace.
+    const nodeId = `node_today_${Date.now().toString(36)}`;
+    try {
+      await createTaskForNode.mutateAsync({
+        mindmapId: group.mindmapId,
+        nodeId,
+        title,
+        scheduledDate: currentFileDate,
+      });
+      // The mutation invalidates today-items + tasks; sync the local
+      // markdown copy so the daily note editor and focus bar don't drift.
+      const data = await filesApi.get(currentFileDate);
+      if (data) {
+        setMarkdown(data.content);
+        setTasks(data.tasks as Task[]);
+        setLastSyncedMD(data.content);
+        setFilesMap(prev => ({ ...prev, [currentFileDate]: data.content }));
+      }
+      showToast(language === 'zh' ? `已加入「${group.title}」` : `Added to "${group.title}"`, 'success');
+      await refreshTodayProjection();
+    } catch (e) {
+      console.error('Failed to add task to event', e);
+      showToast(language === 'zh' ? '加入事件失败' : 'Failed to add to event', 'error');
+    }
+  }, [createTaskForNode, currentFileDate, language, refreshTodayProjection, showToast]);
 
   const loadContextNotes = useCallback(async () => {
     try {
@@ -2224,6 +2255,7 @@ export default function App() {
                     onEditTask={handleEditTask}
                     onDeleteTask={handleDeleteTask}
                     onUnlinkFromSpace={handleUnlinkFromSpace}
+                    onAddToEvent={currentFileDate === getTodayStr() ? handleAddToEvent : undefined}
                     onAddTask={() => taskInputFocusRef.current?.()}
                     starredTaskIds={starredTaskIds}
                     onToggleStar={toggleStar}

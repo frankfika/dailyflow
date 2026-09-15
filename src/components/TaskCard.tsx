@@ -256,26 +256,45 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.title}
           </h3>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
-            {onOpenSpace ? (
-              <button
-                type="button"
-                onClick={() => onOpenSpace(task.originNodeId)}
-                className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium cursor-pointer hover:border-accent/30 hover:bg-accent/15 ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'}`}
-                data-testid={`task-card-event-${task.id}`}
-                title={eventLabel}
-              >
-                {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
-                <span className="truncate">{eventLabel}</span>
-              </button>
-            ) : (
-              <span
-                className="inline-flex min-w-0 items-center gap-1 border border-transparent px-1.5 py-0.5 font-medium text-text-muted"
-                data-testid={`task-card-event-${task.id}`}
-                title={eventLabel}
-              >
-                <span className="truncate">{eventLabel}</span>
-              </span>
-            )}
+            {/* Event chip — clicking the label opens the event; the trailing × unlinks.
+                Keeping the unlink affordance next to its indicator (was buried at the
+                bottom of the expanded panel, easy to miss and read as "just another tag"). */}
+            <span
+              className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'}`}
+            >
+              {onOpenSpace ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenSpace(task.originNodeId)}
+                  className="inline-flex min-w-0 items-center gap-1 cursor-pointer hover:opacity-80"
+                  data-testid={`task-card-event-${task.id}`}
+                  title={eventLabel}
+                >
+                  {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                  <span className="truncate">{eventLabel}</span>
+                </button>
+              ) : (
+                <span data-testid={`task-card-event-${task.id}`} title={eventLabel} className="inline-flex min-w-0 items-center gap-1">
+                  {spaceTitle && <Network className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                  <span className="truncate">{eventLabel}</span>
+                </span>
+              )}
+              {(task.spaceId || task.originMindmapId) && onUnlinkFromSpace && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onUnlinkFromSpace(task.id);
+                  }}
+                  aria-label={language === 'zh' ? '移出事件' : 'Remove from event'}
+                  title={language === 'zh' ? '移出事件' : 'Remove from event'}
+                  className="-mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-black/[0.08] hover:opacity-100"
+                  data-testid={`task-card-space-unlink-${task.id}`}
+                >
+                  <X className="h-2.5 w-2.5" strokeWidth={2.5} />
+                </button>
+              )}
+            </span>
             {task.sourcePath && task.sourcePath.length > 0 && (
               <span className="inline-flex min-w-0 items-center gap-0.5 text-text-muted/80" data-testid={`task-card-path-${task.id}`}>
                 {task.sourcePath.map((segment, index) => (
@@ -428,16 +447,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted">
                     {language === 'zh' ? `从 ${task.source_date} 迁移` : `Migrated from ${task.source_date}`}
                   </span>
-                )}
-                {(task.spaceId || task.originMindmapId) && onUnlinkFromSpace && (
-                  <button
-                    type="button"
-                    onClick={() => onUnlinkFromSpace(task.id)}
-                    className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text-heading"
-                    data-testid={`task-card-space-unlink-${task.id}`}
-                  >
-                    {language === 'zh' ? '移出事件' : 'Remove from event'}
-                  </button>
                 )}
               </div>
 
