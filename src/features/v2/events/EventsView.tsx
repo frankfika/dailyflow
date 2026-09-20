@@ -329,6 +329,9 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const splitRef = useRef<HTMLDivElement>(null);
   const [outlineWidth, setOutlineWidth] = useState(readOutlineWidth);
   const [outlineResizing, setOutlineResizing] = useState(false);
+  // UX: node deletion removes the whole subtree in one click, so gate it
+  // behind a confirm dialog instead of deleting immediately.
+  const [pendingDelete, setPendingDelete] = useState<{ nodeId: string; title: string; nodeCount: number; keepsTask: boolean } | null>(null);
   const event = detailQ.data?.event;
   const matches = useMemo(() => event?.nodes.filter((node) => node.text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) ?? [], [event?.nodes, query]);
 
@@ -580,6 +583,34 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   }
 
   async function handleDelete(nodeId: string) {
+    // Deleting a node removes its whole subtree in one call — confirm first
+    // (the canvas, outline and Backspace paths all route through here).
+    if (!event) return;
+    const node = event.nodes.find((n) => n.id === nodeId);
+    if (!node || nodeId === event.rootNodeId) return;
+    const removeIds = new Set<string>([nodeId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const edge of event.edges) {
+        if (removeIds.has(edge.source) && !removeIds.has(edge.target)) {
+          removeIds.add(edge.target);
+          changed = true;
+        }
+      }
+    }
+    setPendingDelete({
+      nodeId,
+      title: node.text,
+      nodeCount: removeIds.size,
+      keepsTask: event.nodes.some((n) => removeIds.has(n.id) && n.execution?.taskId),
+    });
+  }
+
+  async function confirmDeleteNode() {
+    if (!pendingDelete) return;
+    const { nodeId } = pendingDelete;
+    setPendingDelete(null);
     await safe(() => deleteNode.mutateAsync({ eventId, mindmapId: event!.mindmapId, nodeId }));
   }
 
@@ -916,6 +947,22 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
         onClose={() => { setOrganizeOpen(false); setOrganizeSuggestion(null); setOrganizeStrategy(null); }}
       />
     )}
+    <ConfirmDialog
+      show={pendingDelete !== null}
+      title={language === 'zh' ? '删除节点' : 'Delete node'}
+      message={pendingDelete
+        ? (pendingDelete.nodeCount > 1
+          ? `${language === 'zh' ? '删除「' : 'Delete "'}${pendingDelete.title}${language === 'zh' ? '」及其' : '" and its '}${pendingDelete.nodeCount - 1}${language === 'zh' ? ' 个子节点？' : ' child nodes?'}`
+          : `${language === 'zh' ? '删除「' : 'Delete "'}${pendingDelete.title}${language === 'zh' ? '」？' : '"?'}`) + (pendingDelete.keepsTask
+          ? (language === 'zh' ? ' 已安排的任务会保留在 Today。' : ' Scheduled tasks stay in Today.')
+          : (language === 'zh' ? ' 此操作不可撤销。' : ' This cannot be undone.'))
+        : ''}
+      confirmText={language === 'zh' ? '删除' : 'Delete'}
+      cancelText={language === 'zh' ? '取消' : 'Cancel'}
+      variant="danger"
+      onConfirm={() => void confirmDeleteNode()}
+      onCancel={() => setPendingDelete(null)}
+    />
   </section>;
 }
 

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TodayBacklog, type TodayPlanningGroup } from '../../components/TodayBacklog';
+import type { EventSummary } from '../../api/client';
 
 const noop = vi.fn();
 
@@ -8,13 +9,20 @@ function renderBacklog(tasks: Array<{
   id: string;
   title: string;
   status: 'todo' | 'done' | 'migrated';
+  tags?: string[];
   deadline?: string;
   host_date?: string;
   spaceId?: string;
   originMindmapId?: string;
   originNodeId?: string;
   sourcePath?: string[];
-}>, withPlanning = false, planningGroups?: TodayPlanningGroup[], extraProps?: Record<string, unknown>) {
+}>, opts: {
+  withPlanning?: boolean;
+  planningGroups?: TodayPlanningGroup[];
+  events?: EventSummary[];
+  extraProps?: Record<string, unknown>;
+} = {}) {
+  const { withPlanning = false, planningGroups, events = [], extraProps } = opts;
   const groups: TodayPlanningGroup[] = planningGroups ?? (withPlanning ? [{
     id: 'event-1',
     mindmapId: 'map-1',
@@ -27,6 +35,7 @@ function renderBacklog(tasks: Array<{
     <TodayBacklog
       tasks={tasks}
       planningGroups={groups}
+      events={events}
       selectedDate="2026-07-28"
       categories={[]}
       onToggleTask={noop}
@@ -39,31 +48,49 @@ function renderBacklog(tasks: Array<{
   );
 }
 
-describe('TodayBacklog Event-first execution flow', () => {
+function eventSummary(partial: Partial<EventSummary>): EventSummary {
+  return {
+    id: 'event-1',
+    mindmapId: 'map-1',
+    title: 'Launch event',
+    context: 'work',
+    status: 'active',
+    progress: { done: 0, total: 1 },
+    effectiveTags: [],
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-28T00:00:00.000Z',
+    ...partial,
+  };
+}
+
+describe('TodayBacklog horizontal tab bar', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders each event and standalone as a section, not as tabs', () => {
+  it('renders an All tab plus one tab per event (including empty events)', () => {
     renderBacklog([
       { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' },
-      { id: 'standalone', title: 'Buy groceries', status: 'todo' },
-    ], true);
+    ], {
+      events: [
+        eventSummary({ id: 'event-1', mindmapId: 'map-1' }),
+        eventSummary({ id: 'event-2', mindmapId: 'map-2', title: 'Q4 planning' }),
+      ],
+    });
 
+    const tabbar = screen.getByTestId('today-tabbar');
+    expect(within(tabbar).getByTestId('today-tab-all')).toBeInTheDocument();
+    expect(within(tabbar).getByTestId('today-tab-event-1')).toHaveTextContent('Launch event');
+    // Empty events still get a tab.
+    expect(within(tabbar).getByTestId('today-tab-event-2')).toHaveTextContent('Q4 planning');
+    // All is the default tab; the event's open task renders in the flat list.
     const list = screen.getByTestId('today-execution-list');
-    expect(screen.getByTestId('today-section-map-1')).toBeInTheDocument();
-    expect(screen.getByTestId('today-section-standalone')).toBeInTheDocument();
-    // All open tasks render at once (no tab gating).
-    expect(within(list).getAllByRole('article')).toHaveLength(2);
-    // Legacy "All" tab must be gone.
-    expect(screen.queryByTestId('today-event-group-all')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('today-planning')).not.toBeInTheDocument();
-    expect(screen.queryByText('Linked plans')).not.toBeInTheDocument();
+    expect(within(list).getAllByRole('article')).toHaveLength(1);
   });
 
-  it('shows an Event breadcrumb or Standalone directly on each task row', () => {
+  it('shows an Event breadcrumb or Standalone directly on each task row in All', () => {
     renderBacklog([
       { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', sourcePath: ['Launch', 'Marketing'] },
       { id: 'standalone', title: 'Buy groceries', status: 'todo' },
-    ], true);
+    ], { withPlanning: true });
 
     expect(screen.getByTestId('task-card-event-planned')).toHaveTextContent('Launch event');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Launch');
@@ -75,7 +102,7 @@ describe('TodayBacklog Event-first execution flow', () => {
     const onOpenPlanningGroup = vi.fn();
     renderBacklog([
       { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1', originNodeId: 'node-9' },
-    ], true, undefined, { onOpenPlanningGroup });
+    ], { withPlanning: true, extraProps: { onOpenPlanningGroup } });
 
     fireEvent.click(screen.getByTestId('task-card-event-planned'));
     expect(onOpenPlanningGroup).toHaveBeenCalledWith(
@@ -84,16 +111,54 @@ describe('TodayBacklog Event-first execution flow', () => {
     );
   });
 
-  it('section header click opens the event canvas', () => {
-    const onOpenPlanningGroup = vi.fn();
+  it('switches to an event tab and shows only that event\'s tasks', () => {
     renderBacklog([
       { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' },
-    ], true, undefined, { onOpenPlanningGroup });
+      { id: 'other', title: 'Q4 budget', status: 'todo', spaceId: 'space-2', originMindmapId: 'map-2' },
+    ], {
+      events: [
+        eventSummary({ id: 'event-1', mindmapId: 'map-1' }),
+        eventSummary({ id: 'event-2', mindmapId: 'map-2', title: 'Q4 planning' }),
+      ],
+      planningGroups: [
+        { id: 'event-1', mindmapId: 'map-1', spaceId: 'space-1', title: 'Launch event', taskIds: ['planned'], completedTaskIds: [] },
+        { id: 'event-2', mindmapId: 'map-2', spaceId: 'space-2', title: 'Q4 planning', taskIds: ['other'], completedTaskIds: [] },
+      ],
+    });
 
-    fireEvent.click(screen.getByTestId('today-section-title-map-1'));
-    expect(onOpenPlanningGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'event-1', mindmapId: 'map-1' }),
-    );
+    expect(screen.getByText('Write launch brief')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('today-tab-event-1'));
+    expect(screen.getByText('Write launch brief')).toBeInTheDocument();
+    expect(screen.queryByText('Q4 budget')).not.toBeInTheDocument();
+    // Clicking the active tab returns to All.
+    fireEvent.click(screen.getByTestId('today-tab-event-1'));
+    expect(screen.getByText('Q4 budget')).toBeInTheDocument();
+  });
+
+  it('shows an empty state with an add trigger on an event tab with no tasks', () => {
+    const onAddToEvent = vi.fn();
+    renderBacklog([], {
+      events: [eventSummary({ id: 'event-1', mindmapId: 'map-1' })],
+      extraProps: { onAddToEvent },
+    });
+
+    fireEvent.click(screen.getByTestId('today-tab-event-1'));
+    expect(screen.getByText('No tasks for this event today.')).toBeInTheDocument();
+    expect(screen.getByTestId('today-event-add-trigger-map-1')).toBeInTheDocument();
+  });
+
+  it('filters the All list via a tag chip and toggles it off', () => {
+    renderBacklog([
+      { id: 'a', title: 'Tagged task', status: 'todo', tags: ['urgent'] },
+      { id: 'b', title: 'Plain task', status: 'todo' },
+    ], { extraProps: { categories: ['urgent', 'client'] } });
+
+    expect(screen.getByText('Tagged task')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('today-tag-urgent'));
+    expect(screen.getByText('Tagged task')).toBeInTheDocument();
+    expect(screen.queryByText('Plain task')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('today-tag-urgent'));
+    expect(screen.getByText('Plain task')).toBeInTheDocument();
   });
 
   it('renders the empty-day fallback CTA', () => {
@@ -124,49 +189,15 @@ describe('TodayBacklog Event-first execution flow', () => {
     expect(noop).toHaveBeenCalledWith('earlier', '2026-07-26');
   });
 
-  it('collapses and re-expands a section when its chevron is clicked', () => {
-    renderBacklog([
-      { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' },
-    ], true);
-
-    expect(screen.getByText('Write launch brief')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Collapse Launch event/i }));
-    expect(screen.queryByText('Write launch brief')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Expand Launch event/i }));
-    expect(screen.getByText('Write launch brief')).toBeInTheDocument();
-  });
-
-  it('omits an event section when all its tasks are completed (no empty box)', () => {
-    const groups: TodayPlanningGroup[] = [{
-      id: 'event-1', mindmapId: 'map-1', spaceId: 'space-1', title: 'Launch event',
-      taskIds: ['planned'], completedTaskIds: ['planned'],
-    }];
-    render(
-      <TodayBacklog
-        tasks={[{ id: 'planned', title: 'Write launch brief', status: 'done' as const, spaceId: 'space-1', originMindmapId: 'map-1' }]}
-        planningGroups={groups}
-        selectedDate="2026-07-28"
-        categories={[]}
-        onToggleTask={noop}
-        onEditTask={noop}
-        onAddTask={noop}
-        language="en"
-        isToday
-      />,
-    );
-    expect(screen.queryByTestId('today-section-map-1')).not.toBeInTheDocument();
-  });
-
-  describe('inline + Add to event', () => {
+  describe('inline + Add to event (on the event tab)', () => {
     it('opens an input under the section header when the trigger is clicked', () => {
       const onAddToEvent = vi.fn();
       renderBacklog(
         [{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' }],
-        true,
-        undefined,
-        { onAddToEvent },
+        { events: [eventSummary({ id: 'event-1', mindmapId: 'map-1' })], extraProps: { onAddToEvent } },
       );
 
+      fireEvent.click(screen.getByTestId('today-tab-event-1'));
       expect(screen.queryByTestId('today-event-add-input-map-1')).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId('today-event-add-trigger-map-1'));
       expect(screen.getByTestId('today-event-add-input-map-1')).toBeInTheDocument();
@@ -176,11 +207,10 @@ describe('TodayBacklog Event-first execution flow', () => {
       const onAddToEvent = vi.fn();
       renderBacklog(
         [{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' }],
-        true,
-        undefined,
-        { onAddToEvent },
+        { events: [eventSummary({ id: 'event-1', mindmapId: 'map-1' })], extraProps: { onAddToEvent } },
       );
 
+      fireEvent.click(screen.getByTestId('today-tab-event-1'));
       fireEvent.click(screen.getByTestId('today-event-add-trigger-map-1'));
       const input = screen.getByTestId('today-event-add-input-map-1');
       fireEvent.change(input, { target: { value: '  Draft Q4 brief  ' } });
@@ -196,11 +226,10 @@ describe('TodayBacklog Event-first execution flow', () => {
       const onAddToEvent = vi.fn();
       renderBacklog(
         [{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' }],
-        true,
-        undefined,
-        { onAddToEvent },
+        { events: [eventSummary({ id: 'event-1', mindmapId: 'map-1' })], extraProps: { onAddToEvent } },
       );
 
+      fireEvent.click(screen.getByTestId('today-tab-event-1'));
       fireEvent.click(screen.getByTestId('today-event-add-trigger-map-1'));
       const input = screen.getByTestId('today-event-add-input-map-1');
       fireEvent.change(input, { target: { value: '   ' } });
@@ -212,11 +241,10 @@ describe('TodayBacklog Event-first execution flow', () => {
       const onAddToEvent = vi.fn();
       renderBacklog(
         [{ id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', originMindmapId: 'map-1' }],
-        true,
-        undefined,
-        { onAddToEvent },
+        { events: [eventSummary({ id: 'event-1', mindmapId: 'map-1' })], extraProps: { onAddToEvent } },
       );
 
+      fireEvent.click(screen.getByTestId('today-tab-event-1'));
       fireEvent.click(screen.getByTestId('today-event-add-trigger-map-1'));
       const input = screen.getByTestId('today-event-add-input-map-1');
       fireEvent.change(input, { target: { value: 'draft' } });

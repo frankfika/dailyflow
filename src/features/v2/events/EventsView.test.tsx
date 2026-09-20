@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(async () => ({ id: 'event-new' })),
   applyOrganize: vi.fn(async () => ({ applied: true })),
   deleteEvent: vi.fn(async () => undefined),
+  deleteNode: vi.fn(async () => undefined),
   deletePending: false,
 }));
 
@@ -21,7 +22,7 @@ vi.mock('../hooks/useEvents', () => ({
   useAddEventChild: () => ({ mutateAsync: vi.fn() }),
   useAddEventSibling: () => ({ mutateAsync: vi.fn() }),
   useRenameEventNode: () => ({ mutateAsync: vi.fn() }),
-  useDeleteEventNode: () => ({ mutateAsync: vi.fn() }),
+  useDeleteEventNode: () => ({ mutateAsync: mocks.deleteNode }),
   useDeleteEvent: () => ({ mutateAsync: mocks.deleteEvent, isPending: mocks.deletePending }),
   useOutdentEventNode: () => ({ mutateAsync: vi.fn() }),
   useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
@@ -54,6 +55,7 @@ describe('EventsView Event-first surface', () => {
     mocks.create.mockClear();
     mocks.applyOrganize.mockClear();
     mocks.deleteEvent.mockClear();
+    mocks.deleteNode.mockClear();
     mocks.deletePending = false;
     vi.restoreAllMocks();
     window.localStorage.removeItem('dailyflow:events:outlineWidth');
@@ -92,6 +94,29 @@ describe('EventsView Event-first surface', () => {
     const dialog = await screen.findByTestId('confirm-dialog-confirm');
     fireEvent.click(dialog);
     await waitFor(() => expect(mocks.deleteEvent).toHaveBeenCalledWith({ eventId: 'event-1' }));
+  });
+
+  it('confirms before deleting a node subtree from the outline', async () => {
+    mocks.events = [EVENT];
+    mocks.detail = {
+      ...EVENT, mindmapId: 'map-1', rootNodeId: 'root',
+      nodes: [
+        { id: 'root', eventId: 'event-1', text: 'Ship DailyFlow', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] },
+        { id: 'child', eventId: 'event-1', parentId: 'root', text: 'Write changelog', position: { x: 1, y: 0 }, manualTags: [], aiTags: [] },
+      ],
+      edges: [{ source: 'root', target: 'child' }], manualTags: [], aiTags: [],
+      integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    renderView(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+
+    fireEvent.click(screen.getByTestId('outline-delete-child'));
+    // No node is deleted until the dialog is confirmed.
+    expect(mocks.deleteNode).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId('confirm-dialog-confirm');
+    expect(screen.getByText(/Delete "Write changelog"/)).toBeInTheDocument();
+    fireEvent.click(dialog);
+    await waitFor(() => expect(mocks.deleteNode).toHaveBeenCalledWith({ eventId: 'event-1', mindmapId: 'map-1', nodeId: 'child' }));
   });
 
   it('creates from title and immediately opens the one-canvas detail', async () => {

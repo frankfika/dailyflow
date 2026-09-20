@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, ChevronDown, ChevronRight, Network, Pin, Plus, Sparkles, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Network, Plus, Sparkles, X } from 'lucide-react';
 import { TaskCard } from './TaskCard';
-import type { RecurrenceRule } from '../api/client';
+import type { RecurrenceRule, EventSummary } from '../api/client';
 
 export type TodayTask = {
   id: string;
@@ -37,6 +37,9 @@ export interface TodayPlanningGroup {
 interface TodayBacklogProps {
   tasks: TodayTask[];
   planningGroups?: TodayPlanningGroup[];
+  /** Every event in the current context (including ones with no tasks today) —
+   *  each becomes a tab in the horizontal tab bar. */
+  events?: EventSummary[];
   onOpenPlanningGroup?: (group: TodayPlanningGroup, nodeId?: string) => void;
   /** Task IDs the user has starred; drives the star button on each card. */
   starredTaskIds?: Set<string>;
@@ -50,11 +53,10 @@ interface TodayBacklogProps {
   onDeleteTask?: (id: string, hostDate?: string) => void;
   onUnlinkFromSpace?: (taskId: string, hostDate: string) => void;
   /** Add a new task directly to an event's canvas, bound to a fresh node
-   *  (`useCreateTaskForNode` on the server). When provided, each event
-   *  section shows its own inline "+ Add to {event}" input. */
+   *  (`useCreateTaskForNode` on the server). Shown as the inline "+ Add to
+   *  {event}" input on that event's tab. */
   onAddToEvent?: (group: TodayPlanningGroup, title: string) => void | Promise<void>;
-  /** Add a standalone task — used by the empty state CTA and the section
-   *  header fallback when onAddToEvent isn't wired. */
+  /** Add a standalone task — used by the empty state CTA. */
   onAddTask: () => void;
   language: 'en' | 'zh';
   isToday: boolean;
@@ -74,14 +76,10 @@ function compareTasks(a: TodayTask, b: TodayTask): number {
   return (a.planOrder ?? Number.MAX_SAFE_INTEGER) - (b.planOrder ?? Number.MAX_SAFE_INTEGER);
 }
 
-interface RenderedEventGroup {
-  group: TodayPlanningGroup;
-  openTasks: TodayTask[];
-}
-
 export function TodayBacklog({
   tasks,
   planningGroups = [],
+  events = [],
   onOpenPlanningGroup,
   starredTaskIds,
   onToggleStar,
@@ -99,6 +97,10 @@ export function TodayBacklog({
   onCompletionPromptClosed,
 }: TodayBacklogProps) {
   const [showCompleted, setShowCompleted] = useState(false);
+  // Which event tab is active; null = the "All" tab.
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  // Active tag chip; null = no tag filter.
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   // Per-section collapse state, keyed by group id. Defaults to all expanded.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Which event section has its inline "+ Add" input open. Mutually exclusive.
@@ -113,28 +115,8 @@ export function TodayBacklog({
     [tasks],
   );
 
-  // Tasks belong to their source Event (mind map); anything unclaimed renders
-  // under a plain "standalone" group. Groups without open work are omitted so
-  // the list only shows events that still need attention today.
-  const { eventGroups, standaloneTasks } = useMemo(() => {
-    const taskById = new Map(openTasks.map(task => [task.id, task] as const));
-    const claimed = new Set<string>();
-    const eventGroups: RenderedEventGroup[] = [];
-    for (const group of planningGroups) {
-      const openTasksInGroup: TodayTask[] = [];
-      for (const taskId of group.taskIds) {
-        const task = taskById.get(taskId);
-        if (!task || claimed.has(taskId)) continue;
-        claimed.add(taskId);
-        openTasksInGroup.push(task);
-      }
-      if (openTasksInGroup.length === 0) continue;
-      eventGroups.push({ group, openTasks: openTasksInGroup });
-    }
-    const standaloneTasks = openTasks.filter(task => !claimed.has(task.id));
-    return { eventGroups, standaloneTasks };
-  }, [openTasks, planningGroups]);
-
+  // A task belongs to its source Event (mind map); anything unclaimed is
+  // standalone and only lives in the All tab.
   const eventByTaskId = useMemo(() => {
     const lookup = new Map<string, TodayPlanningGroup>();
     for (const group of planningGroups) {
@@ -142,6 +124,50 @@ export function TodayBacklog({
     }
     return lookup;
   }, [planningGroups]);
+
+  // Tab list: every event (in list order, so recency) plus orphan groups that
+  // hold today's tasks but aren't in the events query.
+  const tabs = useMemo(() => {
+    const byId = new Map<string, { id: string; mindmapId: string; spaceId?: string; title: string }>();
+    for (const e of events) {
+      byId.set(e.id, { id: e.id, mindmapId: e.mindmapId ?? e.id, spaceId: e.id, title: e.title || (language === 'zh' ? '未命名事件' : 'Untitled event') });
+    }
+    for (const g of planningGroups) {
+      if (!byId.has(g.id)) byId.set(g.id, { id: g.id, mindmapId: g.mindmapId, spaceId: g.spaceId, title: g.title });
+    }
+    const openCountByEvent = new Map<string, number>();
+    for (const task of openTasks) {
+      const group = eventByTaskId.get(task.id);
+      if (group) openCountByEvent.set(group.id, (openCountByEvent.get(group.id) ?? 0) + 1);
+    }
+    return [...byId.values()].map(e => ({ ...e, openCount: openCountByEvent.get(e.id) ?? 0 }));
+  }, [events, planningGroups, openTasks, eventByTaskId, language]);
+
+  // If the active event disappears (deleted), fall back to All.
+  useEffect(() => {
+    if (activeEventId && !tabs.some(t => t.id === activeEventId)) setActiveEventId(null);
+  }, [activeEventId, tabs]);
+
+  const activePlanningGroup = useMemo<TodayPlanningGroup | null>(() => {
+    if (!activeEventId) return null;
+    const existing = planningGroups.find(g => g.id === activeEventId);
+    if (existing) return existing;
+    const tab = tabs.find(t => t.id === activeEventId);
+    if (!tab) return null;
+    return { id: tab.id, mindmapId: tab.mindmapId, spaceId: tab.spaceId, title: tab.title, taskIds: [], completedTaskIds: [] };
+  }, [activeEventId, planningGroups, tabs]);
+
+  const matchesTab = (task: TodayTask) => activeEventId === null || eventByTaskId.get(task.id)?.id === activeEventId;
+  const matchesTag = (task: TodayTask) => activeTag === null || (task.tags ?? []).includes(activeTag);
+
+  const visibleOpenTasks = useMemo(
+    () => openTasks.filter(task => matchesTab(task) && matchesTag(task)),
+    [openTasks, activeEventId, activeTag], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const visibleCompletedTasks = useMemo(
+    () => completedTasks.filter(task => matchesTab(task) && matchesTag(task)),
+    [completedTasks, activeEventId, activeTag], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const toggleCollapsed = (key: string) => {
     setCollapsed(prev => {
@@ -177,96 +203,138 @@ export function TodayBacklog({
     </li>
   );
 
-  const hasOpenWork = eventGroups.length > 0 || standaloneTasks.length > 0;
-  const standaloneLabel = language === 'zh' ? '独立任务' : 'Standalone';
+  const hasOpenWork = visibleOpenTasks.length > 0;
+  const isAllTab = activeEventId === null;
+  const emptyLabel = isToday
+    ? (language === 'zh' ? '今天还没有任务。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
+    : (language === 'zh' ? '这一天没有任务。' : 'No open tasks on this day.');
+  const allLabel = language === 'zh' ? '全部' : 'All';
 
   return (
     <div className="today-backlog today-simple" data-testid="today-backlog">
+      <nav className="today-tabbar" data-testid="today-tabbar" aria-label={language === 'zh' ? '事件' : 'Events'}>
+        <button
+          type="button"
+          onClick={() => setActiveEventId(null)}
+          className={`today-tab ${isAllTab ? 'today-tab-active' : ''}`}
+          aria-pressed={isAllTab}
+          data-testid="today-tab-all"
+        >
+          <span>{allLabel}</span>
+          {openTasks.length > 0 && <span className="today-tab-count">{openTasks.length}</span>}
+        </button>
+        {tabs.map(tab => {
+          const active = activeEventId === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveEventId(active ? null : tab.id)}
+              className={`today-tab ${active ? 'today-tab-active' : ''}`}
+              aria-pressed={active}
+              data-testid={`today-tab-${tab.id}`}
+              title={tab.title}
+            >
+              <span className="truncate">{tab.title}</span>
+              {tab.openCount > 0 && <span className="today-tab-count">{tab.openCount}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {categories.length > 0 && (
+        <div className="today-tagbar" data-testid="today-tagbar">
+          {categories.map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+              className={`today-tag-chip ${activeTag === tag ? 'today-tag-chip-active' : ''}`}
+              aria-pressed={activeTag === tag}
+              data-testid={`today-tag-${tag}`}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       <section className="today-simple-open" aria-labelledby="today-task-list-title">
         <header className="today-simple-section-header">
           <div>
             <p className="today-simple-eyebrow">
               {language === 'zh' ? '今天要完成的事' : 'What needs doing today'}
             </p>
-            <h2 id="today-task-list-title">{language === 'zh' ? '任务' : 'Tasks'}</h2>
+            <h2 id="today-task-list-title">{isAllTab
+              ? (language === 'zh' ? '任务' : 'Tasks')
+              : activePlanningGroup?.title ?? ''}</h2>
           </div>
           <div className="today-simple-header-actions">
-            <span aria-label={language === 'zh' ? `${openTasks.length} 个待办` : `${openTasks.length} open tasks`}>
-              {openTasks.length}
+            <span aria-label={language === 'zh' ? `${visibleOpenTasks.length} 个待办` : `${visibleOpenTasks.length} open tasks`}>
+              {visibleOpenTasks.length}
             </span>
           </div>
         </header>
 
-        {hasOpenWork ? (
-          <div className="space-y-3" data-testid="today-execution-list">
-            {eventGroups.map(({ group, openTasks: groupTasks }) => {
-              const isCollapsed = collapsed.has(group.mindmapId);
-              return (
-                <EventSection
-                  key={group.mindmapId}
-                  group={group}
-                  tasks={groupTasks}
-                  isCollapsed={isCollapsed}
-                  onToggleCollapsed={() => toggleCollapsed(group.mindmapId)}
-                  onOpenPlanningGroup={onOpenPlanningGroup}
-                  language={language}
-                  isToday={isToday}
-                  showAddInput={activeAddSection === group.mindmapId}
-                  onRequestAdd={() => setActiveAddSection(group.mindmapId)}
-                  onCancelAdd={() => setActiveAddSection(null)}
-                  onAddToEvent={onAddToEvent}
-                  renderTask={renderTask}
-                />
-              );
-            })}
-
-            {standaloneTasks.length > 0 && (
-              <StandaloneSection
-                tasks={standaloneTasks}
-                isCollapsed={collapsed.has('__standalone__')}
-                onToggleCollapsed={() => toggleCollapsed('__standalone__')}
+        {isAllTab ? (
+          hasOpenWork ? (
+            <ul className="today-simple-list" data-testid="today-execution-list">
+              {visibleOpenTasks.map(renderTask)}
+            </ul>
+          ) : (
+            <div className="today-backlog-empty">
+              <motion.div
+                aria-hidden="true"
+                animate={{ scale: [1, 1.08, 1], rotate: [0, -4, 0, 4, 0] }}
+                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+                className="text-accent"
+              >
+                <Sparkles className="h-4 w-4" />
+              </motion.div>
+              <p>{emptyLabel}</p>
+              {isToday && (
+                <button onClick={onAddTask} className="today-backlog-empty-cta transition-transform active:scale-[0.97]">
+                  {language === 'zh' ? '添加任务' : 'Add one thing'}
+                </button>
+              )}
+            </div>
+          )
+        ) : (
+          activePlanningGroup && (
+            <div className="space-y-3" data-testid="today-execution-list">
+              <EventSection
+                group={activePlanningGroup}
+                tasks={visibleOpenTasks}
+                isCollapsed={collapsed.has(activePlanningGroup.mindmapId)}
+                onToggleCollapsed={() => toggleCollapsed(activePlanningGroup.mindmapId)}
+                onOpenPlanningGroup={onOpenPlanningGroup}
                 language={language}
-                standaloneLabel={standaloneLabel}
+                isToday={isToday}
+                showAddInput={activeAddSection === activePlanningGroup.mindmapId}
+                onRequestAdd={() => setActiveAddSection(activePlanningGroup.mindmapId)}
+                onCancelAdd={() => setActiveAddSection(null)}
+                onAddToEvent={onAddToEvent}
                 renderTask={renderTask}
               />
-            )}
-          </div>
-        ) : (
-          <div className="today-backlog-empty">
-            <motion.div
-              aria-hidden="true"
-              animate={{ scale: [1, 1.08, 1], rotate: [0, -4, 0, 4, 0] }}
-              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-              className="text-accent"
-            >
-              <Sparkles className="h-4 w-4" />
-            </motion.div>
-            <p>{isToday
-              ? (language === 'zh' ? '今天还没有任务。记下一件事就可以开始。' : 'Nothing here yet. Add one thing to get started.')
-              : (language === 'zh' ? '这一天没有任务。' : 'No open tasks on this day.')}</p>
-            {isToday && (
-              <button onClick={onAddTask} className="today-backlog-empty-cta transition-transform active:scale-[0.97]">
-                {language === 'zh' ? '添加任务' : 'Add one thing'}
-              </button>
-            )}
-          </div>
+            </div>
+          )
         )}
       </section>
 
-      {completedTasks.length > 0 && (
+      {visibleCompletedTasks.length > 0 && (
         <section className="today-simple-completed" data-testid="today-group-completed">
           <button
             type="button"
             onClick={() => setShowCompleted(value => !value)}
             aria-expanded={showCompleted}
-            aria-label={`${language === 'zh' ? '已完成' : 'Completed'} ${completedTasks.length}`}
+            aria-label={`${language === 'zh' ? '已完成' : 'Completed'} ${visibleCompletedTasks.length}`}
           >
             <Check className="h-3.5 w-3.5" />
             <span>{language === 'zh' ? '已完成' : 'Completed'}</span>
-            <span>{completedTasks.length}</span>
+            <span>{visibleCompletedTasks.length}</span>
             <ChevronDown className={`ml-auto h-3.5 w-3.5 transition-transform ${showCompleted ? 'rotate-180' : ''}`} />
           </button>
-          {showCompleted && <ul className="today-simple-list">{completedTasks.map(renderTask)}</ul>}
+          {showCompleted && <ul className="today-simple-list">{visibleCompletedTasks.map(renderTask)}</ul>}
         </section>
       )}
     </div>
@@ -275,9 +343,9 @@ export function TodayBacklog({
 
 // ---------------------------------------------------------------------------
 // Event section — collapsible container that owns one event's tasks plus its
-// own inline "+ Add to {event}" affordance. Clicking the header opens the
-// event canvas (replacing the chip-on-card click); the trailing chevron
-// toggles collapse.
+// own inline "+ Add to {event}" affordance. Rendered inside that event's tab.
+// Clicking the header opens the event canvas; the trailing chevron toggles
+// collapse.
 // ---------------------------------------------------------------------------
 
 interface EventSectionProps {
@@ -363,6 +431,11 @@ function EventSection({
       {!isCollapsed && (
         <ul className="today-event-section-list">
           {tasks.map(renderTask)}
+          {tasks.length === 0 && (
+            <li className="today-event-section-empty">
+              {language === 'zh' ? '这个事件今天还没有任务。' : 'No tasks for this event today.'}
+            </li>
+          )}
           {isToday && onAddToEvent && (
             <li className="today-event-section-add">
               {showAddInput ? (
@@ -419,55 +492,6 @@ function EventSection({
               )}
             </li>
           )}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Standalone section — collapsible list of unlinked tasks. No inline add;
-// the global TodayInputBar at the bottom handles standalone creation.
-// ---------------------------------------------------------------------------
-
-interface StandaloneSectionProps {
-  tasks: TodayTask[];
-  isCollapsed: boolean;
-  onToggleCollapsed: () => void;
-  language: 'en' | 'zh';
-  standaloneLabel: string;
-  renderTask: (task: TodayTask) => React.ReactNode;
-}
-
-function StandaloneSection({
-  tasks,
-  isCollapsed,
-  onToggleCollapsed,
-  language,
-  standaloneLabel,
-  renderTask,
-}: StandaloneSectionProps) {
-  return (
-    <div className="today-standalone-section" data-testid="today-section-standalone">
-      <div className="today-event-section-header">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-expanded={!isCollapsed}
-          aria-label={`${isCollapsed ? (language === 'zh' ? '展开' : 'Expand') : (language === 'zh' ? '收起' : 'Collapse')} ${standaloneLabel}`}
-          className="today-event-section-chevron"
-        >
-          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
-        </button>
-        <span className="today-event-section-title" data-testid="today-section-title-standalone">
-          <Pin className="today-event-icon" aria-hidden="true" />
-          <span className="truncate">{standaloneLabel}</span>
-          <span className="today-event-section-count">{tasks.length}</span>
-        </span>
-      </div>
-      {!isCollapsed && (
-        <ul className="today-event-section-list">
-          {tasks.map(renderTask)}
         </ul>
       )}
     </div>
