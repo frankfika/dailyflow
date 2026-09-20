@@ -529,6 +529,14 @@ export default function App() {
     return groups;
   }, [earlierOpenTasks, eventsQuery.data, tasks, todayItemsQuery.data, topicSpaces, language]);
 
+  // Every event in the current context, for Today's horizontal tab bar. A
+  // fresh event appears here as soon as `useCreateEvent` invalidates the
+  // events query, so creating one is reflected in Today immediately.
+  const todayEvents = useMemo(
+    () => (eventsQuery.data?.events ?? []).filter((event) => event.context === activeContext),
+    [eventsQuery.data?.events, activeContext],
+  );
+
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -2244,6 +2252,7 @@ export default function App() {
                   <TodayBacklog
                     tasks={todayTasks}
                     planningGroups={todayPlanningGroups}
+                    events={todayEvents}
                     onOpenPlanningGroup={(group, nodeId) => {
                       setRequestedEventId(group.spaceId ?? group.id);
                       setRequestedNodeId(nodeId ?? null);

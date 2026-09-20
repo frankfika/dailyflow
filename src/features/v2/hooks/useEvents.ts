@@ -116,6 +116,10 @@ export function useCreateEvent(): UseMutationResult<
       await Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() }),
         qc.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot(), exact: false }),
+        // Today's tab bar lists every event, so a fresh event must invalidate
+        // the today-items projection too — otherwise it stays invisible in
+        // Today until the 10-min stale timeout (see today-eventfirst-projection-staleness).
+        qc.invalidateQueries({ queryKey: queryKeys.todayItemsRoot() }),
       ]);
     },
   });
