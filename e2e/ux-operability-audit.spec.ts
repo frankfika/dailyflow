@@ -192,13 +192,13 @@ test.describe('Today UX operability audit', () => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    // Events now render as collapsible sections (no more horizontal tabs);
-    // every event section title is visible at once. The title is the affordance
-    // that opens the canvas (it replaces the old tab click).
-    const eventSection = page.locator('[data-testid^="today-section-title-"]:not([data-testid="today-section-title-standalone"])').first();
-    await expect(eventSection).toBeVisible();
-    await expect(eventSection).toContainText(EVENT_TITLE);
+    // Today renders a horizontal tab bar: the All tab plus one tab per event
+    // (the seeded event appears as a tab before any task is interacted with).
+    const eventTab = page.locator('[data-testid^="today-tab-"]:not([data-testid="today-tab-all"])').first();
+    await expect(eventTab).toBeVisible();
+    await expect(eventTab).toContainText(EVENT_TITLE);
 
+    // The task's event breadcrumb is the affordance that opens the canvas.
     const eventChip = page.locator(`[data-testid="task-card-event-${seeded.eventTaskIds[0]}"]`);
     await expect(eventChip).toBeVisible();
     await eventChip.click();
@@ -219,29 +219,28 @@ test.describe('Today UX operability audit', () => {
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
   });
 
-  test('c. event sections show their own tasks alongside Standalone', async ({ page }) => {
+  test('c. event tasks show alongside Standalone (All) and filter into the event tab', async ({ page }) => {
     const { pageErrors } = attachErrorCapture(page);
     await openTodayPage(page);
 
-    // Every section (event + standalone) is rendered simultaneously — no tab
-    // gating. Each section title is visible up front, and its tasks render
-    // below it without filtering.
-    const eventSection = page.locator('[data-testid^="today-section-title-"]:not([data-testid="today-section-title-standalone"])').first();
-    const standaloneSection = page.getByTestId('today-section-title-standalone');
-    await expect(eventSection).toBeVisible();
-    await expect(standaloneSection).toBeVisible();
-
+    // The All tab mixes event tasks (with an event breadcrumb) and standalone
+    // tasks in one flat list — no tab gating.
     const backlog = page.getByTestId('today-backlog');
     await expect(backlog).toContainText(EVENT_TASKS[0]);
     await expect(backlog).toContainText(STANDALONE_TASKS[0]);
 
-    // Each event section carries its own "+ Add to {event}" trigger so the
-    // user can add a task directly to that event without going through the
-    // standalone input.
+    // Each event gets its own tab with an inline "+ Add to {event}" affordance;
+    // opening it filters down to that event's tasks only.
+    const eventTab = page.locator('[data-testid^="today-tab-"]:not([data-testid="today-tab-all"])').first();
+    await expect(eventTab).toContainText(EVENT_TITLE);
+    await eventTab.click();
+    await expect(backlog).toContainText(EVENT_TASKS[0]);
+    await expect(backlog).not.toContainText(STANDALONE_TASKS[0]);
+
     const addTrigger = page.locator('[data-testid^="today-event-add-trigger-"]').first();
     await expect(addTrigger).toBeVisible();
 
-    // Collapsing a section hides its tasks but keeps the title visible.
+    // Collapsing the event section hides its tasks but keeps the tab bar.
     const chevron = page.locator('[data-testid^="today-section-"] button[aria-expanded]').first();
     await chevron.click();
     await expect(backlog).not.toContainText(EVENT_TASKS[0]);
