@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0](https://github.com/frankfika/dailyflow/compare/v2.15.0...v2.16.0) (2026-09-20)
+
+
+### Features
+
+* **today:** horizontal event tabs + Today sync + node delete confirm ([#92](https://github.com/frankfika/dailyflow/issues/92)) ([e816d6b](https://github.com/frankfika/dailyflow/commit/e816d6b8fab6c5389b9dffcbe6afa9dc680682b3))
+
 ## [2.15.0](https://github.com/frankfika/dailyflow/compare/v2.14.1...v2.15.0) (2026-09-15)
 
 
