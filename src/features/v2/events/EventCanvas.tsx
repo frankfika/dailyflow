@@ -558,14 +558,10 @@ export function EventCanvas({
     if (target.closest('input, textarea, button')) return;
     if (!activeNode) return;
 
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      await commit(activeNode.id);
-      const nodeId = await onAddChild(activeNode.id, '');
-      if (nodeId) onActivate(nodeId);
-      return;
-    }
-    if (event.key === 'Enter') {
+    if (event.key === 'Tab' || event.key === 'Enter') {
+      // Tab no longer spawns a child node — it starts editing the selected
+      // node so the key means "type" (same as Enter). Add-child stays on the
+      // toolbar + button and on Enter inside the inline editor.
       event.preventDefault();
       onActivate(activeNode.id);
       return;
