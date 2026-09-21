@@ -1741,16 +1741,33 @@ export default function App() {
     const kept = focusTaskIds.filter(id => openTodayTaskIds.has(id));
     if (kept.length !== focusTaskIds.length) updateFocusTaskIds(kept);
   }, [focusTaskIds, openTodayTaskIds, updateFocusTaskIds]);
-  const systemTags = ['work', 'life', 'delayed', 'tasks'];
-  const categories = Array.from(new Set(todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag)))));
+  const systemTags = ['work', 'life', 'delayed', 'tasks', 'deadline'];
+  // Union of today's task tags, the active context's event tags, and user
+  // tags scraped from any loaded daily note (#tag inline on task lines).
+  // The history scrape keeps the chip bar discoverable on days where today's
+  // tasks carry no tags, so the filter is visible from day one.
+  const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
+  const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const recentDates = allDates.filter(d => d >= recentThreshold);
+  const historyTagPattern = /#([A-Za-z_一-鿿][A-Za-z0-9_\-一-鿿]*)/g;
+  const historyTagSet = new Set<string>();
+  for (const date of allDates) {
+    const content = filesMap[date];
+    if (!content) continue;
+    for (const match of content.matchAll(historyTagPattern)) {
+      if (!systemTags.includes(match[1])) historyTagSet.add(match[1]);
+    }
+  }
+  const categories = Array.from(new Set([
+    ...todayTasks.flatMap(t => (t.tags || []).filter(tag => !systemTags.includes(tag))),
+    ...todayEvents.flatMap(e => (e.effectiveTags || []).filter(tag => !systemTags.includes(tag))),
+    ...historyTagSet,
+  ]));
   if (lastAddedCategory && categories.includes(lastAddedCategory)) {
     const idx = categories.indexOf(lastAddedCategory);
     categories.splice(idx, 1);
     categories.unshift(lastAddedCategory);
   }
-  const allDates = Object.keys(filesMap).sort((a, b) => b.localeCompare(a));
-  const recentThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const recentDates = allDates.filter(d => d >= recentThreshold);
   // Handle workspace setup completion
   const handleWorkspaceSetupComplete = async () => {
     setShowWorkspaceSetup(false);
