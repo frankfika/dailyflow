@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.2](https://github.com/frankfika/dailyflow/compare/v2.16.1...v2.16.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **events:** Tab on selected node edits instead of adding a child ([#96](https://github.com/frankfika/dailyflow/issues/96)) ([e4d15f5](https://github.com/frankfika/dailyflow/commit/e4d15f55438860cf9ed442cd79a19cd0d2941de1))
+
 ## [2.16.1](https://github.com/frankfika/dailyflow/compare/v2.16.0...v2.16.1) (2026-09-21)
 
 
