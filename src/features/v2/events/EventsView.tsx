@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Search, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Redo2, Search, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { ulid } from 'ulid';
-import type { EventDetail, EventNode, EventSummary, MindMap, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
+import type { EventDetail, EventNode, EventSummary, MindMap, MindMapNodeKind, OrganizeStrategy, OrganizeSuggestion } from '../../../api/client';
 import { mindmapsApi, organizeApi, recurringApi } from '../../../api/client';
 import type { ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { queryKeys } from '../../../queryKeys';
@@ -29,6 +29,8 @@ import {
   useScheduleEventNode,
   useUnscheduleEventNode,
   useUndoCompleteNodeTask,
+  useUpdateEvent,
+  useUpdateNodeKind,
   useUpdateNodePosition,
 } from '../hooks/useEvents';
 import { EventCanvas } from './EventCanvas';
@@ -54,9 +56,11 @@ export interface EventsViewProps {
 const TEXT = {
   en: {
     title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks', deleteEvent: 'Delete event', deleteEventConfirm: 'Delete this event? This cannot be undone. The linked canvas stays on disk but the event is removed from the list.', deleteEventTitle: 'Delete event', delete: 'Delete',
+    renameTitle: 'Rename event', titleEmpty: 'Title cannot be empty', archive: 'Archive', archiveEvent: 'Archive event', archiveEventConfirm: 'Archive this event? You can restore it from the Archive panel.', archiveEventTitle: 'Archive event', archived: 'Archived', archivedEmpty: 'No archived events.', archivedHint: 'Archived events stay on disk and can be restored.', restore: 'Restore', archivedCount: (n: number) => `${n} archived`, undoArchive: 'Archived — Undo', titleUpdated: 'Title updated', renameFailed: 'Could not rename event', archiveFailed: 'Could not archive event', restoreFailed: 'Could not restore event',
   },
   zh: {
     title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务', deleteEvent: '删除事件', deleteEventConfirm: '确定要删除这个事件吗？不可撤销。关联的画布会保留在本地，但事件会从列表中移除。', deleteEventTitle: '删除事件', delete: '删除',
+    renameTitle: '重命名事件', titleEmpty: '标题不能为空', archive: '归档', archiveEvent: '归档事件', archiveEventConfirm: '归档这个事件？你可以稍后在归档面板里恢复它。', archiveEventTitle: '归档事件', archived: '已归档', archivedEmpty: '没有已归档的事件。', archivedHint: '已归档的事件保留在本地，可以随时恢复。', restore: '恢复', archivedCount: (n: number) => `${n} 个已归档`, undoArchive: '已归档 — 撤销', titleUpdated: '标题已更新', renameFailed: '重命名失败', archiveFailed: '归档失败', restoreFailed: '恢复失败',
   },
 } as const;
 
@@ -98,6 +102,59 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
       setPendingDelete(null);
     }
   }, [pendingDelete, deleteEvent, onNotice, language, t.loadError]);
+
+  // Archive (soft-delete) + restore + drawer. The pending toast holds the
+  // id so an Undo within 5s flips it back to active without a second click.
+  // `phase: 'confirming'` shows the ConfirmDialog; after success it flips to
+  // `'toasted'` and the undo banner takes over for 5s.
+  const updateEvent = useUpdateEvent();
+  const [pendingArchive, setPendingArchive] = useState<{ id: string; title: string; phase: 'confirming' | 'toasted'; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const requestArchive = useCallback((id: string, title: string) => {
+    setPendingArchive((prev) => {
+      if (prev?.timer) clearTimeout(prev.timer);
+      return { id, title, phase: 'confirming', timer: 0 as unknown as ReturnType<typeof setTimeout> };
+    });
+  }, []);
+  const cancelArchive = useCallback(() => {
+    if (pendingArchive?.timer) clearTimeout(pendingArchive.timer);
+    setPendingArchive(null);
+  }, [pendingArchive]);
+  const confirmArchive = useCallback(async () => {
+    if (!pendingArchive) return;
+    const { id, title } = pendingArchive;
+    try {
+      await updateEvent.mutateAsync({ eventId: id, patch: { status: 'archived' } });
+      setSelectedEventId((current) => (current === id ? null : current));
+      const timer = setTimeout(() => setPendingArchive(null), 5000);
+      setPendingArchive({ id, title, phase: 'toasted', timer });
+      onNotice?.(t.undoArchive, 'info');
+    } catch (err) {
+      onNotice?.(err instanceof Error ? err.message : t.archiveFailed, 'error');
+      setPendingArchive(null);
+    }
+  }, [pendingArchive, updateEvent, onNotice, t]);
+  const undoArchive = useCallback(async () => {
+    if (!pendingArchive) return;
+    if (pendingArchive.timer) clearTimeout(pendingArchive.timer);
+    const { id } = pendingArchive;
+    try {
+      await updateEvent.mutateAsync({ eventId: id, patch: { status: 'active' } });
+      onNotice?.(language === 'zh' ? '已恢复' : 'Restored', 'success');
+    } catch (err) {
+      onNotice?.(err instanceof Error ? err.message : t.restoreFailed, 'error');
+    } finally {
+      setPendingArchive(null);
+    }
+  }, [pendingArchive, updateEvent, onNotice, language, t]);
+  const restoreFromDrawer = useCallback(async (id: string) => {
+    try {
+      await updateEvent.mutateAsync({ eventId: id, patch: { status: 'active' } });
+      onNotice?.(language === 'zh' ? '已恢复' : 'Restored', 'success');
+    } catch (err) {
+      onNotice?.(err instanceof Error ? err.message : t.restoreFailed, 'error');
+    }
+  }, [updateEvent, onNotice, language, t]);
   const events = useMemo(
     () => (eventsQ.data?.events ?? []).filter((event) => event.context === context),
     [context, eventsQ.data?.events],
@@ -108,6 +165,18 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
     setSelectedEventId(requestedEventId);
     onRequestedEventHandled?.();
   }, [onRequestedEventHandled, requestedEventId]);
+
+  // Clear any pending archive-undo timer on unmount so a 5-second toast
+  // can't fire `setPendingArchive` against an unmounted EventsView (which
+  // would log a React warning and leak a closure).
+  useEffect(() => {
+    return () => {
+      setPendingArchive((prev) => {
+        if (prev?.timer) clearTimeout(prev.timer);
+        return prev;
+      });
+    };
+  }, []);
 
   async function submitNewEvent() {
     if (!newTitle.trim()) return;
@@ -133,13 +202,26 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
 
   const active = events.filter((event) => event.status === 'active');
   const completed = events.filter((event) => event.status === 'completed');
+  const archived = events.filter((event) => event.status === 'archived');
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--color-background)]" data-testid="events-surface">
       <header className="shrink-0 border-b border-border/70 bg-surface/70 px-6 py-5 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-6">
           <div><h1 className="text-xl font-semibold tracking-tight text-text-heading">{t.title}</h1><p className="mt-1 text-xs text-text-muted">{t.subtitle}</p></div>
-          <button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]" data-testid="new-event-button"><Plus className="h-4 w-4" />{t.newEvent}</button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setArchiveOpen(true)}
+              className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-heading transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              data-testid="open-archive-button"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {t.archived}
+              {archived.length > 0 && <span className="rounded-md bg-black/[0.06] px-1.5 py-0.5 text-[11px] tabular-nums dark:bg-white/[0.1]">{archived.length}</span>}
+            </button>
+            <button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]" data-testid="new-event-button"><Plus className="h-4 w-4" />{t.newEvent}</button>
+          </div>
         </div>
       </header>
 
@@ -171,8 +253,8 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
               <button onClick={() => setCreating(true)} className="rounded-lg border border-gray-300 px-3.5 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900">{t.emptyAction}</button>
             </div>
           )}
-          {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} />}
-          {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} />}
+          {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} onArchive={requestArchive} />}
+          {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} onArchive={requestArchive} />}
         </div>
       </div>
       <ConfirmDialog
@@ -185,20 +267,99 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
         onConfirm={() => { void confirmDelete(); }}
         onCancel={cancelDelete}
       />
+      <ConfirmDialog
+        show={pendingArchive !== null && pendingArchive.phase === 'confirming'}
+        title={t.archiveEventTitle}
+        message={t.archiveEventConfirm}
+        confirmText={t.archive}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={updateEvent.isPending}
+        onConfirm={() => { void confirmArchive(); }}
+        onCancel={cancelArchive}
+      />
+      {pendingArchive && pendingArchive.phase === 'toasted' && (
+        <div className="pointer-events-auto fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg" data-testid="archive-toast">
+          <span>{t.undoArchive}</span>
+          <button type="button" disabled={updateEvent.isPending} onClick={() => { void undoArchive(); }} className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium hover:bg-white/25 disabled:opacity-50" data-testid="archive-undo">{language === 'zh' ? '撤销' : 'Undo'}</button>
+        </div>
+      )}
+      {archiveOpen && (
+        <ArchiveDrawer
+          archived={archived}
+          language={language}
+          onClose={() => setArchiveOpen(false)}
+          onRestore={(id) => { void restoreFromDrawer(id); }}
+          onDelete={(id, title) => { setArchiveOpen(false); requestDelete(id, title); }}
+          isPending={updateEvent.isPending}
+          t={t}
+        />
+      )}
     </section>
   );
 }
 
-function EventGroup({ title, events, language, onOpen, noActions, updated, onDelete }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
-  return <div className="mb-10"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} onDelete={onDelete} />)}</div></div>;
+/**
+ * Right-side drawer listing all archived events with one-click Restore
+ * and a fallback hard-delete action.
+ */
+function ArchiveDrawer({ archived, language, onClose, onRestore, onDelete, isPending, t }: { archived: EventSummary[]; language: 'en' | 'zh'; onClose: () => void; onRestore: (id: string) => void; onDelete: (id: string, title: string) => void; isPending: boolean; t: (typeof TEXT)['en' | 'zh'] }) {
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end" data-testid="archive-drawer">
+      <button type="button" aria-label={language === 'zh' ? '关闭' : 'Close'} onClick={onClose} className="flex-1 bg-black/30" />
+      <aside className="flex h-full w-full max-w-md flex-col border-l border-border bg-white shadow-2xl dark:bg-[#101514]">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-text-heading">{t.archived}</h2>
+            <p className="mt-0.5 text-xs text-text-muted">{t.archivedHint}</p>
+          </div>
+          <button type="button" aria-label={language === 'zh' ? '关闭' : 'Close'} onClick={onClose} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="flex-1 overflow-y-auto p-3">
+          {archived.length === 0 && <p className="px-3 py-12 text-center text-sm text-gray-400">{t.archivedEmpty}</p>}
+          {archived.map((event) => (
+            <div key={event.id} className="mb-2 flex items-center gap-2 rounded-lg border border-border px-3 py-2.5" data-testid={`archived-row-${event.id}`}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-text-heading">{event.title}</div>
+                <div className="text-[11px] text-text-muted">{relativeTime(event.updatedAt, language)}</div>
+              </div>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => onRestore(event.id)}
+                className="shrink-0 rounded-md border border-accent/40 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                data-testid={`archived-restore-${event.id}`}
+              >
+                {t.restore}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled'))}
+                className="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                aria-label={t.deleteEvent}
+                data-testid={`archived-delete-${event.id}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function EventGroup({ title, events, language, onOpen, noActions, updated, onDelete, onArchive }: { title: string; events: EventSummary[]; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void; onArchive: (id: string, title: string) => void }) {
+  return <div className="mb-10"><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{events.map((event) => <EventCard key={event.id} event={event} language={language} onOpen={onOpen} noActions={noActions} updated={updated} onDelete={onDelete} onArchive={onArchive} />)}</div></div>;
 }
 
 function CompletedGroup(props: Parameters<typeof EventGroup>[0]) {
   const [open, setOpen] = useState(false);
-  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} onDelete={props.onDelete} />)}</div>}</div>;
+  return <div><button onClick={() => setOpen((value) => !value)} className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400" aria-expanded={open}><ChevronDown className={`h-4 w-4 transition ${open ? '' : '-rotate-90'}`} />{props.title}<span className="font-normal">{props.events.length}</span></button>{open && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{props.events.map((event) => <EventCard key={event.id} event={event} language={props.language} onOpen={props.onOpen} noActions={props.noActions} updated={props.updated} onDelete={props.onDelete} onArchive={props.onArchive} />)}</div>}</div>;
 }
 
-function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void }) {
+function EventCard({ event, language, onOpen, noActions, updated, onDelete, onArchive }: { event: EventSummary; language: 'en' | 'zh'; onOpen: (id: string) => void; noActions: string; updated: string; onDelete: (id: string, title: string) => void; onArchive: (id: string, title: string) => void }) {
   // The card is a <div role="button"> (not a <button>) so we can nest the
   // "more" menu trigger inside it. We still need keyboard activation
   // (Enter / Space) and focus styles to keep it accessible.
@@ -261,6 +422,16 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
               <button
                 type="button"
                 role="menuitem"
+                onClick={() => { setMenuOpen(false); onArchive(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled')); }}
+                data-testid={`event-card-archive-${event.id}`}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <CalendarDays className="h-4 w-4" />
+                {language === 'zh' ? '归档事件' : 'Archive event'}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 onClick={() => { setMenuOpen(false); onDelete(event.id, event.title || (language === 'zh' ? '无标题' : 'Untitled')); }}
                 data-testid={`event-card-delete-${event.id}`}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
@@ -287,6 +458,87 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete }: { 
   );
 }
 
+/**
+ * Click-to-edit event title. Replaces a plain <h1> with an inline input
+ * so the user can fix typos and rename without leaving the canvas.
+ * Submits on Enter / blur, cancels on Esc, ignores empty / unchanged.
+ */
+function EditableTitle({ value, onCommit, language }: { value: string; onCommit: (next: string) => void | Promise<void>; language: 'en' | 'zh' }) {
+  const t = TEXT[language];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  async function commit() {
+    const next = draft.trim();
+    if (!next || next === value) {
+      setEditing(false);
+      setDraft(value);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onCommit(next);
+      setEditing(false);
+    } catch {
+      // Leave the input open so the user can retry / Esc to abandon.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { void commit(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        disabled={busy}
+        maxLength={200}
+        aria-label={t.renameTitle}
+        className="min-w-0 flex-1 rounded-md border border-accent/40 bg-white px-2 py-1 text-base font-semibold text-gray-950 outline-none focus:ring-2 focus:ring-accent/20 dark:bg-[#101514] dark:text-gray-50"
+        data-testid="event-title-input"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="group flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-1 py-1 text-left text-base font-semibold text-gray-950 hover:bg-gray-100 dark:text-gray-50 dark:hover:bg-gray-800"
+      title={t.renameTitle}
+      data-testid="event-title-display"
+    >
+      <span className="truncate">{value}</span>
+      <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
+  );
+}
+
 function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void }) {
   const t = TEXT[language];
   const detailQ = useEventById(eventId);
@@ -294,6 +546,8 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const addSibling = useAddEventSibling();
   const rename = useRenameEventNode();
   const deleteNode = useDeleteEventNode();
+  const updateEvent = useUpdateEvent();
+  const updateNodeKind = useUpdateNodeKind();
   const outdent = useOutdentEventNode();
   const moveNode = useMoveEventNode();
   const reorderNode = useReorderEventNode();
@@ -689,7 +943,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     }
   }
 
-  async function handleChangeKind(nodeId: string, kind: 'branch' | 'tag' | 'question' | 'resource' | 'risk') {
+  async function handleChangeKind(nodeId: string, kind: MindMapNodeKind) {
     if (!event) return;
     await recordHistory();
     try {
@@ -699,6 +953,15 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       writeEventMap(qc, updated);
       qc.invalidateQueries({ queryKey: queryKeys.event(event.id) });
       qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
+    }
+  }
+
+  async function handleUpdateNodeKind(nodeId: string, kind: MindMapNodeKind) {
+    if (!event) return;
+    try {
+      await updateNodeKind.mutateAsync({ eventId: event.id, mindmapId: event.mindmapId, nodeId, kind });
     } catch (error) {
       onNotice?.(error instanceof Error ? error.message : t.loadError, 'error');
     }
@@ -746,7 +1009,21 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     {recoverableRun && <button type="button" onClick={() => setAgentPanelOpen(true)} className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2 text-left text-xs text-amber-900" data-testid="agent-run-recovery-banner"><span>{language === 'zh' ? `发现可恢复的 AI Run：${recoverableRun.status === 'waiting_review' ? '建议等待审阅' : recoverableRun.error?.message ?? recoverableRun.status}` : `Resumable AI run: ${recoverableRun.status === 'waiting_review' ? 'proposal awaiting review' : recoverableRun.error?.message ?? recoverableRun.status}`}</span><span className="font-semibold">{language === 'zh' ? '恢复' : 'Resume'} →</span></button>}
     <header className="relative z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#101514]">
       <button onClick={onBack} aria-label={t.back} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><ArrowLeft className="h-4 w-4" /></button>
-      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-950 dark:text-gray-50">{event.title}</h1>
+      <h1 className="flex min-w-0 flex-1 items-center text-base font-semibold text-gray-950 dark:text-gray-50">
+        <EditableTitle
+          value={event.title}
+          language={language}
+          onCommit={async (next) => {
+            try {
+              await updateEvent.mutateAsync({ eventId, patch: { title: next } });
+              onNotice?.(t.titleUpdated, 'success');
+            } catch (err) {
+              onNotice?.(err instanceof Error ? err.message : t.renameFailed, 'error');
+              throw err;
+            }
+          }}
+        />
+      </h1>
       <button
         type="button"
         onClick={() => setContextPreviewOpen(true)}
@@ -870,6 +1147,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onMoveNode={handleMoveNode}
           onReorderNode={handleReorderNode}
           onScheduleTask={handleSchedule}
+          onUpdateNodeKind={handleUpdateNodeKind}
         />
         {outlineVisible && (
           <ResizeHandle
