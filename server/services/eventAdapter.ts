@@ -754,6 +754,9 @@ export async function listAllEvents(workspaceRoot: string): Promise<EventSummary
   for (const map of maps) {
     if (representedMindmapIds.has(map.id) || (map.spaceId && !representedSpaceIds.has(map.spaceId))) continue;
     const space = standaloneMapAsSpace(map);
+    // Standalone (legacy/independent) MindMaps have no paired TopicSpace and
+    // therefore no `status: archived` frontmatter knob — status is always
+    // derived from progress, matching the rationale at lines 473-485.
     const progress = await computeProgressFromSpace(workspaceRoot, space, map);
     events.push({
       id: map.id,

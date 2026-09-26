@@ -202,7 +202,11 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
 
   const active = events.filter((event) => event.status === 'active');
   const completed = events.filter((event) => event.status === 'completed');
-  const archived = events.filter((event) => event.status === 'archived');
+  // Newest-first in the drawer: most recently archived surfaces first.
+  const archived = events
+    .filter((event) => event.status === 'archived')
+    .slice()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--color-background)]" data-testid="events-surface">
@@ -468,6 +472,7 @@ function EditableTitle({ value, onCommit, language }: { value: string; onCommit:
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
+  const [invalid, setInvalid] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -483,11 +488,19 @@ function EditableTitle({ value, onCommit, language }: { value: string; onCommit:
 
   async function commit() {
     const next = draft.trim();
-    if (!next || next === value) {
+    if (!next) {
+      // Reject: keep input open so the user can fix it, mark aria-invalid.
+      setInvalid(true);
+      inputRef.current?.focus();
+      return;
+    }
+    if (next === value) {
+      setInvalid(false);
       setEditing(false);
       setDraft(value);
       return;
     }
+    setInvalid(false);
     setBusy(true);
     try {
       await onCommit(next);
@@ -501,27 +514,35 @@ function EditableTitle({ value, onCommit, language }: { value: string; onCommit:
 
   if (editing) {
     return (
-      <input
-        ref={inputRef}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => { void commit(); }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            void commit();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        disabled={busy}
-        maxLength={200}
-        aria-label={t.renameTitle}
-        className="min-w-0 flex-1 rounded-md border border-accent/40 bg-white px-2 py-1 text-base font-semibold text-gray-950 outline-none focus:ring-2 focus:ring-accent/20 dark:bg-[#101514] dark:text-gray-50"
-        data-testid="event-title-input"
-      />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); if (invalid) setInvalid(false); }}
+          onBlur={() => { void commit(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setDraft(value);
+              setInvalid(false);
+              setEditing(false);
+            }
+          }}
+          disabled={busy}
+          maxLength={200}
+          aria-invalid={invalid}
+          aria-describedby={invalid ? 'event-title-error' : undefined}
+          aria-label={t.renameTitle}
+          className={`min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-base font-semibold text-gray-950 outline-none focus:ring-2 focus:ring-accent/20 dark:bg-[#101514] dark:text-gray-50 ${invalid ? 'border-red-500' : 'border-accent/40'}`}
+          data-testid="event-title-input"
+        />
+        {invalid && (
+          <p id="event-title-error" role="alert" className="text-xs text-red-600 dark:text-red-400" data-testid="event-title-error">{t.titleEmpty}</p>
+        )}
+      </div>
     );
   }
 

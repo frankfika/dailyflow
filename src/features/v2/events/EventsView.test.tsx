@@ -382,8 +382,8 @@ describe('EventsView canvas undo/redo + ⌘F (UX_DESIGN §4.3)', () => {
     fireEvent.click(screen.getByTestId('event-card-more-event-1'));
     const archiveBtn = await screen.findByTestId('event-card-archive-event-1');
     fireEvent.click(archiveBtn);
-    // ConfirmDialog appears
-    const confirmBtn = await screen.findByRole('button', { name: /^archive$/i });
+    // ConfirmDialog appears — target by testid rather than a brittle name regex.
+    const confirmBtn = await screen.findByTestId('confirm-dialog-confirm');
     fireEvent.click(confirmBtn);
     await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalledWith({ eventId: 'event-1', patch: { status: 'archived' } }));
     // Toast appears with an Undo button that fires a restore PATCH.

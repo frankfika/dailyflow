@@ -87,6 +87,17 @@ export function SlashMenu({ anchor, language, onPick, onDismiss, exclude, only }
     return () => window.removeEventListener('keydown', onKey, true);
   }, [active, filtered, onPick, onDismiss]);
 
+  // Click outside the popover dismisses — Notion-style.
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      const el = listRef.current;
+      if (!el || e.target instanceof Node && el.contains(e.target)) return;
+      onDismiss();
+    }
+    window.addEventListener('mousedown', onDown, true);
+    return () => window.removeEventListener('mousedown', onDown, true);
+  }, [onDismiss]);
+
   // Position with edge-flip: keep menu inside viewport (>= 8px margin).
   const MENU_W = 280;
   const MENU_MAX_H = 320;
