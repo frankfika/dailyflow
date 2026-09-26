@@ -470,7 +470,19 @@ export async function summarizeTopicSpaceAsEvent(
     context = 'work';
   }
 
-  const status: EventStatus = progress.allDone ? 'completed' : 'active';
+  // Honor the persisted status when the user has explicitly set it.
+  // Without this guard, archiving an event looks like a no-op: the .md
+  // frontmatter writes `status: archived`, but `summarizeTopicSpaceAsEvent`
+  // recomputes status from progress and silently overwrites it back to
+  // `active`, so the list view keeps showing the archived row.
+  let status: EventStatus;
+  if (space.status === 'archived') {
+    status = 'archived';
+  } else if (space.status === 'completed') {
+    status = 'completed';
+  } else {
+    status = progress.allDone ? 'completed' : 'active';
+  }
 
   return {
     id: space.id,
@@ -635,7 +647,16 @@ async function buildEventDetailFromSources(
     }
   }
   const allDone = total > 0 && done === total;
-  const status: EventStatus = allDone ? 'completed' : 'active';
+  // Honor explicit user-set statuses; recompute from progress otherwise.
+  // Same rationale as summarizeTopicSpaceAsEvent above.
+  let status: EventStatus;
+  if (space.status === 'archived') {
+    status = 'archived';
+  } else if (space.status === 'completed') {
+    status = 'completed';
+  } else {
+    status = allDone ? 'completed' : 'active';
+  }
 
   const manualTags = Array.isArray(space.tags) ? [...space.tags] : [];
   const aiTags: SuggestedTag[] = [];

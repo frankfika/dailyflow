@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ListTodo, Plus, Trash2 } from 'lucide-react';
-import type { EventDetail, EventNode } from '../../../api/client';
+import type { EventDetail, EventNode, MindMapNodeKind } from '../../../api/client';
 import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import { getTodayStr } from '../../../utils/tagColors';
+import { SlashMenu } from './SlashMenu';
 
 type Copy = {
   addChild: string;
@@ -86,6 +87,7 @@ interface EventOutlineProps {
   onMoveNode?: (nodeId: string, newParentId: string) => Promise<void>;
   onReorderNode?: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
   onScheduleTask?: (node: EventNode, date: string, extras?: ScheduleExtrasDraft) => Promise<void>;
+  onUpdateNodeKind?: (nodeId: string, kind: MindMapNodeKind) => Promise<void>;
 }
 
 function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
@@ -143,6 +145,7 @@ export function EventOutline({
   onMoveNode,
   onReorderNode,
   onScheduleTask,
+  onUpdateNodeKind,
 }: EventOutlineProps) {
   const copy = COPY[language];
   const rows = useMemo(() => buildRows(event, collapsedIds), [event, collapsedIds]);
@@ -151,6 +154,9 @@ export function EventOutline({
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [schedulePicker, setSchedulePicker] = useState<{ nodeId: string; date: string } | null>(null);
+  // Slash-menu anchor: opens when the user types `/` at the caret of a
+  // row they're editing. Picks a `kind` and clears the draft `/`.
+  const [slashMenuFor, setSlashMenuFor] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const today = getTodayStr();
 
   function shiftDate(base: string, days: number): string {
@@ -298,6 +304,36 @@ export function EventOutline({
 
   function handleChange(row: OutlineRow, value: string) {
     setDraftText((prev) => ({ ...prev, [row.node.id]: value }));
+    // Slash-menu trigger: typing `/` alone (or as the only token) opens the
+    // kind picker anchored to the input's bottom-left. Typing more text
+    // closes it again so the user can backspace-and-retry.
+    if (value === '/') {
+      const input = inputRefs.current.get(row.node.id);
+      if (input) {
+        const rect = input.getBoundingClientRect();
+        setSlashMenuFor({ nodeId: row.node.id, x: rect.left, y: rect.bottom + 4 });
+      }
+    } else if (slashMenuFor?.nodeId === row.node.id && value !== '/') {
+      setSlashMenuFor(null);
+    }
+  }
+
+  async function pickKind(kind: MindMapNodeKind) {
+    if (!slashMenuFor) return;
+    const { nodeId } = slashMenuFor;
+    setSlashMenuFor(null);
+    // Clear the `/` placeholder from the draft so the row stays empty.
+    setDraftText((prev) => ({ ...prev, [nodeId]: '' }));
+    if (kind === 'root') return; // root kind is reserved for the canvas root.
+    try {
+      await onUpdateNodeKind?.(nodeId, kind);
+    } catch { /* mutation's own onError already surfaced a notice */ }
+    // Restore focus + caret so the user can keep typing the node's content.
+    const input = inputRefs.current.get(nodeId);
+    if (input) {
+      input.focus();
+      try { input.setSelectionRange(0, 0); } catch { /* selection API may not exist */ }
+    }
   }
 
   const root = rows[0];
@@ -441,6 +477,15 @@ export function EventOutline({
           </div>
         )}
       </div>
+      {slashMenuFor && (
+        <SlashMenu
+          anchor={{ x: slashMenuFor.x, y: slashMenuFor.y }}
+          language={language}
+          onPick={pickKind}
+          onDismiss={() => setSlashMenuFor(null)}
+          exclude={['root']}
+        />
+      )}
     </div>
   );
 }

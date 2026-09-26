@@ -17,8 +17,10 @@ import {
   type EditNodeTaskInput,
   type EventDetail,
   type EventNode,
+  type MindMap,
   type MindMapEdge,
   type MindMapNode,
+  type MindMapNodeKind,
   type OrganizeSuggestion,
   type EventSummary,
   type StandaloneTask,
@@ -646,6 +648,78 @@ export function useDeleteEvent(): UseMutationResult<
       // Force the list to refetch (it was already invalidated optimistically
       // by the caller clearing `selectedEventId`).
       qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    },
+  });
+}
+
+/**
+ * Partial update for event metadata: rename + soft-delete (status=archived)
+ * + restore (status=active). Optimistically updates both the event-detail
+ * cache and the events-list cache so the title/archived badge change is
+ * visible without a refetch.
+ */
+export function useUpdateEvent(): UseMutationResult<
+  { event?: unknown },
+  Error,
+  { eventId: string; patch: { title?: string; status?: 'active' | 'completed' | 'archived' } }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, patch }) => eventsApi.update(eventId, patch),
+    onMutate: async ({ eventId, patch }) => {
+      const detailKey = queryKeys.event(eventId);
+      // Match the `useEvents()` hook's actual query key (defaults to
+      // {from: null, to: null}). Writing to `eventsRoot` here would
+      // land on a different cache slot the list view never reads.
+      const listKey = queryKeys.events({ from: null, to: null });
+      const prevDetail = qc.getQueryData<{ event: EventDetail | null }>(detailKey);
+      const prevList = qc.getQueryData<{ events: EventSummary[] } | undefined>(listKey);
+      if (prevDetail?.event) {
+        qc.setQueryData<{ event: EventDetail | null }>(detailKey, {
+          event: { ...prevDetail.event, ...patch, updatedAt: new Date().toISOString() },
+        });
+      }
+      if (prevList?.events) {
+        qc.setQueryData<{ events: EventSummary[] }>(listKey, {
+          events: prevList.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e)),
+        });
+      }
+      return { prevDetail, prevList };
+    },
+    onError: (_err, { eventId }, context) => {
+      if (context?.prevDetail) qc.setQueryData(queryKeys.event(eventId), context.prevDetail);
+      if (context?.prevList) qc.setQueryData(queryKeys.events({ from: null, to: null }), context.prevList);
+    },
+    onSettled: (_data, _err, { eventId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.event(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.eventsRoot() });
+    },
+  });
+}
+
+/**
+ * Change a node's semantic kind (task/question/decision/risk/branch/...).
+ * Goes through `mindmapsApi.updateNodeKind` which already handles the
+ * paired-tag/task bookkeeping server-side, so we only need to invalidate
+ * the event + mindmap caches on success.
+ */
+export function useUpdateNodeKind(): UseMutationResult<
+  MindMap,
+  Error,
+  { eventId: string; mindmapId: string; nodeId: string; kind: MindMapNodeKind; extras?: { tag?: string } }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: MAP_WRITE_SCOPE,
+    mutationFn: async ({ mindmapId, nodeId, kind, extras }) =>
+      mindmapsApi.updateNodeKind(mindmapId, nodeId, kind, extras),
+    onSuccess: (updated, vars) => {
+      writeEventMap(qc, updated);
+      qc.invalidateQueries({ queryKey: queryKeys.event(vars.eventId) });
+    },
+    onError: (_err, vars) => {
+      dropEventMap(qc, vars.mindmapId);
+      qc.invalidateQueries({ queryKey: queryKeys.event(vars.eventId) });
     },
   });
 }

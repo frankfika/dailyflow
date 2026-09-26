@@ -460,6 +460,27 @@ export const eventsApi = {
     if (res.status === 404) throw new Error('Event not found');
     throw await httpError(res, 'Failed to delete event');
   },
+  /**
+   * Partial update for the event metadata. Today: rename + soft-delete
+   * (`status: 'archived'`) + restore (`status: 'active'`). Returns the
+   * updated TopicSpace wrapped as `{ event }` (server response shape).
+   * Callers (useUpdateEvent) invalidate the queries on settle, so the
+   * payload is rarely consumed directly — the loose `unknown` return type
+   * reflects that no caller depends on the shape.
+   */
+  async update(
+    eventId: string,
+    patch: { title?: string; status?: 'active' | 'completed' | 'archived' },
+  ): Promise<{ event?: unknown }> {
+    const res = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to update event');
+    const payload = await res.json();
+    return (payload?.event !== undefined ? { event: payload.event } : payload) as { event?: unknown };
+  },
   async listTodayItems(date: string, context?: EventContext): Promise<{ items: TodayItem[] }> {
     const query = new URLSearchParams({ date });
     if (context) query.set('context', context);

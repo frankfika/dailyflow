@@ -17,7 +17,7 @@ import {
   unscheduleAllNodeTasks,
   rescheduleNodeTask,
 } from '../services/eventExecutionService.js';
-import { createTopicSpace, deleteTopicSpace, getTopicSpace } from '../services/topicSpaces.js';
+import { createTopicSpace, deleteTopicSpace, getTopicSpace, updateTopicSpace } from '../services/topicSpaces.js';
 import { convertStandaloneTaskToEventNode } from '../services/taskEventConversion.js';
 import { getMindMap, updateMindMap, deleteMindMap } from '../services/mindmaps.js';
 import { randomUUID } from 'node:crypto';
@@ -66,6 +66,10 @@ router.use(expressJson({ limit: '4mb' }));
 
 function isEventContext(v: unknown): v is EventContext {
   return v === 'work' || v === 'life';
+}
+
+function isEventStatus(v: unknown): v is 'active' | 'completed' | 'archived' {
+  return v === 'active' || v === 'completed' || v === 'archived';
 }
 
 /**
@@ -457,6 +461,50 @@ router.post('/actions/reschedule-node-task', async (req, res) => {
     })));
   } catch (error: any) {
     console.error('[events] reschedule error:', error);
+    res.status(error?.status ?? 500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/events/:id
+ * Body: { title?: string, status?: 'active'|'completed'|'archived' }
+ * Returns: { event: TopicSpace }
+ *
+ * Partial update for the event metadata (rename + soft-delete / archive /
+ * restore). Does NOT touch the linked MindMap or its nodes — the mindmap
+ * stays paired with the space so restore is a one-liner.
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await getTopicSpace(id);
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+
+    const body = (req.body ?? {}) as { title?: unknown; status?: unknown };
+    const updates: { title?: string; status?: 'active' | 'completed' | 'archived' } = {};
+
+    if (body.title !== undefined) {
+      const t = typeof body.title === 'string' ? body.title.trim() : '';
+      if (!t) return res.status(400).json({ error: 'Title cannot be empty' });
+      if (t.length > 200) return res.status(400).json({ error: 'Title too long (max 200)' });
+      updates.title = t;
+    }
+    if (body.status !== undefined) {
+      if (!isEventStatus(body.status)) {
+        return res.status(400).json({ error: `Invalid status: ${String(body.status)}` });
+      }
+      updates.status = body.status;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    const updated = await updateTopicSpace(id, updates);
+    if (!updated) return res.status(404).json({ error: 'Event not found' });
+
+    res.json({ event: updated });
+  } catch (error: any) {
+    console.error('[events] patch error:', error);
     res.status(error?.status ?? 500).json({ error: error.message });
   }
 });

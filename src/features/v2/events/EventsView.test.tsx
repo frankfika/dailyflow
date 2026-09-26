@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   deleteEvent: vi.fn(async () => undefined),
   deleteNode: vi.fn(async () => undefined),
   deletePending: false,
+  updateEvent: vi.fn(async () => ({ id: 'event-1' })),
 }));
 
 vi.mock('../hooks/useEvents', () => ({
@@ -28,6 +29,8 @@ vi.mock('../hooks/useEvents', () => ({
   useMoveEventNode: () => ({ mutateAsync: vi.fn() }),
   useReorderEventNode: () => ({ mutateAsync: vi.fn() }),
   useUpdateNodePosition: () => ({ mutateAsync: vi.fn() }),
+  useUpdateEvent: () => ({ mutateAsync: mocks.updateEvent, isPending: false }),
+  useUpdateNodeKind: () => ({ mutateAsync: vi.fn() }),
   useLayoutEventTree: () => ({ mutateAsync: vi.fn() }),
   useScheduleEventNode: () => ({ mutateAsync: vi.fn() }),
   useUnscheduleEventNode: () => ({ mutateAsync: vi.fn() }),
@@ -56,6 +59,7 @@ describe('EventsView Event-first surface', () => {
     mocks.applyOrganize.mockClear();
     mocks.deleteEvent.mockClear();
     mocks.deleteNode.mockClear();
+    mocks.updateEvent.mockClear();
     mocks.deletePending = false;
     vi.restoreAllMocks();
     window.localStorage.removeItem('dailyflow:events:outlineWidth');
@@ -349,5 +353,42 @@ describe('EventsView canvas undo/redo + ⌘F (UX_DESIGN §4.3)', () => {
     // Redo → second PUT restoring the organized (current) map.
     fireEvent.keyDown(window, { key: 'Z', metaKey: true, shiftKey: true });
     await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(2));
+  });
+
+  // P0 UX: event title is inline-editable.
+  it('inline-renames the event title via the header title button', async () => {
+    mocks.events = [EVENT];
+    mocks.detail = {
+      ...EVENT, mindmapId: 'map-1', rootNodeId: 'root',
+      nodes: [{ id: 'root', eventId: 'event-1', text: 'Ship DailyFlow', position: { x: 0, y: 0 }, manualTags: [], aiTags: [] }],
+      edges: [], manualTags: [], aiTags: [],
+      integrity: { missingMap: false, sourceContextWasUnclassified: false, orphanTaskIds: [], duplicateNodeTaskIds: [] },
+    };
+    renderView(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-event-1'));
+    const display = await screen.findByTestId('event-title-display');
+    fireEvent.click(display);
+    const input = await screen.findByTestId('event-title-input');
+    fireEvent.change(input, { target: { value: 'Ship DailyFlow v2' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalledWith({ eventId: 'event-1', patch: { title: 'Ship DailyFlow v2' } }));
+  });
+
+  // P0 UX: archive button on the card menu sets status='archived' (PATCH),
+  // and the 5s toast actually fires a PATCH back to 'active' when clicked.
+  it('archives an event from the card menu and offers a 5s undo', async () => {
+    mocks.events = [EVENT];
+    renderView(<EventsView language="en" context="work" />);
+    fireEvent.click(screen.getByTestId('event-card-more-event-1'));
+    const archiveBtn = await screen.findByTestId('event-card-archive-event-1');
+    fireEvent.click(archiveBtn);
+    // ConfirmDialog appears
+    const confirmBtn = await screen.findByRole('button', { name: /^archive$/i });
+    fireEvent.click(confirmBtn);
+    await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalledWith({ eventId: 'event-1', patch: { status: 'archived' } }));
+    // Toast appears with an Undo button that fires a restore PATCH.
+    const undoBtn = await screen.findByTestId('archive-undo');
+    fireEvent.click(undoBtn);
+    await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalledWith({ eventId: 'event-1', patch: { status: 'active' } }));
   });
 });
