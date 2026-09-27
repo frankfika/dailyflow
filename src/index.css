@@ -158,6 +158,28 @@ body {
   transition: left 220ms var(--ease-native), top 220ms var(--ease-native);
 }
 
+/* T9: 1s highlight pulse on the row/node the user just activated. Triggered
+   by adding the class for 1s from JS (pane-level effect on activeNodeId). */
+.event-node-pulse,
+.outline-row-pulse {
+  animation: event-activate-pulse 1s ease-out;
+}
+@keyframes event-activate-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(35, 135, 123, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(35, 135, 123, 0); }
+}
+
+/* T12: floating action buttons (collapse / add child / add sibling / delete)
+   hide on hover-only by default. On touch devices hover/focus-within never
+   fires, so make them always visible — otherwise users can't see the
+   controls that matter most. */
+@media (hover: none) {
+  .group\/node .opacity-0.group-hover\/node\:opacity-100,
+  .group\/node .opacity-0.group-focus-within\/node\:opacity-100 {
+    opacity: 1;
+  }
+}
+
 /* Typography Overrides */
 h1, h2, h3, h4, h5, h6, .editorial-hero {
   font-family: var(--font-sans);

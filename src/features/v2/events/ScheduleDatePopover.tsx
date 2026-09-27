@@ -81,7 +81,10 @@ export function ScheduleDatePopover({
       if (!ref.current?.contains(e.target as Node)) onClickAway();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel();
+      // T1: Escape must not bubble — EventsView's window handler would otherwise
+      // also consume it (back/Today). Popover listens on document (bubble) so
+      // stopPropagation here blocks App.tsx / EventsView window handlers.
+      if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
     }
     const id = window.setTimeout(() => {
       document.addEventListener('mousedown', onDoc);

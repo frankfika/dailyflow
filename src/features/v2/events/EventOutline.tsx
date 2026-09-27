@@ -88,6 +88,9 @@ interface EventOutlineProps {
   onReorderNode?: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
   onScheduleTask?: (node: EventNode, date: string, extras?: ScheduleExtrasDraft) => Promise<void>;
   onUpdateNodeKind?: (nodeId: string, kind: MindMapNodeKind) => Promise<void>;
+  /** T9: pulse highlight the row matching pulseNodeId when pulseTick bumps. */
+  pulseNodeId?: string | null;
+  pulseTick?: number;
 }
 
 function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
@@ -146,6 +149,8 @@ export function EventOutline({
   onReorderNode,
   onScheduleTask,
   onUpdateNodeKind,
+  pulseNodeId,
+  pulseTick,
 }: EventOutlineProps) {
   const copy = COPY[language];
   const rows = useMemo(() => buildRows(event, collapsedIds), [event, collapsedIds]);
@@ -176,6 +181,25 @@ export function EventOutline({
       input?.select();
     }
   }, [editingId, rows]);
+
+  // T9: when pulseTick bumps (activeNodeId changed in either pane), scroll
+  // the matching outline row into view and pulse-highlight it. Skip the first
+  // tick so the initial selection doesn't animate.
+  const isFirstPulseRef = useRef(true);
+  useEffect(() => {
+    if (!pulseNodeId) return;
+    if (isFirstPulseRef.current) { isFirstPulseRef.current = false; return; }
+    if (typeof document === 'undefined') return;
+    const el = document.querySelector(`[data-testid="outline-row-${pulseNodeId}"]`);
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    if (el) {
+      el.classList.add('outline-row-pulse');
+      window.setTimeout(() => el.classList.remove('outline-row-pulse'), 1000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pulseTick]);
 
   function textFor(row: OutlineRow) {
     return draftText[row.node.id] ?? row.node.text;
