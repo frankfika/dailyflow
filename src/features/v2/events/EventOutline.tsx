@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ListTodo, Plus, Trash2 } from 'lucide-react';
 import type { EventDetail, EventNode, MindMapNodeKind } from '../../../api/client';
 import { ScheduleDatePopover, hasExtras, type ScheduleDateCopy, type ScheduleExtrasDraft } from './ScheduleDatePopover';
-import { getTodayStr } from '../../../utils/tagColors';
+import { getTodayStr } from '../../../utils/date';
 import { SlashMenu } from './SlashMenu';
 
 type Copy = {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Archive, CalendarDays, Check, ChevronDown, FileText, Focus, HelpCircle, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Tag, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode, OrganizeStrategy } from '../../../api/client';
-import { getTodayStr } from '../../../utils/tagColors';
+import { getTodayStr } from '../../../utils/date';
 import { ScheduleDatePopover, hasExtras, type ScheduleExtrasDraft } from './ScheduleDatePopover';
 import type { EventGraphProposal, GraphOperation } from '../api/client';
 

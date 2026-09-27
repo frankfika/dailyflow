@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { Task } from '../types/task';
 import type { RecurrenceRule } from '../api/client';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 import { TagInput } from './TagInput';
 import { ConfirmDialog } from './ConfirmDialog';
 

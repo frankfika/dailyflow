@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { notesApi } from '../api/client';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 
 export interface SaveNoteModalProps {
   isOpen: boolean;

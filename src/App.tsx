@@ -9,7 +9,7 @@ import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiA
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
-import { getTodayStr } from './utils/tagColors';
+import { getTodayStr } from './utils/date';
 import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';

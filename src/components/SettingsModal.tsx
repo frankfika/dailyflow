@@ -22,7 +22,7 @@ import {
 } from '../api/client';
 import { API_BASE } from '../config/api';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from '../api/updater';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 import { ProactiveSettingsSection } from './ProactiveSettingsSection';
 import { TranscriptionSettingsSection } from './TranscriptionSettingsSection';
 import { PrivacyPanel } from './PrivacyPanel';

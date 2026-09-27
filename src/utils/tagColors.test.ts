@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getTagColor, getTodayStr, TAG_COLORS } from '../utils/tagColors';
+import { getTagColor, TAG_COLORS } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 
 describe('tagColors utils', () => {
   describe('getTagColor', () => {

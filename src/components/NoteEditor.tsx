@@ -11,7 +11,8 @@ import remarkGfm from 'remark-gfm';
 import type { NoteData, PromptTemplateData } from '../api/client';
 import { promptsApi, aiApi } from '../api/client';
 import { getActiveAiConfig } from '../types/models';
-import { getTagColor, getTodayStr } from '../utils/tagColors';
+import { getTagColor } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 import { TagInput } from './TagInput';
 
 interface AvailableTask {
