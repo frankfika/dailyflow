@@ -363,7 +363,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 
 * Sprint 1 = 4-week pre-roadshow sprint. 14/14 items shipped. 645 tests pass, 0 TS errors.
-* See `docs/ROADSHOW_VS_PRODUCT_GAP.md` for the full gap analysis.
+* See `docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md` for the full gap analysis.
 
 ## [1.9.0](https://github.com/frankfika/dailyflow/compare/v1.8.0...v1.9.0) (2026-08-18)
 

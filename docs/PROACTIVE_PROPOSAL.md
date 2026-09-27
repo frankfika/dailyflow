@@ -22,7 +22,7 @@ Commitment 已经逾期 ≥ 5 天时，主动推一张卡片到 Today**——而
 3. **每周上限** — `maxPerWeek = 3`；本周已发出的 P2P 提案 ≥ 3
    → 阻塞本轮扫描。
 
-> 这三条是 `docs/ROADSHOW_VS_PRODUCT_GAP.md` 提到的「容易让人觉得
+> 这三条是 `docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md` 提到的「容易让人觉得
 > 太烦」的风险点。设计文档里就已圈定——三种限制缺一不可。
 
 ## 触发条件

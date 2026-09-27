@@ -51,7 +51,7 @@ DailyFlow is a good fit if you want AI assistance and calendar connections witho
 | **P2** | Skill marketplace MVP (GitHub registry + SHA-256) | Slide 12 |
 | **P2** | Privacy panel (5 outbound categories listed) | Slide 05 |
 
-Design docs: [`docs/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
+Design docs: [`docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## ✨ Features
 

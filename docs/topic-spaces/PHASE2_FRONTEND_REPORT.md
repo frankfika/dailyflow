@@ -50,7 +50,7 @@
 
 - `e2e/*` (verifier's territory — `e2e/mindmap-visual.spec.ts` was already modified when I started, I left it alone)
 - `server/*` (server agent's territory)
-- Demo files: `_demo-audio/`, `_demo-compose.py`, `_demo-out/`, `_demo-record.mjs`, `scripts/_demo-record.mjs`, `scripts/_df-mmt-debug.mjs`
+- Demo files: `docs/demo-assets/audio/`, `docs/demo-assets/scripts/_demo-compose.py`, `docs/demo-assets/video/`, `docs/demo-assets/scripts/_demo-record.mjs`, `scripts/_df-mmt-debug.mjs`
 - Frank's WIP templates: `src/components/MindMap/templates.{ts,test.ts}`
 - Visual assets modified by other agents' test runs: `visual-mindmap-*.png`, `visual-topic-spaces-1-created.png`
 
