@@ -5,6 +5,15 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0](https://github.com/frankfika/dailyflow/compare/v2.16.2...v2.17.0) (2026-09-27)
+
+
+### Features
+
+* **events:** P0 UX — inline title edit, slash menu for node kind, archive + restore ([8f887b8](https://github.com/frankfika/dailyflow/commit/8f887b8608189c1c02b59a747185768ab6686063))
+* **events:** S1-S3 UX remediation — Escape layer, activation, density, search ([b6968aa](https://github.com/frankfika/dailyflow/commit/b6968aab91f79eb97f448d8bdcc87453ff69f998))
+* **events:** S1-S3 UX remediation — Escape layer, activation, density, search ([844cd30](https://github.com/frankfika/dailyflow/commit/844cd30ac2e459035f673c4e61d1d7cfeb605dae))
+
 ## [2.16.2](https://github.com/frankfika/dailyflow/compare/v2.16.1...v2.16.2) (2026-09-21)
 
 
