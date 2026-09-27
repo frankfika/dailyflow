@@ -176,6 +176,11 @@ export function isUpdateDownloaded(): boolean {
  * 重启应用以应用更新
  */
 export async function relaunchApp(): Promise<void> {
-  await relaunch();
+  try {
+    await relaunch();
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to relaunch DailyFlow: ${detail}`);
+  }
 }
 
