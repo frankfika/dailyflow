@@ -51,16 +51,18 @@ export interface EventsViewProps {
   requestedNodeId?: string | null;
   onRequestedNodeHandled?: () => void;
   onRequestedEventHandled?: () => void;
+  /** T1: Escape on the events list (no detail open) returns the user to Today. */
+  onExitToToday?: () => void;
 }
 
 const TEXT = {
   en: {
     title: 'Events', subtitle: 'Plan the outcome here. Send only the next actions to Today.', newEvent: 'New Event', active: 'Active', completed: 'Completed', empty: 'Create an event and start breaking it down.', emptyAction: 'Create your first event', input: 'What are you moving forward?', create: 'Create', cancel: 'Cancel', loading: 'Loading events…', loadError: 'Events could not be loaded.', noActions: 'Not scheduled yet', updated: 'Updated', back: 'Back to Events', search: 'Search nodes', more: 'More', missing: 'This event is missing its canvas.', noMatch: 'No matching nodes', showOutline: 'Show outline', hideOutline: 'Hide outline', undo: 'Undo', redo: 'Redo', autoLayout: 'Auto layout', copyOutline: 'Copy outline', outlineCopied: 'Outline copied', copyFailed: 'Copy failed', statNodes: 'nodes', statTasks: 'tasks', deleteEvent: 'Delete event', deleteEventConfirm: 'Delete this event? This cannot be undone. The linked canvas stays on disk but the event is removed from the list.', deleteEventTitle: 'Delete event', delete: 'Delete',
-    renameTitle: 'Rename event', titleEmpty: 'Title cannot be empty', archive: 'Archive', archiveEvent: 'Archive event', archiveEventConfirm: 'Archive this event? You can restore it from the Archive panel.', archiveEventTitle: 'Archive event', archived: 'Archived', archivedEmpty: 'No archived events.', archivedHint: 'Archived events stay on disk and can be restored.', restore: 'Restore', archivedCount: (n: number) => `${n} archived`, undoArchive: 'Archived — Undo', titleUpdated: 'Title updated', renameFailed: 'Could not rename event', archiveFailed: 'Could not archive event', restoreFailed: 'Could not restore event',
+    renameTitle: 'Rename event', titleEmpty: 'Title cannot be empty', archive: 'Archive', archiveEvent: 'Archive event', archiveEventConfirm: 'Archive this event? You can restore it from the Archive panel.', archiveEventTitle: 'Archive event', archived: 'Archived', archivedEmpty: 'No archived events.', archivedHint: 'Archived events stay on disk and can be restored.', restore: 'Restore', archivedCount: (n: number) => `${n} archived`, undoArchive: 'Archived — Undo', titleUpdated: 'Title updated', renameFailed: 'Could not rename event', archiveFailed: 'Could not archive event', restoreFailed: 'Could not restore event', filterEvents: 'Filter events', noMatchList: 'No events match',
   },
   zh: {
     title: '事件', subtitle: '在这里规划全局，只把下一步行动安排到 Today。', newEvent: '新建事件', active: '进行中', completed: '已完成', empty: '创建一个事件，然后开始拆解。', emptyAction: '创建第一个事件', input: '你想推进什么事情？', create: '创建', cancel: '取消', loading: '正在加载事件…', loadError: '事件加载失败。', noActions: '尚未安排', updated: '更新于', back: '返回事件', search: '搜索节点', more: '更多', missing: '这个事件缺少可用的画布。', noMatch: '没有匹配的节点', showOutline: '显示大纲', hideOutline: '隐藏大纲', undo: '撤销', redo: '重做', autoLayout: '自动整理布局', copyOutline: '复制大纲', outlineCopied: '大纲已复制', copyFailed: '复制失败', statNodes: '节点', statTasks: '任务', deleteEvent: '删除事件', deleteEventConfirm: '确定要删除这个事件吗？不可撤销。关联的画布会保留在本地，但事件会从列表中移除。', deleteEventTitle: '删除事件', delete: '删除',
-    renameTitle: '重命名事件', titleEmpty: '标题不能为空', archive: '归档', archiveEvent: '归档事件', archiveEventConfirm: '归档这个事件？你可以稍后在归档面板里恢复它。', archiveEventTitle: '归档事件', archived: '已归档', archivedEmpty: '没有已归档的事件。', archivedHint: '已归档的事件保留在本地，可以随时恢复。', restore: '恢复', archivedCount: (n: number) => `${n} 个已归档`, undoArchive: '已归档 — 撤销', titleUpdated: '标题已更新', renameFailed: '重命名失败', archiveFailed: '归档失败', restoreFailed: '恢复失败',
+    renameTitle: '重命名事件', titleEmpty: '标题不能为空', archive: '归档', archiveEvent: '归档事件', archiveEventConfirm: '归档这个事件？你可以稍后在归档面板里恢复它。', archiveEventTitle: '归档事件', archived: '已归档', archivedEmpty: '没有已归档的事件。', archivedHint: '已归档的事件保留在本地，可以随时恢复。', restore: '恢复', archivedCount: (n: number) => `${n} 个已归档`, undoArchive: '已归档 — 撤销', titleUpdated: '标题已更新', renameFailed: '重命名失败', archiveFailed: '归档失败', restoreFailed: '恢复失败', filterEvents: '筛选事件', noMatchList: '没有匹配的事件',
   },
 } as const;
 
@@ -75,7 +77,7 @@ function readOutlineWidth(): number {
   const parsed = Number(window.localStorage.getItem(OUTLINE_WIDTH_KEY));
   return Number.isFinite(parsed) && parsed >= OUTLINE_MIN_WIDTH ? parsed : OUTLINE_DEFAULT_WIDTH;
 }
-export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: EventsViewProps) {
+export function EventsView({ language = 'en', context = 'work', onNotice, requestedEventId, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled, onExitToToday }: EventsViewProps) {
   const t = TEXT[language];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -86,6 +88,23 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   const createEvent = useCreateEvent();
   const seedTemplate = useSeedEventTemplate();
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  // T1: layered Escape — detail → list → Today. Listeners register after App's
+  // and only act when the target isn't an input (typing guard mirrors App.tsx).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (selectedEventId) {
+        setSelectedEventId(null);
+      } else if (onExitToToday) {
+        onExitToToday();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedEventId, onExitToToday]);
   const deleteEvent = useDeleteEvent();
   const requestDelete = useCallback((id: string, title: string) => setPendingDelete({ id, title }), []);
   const cancelDelete = useCallback(() => setPendingDelete(null), []);
@@ -110,6 +129,8 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
   const updateEvent = useUpdateEvent();
   const [pendingArchive, setPendingArchive] = useState<{ id: string; title: string; phase: 'confirming' | 'toasted'; timer: ReturnType<typeof setTimeout> } | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // T14: list-level filter. Matches by case-insensitive substring on title.
+  const [listFilter, setListFilter] = useState('');
   const requestArchive = useCallback((id: string, title: string) => {
     setPendingArchive((prev) => {
       if (prev?.timer) clearTimeout(prev.timer);
@@ -183,9 +204,16 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
     try {
       const created = await createEvent.mutateAsync({ title: newTitle.trim(), context });
       if (newTemplateId && created.mindmapId) {
+        // T10: surface template-seed failures instead of swallowing them.
+        // The event still exists; the user needs to know the canvas is empty.
         try {
           await seedTemplate.mutateAsync({ eventId: created.id, mindmapId: created.mindmapId, templateId: newTemplateId, language });
-        } catch { /* template seeding is best-effort; the event itself exists */ }
+        } catch (err) {
+          onNotice?.(
+            language === 'zh' ? '事件已创建，但模板初始化失败' : 'Event created, but template seeding failed',
+            'error',
+          );
+        }
       }
       setNewTemplateId('');
       setCreating(false);
@@ -196,17 +224,33 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
     }
   }
 
-  if (selectedEventId) {
-    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} requestedNodeId={requestedNodeId} onRequestedNodeHandled={onRequestedNodeHandled} />;
-  }
-
-  const active = events.filter((event) => event.status === 'active');
-  const completed = events.filter((event) => event.status === 'completed');
   // Newest-first in the drawer: most recently archived surfaces first.
   const archived = events
     .filter((event) => event.status === 'archived')
     .slice()
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // T14: case-insensitive substring match on title. Empty query = full list.
+  const normalizedFilter = listFilter.trim().toLowerCase();
+  const matchTitle = (title: string) => !normalizedFilter || title.toLowerCase().includes(normalizedFilter);
+  const active = useMemo(
+    () => events.filter((event) => event.status === 'active' && matchTitle(event.title)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [events, normalizedFilter],
+  );
+  const completed = useMemo(
+    () => events.filter((event) => event.status === 'completed' && matchTitle(event.title)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [events, normalizedFilter],
+  );
+  const filteredArchived = useMemo(
+    () => archived.filter((event) => matchTitle(event.title)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [archived, normalizedFilter],
+  );
+
+  if (selectedEventId) {
+    return <EventDetailView eventId={selectedEventId} language={language} onBack={() => setSelectedEventId(null)} onNotice={onNotice} onRequestedEventHandled={onRequestedEventHandled} requestedNodeId={requestedNodeId} onRequestedNodeHandled={onRequestedNodeHandled} onArchive={(id, title) => requestArchive(id, title)} />;
+  }
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--color-background)]" data-testid="events-surface">
@@ -214,6 +258,30 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-6">
           <div><h1 className="text-xl font-semibold tracking-tight text-text-heading">{t.title}</h1><p className="mt-1 text-xs text-text-muted">{t.subtitle}</p></div>
           <div className="flex items-center gap-2">
+            {/* T14: list-level filter so the cover grid is searchable when it
+                grows. Icon-only when collapsed so it doesn't crowd the title;
+                expands on focus / when there's a query. */}
+            <div className="relative" data-testid="event-list-filter">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                placeholder={t.filterEvents}
+                aria-label={t.filterEvents}
+                className={`w-36 rounded-lg border border-border bg-surface py-2 pl-8 pr-7 text-sm text-text-heading outline-none transition-all placeholder:text-text-muted focus:w-56 focus:border-accent sm:w-44 sm:focus:w-64 ${listFilter ? 'border-accent/40 pr-7' : ''}`}
+                data-testid="event-list-filter-input"
+              />
+              {listFilter && (
+                <button
+                  type="button"
+                  onClick={() => setListFilter('')}
+                  aria-label={language === 'zh' ? '清除筛选' : 'Clear filter'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setArchiveOpen(true)}
@@ -259,6 +327,16 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
           )}
           {active.length > 0 && <EventGroup title={t.active} events={active} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} onArchive={requestArchive} />}
           {completed.length > 0 && <CompletedGroup title={t.completed} events={completed} language={language} onOpen={setSelectedEventId} noActions={t.noActions} updated={t.updated} onDelete={requestDelete} onArchive={requestArchive} />}
+          {/* T14: filter has a value but no rows survived — show the empty
+              state so the user doesn't think the list vanished. */}
+          {normalizedFilter && active.length === 0 && completed.length === 0 && events.length > 0 && (
+            <div className="flex min-h-40 flex-col items-center justify-center text-center" data-testid="event-list-no-match">
+              <p className="text-sm text-text-muted">{t.noMatchList}</p>
+              <button type="button" onClick={() => setListFilter('')} className="mt-2 text-xs font-medium text-accent hover:underline">
+                {language === 'zh' ? '清除筛选' : 'Clear filter'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <ConfirmDialog
@@ -289,7 +367,7 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
       )}
       {archiveOpen && (
         <ArchiveDrawer
-          archived={archived}
+          archived={filteredArchived}
           language={language}
           onClose={() => setArchiveOpen(false)}
           onRestore={(id) => { void restoreFromDrawer(id); }}
@@ -307,22 +385,54 @@ export function EventsView({ language = 'en', context = 'work', onNotice, reques
  * and a fallback hard-delete action.
  */
 function ArchiveDrawer({ archived, language, onClose, onRestore, onDelete, isPending, t }: { archived: EventSummary[]; language: 'en' | 'zh'; onClose: () => void; onRestore: (id: string) => void; onDelete: (id: string, title: string) => void; isPending: boolean; t: (typeof TEXT)['en' | 'zh'] }) {
+  // T14: filter the drawer by the same list-level query. Lives inside the
+  // drawer so the input doesn't fight the list filter for header space.
+  const [drawerFilter, setDrawerFilter] = useState('');
+  const normalizedDrawer = drawerFilter.trim().toLowerCase();
+  const visible = normalizedDrawer
+    ? archived.filter((event) => event.title.toLowerCase().includes(normalizedDrawer))
+    : archived;
   return (
     <div className="fixed inset-0 z-40 flex justify-end" data-testid="archive-drawer">
       <button type="button" aria-label={language === 'zh' ? '关闭' : 'Close'} onClick={onClose} className="flex-1 bg-black/30" />
       <aside className="flex h-full w-full max-w-md flex-col border-l border-border bg-white shadow-2xl dark:bg-[#101514]">
-        <header className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-text-heading">{t.archived}</h2>
             <p className="mt-0.5 text-xs text-text-muted">{t.archivedHint}</p>
           </div>
-          <button type="button" aria-label={language === 'zh' ? '关闭' : 'Close'} onClick={onClose} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+          <button type="button" aria-label={language === 'zh' ? '关闭' : 'Close'} onClick={onClose} className="shrink-0 rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
             <X className="h-4 w-4" />
           </button>
         </header>
+        {archived.length > 0 && (
+          <div className="border-b border-border px-5 py-3">
+            <div className="relative" data-testid="archive-drawer-filter">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={drawerFilter}
+                onChange={(e) => setDrawerFilter(e.target.value)}
+                placeholder={t.filterEvents}
+                aria-label={t.filterEvents}
+                className="w-full rounded-lg border border-border bg-transparent py-1.5 pl-8 pr-7 text-sm outline-none focus:border-accent"
+              />
+              {drawerFilter && (
+                <button
+                  type="button"
+                  onClick={() => setDrawerFilter('')}
+                  aria-label={language === 'zh' ? '清除筛选' : 'Clear filter'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto p-3">
           {archived.length === 0 && <p className="px-3 py-12 text-center text-sm text-gray-400">{t.archivedEmpty}</p>}
-          {archived.map((event) => (
+          {archived.length > 0 && visible.length === 0 && <p className="px-3 py-12 text-center text-sm text-gray-400" data-testid="archive-drawer-no-match">{t.noMatchList}</p>}
+          {visible.map((event) => (
             <div key={event.id} className="mb-2 flex items-center gap-2 rounded-lg border border-border px-3 py-2.5" data-testid={`archived-row-${event.id}`}>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-text-heading">{event.title}</div>
@@ -374,7 +484,7 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete, onAr
     const onDown = (e: MouseEvent) => {
       if (!moreRef.current?.contains(e.target as Node)) setMenuOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setMenuOpen(false); e.stopImmediatePropagation(); } };
     window.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey);
     return () => {
@@ -402,6 +512,16 @@ function EventCard({ event, language, onOpen, noActions, updated, onDelete, onAr
           ghost monogram), tinted per event. */}
       <div className="relative h-36 shrink-0 border-b border-border/60 text-black/[0.55] dark:text-white/25">
         <EventCover id={event.id} title={event.title} />
+        {/* T11: stats overlay — tasks done/total + updated time, so the cover
+            carries signal not just decoration. EventSummary has no node list
+            (saving a per-card fetch), so we surface what is already on hand. */}
+        <div className="pointer-events-none absolute bottom-2 left-3 flex items-end gap-3 font-mono text-[11px] font-semibold tabular-nums text-black/70 dark:text-white/80">
+          <span data-testid={`event-card-stats-${event.id}`}>
+            <span className="text-black dark:text-white">{event.progress.done}/{event.progress.total}</span>
+            <span className="ml-1 opacity-70">{language === 'zh' ? '任务' : 'tasks'}</span>
+          </span>
+          <span className="opacity-70">{updated}</span>
+        </div>
         {/* More menu lives on the cover so the body stays clean. Hidden
             until hover/focus; the destructive action reuses ConfirmDialog. */}
         <div className="absolute right-2 top-2" ref={moreRef}>
@@ -560,7 +680,7 @@ function EditableTitle({ value, onCommit, language }: { value: string; onCommit:
   );
 }
 
-function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void }) {
+function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEventHandled, requestedNodeId, onRequestedNodeHandled, onArchive }: { eventId: string; language: 'en' | 'zh'; onBack: () => void; onNotice?: EventsViewProps['onNotice']; onRequestedEventHandled?: () => void; requestedNodeId?: string | null; onRequestedNodeHandled?: () => void; onArchive?: (id: string, title: string) => void }) {
   const t = TEXT[language];
   const detailQ = useEventById(eventId);
   const addChild = useAddEventChild();
@@ -815,6 +935,12 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
     }
   }, [event, activeNodeId]);
 
+  // T9: bump a tick on every activeNodeId change so both panes can scroll/highlight.
+  const [pulseTick, setPulseTick] = useState(0);
+  useEffect(() => {
+    setPulseTick((t) => t + 1);
+  }, [activeNodeId]);
+
   // If the active node disappears (deleted), fall back to root.
   useEffect(() => {
     if (event && activeNodeId && !event.nodes.some((n) => n.id === activeNodeId)) {
@@ -1037,6 +1163,17 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onCommit={async (next) => {
             try {
               await updateEvent.mutateAsync({ eventId, patch: { title: next } });
+              // T7: keep root node text in sync with the event title until the
+              // user manually edits the root separately (one-way sync; editing
+              // the root on the canvas doesn't break it back).
+              if (event && event.nodes.find((n) => n.id === event.rootNodeId)?.text !== next) {
+                await rename.mutateAsync({
+                  eventId,
+                  mindmapId: event.mindmapId,
+                  nodeId: event.rootNodeId,
+                  text: next,
+                }).catch(() => { /* root rename is best-effort */ });
+              }
               onNotice?.(t.titleUpdated, 'success');
             } catch (err) {
               onNotice?.(err instanceof Error ? err.message : t.renameFailed, 'error');
@@ -1155,6 +1292,8 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           language={language}
           selectedId={activeNodeId}
           editingId={activeNodeId}
+          pulseNodeId={activeNodeId}
+          pulseTick={pulseTick}
           collapsedIds={collapsedIds}
           onToggleCollapse={toggleCollapse}
           onSelect={activateNode}
@@ -1198,6 +1337,8 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           language={language}
           activeNodeId={activeNodeId}
           focusedNodeId={focusedNodeId}
+          pulseNodeId={activeNodeId}
+          pulseTick={pulseTick}
           collapsedIds={collapsedIds}
           onToggleCollapse={toggleCollapse}
           onActivate={activateNode}
@@ -1209,6 +1350,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           onSchedule={handleSchedule}
           onUnschedule={handleUnschedule}
           onToggleDone={handleToggleDone}
+          onArchive={onArchive ? () => onArchive(eventId, event.title) : undefined}
           onMoveNodePosition={handleMoveNodePosition}
           onRequestTreeLayout={() => void layoutTree.mutateAsync({ eventId, mindmapId: event.mindmapId }).catch(() => {})}
           onOrganize={(strategy) => void runOrganize(strategy)}

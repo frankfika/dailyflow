@@ -1127,10 +1127,9 @@ export default function App() {
         const target = e.target as HTMLElement | null;
         const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
         if (typing) return;
+        // T1: Escape on the events tab is owned by EventsView (detail → list → Today).
         if (activeOverlay) {
           setActiveOverlay(null);
-        } else if (activeTab === 'events') {
-          setActiveTab('today');
         }
       }
     };
@@ -2358,6 +2357,7 @@ export default function App() {
                     onRequestedEventHandled={() => setRequestedEventId(null)}
                     requestedNodeId={requestedNodeId}
                     onRequestedNodeHandled={() => setRequestedNodeId(null)}
+                    onExitToToday={() => setActiveTab('today')}
                   />
                 </motion.div>
               )

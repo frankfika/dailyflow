@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CalendarDays, Check, ChevronDown, FileText, Focus, HelpCircle, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Tag, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Archive, CalendarDays, Check, ChevronDown, FileText, Focus, HelpCircle, LayoutGrid, ListTodo, Minus, MoreHorizontal, Plus, Sparkles, Tag, Trash2, X } from 'lucide-react';
 import type { EventDetail, EventNode, OrganizeStrategy } from '../../../api/client';
 import { getTodayStr } from '../../../utils/tagColors';
 import { ScheduleDatePopover, hasExtras, type ScheduleExtrasDraft } from './ScheduleDatePopover';
@@ -18,6 +18,7 @@ type Copy = {
   cancel: string;
   removeDay: string;
   deleteNode: string;
+  archiveEvent: string;
   empty: string;
   hint: string;
   addToTask: string;
@@ -59,6 +60,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     cancel: 'Cancel',
     removeDay: 'Remove from day',
     deleteNode: 'Delete node',
+    archiveEvent: 'Archive event',
     empty: 'Start by adding the first step.',
     hint: 'Tab child · Enter sibling · ↑↓←→ navigate',
     addToTask: 'Add to Task',
@@ -98,6 +100,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     cancel: '取消',
     removeDay: '移出日程',
     deleteNode: '删除节点',
+    archiveEvent: '归档事件',
     empty: '从添加第一个步骤开始。',
     hint: 'Tab 子节点 · Enter 同级 · ↑↓←→ 移动',
     addToTask: '添加为任务',
@@ -142,7 +145,11 @@ interface EventCanvasProps {
   onUnschedule: (node: EventNode) => Promise<void>;
   onToggleDone: (node: EventNode) => Promise<void>;
   onDelete: (nodeId: string) => Promise<void>;
+  onArchive?: () => void;
   onMoveNodePosition: (nodeId: string, x: number, y: number) => Promise<void>;
+  /** T9: when activeNodeId changes, this canvas node scrolls + pulses. */
+  pulseNodeId?: string | null;
+  pulseTick?: number;
   /** Recompute a tidy tree layout for the whole map. */
   onRequestTreeLayout?: () => void;
   /** UX S9: run an AI organize strategy (read-only suggestion → modal). */
@@ -185,6 +192,9 @@ export function EventCanvas({
   proposalSelection = new Set<string>(),
   activeProposalChangeId,
   onSelectProposalChange,
+  pulseNodeId,
+  pulseTick,
+  onArchive,
 }: EventCanvasProps) {
   const copy = COPY[language];
   const [addingChild, setAddingChild] = useState(false);
@@ -337,6 +347,25 @@ export function EventCanvas({
       }
     }
   }, [event.nodes, focusedNodeId, onActivate]);
+
+  // T9: when activeNodeId changes (from either pane), scroll the node into
+  // view and add a 1s highlight pulse so the user can track where the
+  // activation landed. Skip the very first tick (initial mount).
+  const isFirstPulseRef = useRef(true);
+  useEffect(() => {
+    if (!pulseNodeId) return;
+    if (isFirstPulseRef.current) { isFirstPulseRef.current = false; return; }
+    if (typeof document === 'undefined') return;
+    const el = document.querySelector(`[data-testid="event-node-${pulseNodeId}"]`);
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    if (el) {
+      el.classList.add('event-node-pulse');
+      window.setTimeout(() => el.classList.remove('event-node-pulse'), 1000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pulseTick]);
 
   useEffect(() => {
     if (activeNodeId && inputRefs.current.has(activeNodeId)) {
@@ -673,6 +702,11 @@ export function EventCanvas({
         // Clear the didDrag latch after the click that bubbles after pointerup
         // has fired, otherwise activating via a later click would be suppressed.
         setTimeout(() => { didDragRef.current = false; }, 0);
+      } else {
+        // T2: activation no longer relies on the click event (which can be
+        // eaten by micro-movements or floating-button overlap). A clean
+        // pointerup on the node = click = activate.
+        onActivate(d.nodeId);
       }
       setDraggingId(null);
       setDragOffset({ dx: 0, dy: 0 });
@@ -783,7 +817,7 @@ export function EventCanvas({
               <div className="relative">
                 <button
                   type="button"
-                  onClick={(e) => { if (didDragRef.current) { e.preventDefault(); return; } e.stopPropagation(); onActivate(node.id); }}
+                  onClick={(e) => { e.stopPropagation(); onActivate(node.id); }}
                   className={`relative flex min-h-[58px] w-full items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left transition ${update ? (proposal?.riskLevel === 'high' ? 'border-red-500 ring-2 ring-red-400/20' : 'border-amber-400 ring-2 ring-amber-300/20') : isActive ? 'border-accent bg-white ring-2 ring-accent/15 dark:bg-gray-900' : isTaskNode ? 'border-accent/40 bg-accent/[0.04] hover:border-accent/60 dark:bg-accent/[0.06]' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900'} ${isEventRoot ? 'font-semibold' : ''} ${isActive ? 'shadow-sm' : 'shadow-none'}`}
                   aria-pressed={isActive}
                   data-task-node={isTaskNode || undefined}
@@ -858,12 +892,14 @@ export function EventCanvas({
                   )}
                 </button>
 
-                {/* Collapse toggle for nodes with children */}
+                {/* Collapse toggle for nodes with children — T4: shown on hover/focus
+                    only so it doesn't steal clicks from the node body when the user
+                    aims at the right edge. */}
                 {hasChildren && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onToggleCollapse(node.id); }}
-                    className="absolute -right-3 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-accent hover:text-accent dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                    className="absolute -right-4 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 opacity-0 shadow-sm transition-opacity hover:border-accent hover:text-accent focus-visible:opacity-100 group-hover/node:opacity-100 group-focus-within/node:opacity-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={isCollapsed ? 'Expand' : 'Collapse'}
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                     data-no-drag="true"
@@ -872,12 +908,13 @@ export function EventCanvas({
                   </button>
                 )}
 
-                {/* Inline add-child button (hidden when collapsed to reduce clutter). */}
+                {/* Inline add-child button (hidden when collapsed) — T4: same hover-only
+                    pattern + bumped outside the node edge by 2px. */}
                 {!isCollapsed && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); void addChildTo(node); }}
-                  className="absolute -right-2 top-1/2 z-20 flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-accent bg-white text-accent shadow-sm hover:bg-accent hover:text-white dark:border-accent dark:bg-gray-900"
+                  className="absolute -right-3 top-1/2 z-20 flex h-5 w-5 translate-x-1/2 items-center justify-center rounded-full border border-accent bg-white text-accent opacity-0 shadow-sm transition-opacity hover:bg-accent hover:text-white focus-visible:opacity-100 group-hover/node:opacity-100 group-focus-within/node:opacity-100 dark:border-accent dark:bg-gray-900"
                   aria-label={copy.addChild}
                   title={copy.addChild}
                   data-no-drag="true"
@@ -890,8 +927,9 @@ export function EventCanvas({
                 {!isEventRoot && (
                   <button
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); void addSiblingAfter(node); }}
-                    className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-accent hover:text-accent dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                    className="absolute bottom-0 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 opacity-0 shadow-sm transition-opacity hover:border-accent hover:text-accent focus-visible:opacity-100 group-hover/node:opacity-100 group-focus-within/node:opacity-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     aria-label={copy.addSibling}
                     title={copy.addSibling}
                     data-no-drag="true"
@@ -904,7 +942,7 @@ export function EventCanvas({
                     type="button"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); void onDelete(node.id); }}
-                    className="absolute -right-2 -top-2 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-400 opacity-0 shadow-sm transition-opacity hover:border-red-200 hover:bg-red-50 hover:text-red-600 group-hover/node:opacity-100 dark:border-gray-600 dark:bg-gray-900"
+                    className="absolute -right-3 -top-3 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-400 opacity-0 shadow-sm transition-opacity hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/node:opacity-100 group-focus-within/node:opacity-100 dark:border-gray-600 dark:bg-gray-900"
                     aria-label={copy.deleteNode}
                     title={copy.deleteNode}
                     data-no-drag="true"
@@ -1021,7 +1059,7 @@ export function EventCanvas({
                   )}
                 </div>
               )}
-              <div className="relative"><ToolbarButton icon={<MoreHorizontal className="h-4 w-4" />} label={copy.more} onClick={() => setMoreOpen((open) => !open)} trailing={<ChevronDown className="h-3 w-3" />} />{moreOpen && <div className="absolute bottom-12 right-0 min-w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900">{activeNode.execution && <button onClick={() => void onUnschedule(activeNode)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><CalendarDays className="h-4 w-4" />{copy.removeDay}</button>}{!isRootActive && <button onClick={() => void onDelete(activeNode.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" />{copy.deleteNode}</button>}</div>}</div>
+              <div className="relative"><ToolbarButton icon={<MoreHorizontal className="h-4 w-4" />} label={copy.more} onClick={() => setMoreOpen((open) => !open)} trailing={<ChevronDown className="h-3 w-3" />} />{moreOpen && <div className="absolute bottom-12 right-0 min-w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-900">{activeNode.execution && <button onClick={() => void onUnschedule(activeNode)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><CalendarDays className="h-4 w-4" />{copy.removeDay}</button>}{isRootActive && onArchive && <button onClick={() => { setMoreOpen(false); onArchive(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"><Archive className="h-4 w-4" />{copy.archiveEvent}</button>}{!isRootActive && <button onClick={() => void onDelete(activeNode.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" />{copy.deleteNode}</button>}</div>}</div>
               <span className="ml-1 hidden text-[11px] text-gray-400 md:inline">{copy.hint}</span>
             </>
           )}
@@ -1038,5 +1076,7 @@ function ProposalNode({ op, x, y, selected, active, highRisk, onSelect }: { op: 
 }
 
 function ToolbarButton({ icon, label, onClick, trailing }: { icon: React.ReactNode; label: string; onClick: () => void; trailing?: React.ReactNode }) {
-  return <button type="button" onClick={onClick} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">{icon}<span>{label}</span>{trailing}</button>;
+  // T5: nowrap + shrink-0 so the button stays one row even when the toolbar
+  // is narrow. Tooltip via title matches the project's aria-label pattern.
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">{icon}<span>{label}</span>{trailing}</button>;
 }
