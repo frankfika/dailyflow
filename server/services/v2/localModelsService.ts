@@ -356,6 +356,10 @@ export async function downloadModel(
         // eslint-disable-next-line no-console
         console.warn(`[localModelsService] no pinned SHA-256 for ${entry.id}; accepting unverified download.`);
       }
+      // Release the file descriptor before renaming. POSIX doesn't
+      // require this, but a fd still attached to the temp file can EPERM
+      // the rename on Windows until the handle goes.
+      await drainWriter(writer);
       await fsp.rename(tmpPath, finalPath);
       const completed: ModelDownloadEvent = {
         modelId,
@@ -399,6 +403,15 @@ function closeWriteStream(writer: fs.WriteStream | undefined): Promise<void> {
     const timer = setTimeout(finish, 500);
     timer.unref?.();
   });
+}
+
+/** Wait for a write stream to finish AND release its file descriptor.
+ *  Unlike resolving on 'finish' (data flushed), this waits for 'close' (the
+ *  OS handle is gone). On Windows the file remains locked until the fd is
+ *  released, so a following rename can EPERM otherwise. POSIX is unaffected. */
+async function drainWriter(writer: fs.WriteStream | undefined): Promise<void> {
+  if (!writer || writer.closed) return;
+  await new Promise<void>((resolve) => writer.once('close', resolve));
 }
 
 /** Clean up `.part` files left behind by crashed downloads. Anything
