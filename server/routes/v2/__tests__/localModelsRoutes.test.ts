@@ -1,27 +1,71 @@
 /** HTTP-level smoke tests for the local-models / TTS routes.
  *
- * Mounts the v2 router with a stub `getV2` middleware so we don't have to
- * bootstrap a full workspace. The intent isn't to re-test the underlying
- * service (that's covered by `localModelsService.test.ts`) — it's to
- * confirm the routes exist, parse inputs, and return the documented
- * shapes. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ * Boots the real Express app against a THROWAWAY config: the v2 router's
+ * bootstrap middleware runs `getV2Flags()`/`bootstrapV2()` on every request,
+ * and those read `DAILYFLOW_CONFIG_FILE`. Without a pre-seeded config the
+ * bootstrap throws and every route 500s — on a developer Mac a real config
+ * happens to exist, which is why this only surfaced on a clean CI runner
+ * (same pattern as `routes.test.ts`).
+ *
+ * The intent isn't to re-test the underlying service (that's covered by
+ * `localModelsService.test.ts`) — it's to confirm the routes exist, parse
+ * inputs, and return the documented shapes. */
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import http from 'http';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import { AddressInfo } from 'net';
 import { v2Router } from '../index';
+import { loadConfig, saveConfig } from '../../../services/config';
+
+let workspaceRoot: string;
+let configDir: string;
+let previousEnv: Record<string, string | undefined>;
+
+beforeAll(async () => {
+  workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-models-ws-'));
+  configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'df-v2-models-cfg-'));
+  previousEnv = {
+    DAILYFLOW_CONFIG_FILE: process.env.DAILYFLOW_CONFIG_FILE,
+    DAILYFLOW_V2_WORKSPACE_ROOT: process.env.DAILYFLOW_V2_WORKSPACE_ROOT,
+    DAILYFLOW_V2_WORKSPACE_ID: process.env.DAILYFLOW_V2_WORKSPACE_ID,
+  };
+  process.env.DAILYFLOW_CONFIG_FILE = path.join(configDir, 'config.json');
+  process.env.DAILYFLOW_V2_WORKSPACE_ROOT = workspaceRoot;
+  process.env.DAILYFLOW_V2_WORKSPACE_ID = 'ws_local_models';
+  // Seed the throwaway config with v2 enabled so the bootstrap middleware
+  // succeeds on any machine, including a bare CI runner.
+  const cfg = await loadConfig();
+  await saveConfig({
+    ...cfg,
+    workspaceRoot,
+    workspaces: [{
+      id: 'ws_local_models',
+      name: 'Local models test workspace',
+      path: workspaceRoot,
+      createdAt: new Date().toISOString(),
+    }],
+    activeWorkspaceId: 'ws_local_models',
+    v2: { enabled: true, inboxV2: true, todayV2: true, memoryV2: true, connectorsV2: false, aiEnabled: false, contextBudgetBytes: 32000 } as any,
+  } as Parameters<typeof saveConfig>[0]);
+});
+
+afterAll(async () => {
+  await fs.rm(workspaceRoot, { recursive: true, force: true });
+  await fs.rm(configDir, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(previousEnv)) {
+    if (value === undefined) delete (process.env as Record<string, string | undefined>)[key];
+    else (process.env as Record<string, string | undefined>)[key] = value;
+  }
+});
 
 function makeApp() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  // Stub the `getV2` accessor by injecting a fake res.locals.v2.
-  app.use((req, res, next) => {
-    (res as unknown as { locals: { v2: unknown } }).locals.v2 = {
-      repo: { layout: { root: '/tmp/fake', internal: { config: '/tmp/fake/config.json' } } },
-      ctx: { root: '/tmp/fake', workspaceId: 'ws_local_models' },
-    };
-    next();
-  });
+  // The router's own bootstrap middleware binds the real workspace from the
+  // seeded config — no stub needed.
   app.use('/api/v2', v2Router);
   return app;
 }
