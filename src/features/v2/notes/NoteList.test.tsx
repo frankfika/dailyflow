@@ -163,6 +163,60 @@ describe('NoteList creation and selection flow', () => {
     expect(screen.getByRole('button', { name: '全部标签' })).toBeInTheDocument();
   });
 
+  it('surfaces meeting-note status at a glance and counts pending meetings', () => {
+    const untouchedMeeting = { ...note, id: 'm-fresh', kind: 'meeting', state: 'active', body: '' };
+    const audioOnlyMeeting = {
+      ...note,
+      id: 'm-audio',
+      kind: 'meeting',
+      state: 'active',
+      body: '',
+      sourceIds: ['src_a'],
+    };
+    const transcribedMeeting = {
+      ...note,
+      id: 'm-transcribed',
+      kind: 'meeting',
+      state: 'active',
+      sourceIds: ['src_a'],
+      body: '今天讨论了发布计划，下周一上线。',
+    };
+    hooks.notes.mockReturnValue({
+      data: { notes: [untouchedMeeting, audioOnlyMeeting, transcribedMeeting], total: 3 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<NoteList selectedId={null} onSelect={vi.fn()} language="en" />);
+
+    expect(screen.getByTestId('notes-item-meeting-status-m-fresh')).toHaveAttribute('data-status', 'none');
+    expect(screen.getByTestId('notes-item-meeting-status-m-audio')).toHaveAttribute('data-status', 'audio');
+    expect(screen.getByTestId('notes-item-meeting-status-m-transcribed')).toHaveAttribute('data-status', 'both');
+    // Two meetings still need work (untouched + audio-only), but the badge
+    // must lead with the urgent one: a recording waiting to be transcribed.
+    const badge = screen.getByTestId('notes-meeting-pending');
+    expect(badge).toHaveAttribute('data-kind', 'needs-transcript');
+    expect(badge).toHaveTextContent('1');
+    expect(badge).toHaveAccessibleName(/1 recording/i);
+  });
+
+  it('falls back to a non-urgent badge when only untouched meetings remain', () => {
+    const untouchedMeeting = { ...note, id: 'm-fresh', kind: 'meeting', state: 'active', body: '' };
+    hooks.notes.mockReturnValue({
+      data: { notes: [untouchedMeeting], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<NoteList selectedId={null} onSelect={vi.fn()} language="en" />);
+
+    const badge = screen.getByTestId('notes-meeting-pending');
+    expect(badge).toHaveAttribute('data-kind', 'untouched');
+    expect(badge).toHaveTextContent('1');
+  });
+
   it('archives and restores through the same versioned state transition', () => {
     hooks.notes.mockReturnValue({
       data: { notes: [note], total: 1 },
@@ -195,5 +249,67 @@ describe('NoteList creation and selection flow', () => {
       archived: false,
       expectedAutoSaveVersion: 0,
     });
+  });
+
+  it('uses Chinese copy for the meeting entry button and status badges', () => {
+    const meeting = {
+      ...note,
+      id: 'meeting-zh',
+      kind: 'meeting',
+      state: 'active',
+      sourceIds: ['src_a'],
+      body: '今天的会议结论：下周一上线。',
+    };
+    hooks.notes.mockReturnValue({
+      data: { notes: [meeting], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<NoteList selectedId="meeting-zh" onSelect={vi.fn()} language="zh" />);
+
+    expect(screen.getByTestId('notes-new-meeting')).toHaveTextContent('开始会议');
+    expect(screen.getByTestId('notes-new-meeting')).toHaveTextContent('一键新建会议笔记，立刻开始录音');
+    // "已转写" = both audio + body
+    expect(screen.getByTestId('notes-item-meeting-status-meeting-zh')).toHaveTextContent('已转写');
+  });
+
+  it('does not show the meeting status badge on non-meeting notes', () => {
+    const project = { ...note, id: 'project-1', kind: 'project', state: 'active', sourceIds: ['src_a'], body: '' };
+    hooks.notes.mockReturnValue({
+      data: { notes: [project], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<NoteList selectedId="project-1" onSelect={vi.fn()} language="en" />);
+
+    expect(screen.queryByTestId('notes-item-meeting-status-project-1')).not.toBeInTheDocument();
+    // Pending count is purely meeting-scoped, so it must be absent here too.
+    expect(screen.queryByTestId('notes-meeting-pending')).not.toBeInTheDocument();
+  });
+
+  it('omits the pending chip once every meeting note is fully transcribed', () => {
+    const done = {
+      ...note,
+      id: 'm-done',
+      kind: 'meeting',
+      state: 'active',
+      sourceIds: ['src_a'],
+      body: '今天的会议结论：下周一上线。',
+    };
+    hooks.notes.mockReturnValue({
+      data: { notes: [done], total: 1 },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<NoteList selectedId="m-done" onSelect={vi.fn()} language="en" />);
+
+    expect(screen.getByTestId('notes-item-meeting-status-m-done')).toHaveAttribute('data-status', 'both');
+    expect(screen.queryByTestId('notes-meeting-pending')).not.toBeInTheDocument();
   });
 });
