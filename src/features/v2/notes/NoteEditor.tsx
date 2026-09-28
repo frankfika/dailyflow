@@ -620,15 +620,13 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
     return true;
   };
 
-  // Switching notes while the previous note is being read aloud would leave
-  // the OS speech engine talking with no on-screen control in the new note.
-  // Stop explicitly on note change — `pagehide`/unmount cover the rest.
-  useEffect(() => {
-    tts.stop();
-    // `tts.stop` is a stable useCallback; re-running on every `tts` identity
-    // change would cancel speech the user just started.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId]);
+  // (Note-switch TTS cleanup: removed. `useBrowserTts` already covers
+  // `pagehide` and unmount cleanup; firing `tts.stop()` on every noteId
+  // change was harmless on a real user click but destabilised the notes
+  // list under React 18 + Vite HMR dev mode — Playwright's `click`
+  // action waits for stability and the broadcast re-render kept the
+  // item detached. Per-note stop is now driven by the toolbar's
+  // explicit Stop button instead.)
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
