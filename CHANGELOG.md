@@ -5,6 +5,23 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0](https://github.com/frankfika/dailyflow/compare/v2.17.0...v2.18.0) (2026-09-28)
+
+
+### Features
+
+* **notes:** in-app Whisper model manager, read-aloud TTS, transcript auto-insert ([0a9aabe](https://github.com/frankfika/dailyflow/commit/0a9aabe4adae1bc301417a2ff78430e6de1968bb))
+* **notes:** in-app Whisper model manager, read-aloud TTS, transcript auto-insert ([6b76d1a](https://github.com/frankfika/dailyflow/commit/6b76d1a6035350c73736d08950a8462a2ddd57db))
+
+
+### Bug Fixes
+
+* **build:** restore vite entry index.html removed by the repo prune ([03a782c](https://github.com/frankfika/dailyflow/commit/03a782cfbdd3841de526c67ea2c23d9351715816))
+* **build:** restore vite entry index.html removed by the repo prune ([e43866d](https://github.com/frankfika/dailyflow/commit/e43866d8097017bfd7251e3f29a05745885a1cdd))
+* **notes:** stop TTS via toolbar, not via per-noteId effect ([c225ab0](https://github.com/frankfika/dailyflow/commit/c225ab0aeaea5a3c23e2afa52ee4fd9fd12661ec))
+* **notes:** stop TTS via toolbar, not via per-noteId effect ([5850b99](https://github.com/frankfika/dailyflow/commit/5850b99e41e2589318db597b43f4a46d6e4094f4))
+* **updater:** wrap relaunch() failures with descriptive Error so UI surfaces the cause ([2868b2a](https://github.com/frankfika/dailyflow/commit/2868b2a120e96ff1efcfd18fc866c8167dc2d641))
+
 ## [2.17.0](https://github.com/frankfika/dailyflow/compare/v2.16.2...v2.17.0) (2026-09-27)
 
 
