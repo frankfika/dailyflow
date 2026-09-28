@@ -1,6 +1,6 @@
 # Memory Search — 3-Tier Ranking
 
-> Gap 4 / P0 / Sprint 1 — see `docs/ROADSHOW_VS_PRODUCT_GAP.md` for context.
+> Gap 4 / P0 / Sprint 1 — see `docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md` for context.
 
 ## What the user sees
 

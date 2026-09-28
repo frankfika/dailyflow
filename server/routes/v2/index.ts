@@ -127,6 +127,18 @@ import {
   localTranscriptionStatus,
 } from '../../services/v2/localTranscriptionService.js';
 import {
+  WHISPER_MODEL_CATALOG,
+  downloadModel,
+  listInstalledModels,
+  onModelDownloadEvent,
+  systemCheck,
+  synthesizeSpeech,
+  TTS_PROVIDERS,
+  TtsRequestSchema,
+  resolveModelsDirectory,
+  type ModelDownloadEvent,
+} from '../../services/v2/localModelsService.js';
+import {
   generateAndSaveDailyReport,
   listDailyReports,
   readDailyReport,
@@ -307,6 +319,113 @@ v2Router.post('/notes/:id/meeting/transcribe-local', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Local ASR model management — the user-facing piece that lets the user
+// pick a ggml-* checkpoint, download it into the DailyFlow model directory,
+// and skip the "brew install + manually fetch ggml-small.bin" round trip.
+// ---------------------------------------------------------------------------
+
+v2Router.get('/transcription/models', async (_req, res) => {
+  try {
+    const installed = await listInstalledModels();
+    res.json({
+      catalog: WHISPER_MODEL_CATALOG,
+      installed,
+      directory: resolveModelsDirectory().directory,
+    });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.post('/transcription/models/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await downloadModel(id);
+    res.status(201).json({ result });
+  } catch (err) { handleError(err, res); }
+});
+
+v2Router.get('/transcription/models/events', async (req, res) => {
+  // Server-Sent Events stream for download progress. The UI subscribes once
+  // and updates a single progress bar — no need for the front-end to
+  // poll. Heartbeats every 15s keep the connection open across corporate
+  // proxies that drop idle HTTP/1.1 streams.
+  //
+  // We mirror the shape used by `streamEventOperatorRunEvents` so the
+  // browser gets the same buffering-disabled + reconnect timing behaviour.
+  //
+  // SCOPE NOTE: `downloadBus` is a process-global singleton, so every
+  // subscriber sees every model's progress. That is correct for today's
+  // single-workspace desktop deployment (one workspace per process, model
+  // ids are a fixed public catalog). If this server ever becomes
+  // multi-tenant, the bus must be keyed by `getV2(res).workspaceId` before
+  // this route ships to that deployment — the events would otherwise leak
+  // one workspace's download activity into another's browser session.
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  // Tell EventSource to retry after 1s on disconnect — matches the rest
+  // of the project's SSE handlers.
+  res.write(`retry: 1000\n\n`);
+  res.flushHeaders?.();
+  const send = (event: ModelDownloadEvent) => {
+    if (res.writableEnded || res.destroyed) return;
+    try {
+      res.write(`event: ${event.state}\n`);
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch {
+      // The socket has been torn down between the writableEnded check
+      // and the write. Drop the event; `close` will clear the timer.
+    }
+  };
+  const unsubscribe = onModelDownloadEvent((event) => send(event));
+  let closed = false;
+  const heartbeat = setInterval(() => {
+    if (closed || res.writableEnded || res.destroyed) {
+      clearInterval(heartbeat);
+      return;
+    }
+    try {
+      res.write(`: heartbeat\n\n`);
+    } catch {
+      clearInterval(heartbeat);
+      unsubscribe();
+      closed = true;
+    }
+  }, 15_000);
+  req.once('close', () => {
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+});
+
+v2Router.get('/transcription/system-check', async (_req, res) => {
+  try {
+    const result = await systemCheck();
+    res.json(result);
+  } catch (err) { handleError(err, res); }
+});
+
+// TTS — list providers and synthesize. The browser-side `window.speechSynthesis`
+// path doesn't round-trip through this server; this endpoint only serves the
+// cloud providers (siliconflow / openai / elevenlabs) when the user wants
+// higher-fidelity voices than the OS can provide.
+v2Router.get('/tts/providers', (_req, res) => {
+  res.json({ providers: TTS_PROVIDERS });
+});
+
+v2Router.post('/tts/synthesize', async (req, res) => {
+  try {
+    // Parse first, then immediately hand the validated input to the
+    // service. We deliberately do not log req.body — the API key would
+    // land in any future logger that captures the raw body.
+    const input = TtsRequestSchema.parse(req.body);
+    const result = await synthesizeSpeech(input);
+    res.json(result);
+  } catch (err) { handleError(err, res); }
+});
+
 function handleError(err: unknown, res: Response): void {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: { code: 'validation', message: 'Invalid input.', issues: err.issues } });
@@ -324,6 +443,17 @@ function handleError(err: unknown, res: Response): void {
     }
     if (e.code === 'commitment_invalid') {
       res.status(400).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'invalid_request' || e.code === 'tts_browser_not_supported' || e.code === 'tts_api_key_required' || e.code === 'tts_voice_invalid') {
+      res.status(400).json({ error: { code: e.code, message: e.message } });
+      return;
+    }
+    if (e.code === 'tts_upstream_failed') {
+      // The message is sanitized upstream (HTTP status only — never the
+      // provider's body or the user's key), so it is safe to surface.
+      // 502 distinguishes "the provider rejected the call" from a bug here.
+      res.status(502).json({ error: { code: e.code, message: e.message } });
       return;
     }
     if (e.code === 'invalid_job_transition' || e.code === 'job_not_retryable' || e.code === 'job_not_cancellable') {

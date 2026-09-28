@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { filesApi } from '../api/client';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 import { ResizeHandle } from './ResizeHandle';
 
 declare const __APP_VERSION__: string;

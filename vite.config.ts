@@ -31,6 +31,7 @@ export default defineConfig(() => {
       watch: {
         ignored: [
           '**/_demo-record.mjs',
+          '**/docs/demo-assets/scripts/_demo-record.mjs',
           '**/webbridge-*.mjs',
           '**/scripts/_demo-record.mjs',
           '**/scripts/debug-mindmap.mjs',

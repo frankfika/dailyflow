@@ -131,10 +131,19 @@ describe('TaskCard inline keyboard shortcuts (UX_DESIGN §12)', () => {
 
 describe('TaskCard progressive disclosure', () => {
   it('keeps the default row limited to title, source, deadline, checkbox, and details', () => {
+    // Deadline is computed relative to "now" — a hard-coded 2024 date turned
+    // this into a time bomb that rendered "999d overdue" once the calendar
+    // moved on. `formatTaskDeadline` compares local midnights (and rounds),
+    // so today+2d always yields "Due in 2d" across DST shifts too.
+    const inTwoDays = new Date();
+    inTwoDays.setDate(inTwoDays.getDate() + 2);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dueDate = `${inTwoDays.getFullYear()}-${pad(inTwoDays.getMonth() + 1)}-${pad(inTwoDays.getDate())}`;
+
     render(<TaskCard {...createProps({
       task: {
         ...baseTask,
-        deadline: '2024-01-03',
+        deadline: dueDate,
         description: 'Hidden detail',
         tags: ['planning'],
         comment: 'Hidden note',
@@ -144,7 +153,7 @@ describe('TaskCard progressive disclosure', () => {
 
     expect(screen.getByText('Test task')).toBeInTheDocument();
     expect(screen.getByTestId('task-card-event-task-1')).toHaveTextContent('Launch event');
-    expect(screen.getByText('Due in 2d')).toHaveAttribute('title', '2024-01-03');
+    expect(screen.getByText('Due in 2d')).toHaveAttribute('title', dueDate);
     expect(screen.queryByText('Hidden detail')).not.toBeInTheDocument();
     expect(screen.queryByText('Hidden note')).not.toBeInTheDocument();
     expect(screen.queryByText('#planning')).not.toBeInTheDocument();

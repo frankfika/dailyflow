@@ -53,7 +53,7 @@ DailyFlow 面向被待办过载、会议和零散想法拉扯的人。它把收�
 | **P2** | Skill 市场雏形（GitHub registry + SHA-256 校验） | Slide 12 |
 | **P2** | 隐私面板（5 类外发请求透明展示） | Slide 05 |
 
-详细设计：[`docs/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
+详细设计：[`docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md`](./docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md) · [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## ✨ 核心功能
 
@@ -264,7 +264,7 @@ flowchart LR
 - [V2 16 页全量对账表](./docs/FEATURE_AUDIT.md)
 - [0 字节上传路径审计](./docs/ZERO_UPLOAD_AUDIT.md)
 - [Skill 市场 v2 规划](./docs/AGENT_MARKET_V2.md)
-- [V2 路演 vs 实际产品 差距分析](./docs/ROADSHOW_VS_PRODUCT_GAP.md)
+- [V2 路演 vs 实际产品 差距分析](./docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md)
 - [脑图 AI 整理（3 策略）](./docs/MINDMAP_AI_ORGANIZE.md)
 - [主动提案机制](./docs/PROACTIVE_PROPOSAL.md)
 - [Memory 3 层搜索](./docs/MEMORY_SEARCH_TIERS.md)

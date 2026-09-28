@@ -1944,6 +1944,118 @@ export const transcriptionApi = {
     if (!res.ok) throw await httpError(res, 'Failed to start local transcription');
     return res.json();
   },
+
+  // -------------------------------------------------------------------------
+  // Local ASR model manager — list / install / watch progress.
+  // The catalogue is small (4 entries) so the UI can fetch it on demand
+  // instead of bundling the URLs. Each modelId refers to a ggml-* checkpoint
+  // mirrored from Hugging Face + GitHub.
+  // -------------------------------------------------------------------------
+  async listLocalModels(): Promise<{
+    catalog: Array<{
+      id: string;
+      label: string;
+      filename: string;
+      approxSizeMb: number;
+      bestFor: string[];
+      mirrors: string[];
+    }>;
+    installed: Array<{
+      id: string;
+      filename: string;
+      path: string;
+      sizeBytes: number;
+      installedAt: string;
+    }>;
+    directory: string;
+  }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/models`);
+    if (!res.ok) throw await httpError(res, 'Failed to list local ASR models');
+    return res.json();
+  },
+
+  async downloadLocalModel(modelId: string): Promise<{
+    result: { modelId: string; path: string; bytes: number };
+  }> {
+    const res = await fetch(
+      `${API_BASE}/v2/transcription/models/${encodeURIComponent(modelId)}/download`,
+      { method: 'POST' },
+    );
+    if (!res.ok) throw await httpError(res, 'Failed to download local ASR model');
+    return res.json();
+  },
+
+  /**
+   * Open a Server-Sent Events stream for download progress. Returns the
+   * `EventSource` so the caller can `.close()` it when the component
+   * unmounts. The SSE payload carries the same shape as the in-process
+   * events emitted by the server service.
+   */
+  openLocalModelEvents(): EventSource {
+    return new EventSource(`${API_BASE}/v2/transcription/models/events`);
+  },
+
+  async systemCheck(): Promise<{
+    platform: 'macos' | 'linux' | 'windows' | 'unknown';
+    whisperCliPath: string | null;
+    ffmpegPath: string | null;
+    ready: boolean;
+    installCommand: { label: string; command: string } | null;
+  }> {
+    const res = await fetch(`${API_BASE}/v2/transcription/system-check`);
+    if (!res.ok) throw await httpError(res, 'Failed to probe system dependencies');
+    return res.json();
+  },
+};
+
+// ---------------------------------------------------------------------------
+// TTS — text-to-speech providers, both local (browser SpeechSynthesis) and
+// remote (siliconflow / openai / elevenlabs). The browser path lives
+// entirely in the UI; this client only round-trips audio bytes for the
+// remote providers.
+// ---------------------------------------------------------------------------
+
+export type TtsProviderId = 'browser' | 'siliconflow' | 'openai' | 'elevenlabs';
+
+export interface TtsProviderInfo {
+  id: TtsProviderId;
+  label: string;
+  requiresApiKey: boolean;
+  hint: string;
+}
+
+export interface TtsRequestInput {
+  text: string;
+  provider?: TtsProviderId;
+  voice?: string;
+  language?: 'zh' | 'en';
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
+export interface TtsResult {
+  audioBase64: string;
+  mimeType: string;
+  provider: TtsProviderId;
+}
+
+export const ttsApi = {
+  async listProviders(): Promise<{ providers: TtsProviderInfo[] }> {
+    const res = await fetch(`${API_BASE}/v2/tts/providers`);
+    if (!res.ok) throw await httpError(res, 'Failed to list TTS providers');
+    return res.json();
+  },
+
+  async synthesize(input: TtsRequestInput): Promise<TtsResult> {
+    const res = await fetch(`${API_BASE}/v2/tts/synthesize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to synthesize speech');
+    return res.json();
+  },
 };
 
 

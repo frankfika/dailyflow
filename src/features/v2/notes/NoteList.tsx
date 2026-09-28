@@ -70,6 +70,36 @@ function previewBody(n: NoteDocument): string {
   return lines.slice(0, 2).join(' ').slice(0, 140);
 }
 
+/** Approximate the state of a meeting note from its surface data so the list
+ * can give the user a quick "what's left to do" cue without a per-note source
+ * round-trip. Body filled + sources present → fully captured; sources only →
+ * recording/transcript landed but the note hasn't been written up yet. */
+function meetingStatus(n: NoteDocument): 'none' | 'audio' | 'body' | 'both' {
+  const hasAudio = (n.sourceIds?.length ?? 0) > 0;
+  const hasBody = Boolean(n.body?.trim());
+  if (hasAudio && hasBody) return 'both';
+  if (hasBody) return 'body';
+  if (hasAudio) return 'audio';
+  return 'none';
+}
+
+function meetingStatusCopy(status: ReturnType<typeof meetingStatus>, language: 'zh' | 'en'): { label: string; tone: 'success' | 'info' | 'warning' | 'muted' } {
+  if (language === 'zh') {
+    switch (status) {
+      case 'both': return { label: '已转写', tone: 'success' };
+      case 'body': return { label: '已整理', tone: 'info' };
+      case 'audio': return { label: '待转写', tone: 'warning' };
+      default: return { label: '未开始', tone: 'muted' };
+    }
+  }
+  switch (status) {
+    case 'both': return { label: 'transcribed', tone: 'success' };
+    case 'body': return { label: 'drafted', tone: 'info' };
+    case 'audio': return { label: 'needs transcript', tone: 'warning' };
+    default: return { label: 'not started', tone: 'muted' };
+  }
+}
+
 export interface NoteListProps {
   /** Currently-selected note id; the list highlights it. */
   selectedId?: string | null;
@@ -207,6 +237,24 @@ export function NoteList({
     onNotice?.(language === 'zh' ? '会议笔记已创建，下面可以开始录音' : 'Meeting note ready — start recording below', 'info');
   };
 
+  // Quick stats for the meeting tab header. We split the two "pending" kinds
+  // because they need different actions: `untouched` = created but never
+  // recorded (low urgency), `needsTranscript` = a recording is sitting there
+  // waiting to be transcribed (could lose work). Collapsing them into one red
+  // number made the badge unactionable — the user couldn't tell which note to
+  // open first.
+  const meetingStats = useMemo(() => {
+    let untouched = 0;
+    let needsTranscript = 0;
+    for (const n of items) {
+      if (n.kind !== 'meeting') continue;
+      const s = meetingStatus(n);
+      if (s === 'none') untouched += 1;
+      else if (s === 'audio') needsTranscript += 1;
+    }
+    return { untouched, needsTranscript, pending: untouched + needsTranscript };
+  }, [items]);
+
   // Collapsed: just an icon strip. Each note is a single character
   // avatar; the active one is highlighted. Click to switch.
   if (layout === 'note') {
@@ -299,16 +347,51 @@ export function NoteList({
       <div className="px-3 pb-3">
         <button type="button" onClick={() => void createMeetingAndOpen()} disabled={create.isPending}
           data-testid="notes-new-meeting"
-          className="flex w-full items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-2 text-left text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-heading disabled:opacity-40">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-950/30">
+          className="flex w-full items-center gap-2.5 rounded-lg border border-red-200/70 bg-red-50/60 px-2.5 py-2 text-left text-xs font-medium text-red-700 transition-colors hover:bg-red-100/70 hover:text-red-800 disabled:opacity-40 dark:border-red-950/50 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-950/40">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
             <Mic className="h-3.5 w-3.5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block">{language === 'zh' ? '会议笔记' : 'Meeting note'}</span>
-            <span className="block truncate text-[11px] font-normal text-text-muted">
-              {language === 'zh' ? '录音无需 AI · 自动转写需先配置' : 'record without AI · set up auto-transcription first'}
+            <span className="block text-[13px] font-semibold">{language === 'zh' ? '开始会议' : 'Start meeting'}</span>
+            <span className="block truncate text-[11px] font-normal text-red-700/80 dark:text-red-300/80">
+              {language === 'zh' ? '一键新建会议笔记，立刻开始录音' : 'one tap to open a fresh meeting note + start recording'}
             </span>
           </span>
+          {meetingStats.needsTranscript > 0 ? (
+            // A recording is waiting — this is the urgent one, so it gets the
+            // red badge and spells out what it means.
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+              data-testid="notes-meeting-pending"
+              data-kind="needs-transcript"
+              title={language === 'zh'
+                ? `${meetingStats.needsTranscript} 篇录音待转写`
+                : `${meetingStats.needsTranscript} recording${meetingStats.needsTranscript === 1 ? '' : 's'} waiting to be transcribed`}
+              aria-label={language === 'zh'
+                ? `${meetingStats.needsTranscript} 篇录音待转写`
+                : `${meetingStats.needsTranscript} recordings waiting to be transcribed`}
+            >
+              <Mic className="h-2.5 w-2.5" aria-hidden="true" />
+              {meetingStats.needsTranscript}
+              <span className="font-normal">{language === 'zh' ? '待转写' : 'to transcribe'}</span>
+            </span>
+          ) : meetingStats.untouched > 0 ? (
+            // Created but never recorded — informational, not urgent.
+            <span
+              className="inline-flex items-center rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+              data-testid="notes-meeting-pending"
+              data-kind="untouched"
+              title={language === 'zh'
+                ? `${meetingStats.untouched} 篇会议笔记尚未开始`
+                : `${meetingStats.untouched} meeting note${meetingStats.untouched === 1 ? '' : 's'} not started yet`}
+              aria-label={language === 'zh'
+                ? `${meetingStats.untouched} 篇会议笔记尚未开始`
+                : `${meetingStats.untouched} meeting notes not started`}
+            >
+              {meetingStats.untouched}
+              <span className="ml-1 font-normal">{language === 'zh' ? '未开始' : 'not started'}</span>
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -415,6 +498,31 @@ export function NoteList({
                       )}
                       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
                         <span>{VIEW_LABELS[n.kind === 'meeting' ? 'meeting' : n.kind === 'daily' ? 'daily' : n.kind === 'project' ? 'project' : 'all'][language]}</span>
+                        {n.kind === 'meeting' && (() => {
+                          const status = meetingStatus(n);
+                          const meta = meetingStatusCopy(status, language);
+                          const toneClass = {
+                            success: 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300',
+                            info: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
+                            warning: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
+                            muted: 'bg-surface text-text-muted',
+                          }[meta.tone];
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${toneClass}`}
+                              data-testid={`notes-item-meeting-status-${n.id}`}
+                              data-status={status}
+                            >
+                              {/* The mic icon only makes sense once there is
+                                  actually audio on the note. On "not started"
+                                  it implied a recording existed. */}
+                              {(status === 'audio' || status === 'both') && (
+                                <Mic className="h-2.5 w-2.5" aria-hidden="true" />
+                              )}
+                              {meta.label}
+                            </span>
+                          );
+                        })()}
                         {n.pinned && <span>· ★</span>}
                       </div>
                     </button>

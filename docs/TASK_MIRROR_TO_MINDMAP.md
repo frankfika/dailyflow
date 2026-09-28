@@ -57,4 +57,4 @@
 - `server/services/v2/__tests__/taskCompletionMirror.test.ts` — 8 个测试
 - `server/routes/v2/index.ts` — 路由（line 868 隐式 + line 915 显式）
 - `src/api/client.ts` — `mirrorApi.taskCompletion()`
-- `docs/ROADSHOW_VS_PRODUCT_GAP.md` — 缺口 7
+- `docs/roadshow/ROADSHOW_VS_PRODUCT_GAP.md` — 缺口 7

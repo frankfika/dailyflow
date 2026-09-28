@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Calendar, Check, Copy, ExternalLink, FileText, Hash, ListTodo, Mic, Plus, Repeat, Send, Sparkles, X } from 'lucide-react';
 import type { RecurrenceRule } from '../api/client';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 
 export interface QuickTaskDraft {
   title: string;

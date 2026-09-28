@@ -18,7 +18,7 @@ import { aiApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSki
 import { buildToolInstructions, parseToolCalls } from '../types/ai-tools';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
 import { executeToolCall } from '../utils/aiToolExecutor';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 import { generateShortId } from '../utils/idGenerator';
 import {
   createNewSession,

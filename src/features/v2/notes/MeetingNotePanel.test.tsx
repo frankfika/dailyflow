@@ -348,7 +348,7 @@ describe('MeetingNotePanel', () => {
     expect(screen.getByText('[00:01] 方辰: 发布计划已确认。')).toBeInTheDocument();
   });
 
-  it('lets the user explicitly copy a preserved transcript into the editable note', async () => {
+  it('lets the user explicitly re-insert a preserved transcript into the editable note', async () => {
     const onInsertTranscript = vi.fn();
     getSource.mockResolvedValueOnce({
       source: source('meeting_transcript', 'src_transcript', '讨论完成，下一步发布。'),
@@ -358,11 +358,208 @@ describe('MeetingNotePanel', () => {
       <MeetingNotePanel
         note={note({ sourceIds: ['src_transcript'] })}
         language="zh"
+        autoInsertTranscript={false}
         onInsertTranscript={onInsertTranscript}
       />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '加入笔记并编辑' }));
+    fireEvent.click(await screen.findByRole('button', { name: '重新写入笔记' }));
     expect(onInsertTranscript).toHaveBeenCalledWith('讨论完成，下一步发布。');
+  });
+
+  it('automatically drops a freshly transcribed meeting into the editable note body', async () => {
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'remote',
+      remoteApiKey: 'secret',
+      remoteBaseUrl: 'https://example.test/v1',
+      remoteModel: 'whisper-1',
+    }));
+    const transcriptSource = source('meeting_transcript', 'src_transcript');
+    const audioSource = source('meeting_audio', 'src_audio_new');
+    captureNoteMeetingBinary.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id] }),
+      audioSource,
+      transcriptionMode: 'saved-only',
+    } satisfies MeetingCaptureResult);
+    transcribeNoteMeeting.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id, transcriptSource.id] }),
+      audioSource,
+      transcriptSource,
+      text: '会议转写已自动写入笔记。',
+      transcriptionMode: 'remote',
+    } satisfies MeetingCaptureResult);
+
+    const onInsertTranscript = vi.fn();
+    render(
+      <MeetingNotePanel
+        note={note()}
+        onInsertTranscript={onInsertTranscript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+    await screen.findByRole('button', { name: 'Stop' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
+
+    await waitFor(() =>
+      expect(onInsertTranscript).toHaveBeenCalledWith('会议转写已自动写入笔记。'),
+    );
+  });
+
+  it('does not auto-insert when the host opts out of the new behavior', async () => {
+    const onInsertTranscript = vi.fn();
+    getSource.mockResolvedValueOnce({
+      source: source('meeting_transcript', 'src_transcript', 'manual only'),
+    });
+
+    render(
+      <MeetingNotePanel
+        note={note({ sourceIds: ['src_transcript'] })}
+        language="zh"
+        autoInsertTranscript={false}
+        onInsertTranscript={onInsertTranscript}
+      />,
+    );
+
+    // Auto-insert is disabled, so onInsertTranscript must NOT be invoked
+    // just because the source loaded.
+    await waitFor(() => screen.getByTestId('meeting-note-panel'));
+    expect(onInsertTranscript).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '重新写入笔记' }));
+    expect(onInsertTranscript).toHaveBeenCalledWith('manual only');
+  });
+
+  it('warns with a retry path (and keeps the saved message) when auto-insert throws', async () => {
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'remote',
+      remoteApiKey: 'secret',
+      remoteBaseUrl: 'https://example.test/v1',
+      remoteModel: 'whisper-1',
+    }));
+    const audioSource = source('meeting_audio', 'src_audio_new');
+    const transcriptSource = source('meeting_transcript', 'src_transcript');
+    captureNoteMeetingBinary.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id] }),
+      audioSource,
+      transcriptionMode: 'saved-only',
+    } satisfies MeetingCaptureResult);
+    transcribeNoteMeeting.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id, transcriptSource.id] }),
+      audioSource,
+      transcriptSource,
+      text: 'transcript text',
+      transcriptionMode: 'remote',
+    } satisfies MeetingCaptureResult);
+
+    const onInsertTranscript = vi.fn().mockRejectedValue(new Error('host exploded'));
+
+    render(
+      <MeetingNotePanel
+        note={note()}
+        onInsertTranscript={onInsertTranscript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+    await screen.findByRole('button', { name: 'Stop' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
+
+    await waitFor(() => expect(onInsertTranscript).toHaveBeenCalledWith('transcript text'));
+    // The recording + transcript are persisted, so we must not present this as
+    // a total failure. But a silently swallowed host error is exactly the
+    // "UI promised something it didn't do" trap — the notice has to say the
+    // data is saved AND that the note-body write needs a retry.
+    const warning = await screen.findByTestId('meeting-notice-warning');
+    expect(warning).toHaveTextContent(/saved/i);
+    expect(warning).toHaveTextContent(/Re-insert into note/i);
+    expect(warning).toHaveTextContent('host exploded');
+  });
+
+  it('auto-inserts from the local-managed transcription path as well', async () => {
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'local-managed', modelId: 'small', installedModels: ['small'],
+    }));
+    const audioSource = source('meeting_audio', 'src_local_audio');
+    const transcriptSource = source('meeting_transcript', 'src_local_text', '本地转写');
+    captureNoteMeetingBinary.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id] }),
+      audioSource,
+      transcriptionMode: 'saved-only',
+    } satisfies MeetingCaptureResult);
+    transcribeNoteMeeting.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id, transcriptSource.id] }),
+      audioSource,
+      transcriptSource,
+      text: '本地转写',
+      transcriptionMode: 'local-managed',
+    } satisfies MeetingCaptureResult);
+
+    const onInsertTranscript = vi.fn();
+    render(
+      <MeetingNotePanel
+        note={note()}
+        language="zh"
+        onInsertTranscript={onInsertTranscript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /有权录音和处理/ }));
+    fireEvent.click(screen.getByRole('button', { name: '开始录音' }));
+    await screen.findByRole('button', { name: '停止' });
+    fireEvent.click(screen.getByRole('button', { name: '停止' }));
+    fireEvent.click(await screen.findByRole('button', { name: '保存并转写' }));
+
+    await waitFor(() =>
+      expect(onInsertTranscript).toHaveBeenCalledWith('本地转写'),
+    );
+  });
+
+  it('does not invoke onInsertTranscript when the transcript text is empty', async () => {
+    localStorage.setItem('df_meeting_transcription_settings', JSON.stringify({
+      mode: 'remote',
+      remoteApiKey: 'secret',
+      remoteBaseUrl: 'https://example.test/v1',
+      remoteModel: 'whisper-1',
+    }));
+    const audioSource = source('meeting_audio', 'src_audio_new');
+    captureNoteMeetingBinary.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id] }),
+      audioSource,
+      transcriptionMode: 'saved-only',
+    } satisfies MeetingCaptureResult);
+    // Some providers can return a transcript source without usable text
+    // (e.g. only a header was captured). The panel must not push empty
+    // content into the editable body.
+    transcribeNoteMeeting.mockResolvedValue({
+      note: note({ sourceIds: [audioSource.id] }),
+      audioSource,
+      transcriptSource: source('meeting_transcript', 'src_empty'),
+      text: '',
+      transcriptionMode: 'remote',
+    } satisfies MeetingCaptureResult);
+
+    const onInsertTranscript = vi.fn();
+    render(
+      <MeetingNotePanel
+        note={note()}
+        onInsertTranscript={onInsertTranscript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /right to record and process/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+    await screen.findByRole('button', { name: 'Stop' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save & transcribe' }));
+
+    await waitFor(() => expect(transcribeNoteMeeting).toHaveBeenCalled());
+    // Allow pending microtasks to settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onInsertTranscript).not.toHaveBeenCalled();
   });
 });

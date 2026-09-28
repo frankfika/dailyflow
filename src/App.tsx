@@ -9,7 +9,7 @@ import { filesApi, tasksApi, recurringApi, rolloverApi, configApi, notesApi, aiA
 import type { Workspace } from './api/client';
 import { API_BASE } from './config/api';
 import { getActiveAiConfig, hydrateModelCenterFromBackend, loadProviderConfigs } from './types/models';
-import { getTodayStr } from './utils/tagColors';
+import { getTodayStr } from './utils/date';
 import { TaskCard } from './components/TaskCard';
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
@@ -40,6 +40,7 @@ import type { NoteData } from './api/client';
 import { checkForUpdates, downloadUpdate, relaunchApp, type UpdateInfo } from './api/updater';
 import { filterTasksByContext, filterNotesByContext } from './utils/contextFilter';
 import { createNote as createV2Note, patchCommitment as v2PatchCommitment, completeCommitment as v2CompleteCommitment } from './features/v2/api/client';
+import { queryKeys } from './queryKeys';
 import type { ProactiveProposal, ProactiveSuggestion } from './api/client';
 import { EntityContextDrawer, type EntityRef } from './components/EntityContextDrawer';
 import { CommandPalette, type CommandId } from './components/CommandPalette';
@@ -888,7 +889,7 @@ export default function App() {
       // Refetch failed (e.g. offline moment): TanStack keeps the stale
       // projection, which would mask the local task state we just updated.
       // Reset so Today falls back to the local list until the API returns.
-      queryClient.resetQueries({ queryKey: ['today-items'] });
+      queryClient.resetQueries({ queryKey: queryKeys.todayItemsRoot() });
     }
   }, [todayItemsQuery, queryClient]);
 
@@ -1545,7 +1546,7 @@ export default function App() {
         // TanStack keeps the old projection, which would hide the task we just
         // saved. Reset it so Today falls back to the local task list, which
         // already contains the new task.
-        queryClient.resetQueries({ queryKey: ['today-items'] });
+        queryClient.resetQueries({ queryKey: queryKeys.todayItemsRoot() });
       }
     } catch (e) {
       console.error('Failed to add task', e);

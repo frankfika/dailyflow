@@ -14,6 +14,7 @@ import {
   type SourceItem,
 } from '../api/client';
 import { MEETING_TRANSCRIPTION_PRESETS, isMeetingModelInstalled, loadMeetingTranscriptionSettings, loadTranscriptionBackend, saveMeetingTranscriptionSettings, type MeetingTranscriptionSettings, type TranscriptionBackend } from './meetingTranscription';
+import { LocalModelsPanel } from './LocalModelsPanel';
 
 export interface MeetingNotePanelProps {
   note: NoteDocument;
@@ -22,7 +23,21 @@ export interface MeetingNotePanelProps {
   /** Lets the host offer AI cleanup/summary without silently replacing the note body. */
   onTranscriptReady?: (text: string, result: MeetingCaptureResult) => void;
   /** Copies a preserved transcript into the editable Note body on explicit user action. */
-  onInsertTranscript?: (text: string) => void | Promise<void>;
+  /**
+   * Writes a transcript into the editable note body. Returns `false` when the
+   * body already contained the transcript (an idempotent no-op) so the panel
+   * can tell the user apart "written" from "was already there". Returning
+   * `void`/`true` means the body changed.
+   */
+  onInsertTranscript?: (text: string) => boolean | void | Promise<boolean | void>;
+  /**
+   * When true (default) the panel calls `onInsertTranscript` automatically as soon
+   * as a fresh transcript is produced, so the user lands on a note whose body
+   * already contains the conversation without having to press another button.
+   * Set to false to keep the manual "Add to note" workflow (e.g. when an AI step
+   * sits between the raw transcript and the editable note body).
+   */
+  autoInsertTranscript?: boolean;
 }
 
 type RecordingState = 'idle' | 'requesting' | 'recording' | 'ready' | 'saving';
@@ -83,7 +98,10 @@ const COPY = {
     recordingOnly: '当前仅保存录音',
     recordingStep: '准备录音',
     consent: '我已告知参会者，并确认有权录音和处理本次会议内容',
-    insertTranscript: '加入笔记并编辑',
+    insertTranscript: '重新写入笔记',
+    transcriptInserted: '已自动写入笔记。',
+    transcriptAlreadyInNote: '转写内容已在笔记中，未重复写入。',
+    transcriptInsertFailed: '录音与转写已保存，但自动写入笔记失败——请点下方“重新写入笔记”重试。',
     backgroundTranscribing: '录音已保存，本地转写正在后台运行。你可以继续编辑或离开此页面。',
     backendBadgeOpenai: 'OpenAI Whisper',
     backendBadgeLocal: '本地 Whisper',
@@ -96,7 +114,7 @@ const COPY = {
     localNotReady: '本地转写尚未就绪，请确认执行程序和模型文件路径。',
     saveConfig: '保存并检测',
     setupTitle: '选一个就行 · 录音后怎么处理',
-    setupBody: '只录音不需要任何配置；想自动转写则选一个后面随时可以换。Ollama 跑的是 AI 聊天模型，不能转写语音，所以不在选项里。',
+    setupBody: '只录音不需要任何配置；想自动转写则选一个后面随时可以换。注：Ollama 只支持 AI 聊天，无法转写语音，不在选项中。',
     setupSaveOnly: '只保存录音',
     setupSaveOnlyHint: '零配置 · 手动整理',
     setupRemote: '云端转写（硅基流动 / OpenAI 等）',
@@ -105,7 +123,7 @@ const COPY = {
     setupLocalHint: '免费 · 隐私 · 无需 API Key',
     siliconflowCta: '硅基流动送 ¥9.9 体验金 · 中文识别强',
     siliconflowCtaUrl: 'https://cloud.siliconflow.cn/account/ak',
-    localSetupHint: '需要 brew install whisper-cpp ffmpeg · 一个 ggml 模型',
+    localSetupHint: '在 dailyflow 内一键下载 ggml 模型（点上方“本地模型”面板）· ffmpeg/whisper-cli 命令见下方',
     apiKeyRequired: '远程自动转写尚未启用：请填写所选服务商的 API Key。录音仍可正常保存。',
   },
   en: {
@@ -163,7 +181,10 @@ const COPY = {
     recordingOnly: 'Recording will be saved without transcription',
     recordingStep: 'Ready to record',
     consent: 'I have notified participants and have the right to record and process this meeting',
-    insertTranscript: 'Add to note and edit',
+    insertTranscript: 'Re-insert into note',
+    transcriptInserted: 'Added to the note automatically.',
+    transcriptAlreadyInNote: 'The transcript is already in the note — nothing re-written.',
+    transcriptInsertFailed: 'Recording and transcript were saved, but writing them into the note failed. Use “Re-insert into note” below to retry.',
     backgroundTranscribing: 'Recording saved. Local transcription is running in the background; you can keep editing or leave this page.',
     backendBadgeOpenai: 'OpenAI Whisper',
     backendBadgeLocal: 'Local Whisper',
@@ -185,7 +206,7 @@ const COPY = {
     setupLocalHint: 'Free · private · no API key',
     siliconflowCta: 'SiliconFlow gives ¥9.9 trial credit · strong for Chinese',
     siliconflowCtaUrl: 'https://cloud.siliconflow.cn/account/ak',
-    localSetupHint: 'Needs brew install whisper-cpp ffmpeg · one ggml model',
+    localSetupHint: 'Download ggml checkpoints from inside DailyFlow (open the Local models panel above) · ffmpeg/whisper-cli install line below',
     apiKeyRequired: 'Remote transcription is not active yet. Add the selected provider’s API key; recording and saving still work.',
   },
 } as const;
@@ -225,6 +246,7 @@ export function MeetingNotePanel({
   onNoteUpdated,
   onTranscriptReady,
   onInsertTranscript,
+  autoInsertTranscript = true,
 }: MeetingNotePanelProps) {
   const t = COPY[language];
   const [state, setState] = useState<RecordingState>('idle');
@@ -249,6 +271,10 @@ export function MeetingNotePanel({
   const [localStatus, setLocalStatus] = useState<LocalTranscriptionStatus | null>(null);
   const [localConfigSaving, setLocalConfigSaving] = useState(false);
   const [transcribingSourceId, setTranscribingSourceId] = useState<string | null>(null);
+  // True while the user still needs the manual "Re-insert into note" affordance
+  // — either the auto-insert was a no-op, or it failed. Reset once a manual
+  // insert actually writes the body.
+  const [manualInsertExpected, setManualInsertExpected] = useState(false);
   const [activeBackend, setActiveBackend] = useState<TranscriptionBackend>(() => loadTranscriptionBackend());
   const [audioTranscriptMap, setAudioTranscriptMap] = useState<Record<string, SourceItem>>({});
   useEffect(() => {
@@ -478,12 +504,66 @@ export function MeetingNotePanel({
       setNotice(t.transcribed);
       onNoteUpdated?.(result.note, result);
       if (result.text) onTranscriptReady?.(result.text, result);
+      // Default flow: drop the freshly-minted transcript into the editable
+      // body so the user lands on a note that already contains their meeting
+      // without a second click. The host (NoteEditor) is idempotent — calling
+      // it twice with the same text is a no-op — so this is safe to retry.
+      //
+      // Three outcomes, three different user-visible messages. Silently
+      // swallowing a failure here would be the exact "UI promised something
+      // it didn't do" trap this panel is supposed to avoid.
+      if (autoInsertTranscript && onInsertTranscript && result.text) {
+        try {
+          const outcome = await onInsertTranscript(result.text);
+          if (outcome === false) {
+            // Body already had this transcript — not an error, but say so,
+            // otherwise the user re-clicks "Re-insert" hunting for a change.
+            setNoticeTone('info');
+            setNotice(`${t.transcribed} ${t.transcriptAlreadyInNote}`);
+            setManualInsertExpected(true);
+          } else {
+            setNoticeTone('success');
+            setNotice(`${t.transcribed} ${t.transcriptInserted}`);
+            setManualInsertExpected(false);
+          }
+        } catch (cause) {
+          // The recording + transcript were saved successfully; only the
+          // note-body write failed. Keep it recoverable: warn, and keep the
+          // manual "Re-insert into note" affordance on screen.
+          const detail = cause instanceof Error ? cause.message : String(cause);
+          setNoticeTone('warning');
+          setNotice(`${t.transcriptInsertFailed}${detail ? ` ${detail}` : ''}`);
+          setManualInsertExpected(true);
+        }
+      }
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
       setNoticeTone('warning');
       setNotice(`${t.transcriptionFailed} ${detail}`);
     } finally {
       setTranscribingSourceId(null);
+    }
+  };
+
+  /** Manual "Re-insert into note" path. Reports the same three outcomes as the
+   *  auto-insert so a retry either confirms success or explains the no-op. */
+  const runManualInsert = async (text: string) => {
+    if (!onInsertTranscript) return;
+    try {
+      const outcome = await onInsertTranscript(text);
+      if (outcome === false) {
+        setNoticeTone('info');
+        setNotice(t.transcriptAlreadyInNote);
+        return;
+      }
+      setNoticeTone('success');
+      setNotice(t.transcriptInserted);
+      setManualInsertExpected(false);
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setNoticeTone('warning');
+      setNotice(`${t.transcriptInsertFailed}${detail ? ` ${detail}` : ''}`);
+      setManualInsertExpected(true);
     }
   };
 
@@ -550,10 +630,42 @@ export function MeetingNotePanel({
             </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-medium ${canTranscribe ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${canTranscribe ? 'bg-green-500' : 'bg-amber-500'}`} />
-            {canTranscribe ? t.transcriptionReady : t.recordingOnly}
-          </span>
+          {/*
+            Status badge. Two distinct states, two distinct affordances:
+            - Not ready (amber): this is a call to action. Rendered as a
+              button with a caret so it reads as clickable, and it opens the
+              transcription-setup panel (where the local-models picker lives).
+            - Ready (green): pure status. Rendered as a non-interactive span
+              with a tooltip — clicking a "everything is fine" pill was a
+              wasted click that also confused people into thinking it would
+              manage models. The settings gear next to it is the single
+              always-available entry point.
+          */}
+          {canTranscribe ? (
+            <span
+              title={t.transcriptionReady}
+              className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2 py-1 font-medium text-green-700 dark:bg-green-950/30 dark:text-green-300"
+              data-testid="transcription-status-badge"
+              data-state="ready"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden="true" />
+              {t.transcriptionReady}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowTranscriptionSettings(true)}
+              aria-expanded={showTranscriptionSettings}
+              aria-label={`${t.recordingOnly} — ${t.configureTranscription}`}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300 sm:min-h-0"
+              data-testid="transcription-status-badge"
+              data-state="needs-setup"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              {t.recordingOnly}
+              <span aria-hidden="true">▾</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowTranscriptionSettings((open) => !open)}
@@ -633,6 +745,9 @@ export function MeetingNotePanel({
             </div>
           </div>
         )}
+
+        <LocalModelsPanel language={language} />
+
         {state === 'idle' && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className="flex max-w-2xl cursor-pointer items-center gap-2.5 text-xs leading-5 text-text-secondary">
@@ -1049,8 +1164,8 @@ export function MeetingNotePanel({
                           {onInsertTranscript && (
                             <button
                               type="button"
-                              onClick={() => void onInsertTranscript(transcript.body!)}
-                              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-accent/25 bg-accent/5 px-2 py-1 text-[12px] font-medium text-accent hover:bg-accent/10"
+                              onClick={() => void runManualInsert(transcript.body!)}
+                              className={`mt-1.5 inline-flex min-h-[36px] items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] font-medium text-accent ${manualInsertExpected ? 'border-accent bg-accent/15 ring-1 ring-accent/40' : 'border-accent/25 bg-accent/5'} hover:bg-accent/10`}
                             >
                               <FileText className="h-3 w-3" aria-hidden="true" />
                               {t.insertTranscript}
@@ -1075,8 +1190,8 @@ export function MeetingNotePanel({
               {onInsertTranscript && (
                 <button
                   type="button"
-                  onClick={() => void onInsertTranscript(latestTranscript.body!)}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-accent/25 bg-accent/5 px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent/10"
+                  onClick={() => void runManualInsert(latestTranscript.body!)}
+                  className={`mt-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-accent ${manualInsertExpected ? 'border-accent bg-accent/15 ring-1 ring-accent/40' : 'border-accent/25 bg-accent/5'} hover:bg-accent/10`}
                 >
                   <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                   {t.insertTranscript}

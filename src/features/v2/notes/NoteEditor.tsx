@@ -17,7 +17,7 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Maximize2, Minimize2, FileText, Calendar, ArrowRight, Trash2, Pencil, Tag, Link2, Settings2, X, Plus } from 'lucide-react';
+import { Maximize2, Minimize2, FileText, Calendar, ArrowRight, Trash2, Pencil, Tag, Link2, Settings2, X, Plus, Volume2, Square, Pause, Play } from 'lucide-react';
 import { useNote, useNoteAutosave, useNoteBacklinks, useNotes, useDeleteNote, type AutosaveStatus } from '../hooks/useNotes';
 import { Spinner, Badge } from '../components/States';
 import {
@@ -35,6 +35,7 @@ import { useWorkspaceScope } from '../../../workspaceScope';
 import { queryKeys } from '../../../queryKeys';
 import { MeetingNotePanel } from './MeetingNotePanel';
 import { MeetingEventLauncher } from './MeetingEventLauncher';
+import { useBrowserTts } from '../hooks/useBrowserTts';
 import type { LiveMarkdownEditorHandle } from './LiveMarkdownEditor';
 
 const LiveMarkdownEditor = lazy(async () => ({
@@ -123,6 +124,10 @@ const COPY = {
     removeTag: '移除标签',
     unlinkTask: '取消关联任务',
     emptyPreview: '还没有可预览的 Markdown 内容。',
+    readAloud: '朗读',
+    pause: '暂停',
+    resume: '继续朗读',
+    stopRead: '停止',
   },
   en: {
     placeholder: 'Start writing…',
@@ -179,8 +184,91 @@ const COPY = {
     removeTag: 'Remove tag',
     unlinkTask: 'Unlink task',
     emptyPreview: 'There is no Markdown content to preview yet.',
+    readAloud: 'Read aloud',
+    pause: 'Pause',
+    resume: 'Resume',
+    stopRead: 'Stop',
   },
 };
+
+/**
+ * Strip Markdown decorations so the Web Speech API doesn't read "hash"
+ * and "asterisk" out loud. The point isn't to be a complete Markdown
+ * parser — just enough that a transcript like
+ *   "## 录音转写\n\n今天讨论了发布计划…"
+ * becomes
+ *   "录音转写。今天讨论了发布计划。"
+ * which is what the user wants to hear. Exported so the unit tests can
+ * cover the regex catalogue without spinning up React.
+ */
+export function plainTextForTts(body: string): string {
+  return body
+    // Fenced code blocks become a single space — the speech engine
+    // can't read code aloud usefully, and skipping it avoids long
+    // stretches of punctuation noise.
+    .replace(/```[\s\S]*?```/g, ' ')
+    // GFM task list checkboxes (`- [x] foo`, `- [ ] bar`). We keep the
+    // "x" / blank as a one-word cue so the listener hears "done" / "todo".
+    .replace(/^\s*[-*+]\s+\[([ xX])\]\s+/gm, (_match, mark: string) =>
+      mark.toLowerCase() === 'x' ? 'done ' : 'todo ',
+    )
+    .replace(/`[^`]*`/g, (match) => match.slice(1, -1))
+    .replace(/^#{1,6}\s+/gm, '')
+    // Horizontal rules (---, ***, ___ lines on their own).
+    .replace(/^[ \t]*(?:[-*_][ \t]*){3,}[ \t]*$/gm, ' ')
+    // Bold / italic / strikethrough — keep the inner text.
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    // Inline + reference + image links — keep the label, drop the URL.
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
+    .replace(/\[([^\]]+)\]\[([^\]]*)\]/g, '$1')
+    // Markdown tables — drop the divider row (| --- | --- |) entirely and
+    // collapse each data row's pipes to spaces so the listener doesn't
+    // hear "|".
+    .replace(/^\s*\|?[\s:|-]+\|[ \t]*$/gm, ' ')
+    .replace(/^\s*\|.+\|[ \t]*$/gm, (line) => line.replace(/\|/g, ' ').trim())
+    // Bullet / ordered list markers.
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    // Blockquote prefix.
+    .replace(/^>\s?/gm, '')
+    // Emoji shortcodes (`:rocket:`) — TTS engines vary on how they read
+    // them, so we strip the colon wrapper.
+    .replace(/:([a-z0-9_+-]+):/gi, ' ')
+    // Raw emoji (any non-ASCII char or surrogate pair) — replace with a
+    // space. We deliberately do NOT translate them to their Unicode name
+    // (e.g. "ROCKET") because some engines read that out loud and it
+    // sounds worse than the silence.
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Pure helper that decides what the note body should look like after a fresh
+ * transcript lands. Returning `null` means "no change" — used both for
+ * idempotent re-inserts (the same transcript is already in the body) and for
+ * empty payloads that would otherwise add a heading with nothing under it.
+ *
+ * Exported so the behaviour can be unit-tested without rendering React.
+ */
+export function composeTranscriptInsertion(
+  currentBody: string,
+  rawTranscript: string,
+  language: 'zh' | 'en',
+): string | null {
+  const transcript = rawTranscript.trim();
+  if (!transcript) return null;
+  if (currentBody.includes(transcript)) return null;
+  const heading = language === 'zh' ? '## 录音转写' : '## Recording transcript';
+  return currentBody.trim()
+    ? `${currentBody.trimEnd()}\n\n${heading}\n\n${transcript}\n`
+    : `${heading}\n\n${transcript}\n`;
+}
 
 function statusCopy(s: AutosaveStatus, lang: 'zh' | 'en'): string {
   const c = COPY[lang];
@@ -206,6 +294,10 @@ function statusTone(s: AutosaveStatus): 'default' | 'success' | 'warning' | 'dan
 
 export function NoteEditor({ noteId, language = 'en', className = '', layout = 'split', onToggleLayout, onCreateFromTemplate, onSelectNote, onDeleted, onNotice }: NoteEditorProps) {
   const t = COPY[language];
+  // Browser-native TTS for meeting notes — the same path that powers
+  // "read this transcript back to me" in Voice Memos. SSR-safe: returns
+  // an inert no-op when window.speechSynthesis isn't present (older Safari).
+  const tts = useBrowserTts({ language });
   const workspaceId = useWorkspaceScope();
   const queryClient = useQueryClient();
   const q = useNote(noteId);
@@ -514,21 +606,29 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
       setIsLinkingTask(false);
     }
   };
-  const insertTranscriptIntoNote = async (text: string) => {
-    const transcript = text.trim();
-    if (!transcript) return;
-    const currentBody = bodyRef.current;
-    if (currentBody.includes(transcript)) return;
-    const heading = language === 'zh' ? '## 录音转写' : '## Recording transcript';
-    const nextBody = currentBody.trim()
-      ? `${currentBody.trimEnd()}\n\n${heading}\n\n${transcript}\n`
-      : `${heading}\n\n${transcript}\n`;
+  /** Insert a transcript into the body. Returns `false` when the body already
+   *  contained it (idempotent no-op) so the caller can tell the user apart
+   *  "written" from "was already there". */
+  const insertTranscriptIntoNote = async (text: string): Promise<boolean> => {
+    const nextBody = composeTranscriptInsertion(bodyRef.current, text, language);
+    if (nextBody === null) return false;
     bodyRef.current = nextBody;
     markdownEditorRef.current?.setMarkdown(nextBody);
     setRenderedBody(nextBody);
     autosave.schedule({ body: nextBody });
     await autosave.flush();
+    return true;
   };
+
+  // Switching notes while the previous note is being read aloud would leave
+  // the OS speech engine talking with no on-screen control in the new note.
+  // Stop explicitly on note change — `pagehide`/unmount cover the rest.
+  useEffect(() => {
+    tts.stop();
+    // `tts.stop` is a stable useCallback; re-running on every `tts` identity
+    // change would cancel speech the user just started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
 
   return (
     <div className={`flex flex-col h-full ${className}`} data-testid="note-editor">
@@ -566,6 +666,58 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
             )}
           </div>
           <div className="flex items-center gap-1">
+            {tts.isSupported && note && note.kind === 'meeting' && (
+              <div className="flex items-center gap-0.5" data-testid="note-tts-controls">
+                {!tts.isSpeaking ? (
+                  <button
+                    type="button"
+                    onClick={() => tts.speak(plainTextForTts(note.body ?? ''))}
+                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-border px-2 py-1 text-text-muted transition-colors hover:border-text-muted hover:text-text-heading sm:min-h-0 sm:min-w-0"
+                    title={t.readAloud}
+                    aria-label={t.readAloud}
+                    data-testid="note-tts-play"
+                  >
+                    <Volume2 size={16} />
+                  </button>
+                ) : (
+                  <>
+                    {tts.isPaused ? (
+                      <button
+                        type="button"
+                        onClick={() => tts.resume()}
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-accent px-2 py-1 text-accent sm:min-h-0 sm:min-w-0"
+                        title={t.resume}
+                        aria-label={t.resume}
+                        data-testid="note-tts-resume"
+                      >
+                        <Play size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => tts.pause()}
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-accent px-2 py-1 text-accent sm:min-h-0 sm:min-w-0"
+                        title={t.pause}
+                        aria-label={t.pause}
+                        data-testid="note-tts-pause"
+                      >
+                        <Pause size={16} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => tts.stop()}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-border px-2 py-1 text-text-muted hover:border-text-muted hover:text-text-heading sm:min-h-0 sm:min-w-0"
+                      title={t.stopRead}
+                      aria-label={t.stopRead}
+                      data-testid="note-tts-stop"
+                    >
+                      <Square size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {onToggleLayout && (
               <button
                 onClick={onToggleLayout}

@@ -28,7 +28,7 @@ import {
   type CalendarWorkspaceData,
   type CalendarWorkspaceItem,
 } from '../api/client';
-import { getTodayStr } from '../utils/tagColors';
+import { getTodayStr } from '../utils/date';
 
 type CalendarViewMode = 'day' | 'week' | 'month';
 
