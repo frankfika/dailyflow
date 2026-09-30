@@ -20,6 +20,14 @@ export interface ContextItem {
   };
 }
 
+/** One executed AI tool call, captured for display as an action card. */
+export interface ChatToolRecord {
+  name: string;
+  args: Record<string, unknown>;
+  success: boolean;
+  message: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -29,6 +37,8 @@ export interface ChatMessage {
   modelName?: string;
   skillName?: string;
   contextSnapshot?: ContextItem[]; // captured at send time
+  /** Tools this assistant turn executed (real CRUD actions). */
+  toolCalls?: ChatToolRecord[];
   error?: string;
 }
 

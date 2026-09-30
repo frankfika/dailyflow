@@ -94,6 +94,47 @@ export function invalidateTaskIndex(): void {
   indexCache = null;
 }
 
+/** Maximum results returned by searchAllTasks — AI consumers only need a handful. */
+const SEARCH_RESULT_CAP = 50;
+
+/**
+ * Keyword search across ALL daily notes (title or tag match,
+ * case-insensitive). Built on the same full-scan primitive as the
+ * taskId→date index; a few hundred notes scan in tens of
+ * milliseconds, and results are capped so AI tool calls stay small.
+ * Returns matches newest-first (the scan walks dates descending).
+ */
+export async function searchAllTasks(
+  query: string,
+  config?: Config,
+): Promise<TaskWithDate[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const cfg = config ?? (await loadConfig());
+  const dates = await listDailyNotes(cfg);
+  const out: TaskWithDate[] = [];
+  // Iterate newest → oldest so the most relevant (recent) tasks surface first.
+  for (const date of dates) {
+    if (out.length >= SEARCH_RESULT_CAP) break;
+    try {
+      const note = await readDailyNote(date, cfg);
+      if (!note) continue;
+      for (const task of note.tasks) {
+        if (!task || !task.id || out.length >= SEARCH_RESULT_CAP) continue;
+        const title = (task.title || '').toLowerCase();
+        const tags = (task.tags || []).map((t) => t.toLowerCase());
+        if (title.includes(q) || tags.some((t) => t.includes(q))) {
+          out.push({ task, date });
+        }
+      }
+    } catch (err) {
+      // A corrupt file should not break the whole search.
+      console.error(`[taskIndex] search skipping unreadable note for ${date}:`, err);
+    }
+  }
+  return out;
+}
+
 /**
  * Resolve a single taskId to its host date, or `undefined` if it is
  * not found in any daily note. Convenience wrapper around the index.

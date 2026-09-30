@@ -17,11 +17,50 @@ import {
 } from '../services/topicSpaces.js';
 import { loadConfig } from '../services/config.js';
 import { withDateLock } from '../services/lock.js';
-import { invalidateTaskIndex } from '../services/taskIndex.js';
+import { invalidateTaskIndex, resolveTaskDate, searchAllTasks } from '../services/taskIndex.js';
 import { listMindMaps, updateNodeInMindMap } from '../services/mindmaps.js';
 import type { Task } from '../types/task.js';
 
 const router = Router();
+
+/**
+ * GET /api/tasks/search?q=keyword | ?id=taskId — cross-date task lookup
+ * for AI tools. Registered before GET /:date so "search" is never
+ * parsed as a date.
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    if (!id && !q.trim()) {
+      return res.status(400).json({ error: 'q or id query param is required' });
+    }
+    const toPayload = (task: Task, date: string) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      tags: task.tags ?? [],
+      deadline: task.deadline,
+      priority: task.priority,
+      source_date: date,
+    });
+
+    if (id) {
+      const date = await resolveTaskDate(id);
+      if (!date) return res.json({ tasks: [] });
+      const config = await loadConfig();
+      const note = await readDailyNote(date, config);
+      const task = note?.tasks.find((t) => t.id === id);
+      return res.json({ tasks: task ? [toPayload(task, date)] : [] });
+    }
+
+    const matches = await searchAllTasks(q);
+    res.json({ tasks: matches.map(({ task, date }) => toPayload(task, date)) });
+  } catch (error: any) {
+    console.error('[tasks] search error:', error?.message ?? error);
+    res.status(500).json({ error: error?.message || 'Task search failed' });
+  }
+});
 
 /**
  * GET /api/tasks/:date - 获取指定日期的所有任务

@@ -193,6 +193,25 @@ export const filesApi = {
  * 任务操作 API
  */
 export const tasksApi = {
+  /**
+   * Cross-date keyword search (server walks every daily note). Used by
+   * AI tools so the model can find tasks that are not on today's note.
+   */
+  async search(query: string): Promise<TaskInput[]> {
+    const res = await fetch(`${API_BASE}/tasks/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to search tasks');
+    const data = await res.json();
+    return data.tasks;
+  },
+
+  /** Cross-date id lookup via the server's taskId→date index. */
+  async searchById(taskId: string): Promise<TaskInput[]> {
+    const res = await fetch(`${API_BASE}/tasks/search?id=${encodeURIComponent(taskId)}`);
+    if (!res.ok) throw await httpError(res, 'Failed to look up task');
+    const data = await res.json();
+    return data.tasks;
+  },
+
   async getByDate(date: string): Promise<TaskInput[]> {
     const res = await fetch(`${API_BASE}/tasks/${date}`);
     if (!res.ok) throw await httpError(res, 'Failed to fetch tasks');

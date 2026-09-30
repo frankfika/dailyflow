@@ -23,6 +23,7 @@ import { createNewSession as createNewSessionImpl, type ContextItem } from '../t
 import { ensureInitialized, getStore, setStore, subscribe, type ChatSession, type SharedStore } from './useAiSessionStore';
 import { useSendPipeline } from './useAiSessionSend';
 import { buildContextText as buildContextTextImpl, buildAutoContextText as buildAutoContextTextImpl } from './aiContextBuilders';
+import type { DataScope } from '../utils/aiToolExecutor';
 
 export interface UseAiSessionOptions {
   workspaceId?: string;
@@ -34,6 +35,10 @@ export interface UseAiSessionOptions {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   /** 从 NoteEditor / Today 自动注入的上下文 */
   focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
+  /** Event summaries so the chat can operate on events. */
+  events?: any[];
+  /** Called when an AI tool wrote data, so the app refreshes that scope. */
+  onDataChanged?: (scope: DataScope) => void;
 }
 
 export interface UseAiSessionReturn {
@@ -107,7 +112,7 @@ export function findReusableDraftSession(
 }
 
 export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
-  const { language, tasks, notes, filesMap, activeContext = 'work', showToast, focusedContext, workspaceId = 'default' } = opts;
+  const { language, tasks, notes, filesMap, activeContext = 'work', showToast, focusedContext, workspaceId = 'default', events, onDataChanged } = opts;
   const snapshot = useSharedSnapshot();
   const scopedSessions = useMemo(
     () => snapshot.sessions.filter(s => (s.workspaceId || 'default') === workspaceId),
@@ -116,7 +121,7 @@ export function useAiSession(opts: UseAiSessionOptions): UseAiSessionReturn {
 
   // Send pipeline (per-instance, 跟原行为一致)
   const { isStreaming, sendMessage, stopMessage, retryMessage } = useSendPipeline({
-    workspaceId, language, tasks, notes, filesMap, activeContext, showToast, focusedContext,
+    workspaceId, language, tasks, notes, filesMap, activeContext, showToast, focusedContext, events, onDataChanged,
   });
 
   const activeSession = useMemo(

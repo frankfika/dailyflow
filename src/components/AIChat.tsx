@@ -8,6 +8,7 @@ import { Plus, Sparkles, Settings, Trash2, MessageSquare, PanelLeftClose, PanelL
 import { persistProviderConfigsToBackend } from '../types/models';
 import { type ChatMessage, type ContextItem } from '../types/chat';
 import { useAiSession } from '../hooks/useAiSession';
+import type { DataScope } from '../utils/aiToolExecutor';
 import { ChatSettingsPanel } from './ChatSettingsPanel';
 import { ContextPicker } from './ContextPicker';
 import { SaveNoteModal } from './SaveNoteModal';
@@ -26,19 +27,23 @@ interface AIChatProps {
   onDraftConsumed?: () => void;
   onCreateMeetingNote?: () => void;
   onNoteCreated?: () => void;
+  /** Event summaries for the AI to operate on (create / add task / rename). */
+  events?: any[];
+  /** Refresh hook: called when an AI tool writes tasks/notes/events. */
+  onDataChanged?: (scope: DataScope) => void;
   compact?: boolean;
   onClose?: () => void;
   onOpenFullChat?: () => void;
 }
 
-export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated, compact = false, onClose, onOpenFullChat }: AIChatProps) {
+export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated, events, onDataChanged, compact = false, onClose, onOpenFullChat }: AIChatProps) {
   const {
     sessions, activeSession, setActiveSessionId, createSession, prepareSessionForDraft, deleteSession, renameSession,
     isStreaming, sendMessage, stopMessage, retryMessage,
     providers, activeProvider, switchProvider, reloadProvidersAndSkills,
     skills, pendingSkillId, setPendingSkillId, activeSkill,
     addContext, removeContext,
-  } = useAiSession({ workspaceId, language, tasks, notes, filesMap, activeContext, showToast });
+  } = useAiSession({ workspaceId, language, tasks, notes, filesMap, activeContext, showToast, events, onDataChanged });
 
   // UI 状态 (本地)
   const [inputValue, setInputValue] = useState('');

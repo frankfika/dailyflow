@@ -42,6 +42,17 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => React.createElement('span', { 'data-testid': 'icon-bookmark' }),
   Mic: () => React.createElement('span', { 'data-testid': 'icon-mic' }),
   Maximize2: () => React.createElement('span', { 'data-testid': 'icon-maximize' }),
+  // MessageBubble tool-card icons (AI action cards)
+  CalendarPlus: () => React.createElement('span', { 'data-testid': 'icon-calendar-plus' }),
+  Check: () => React.createElement('span', { 'data-testid': 'icon-check' }),
+  CheckCircle2: () => React.createElement('span', { 'data-testid': 'icon-check-circle' }),
+  ListTodo: () => React.createElement('span', { 'data-testid': 'icon-list-todo' }),
+  Pencil: () => React.createElement('span', { 'data-testid': 'icon-pencil' }),
+  PlusCircle: () => React.createElement('span', { 'data-testid': 'icon-plus-circle' }),
+  RotateCcw: () => React.createElement('span', { 'data-testid': 'icon-rotate' }),
+  Search: () => React.createElement('span', { 'data-testid': 'icon-search' }),
+  StickyNote: () => React.createElement('span', { 'data-testid': 'icon-sticky-note' }),
+  XCircle: () => React.createElement('span', { 'data-testid': 'icon-x-circle' }),
 }));
 
 vi.mock('../../api/client', () => ({
@@ -244,5 +255,18 @@ describe('AIChat initialDraft', () => {
 
     expect(onOpenFullChat).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AIChat — option forwarding to useAiSession', () => {
+  it('forwards events and onDataChanged down to the chat hook', async () => {
+    const useAiSessionModule = await import('../../hooks/useAiSession');
+    const spy = vi.spyOn(useAiSessionModule, 'useAiSession');
+    const events = [{ id: 'evt_1', title: 'Launch v3' }];
+    const onDataChanged = vi.fn();
+
+    render(<AIChat {...baseProps} events={events} onDataChanged={onDataChanged} />);
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ events, onDataChanged }));
   });
 });

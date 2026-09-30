@@ -15,15 +15,16 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { aiApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { buildToolInstructions, parseToolCalls } from '../types/ai-tools';
+import { buildToolInstructions, parseToolCalls, type AIToolResult } from '../types/ai-tools';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
-import { executeToolCall } from '../utils/aiToolExecutor';
+import { executeToolCall, type DataScope } from '../utils/aiToolExecutor';
 import { getTodayStr } from '../utils/date';
 import { generateShortId } from '../utils/idGenerator';
 import {
   createNewSession,
   deriveSessionTitle,
   type ChatMessage,
+  type ChatToolRecord,
   type ContextItem,
 } from '../types/chat';
 import { getStore, setStore } from './useAiSessionStore';
@@ -38,6 +39,10 @@ export interface UseSendPipelineOptions {
   activeContext?: 'work' | 'life';
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   focusedContext?: { type: 'note' | 'today'; id?: string; title?: string; content?: string } | null;
+  /** Event summaries so the chat can operate on events (optional). */
+  events?: any[];
+  /** Called when a tool actually wrote data, so the app can refresh that scope. */
+  onDataChanged?: (scope: DataScope) => void;
 }
 
 interface RunMessageOptions {
@@ -57,6 +62,8 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
     activeContext = 'work',
     showToast,
     focusedContext,
+    events,
+    onDataChanged,
   } = opts;
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -181,7 +188,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       const baseSystemPrompt = skillForThisMessage && skillForThisMessage.type !== 'agent'
         ? skillForThisMessage.systemPrompt || skillForThisMessage.prompt || ''
         : defaultSystemPrompt;
-      const systemPrompt = baseSystemPrompt + buildToolInstructions(language);
+      const systemPrompt = baseSystemPrompt + buildToolInstructions(language, getTodayStr());
 
       const { summary } = await aiApi.summarize({
         apiKey: provider.apiKey,
@@ -194,24 +201,68 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       if (controller.signal.aborted) return;
 
       const { text, calls } = parseToolCalls(summary);
-      const toolResults = [];
+      // Agent loop: execute the model's tool calls against the real APIs,
+      // refresh the affected UI scopes, then ask the model for a summary
+      // grounded in the actual results — so its answer can never claim an
+      // action that did not happen.
+      const toolRecords: ChatToolRecord[] = [];
+      const mutatedScopes = new Set<DataScope>();
       for (const call of calls) {
-        const result = await executeToolCall(call, {
+        const result: AIToolResult = await executeToolCall(call, {
           currentDate: getTodayStr(),
           activeContext,
           language,
           tasks,
+          notes,
+          events,
           showToast,
         });
-        toolResults.push({ call, result });
+        if (result.mutated) mutatedScopes.add(result.mutated);
+        toolRecords.push({
+          name: call.name,
+          args: call.arguments,
+          success: result.success,
+          message: result.message,
+        });
       }
 
-      const toolSummary = toolResults
-        .map(({ call, result }) => `${result.success ? '✓' : '✗'} **${call.name}**: ${result.message}`)
-        .join('\n');
-      const finalContent = toolSummary
-        ? (text ? `${text}\n\n---\n${toolSummary}` : toolSummary)
-        : text;
+      let finalContent = text;
+      if (toolRecords.length > 0) {
+        // Refresh before the second round so the UI already shows what the
+        // model is about to describe.
+        for (const scope of mutatedScopes) onDataChanged?.(scope);
+
+        const resultsBlock = toolRecords
+          .map(r => `<tool_result tool="${r.name}" status="${r.success ? 'success' : 'failure'}">${r.message}</tool_result>`)
+          .join('\n');
+        try {
+          const followup = await aiApi.summarize({
+            apiKey: provider.apiKey,
+            model: provider.model,
+            baseUrl: provider.baseUrl,
+            systemPrompt: systemPrompt + (language === 'zh'
+              ? '\n\n工具已真实执行完毕。请严格根据下面的执行结果向用户汇报：成功了什么、失败了什么、如需删除等后续操作请先与用户确认。不得编造未发生的操作。'
+              : '\n\nTools have really executed. Report strictly based on the results below: what succeeded, what failed, and confirm with the user before any destructive follow-up. Never fabricate actions that did not happen.'),
+            userPrompt: `${userPrompt}\n\n---\n${
+              language === 'zh' ? '工具执行结果（已真实生效）：' : 'Tool execution results (already applied):'
+            }\n${resultsBlock}`,
+            signal: controller.signal,
+          });
+          if (!controller.signal.aborted && followup.summary.trim()) {
+            finalContent = followup.summary;
+          }
+        } catch {
+          // Second round failed — fall through and keep round-1 text plus a
+          // structured summary so the executed actions are never lost.
+        }
+        if (controller.signal.aborted) return;
+        if (finalContent === text) {
+          const toolSummary = toolRecords
+            .map(r => `${r.success ? '✓' : '✗'} **${r.name}**: ${r.message}`)
+            .join('\n');
+          finalContent = text ? `${text}\n\n---\n${toolSummary}` : toolSummary;
+        }
+      }
 
       appendMessageToSession(session.id, {
         id: generateShortId('msg'),
@@ -221,6 +272,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         modelName: provider.name,
         skillName: skillForThisMessage?.name,
         contextSnapshot,
+        toolCalls: toolRecords.length > 0 ? toolRecords : undefined,
       });
     } catch (error: any) {
       const rawError = error.message || String(error);
@@ -244,10 +296,12 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
     }
   }, [
     activeContext,
+    events,
     filesMap,
     focusedContext,
     language,
     notes,
+    onDataChanged,
     resolveSlashCommand,
     showToast,
     tasks,
