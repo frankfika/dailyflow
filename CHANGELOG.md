@@ -5,6 +5,13 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0](https://github.com/frankfika/dailyflow/compare/v2.18.1...v2.19.0) (2026-09-30)
+
+
+### Features
+
+* **ai-chat:** v2 agent with CRUD tool execution and bilingual tool cards ([4bf64f7](https://github.com/frankfika/dailyflow/commit/4bf64f7ef3642b3c2466f7d5e46a0fd0f44df20d))
+
 ## [2.18.1](https://github.com/frankfika/dailyflow/compare/v2.18.0...v2.18.1) (2026-09-28)
 
 
