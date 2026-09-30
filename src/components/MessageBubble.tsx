@@ -12,9 +12,70 @@
 import { motion } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Bookmark, PlusCircle, RotateCcw, User, Bot, Zap } from 'lucide-react';
-import type { ChatMessage } from '../types/chat';
+import {
+  Bookmark, Bot, CalendarPlus, Check, CheckCircle2, Copy,
+  ListTodo, Pencil, PlusCircle, RotateCcw, Search, StickyNote, Trash2, User, XCircle, Zap,
+} from 'lucide-react';
+import type { ChatMessage, ChatToolRecord } from '../types/chat';
 import { copyMessageContent, createTaskProposalsFromMessage } from '../utils/chatActions';
+
+/** Icon + bilingual label per tool family, so cards read like UI actions. */
+const TOOL_META: Record<string, { icon: typeof Zap; zh: string; en: string }> = {
+  list_today_tasks: { icon: ListTodo, zh: '查看今日任务', en: 'List today' },
+  search_tasks: { icon: Search, zh: '搜索任务', en: 'Search tasks' },
+  search_notes: { icon: Search, zh: '搜索笔记', en: 'Search notes' },
+  create_task: { icon: PlusCircle, zh: '新建任务', en: 'Create task' },
+  create_note: { icon: StickyNote, zh: '新建笔记', en: 'Create note' },
+  create_event: { icon: CalendarPlus, zh: '新建事件', en: 'Create event' },
+  update_task: { icon: Pencil, zh: '修改任务', en: 'Update task' },
+  update_event: { icon: Pencil, zh: '修改事件', en: 'Update event' },
+  complete_task: { icon: Check, zh: '完成任务', en: 'Complete task' },
+  add_task_to_event: { icon: ListTodo, zh: '任务加入事件', en: 'Add to event' },
+  delete_task: { icon: Trash2, zh: '删除任务', en: 'Delete task' },
+  delete_note: { icon: Trash2, zh: '删除笔记', en: 'Delete note' },
+  delete_event: { icon: Trash2, zh: '删除事件', en: 'Delete event' },
+};
+
+/** Compact arg digest — the title/id the action was about, nothing else. */
+function summarizeArgs(record: ChatToolRecord): string {
+  const a = record.args || {};
+  const title = [a.new_title, a.title, a.title_query, a.event_title, a.query, a.note_id, a.task_id, a.event_id]
+    .find(v => typeof v === 'string' && v.trim());
+  return title ? String(title).slice(0, 60) : '';
+}
+
+function ToolCallCard({ record, language }: { record: ChatToolRecord; language: 'en' | 'zh' }) {
+  const meta = TOOL_META[record.name] ?? { icon: Zap, zh: record.name, en: record.name };
+  const Icon = meta.icon;
+  return (
+    <div
+      data-testid={`ai-tool-card-${record.name}`}
+      className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 text-[13px] ${
+        record.success
+          ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+          : 'border-amber-200 bg-amber-50/70 text-amber-900'
+      }`}
+    >
+      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white ${
+        record.success ? 'bg-emerald-500' : 'bg-amber-500'
+      }`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 font-bold">
+          <span>{language === 'zh' ? meta.zh : meta.en}</span>
+          {record.success
+            ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            : <XCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+        </div>
+        {summarizeArgs(record) && (
+          <div className="mt-0.5 truncate text-[12px] font-semibold opacity-80">{summarizeArgs(record)}</div>
+        )}
+        <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-snug opacity-90">{record.message}</div>
+      </div>
+    </div>
+  );
+}
 
 export interface MessageBubbleProps {
   message: ChatMessage;
@@ -70,6 +131,14 @@ export function MessageBubble({
               </span>
             )}
           </div>
+          {/* Executed AI actions — real CRUD results shown as cards. */}
+          {message.toolCalls && message.toolCalls.length > 0 && !message.error && (
+            <div className="mb-2.5 space-y-1.5" data-testid="ai-tool-cards">
+              {message.toolCalls.map((record, index) => (
+                <ToolCallCard key={`${record.name}-${index}`} record={record} language={language} />
+              ))}
+            </div>
+          )}
           {message.error ? (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 leading-relaxed">
               <div className="flex items-start gap-2.5">

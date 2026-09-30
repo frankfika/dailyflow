@@ -978,6 +978,38 @@ export default function App() {
     }
   }, [activeContext]);
 
+  // AI chat tools write through the same APIs as the UI. When a tool
+  // mutates a dataset, refresh that scope immediately so Today / Notes /
+  // Events reflect the change the moment the AI reports it — the chat and
+  // the rest of the app stay consistent by construction.
+  const handleAiDataChanged = useCallback((scope: 'tasks' | 'notes' | 'events') => {
+    if (scope === 'tasks') {
+      void loadTasksForDate(currentFileDate);
+      void refreshTodayProjection();
+      void refreshEarlierOpenTasks();
+    } else if (scope === 'notes') {
+      void loadContextNotes();
+      notesApi.getByDate(currentFileDate)
+        .then(dateNotes => setDailyNotes(dateNotes))
+        .catch(() => { /* keep previous notes on transient failure */ });
+    } else if (scope === 'events') {
+      void eventsQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topicSpacesRoot() });
+    }
+  }, [currentFileDate, eventsQuery, loadContextNotes, loadTasksForDate, queryClient, refreshEarlierOpenTasks, refreshTodayProjection]);
+
+  // Optional landing surface: users who prefer to start in AI Chat
+  // (Settings → General → Landing page) open straight into the chat
+  // overlay once the workspace is confirmed to be set up.
+  useEffect(() => {
+    if (isFirstRun !== false) return;
+    try {
+      if (localStorage.getItem('df_landing_tab') === 'ai-chat') {
+        setActiveOverlay('ai-chat');
+      }
+    } catch { /* storage unavailable — default landing */ }
+  }, [isFirstRun]);
+
   // Load all notes for the current context whenever the context changes or the
   // user opens the AI chat tab, so the chat can reference any note.
   useEffect(() => {
@@ -2087,6 +2119,8 @@ export default function App() {
                         notes={contextNotes}
                         filesMap={filesMap}
                         showToast={showToast}
+                        events={todayEvents}
+                        onDataChanged={handleAiDataChanged}
                         initialDraft={chatDraft}
                         onDraftConsumed={() => setChatDraft(null)}
                         onCreateMeetingNote={() => void openMeetingNote()}

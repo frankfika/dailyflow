@@ -81,6 +81,52 @@ function StepNumber({ value, done }: { value: string; done: boolean }) {
   );
 }
 
+/**
+ * Landing page toggle (Settings → General). Chooses between the classic
+ * Today surface and starting directly in AI Chat (`df_landing_tab`).
+ * Self-contained: reads/writes localStorage like the font settings do.
+ */
+function LandingPageSetting({ language }: { language: 'en' | 'zh' }) {
+  const [landing, setLanding] = useState<'today' | 'ai-chat'>(() => {
+    try { return localStorage.getItem('df_landing_tab') === 'ai-chat' ? 'ai-chat' : 'today'; }
+    catch { return 'today'; }
+  });
+  const pick = (value: 'today' | 'ai-chat') => {
+    setLanding(value);
+    try { localStorage.setItem('df_landing_tab', value); } catch { /* ignore */ }
+  };
+  const options: Array<{ key: 'today' | 'ai-chat'; label: string; hint: string }> = [
+    { key: 'today', label: language === 'zh' ? '今天' : 'Today', hint: language === 'zh' ? '经典首页，任务优先' : 'Classic home, tasks first' },
+    { key: 'ai-chat', label: language === 'zh' ? 'AI 对话' : 'AI Chat', hint: language === 'zh' ? '进入即对话，用自然语言操作' : 'Start in chat, operate by natural language' },
+  ];
+  return (
+    <div>
+      <h3 className="font-sans text-xs font-bold text-text-muted mb-2">
+        {language === 'zh' ? '启动页' : 'Landing Page'}
+      </h3>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map(o => (
+          <button
+            key={o.key}
+            onClick={() => pick(o.key)}
+            className={`rounded-lg border px-3 py-2 text-left transition-all ${
+              landing === o.key
+                ? 'border-accent bg-accent/10 shadow-sm'
+                : 'border-border/50 bg-surface hover:border-accent/30'
+            }`}
+          >
+            <div className={`text-xs font-bold ${landing === o.key ? 'text-accent' : 'text-text-heading'}`}>{o.label}</div>
+            <div className="mt-0.5 text-[11px] text-text-muted">{o.hint}</div>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-text-muted mt-1.5">
+        {language === 'zh' ? '下次启动时生效。' : 'Takes effect on the next launch.'}
+      </p>
+    </div>
+  );
+}
+
 export function SettingsModal({
   showSettings,
   setShowSettings,
@@ -998,6 +1044,11 @@ export function SettingsModal({
                   </button>
                 </div>
               </div>
+
+              <hr className="border-border" />
+
+              {/* Landing page — which surface the app opens on */}
+              <LandingPageSetting language={language} />
 
               <hr className="border-border" />
 
