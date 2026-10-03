@@ -77,7 +77,7 @@ describe('POST /api/ai/summarize', () => {
     const response = await postJson(port, { baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toBe('Invalid AI request');
+    expect(response.body).toEqual({ error: 'Invalid AI request', category: 'bad_request' });
     expect(upstream).not.toHaveBeenCalled();
   });
 
@@ -90,12 +90,15 @@ describe('POST /api/ai/summarize', () => {
       apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello', maxTokens: 99_999,
     });
 
-    expect(oversized).toEqual({ status: 413, body: { error: 'AI prompt exceeds the 2 MiB limit' } });
-    expect(invalidTokens).toEqual({ status: 400, body: { error: 'Invalid AI request' } });
+    expect(oversized).toEqual({
+      status: 413,
+      body: { error: 'AI prompt exceeds the 2 MiB limit', category: 'bad_request' },
+    });
+    expect(invalidTokens).toEqual({ status: 400, body: { error: 'Invalid AI request', category: 'bad_request' } });
     expect(upstream).not.toHaveBeenCalled();
   });
 
-  it('does not expose raw upstream error bodies', async () => {
+  it('does not expose raw upstream error bodies and tags the failure category', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       error: 'secret provider trace', prompt: 'private context',
     }), { status: 401, headers: { 'content-type': 'application/json' } }));
@@ -104,8 +107,31 @@ describe('POST /api/ai/summarize', () => {
       apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello',
     });
 
-    expect(response).toEqual({ status: 401, body: { error: 'Upstream AI error (401)' } });
+    expect(response).toEqual({
+      status: 401,
+      body: { error: 'Upstream AI error (401)', category: 'auth', upstreamStatus: 401 },
+    });
     expect(JSON.stringify(response.body)).not.toMatch(/secret|private context/);
+  });
+
+  it('maps 404 and 429 upstream failures to actionable categories', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 404 }));
+    const notFound = await postJson(port, {
+      apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello',
+    });
+    expect(notFound).toEqual({
+      status: 404,
+      body: { error: 'Upstream AI error (404)', category: 'not_found', upstreamStatus: 404 },
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 429 }));
+    const rateLimited = await postJson(port, {
+      apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello',
+    });
+    expect(rateLimited).toEqual({
+      status: 429,
+      body: { error: 'Upstream AI error (429)', category: 'rate_limit', upstreamStatus: 429 },
+    });
   });
 
   it('rejects an oversized provider response', async () => {
@@ -129,6 +155,20 @@ describe('POST /api/ai/summarize', () => {
 
     expect(response.status).toBe(502);
     expect(response.body.error).toBe('Empty response from AI provider');
+    expect(response.body.category).toBe('unknown');
+  });
+
+  it('keeps the note\'s own code fences on the Markdown path (C14)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '# Notes\n\n```\nconst keep = true;\n```\n' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await postJson(port, {
+      apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', userPrompt: 'Hello',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toContain('```\nconst keep = true;\n```');
   });
 });
 
@@ -217,6 +257,42 @@ describe('POST /api/ai/action', () => {
     });
     expect(response.status).toBe(502);
     expect(response.body.error).toBe('AI response was not valid JSON');
+    expect(response.body.category).toBe('unknown');
+  });
+
+  it('validates the answer against the per-action schema (C15)', async () => {
+    // Valid JSON, wrong shape for `ask`.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"oops": true}' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const wrongShape = await postAction({
+      action: 'ask', apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', input: 'what today?',
+    });
+    expect(wrongShape.status).toBe(400);
+    expect(wrongShape.body).toEqual({
+      error: 'AI response failed schema validation for ask',
+      category: 'bad_request',
+    });
+
+    // pick_focus must never return more than 3 ids.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"ids":["a","b","c","d"]}' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const tooManyIds = await postAction({
+      action: 'pick_focus', apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', input: 'pick',
+    });
+    expect(tooManyIds.status).toBe(400);
+    expect(tooManyIds.body.category).toBe('bad_request');
+
+    // A schema-valid answer still passes through (unknown keys stripped).
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"answer":"focus on A","extra":"noise"}' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const valid = await postAction({
+      action: 'ask', apiKey: 'test-key', baseUrl: 'http://127.0.0.1:11434/v1', input: 'what today?',
+    });
+    expect(valid.status).toBe(200);
+    expect(valid.body.result).toEqual({ answer: 'focus on A' });
   });
 });
 

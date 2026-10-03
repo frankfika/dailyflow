@@ -86,7 +86,7 @@ describe('TodayBacklog horizontal tab bar', () => {
     expect(within(list).getAllByRole('article')).toHaveLength(1);
   });
 
-  it('shows an Event breadcrumb or Standalone directly on each task row in All', () => {
+  it('shows an Event breadcrumb on grouped rows and no chip on event-less rows (G5)', () => {
     renderBacklog([
       { id: 'planned', title: 'Write launch brief', status: 'todo', spaceId: 'space-1', sourcePath: ['Launch', 'Marketing'] },
       { id: 'standalone', title: 'Buy groceries', status: 'todo' },
@@ -95,7 +95,8 @@ describe('TodayBacklog horizontal tab bar', () => {
     expect(screen.getByTestId('task-card-event-planned')).toHaveTextContent('Launch event');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Launch');
     expect(screen.getByTestId('task-card-path-planned')).toHaveTextContent('Marketing');
-    expect(screen.getByTestId('task-card-event-standalone')).toHaveTextContent('Standalone');
+    // G5/P5: event-less tasks carry no badge at all.
+    expect(screen.queryByTestId('task-card-event-standalone')).toBeNull();
   });
 
   it('S8: clicking the event chip jumps to the canvas with the origin node id', () => {

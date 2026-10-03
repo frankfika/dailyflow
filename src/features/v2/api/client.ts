@@ -528,8 +528,9 @@ export interface AgentDefinition {
 
 export const listAgentDefinitions = () => request<{ agents: AgentDefinition[] }>('GET', '/agents');
 
-export const startNoteAgentRun = (noteId: string, body: { agentId?: string; sourceIds?: string[] } = {}) =>
-  request<{ run: AgentRun; status: 'awaiting_agent_runtime' }>('POST', `/notes/${encodeURIComponent(noteId)}/agents/run`, body);
+// DEBT-004：`POST /notes/:id/agents/run`（原 `startNoteAgentRun`）已移除 ——
+// 会议笔记 agent 运行时收敛到 Event Operator（`startEventOperatorRun`，见文末），
+// 服务端对旧入口返回 501 `not_implemented`。
 
 export interface AuditEvent {
   id: string;

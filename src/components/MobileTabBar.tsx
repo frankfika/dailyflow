@@ -14,13 +14,20 @@
  *   - Shown on mobile (≤640px). The sidebar still exists on mobile as a
  *     "hamburger" overlay — folder / workspace / context management.
  *
+ * Height:
+ *   - Occupies exactly `calc(var(--tabbar-height) + var(--safe-bottom, 0px))`
+ *     (both tokens defined once at :root in index.css). Other surfaces compute
+ *     their bottom avoidance from the same tokens instead of a hardcoded
+ *     `h-14`/56px, and `--safe-bottom` now resolves in the default work
+ *     context too (A7: it used to be defined only for `data-context="life"`).
+ *
  * Animation:
  *   - The active background pill uses `layoutId` so it slides between
  *     tabs with the same spring as the Sidebar nav indicator. The
  *     result reads as one consistent motion language across the app.
  */
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, ListTodo, MessageCircle, MoreHorizontal, Plus, Sparkles } from 'lucide-react';
+import { FileText, ListTodo, MessageCircle, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import type { AppTab } from '../App';
 import { MobileMoreSheet } from './MobileMoreSheet';
@@ -84,10 +91,13 @@ export function MobileTabBar({
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 340, damping: 32 }}
           className="fixed inset-x-0 bottom-0 z-30 px-2 sm:hidden"
-          style={{ paddingBottom: 'var(--safe-bottom)' }}
+          style={{
+            height: 'calc(var(--tabbar-height) + var(--safe-bottom, 0px))',
+            paddingBottom: 'var(--safe-bottom)',
+          }}
           data-testid="mobile-tab-bar"
         >
-          <div className="mx-auto mb-2 flex max-w-md items-center justify-around rounded-2xl border border-border bg-surface-elevated/95 px-1 py-1 shadow-lg backdrop-blur-md">
+          <div className="mx-auto flex h-full max-w-md items-center justify-around rounded-2xl border border-border bg-surface-elevated/95 px-1 py-1 shadow-lg backdrop-blur-md">
             {PRIMARY_TABS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id;
               return (
@@ -135,19 +145,12 @@ export function MobileTabBar({
               <MoreHorizontal className="relative h-4 w-4" aria-hidden="true" />
               <span className="relative">{language === 'zh' ? '更多' : 'More'}</span>
             </button>
-            {onAddTask && (
-              <button
-                type="button"
-                onClick={onAddTask}
-                aria-label={language === 'zh' ? '添加任务' : 'Add task'}
-                data-testid="mobile-tab-add-task"
-                className="relative flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-accent transition-colors active:scale-90"
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white shadow-sm">
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </button>
-            )}
+            {/*
+             * G2 / A1: the floating "+ Add task" button competed with the
+             * sticky input bar for the thumb-zone on phones and was redundant
+             * once the bar itself sinks above the tab bar. Removed; the
+             * bottom-anchored TodayInputBar is now the single capture path.
+             */}
           </div>
         </motion.nav>
       )}

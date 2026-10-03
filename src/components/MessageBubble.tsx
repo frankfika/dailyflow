@@ -183,6 +183,8 @@ export function MessageBubble({
               </ReactMarkdown>
             </div>
           )}
+          {/* C4: failed requests get a retry entry — the action bar below
+              renders the retry key for error messages too. */}
           {!message.error && (
             <div className="flex items-center gap-1 mt-2">
               <button
@@ -208,10 +210,23 @@ export function MessageBubble({
               </button>
               <button
                 onClick={onRetry}
+                data-testid="message-retry"
                 className="flex items-center gap-1 px-2 py-1 text-[12px] text-text-muted hover:text-text-heading hover:bg-surface rounded transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
                 {language === 'zh' ? '重复提问' : 'Retry'}
+              </button>
+            </div>
+          )}
+          {message.error && (
+            <div className="flex items-center gap-1 mt-2">
+              <button
+                onClick={onRetry}
+                data-testid="message-retry"
+                className="flex items-center gap-1 px-2 py-1 text-[12px] font-bold text-amber-800 hover:text-amber-900 hover:bg-amber-100 rounded transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                {language === 'zh' ? '重试' : 'Retry'}
               </button>
             </div>
           )}

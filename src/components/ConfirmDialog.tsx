@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
@@ -24,6 +25,23 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  // A8: a11y baseline for the shared confirm — role/aria-modal, Esc to cancel,
+  // and initial focus on the cancel button so an accidental Enter/Space on
+  // the trigger does not confirm the destructive action.
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!show) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    cancelRef.current?.focus();
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [show, onCancel]);
+
   return (
     <AnimatePresence>
       {show && (
@@ -35,6 +53,10 @@ export function ConfirmDialog({
           onClick={onCancel}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            data-testid="confirm-dialog"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -45,8 +67,10 @@ export function ConfirmDialog({
             <p className="text-sm text-text-muted mb-5">{message}</p>
             <div className="flex gap-3">
               <button
+                ref={cancelRef}
                 onClick={onCancel}
                 disabled={isLoading}
+                data-testid="confirm-dialog-cancel"
                 className="flex-1 py-2 rounded-md border border-border text-sm font-medium text-text-muted hover:bg-surface transition-colors disabled:opacity-50"
               >
                 {cancelText || 'Cancel'}

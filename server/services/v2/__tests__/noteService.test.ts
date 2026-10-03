@@ -507,3 +507,42 @@ describe('ConcurrentModificationError re-export', () => {
     expect(e.code).toBe('concurrent_modification');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 15. WP-45: v1 legacy note aggregation (read-only)
+// ---------------------------------------------------------------------------
+describe('v1 legacy note aggregation', () => {
+  async function writeLegacyNote(year: string, month: string, file: string, body: string): Promise<void> {
+    const dir = path.join(workspace, 'Notes', year, month);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, file), body, 'utf8');
+  }
+
+  it('surfaces v1 files in list() with origin=v1 and writable=false', async () => {
+    await writeLegacyNote('2026', '01', 'hello.md', '# Old hello\nLegacy line.');
+    const items = await svc.list();
+    const legacy = items.find(item => item.origin === 'v1');
+    expect(legacy).toBeTruthy();
+    expect(legacy!.writable).toBe(false);
+    expect(legacy!.title).toBe('hello'); // basename fallback (no frontmatter title)
+    expect(legacy!.body).toContain('Legacy line.');
+  });
+
+  it('matches v1 items on the search needle (q parameter)', async () => {
+    await writeLegacyNote('2026', '02', 'needle.md', 'first line\nSECRETKEYWORD second line\n');
+    const items = await svc.list({ q: 'SECRETKEYWORD' });
+    expect(items.some(item => item.origin === 'v1' && item.body.includes('SECRETKEYWORD'))).toBe(true);
+    const itemsNoNeedle = await svc.list({ q: 'zzz_not_present' });
+    expect(itemsNoNeedle.some(item => item.origin === 'v1')).toBe(false);
+  });
+
+  it('v1 notes are never writable: update() on a v1 id throws', async () => {
+    await writeLegacyNote('2026', '03', 'read-only.md', 'Cannot be edited.');
+    const items = await svc.list();
+    const legacy = items.find(item => item.origin === 'v1');
+    expect(legacy).toBeTruthy();
+    // update must reject v1 ids — there is no path to mutate legacy content.
+    await expect(svc.update(legacy!.id, { expectedAutoSaveVersion: 0, body: 'tampered' }))
+      .rejects.toBeTruthy();
+  });
+});

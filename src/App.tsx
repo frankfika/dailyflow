@@ -30,6 +30,7 @@ import { TodayReflectionBar, isReflectionPromptOptedOut } from './components/Tod
 import { CalendarWorkspace } from './components/CalendarWorkspace';
 import { NoteEditor } from './components/NoteEditor';
 import { UpdateNotificationModal } from './components/UpdateNotificationModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { NotesView } from './features/v2/notes/NotesView';
 import { MemoryView } from './features/v2/memory/MemoryView';
 import { InboxView } from './features/v2/inbox/InboxView';
@@ -1171,6 +1172,17 @@ export default function App() {
   }, [openMeetingNote, activeTab, activeOverlay]);
 
   const [proactiveRefreshKey, setProactiveRefreshKey] = useState(0);
+  // C12: consequential proactive actions (move_to_today rewrites the due
+  // date, mark_done completes the commitment) pause behind a human-confirm
+  // dialog. The pending apply carries the resolve/reject of the promise the
+  // card is awaiting, so recordAction('accepted') only fires on success.
+  const [pendingApply, setPendingApply] = useState<{
+    proposal: ProactiveProposal;
+    suggestion: ProactiveSuggestion;
+    resolve: () => void;
+    reject: () => void;
+  } | null>(null);
+  const [applyBusy, setApplyBusy] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [workspaceOpenSignal, setWorkspaceOpenSignal] = useState(0);
@@ -1184,7 +1196,25 @@ export default function App() {
   // Suggestions from the proactive scan target v2 commitments, not daily
   // tasks — apply them through the v2 API so the buttons do real work
   // instead of just hiding the card (design v3.1: no dead buttons).
-  const handleApplySuggestion = async (proposal: ProactiveProposal, suggestion: ProactiveSuggestion) => {
+  const handleApplySuggestion = (proposal: ProactiveProposal, suggestion: ProactiveSuggestion): Promise<void> => {
+    // regroup has no single-click server action yet; point the user at the
+    // canvas instead of pretending the card action did it.
+    if (suggestion.action === 'regroup') {
+      showToast(language === 'zh' ? '请在事件画布中重新整理该事项' : 'Regroup this item from the event canvas', 'info');
+      return Promise.resolve();
+    }
+    // C12: consequential writes (rewrite due date / complete the commitment)
+    // must not fire from a single accidental tap. Gate them behind the
+    // confirm dialog; the card's recordAction only runs when this resolves.
+    return new Promise<void>((resolve, reject) => {
+      setPendingApply({ proposal, suggestion, resolve, reject });
+    });
+  };
+
+  const executeApply = async () => {
+    if (!pendingApply) return;
+    const { proposal, suggestion, resolve } = pendingApply;
+    setApplyBusy(true);
     try {
       if (suggestion.action === 'move_to_today') {
         const endOfToday = new Date();
@@ -1194,20 +1224,33 @@ export default function App() {
       } else if (suggestion.action === 'mark_done') {
         await v2CompleteCommitment(proposal.entityId, {
           outcomeKind: 'delivered',
-          outcomeSummary: proposal.title,
+          // C12: the outcome summary must describe what was delivered, not
+          // parrot the proposal title back as if it were an outcome.
+          outcomeSummary: language === 'zh'
+            ? `按建议标记完成：${proposal.title}`
+            : `Marked done from suggestion: ${proposal.title}`,
         });
         showToast(language === 'zh' ? '已标记完成' : 'Marked as done', 'success');
-      } else {
-        // regroup has no single-click server action yet; point the user at
-        // the canvas instead of pretending the card action did it.
-        showToast(language === 'zh' ? '请在事件画布中重新整理该事项' : 'Regroup this item from the event canvas', 'info');
       }
+      setPendingApply(null);
+      resolve();
     } catch (err) {
       console.error('Failed to apply proactive suggestion', err);
       showToast(language === 'zh' ? '操作失败，建议已恢复' : 'Action failed; suggestion restored', 'error');
+      // Keep the dialog open? No — close it but reject so the card restores.
+      const { reject } = pendingApply;
+      setPendingApply(null);
+      reject();
     } finally {
+      setApplyBusy(false);
       setProactiveRefreshKey(k => k + 1);
     }
+  };
+
+  const cancelApply = () => {
+    if (!pendingApply) return;
+    pendingApply.reject();
+    setPendingApply(null);
   };
 
   // --- UX S6: AI actions ----------------------------------------------------
@@ -2298,6 +2341,7 @@ export default function App() {
                     language={language}
                     isToday={currentFileDate === getTodayStr()}
                     onAiPick={() => handleAiPickFocus()}
+                    onError={(message) => showToast(message, 'error')}
                   />
 
                   <TodayBacklog
@@ -2345,7 +2389,7 @@ export default function App() {
                     onBrainPreviewRemove={handleBrainPreviewRemove}
                     onBrainPreviewCancel={() => setBrainPreviewTasks(null)}
                     rewritingPreviewId={rewritingPreviewId}
-                    onAsk={(question) => void handleAskAi(question)}
+                    onAsk={handleAskAi}
                     aiAnswer={aiAnswer}
                     onAnswerAdopt={handleAnswerAdopt}
                     onAnswerCopy={(answer) => {
@@ -2468,6 +2512,26 @@ export default function App() {
             }
           }).catch(err => console.error('Update check failed', err));
         }}
+      />
+
+      <ConfirmDialog
+        show={pendingApply !== null}
+        title={pendingApply?.suggestion.action === 'mark_done'
+          ? (language === 'zh' ? '标记为已完成？' : 'Mark as done?')
+          : (language === 'zh' ? '排进今天？' : 'Move to today?')}
+        message={pendingApply?.suggestion.action === 'mark_done'
+          ? (language === 'zh'
+            ? `「${pendingApply?.proposal.title}」将被标记为已交付完成。`
+            : `"${pendingApply?.proposal.title}" will be marked as delivered/done.`)
+          : (language === 'zh'
+            ? `「${pendingApply?.proposal.title}」的截止时间将被改到今天结束。`
+            : `The due date of "${pendingApply?.proposal.title}" will be changed to end of today.`)}
+        confirmText={language === 'zh' ? '确认' : 'Confirm'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={applyBusy}
+        variant={pendingApply?.suggestion.action === 'mark_done' ? 'danger' : 'accent'}
+        onConfirm={() => void executeApply()}
+        onCancel={cancelApply}
       />
 
       <SettingsModal

@@ -138,7 +138,12 @@ class OpenAICompatibleProvider implements AIProvider {
       ? `${this.opts.baseUrl.replace(/\/$/, '')}/v1/messages`
       : `${this.opts.baseUrl.replace(/\/$/, '')}/chat/completions`;
 
-    const body =
+    // C17: response_format=json_object is OpenAI-specific. Anthropic-style
+    // templates and some aggregators reject the parameter, so it is sent by
+    // default but dropped automatically when a 400 explicitly complains
+    // about it (retry once). Bounded snippet reading only — the provider
+    // body itself is still never surfaced.
+    const buildBody = (jsonMode: boolean) =>
       this.opts.format === 'anthropic'
         ? {
             model: this.opts.model,
@@ -155,27 +160,35 @@ class OpenAICompatibleProvider implements AIProvider {
             ],
             max_tokens: req.maxTokens ?? 1024,
             temperature: req.temperature ?? 0.2,
-            response_format: { type: 'json_object' },
+            ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
           };
 
     const timeout = AbortSignal.timeout(req.timeoutMs ?? 120_000);
     const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
+    const post = (body: unknown) => fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${this.opts.apiKey}`,
+        'x-api-key': this.opts.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+      signal,
+      redirect: 'error',
+    });
+
     try {
       // Resolve immediately before fetch so a hostname cannot bypass the
       // internal/reserved-address policy through DNS rebinding.
       await assertSafeModelBaseUrl(this.opts.baseUrl);
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${this.opts.apiKey}`,
-          'x-api-key': this.opts.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(body),
-        signal,
-        redirect: 'error',
-      });
+      let resp = await post(buildBody(true));
+      if (resp.status === 400) {
+        const detail = await readBoundedResponse(resp, 4_096).catch(() => '');
+        if (/\bresponse_format\b|json_object|unknown (parameter|argument|field)|unrecognized (parameter|argument|field)/i.test(detail)) {
+          resp = await post(buildBody(false));
+        }
+      }
       if (!resp.ok) {
         await resp.body?.cancel().catch(() => {});
         return {

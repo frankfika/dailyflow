@@ -53,14 +53,27 @@ async function seedTask(api: APIRequestContext, date: string, title: string, ext
 
 /** Inject the stub provider into localStorage before the app boots. */
 async function installStubProvider(page: Page, stub: AiStub) {
-  await page.addInitScript((seed) => {
-    window.localStorage.setItem('df_model_center', seed);
-  }, providerConfigSeed(stub.url));
+  const seed = providerConfigSeed(stub.url);
+  // `hydrateModelCenterFromBackend` (src/types/models.ts) lets the *durable*
+  // backend config win over the localStorage cache at boot. Without writing
+  // the fresh stub URL server-side, test 2+ would hydrate the previous test's
+  // now-closed stub port and every AI call would fail as a network error.
+  const current = await (await fetch(`${FRONTEND_BASE}/api/config`)).json();
+  await fetch(`${FRONTEND_BASE}/api/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version: current.version, patch: { modelCenter: seed, providerConfigs: null } }),
+  });
+  await page.addInitScript((value) => {
+    window.localStorage.setItem('df_model_center', value);
+  }, seed);
 }
 
 async function openAiChat(page: Page) {
   // The seeded workspace is already active (first-run flow is bypassed).
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // WP-C: Ask AI lives inside the More disclosure — expand it first.
+  await page.getByTestId('nav-more').click();
   await page.getByTestId('nav-ai-chat').click();
   await expect(page.getByTestId('full-ai-chat')).toBeVisible();
   await expect(page.getByTestId('chat-message-scroll-region')).toBeVisible();
@@ -74,7 +87,9 @@ async function sendAndWait(page: Page, message: string) {
 }
 
 async function waitForCardCount(page: Page, n: number, timeout = 8000) {
-  await expect(page.locator('[data-testid="ai-tool-cards"]')).toBeVisible({ timeout });
+  // Multiple assistant messages can each own a cards container — .first()
+  // keeps the visibility check strict-safe; the count poll below scans all.
+  await expect(page.locator('[data-testid="ai-tool-cards"]').first()).toBeVisible({ timeout });
   await expect
     .poll(async () =>
       page.locator('[data-testid^="ai-tool-card-"]:not([data-testid="ai-tool-cards"])').count(),
@@ -237,18 +252,20 @@ test.describe('AI agent — tasks CRUD', () => {
     await seedTask(api, TODAY, 'AI-doomed');
 
     stub.respond([
-      // Round 1: model forgets confirm=true. Should fail safely.
+      // Round 1: model forgets confirm=true — the gate must not trust that.
       { toolCalls: [{ name: 'delete_task', arguments: { title_query: 'AI-doomed' } }] },
-      { summary: 'Refused to delete without your explicit confirmation.' },
+      { summary: 'Waiting for your explicit confirmation.' },
     ]);
 
     await openAiChat(page);
     await sendAndWait(page, 'Delete the doomed task');
-    await waitForCardCount(page, 1);
+
+    // WP-3 C1: the model's missing confirm opens the human gate rather than
+    // deleting. Cancelling it must leave the task untouched.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-cancel').click();
     await waitForStreamingToStop(page);
 
-    // The card must reflect failure, and the task must still be on disk.
-    await expect(page.locator('[data-testid="ai-tool-card-delete_task"]')).toContainText(/confirm/i);
     const afterFirst = await api.get(`/api/tasks/${TODAY}`);
     const tasks1 = (await afterFirst.json()).tasks as Array<{ title: string }>;
     expect(tasks1.some((t) => t.title === 'AI-doomed')).toBe(true);
@@ -259,12 +276,22 @@ test.describe('AI agent — tasks CRUD', () => {
       { summary: 'Deleted.' },
     ]);
     await sendAndWait(page, 'Yes, delete it');
-    await waitForCardCount(page, 2);
+
+    // WP-3 C1: the delete pauses at the human-confirm dialog (model-supplied
+    // confirm:true is ignored by design). Approve it to let the pipeline
+    // finish, then the task should be gone.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-confirm').click();
+
     await waitForStreamingToStop(page);
 
-    const afterSecond = await api.get(`/api/tasks/${TODAY}`);
-    const tasks2 = (await afterSecond.json()).tasks as Array<{ title: string }>;
-    expect(tasks2.some((t) => t.title === 'AI-doomed')).toBe(false);
+    await expect
+      .poll(async () => {
+        const res = await api.get(`/api/tasks/${TODAY}`);
+        const tasks = (await res.json()).tasks as Array<{ title: string }>;
+        return tasks.some((t) => t.title === 'AI-doomed');
+      }, { timeout: 8000 })
+      .toBe(false);
 
     await api.dispose();
   });

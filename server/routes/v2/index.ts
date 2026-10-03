@@ -61,6 +61,9 @@ import {
   saveProactiveConfig,
   scanProactiveProposals,
   recordProposalAction,
+  dismissProactiveEntities,
+  computeProactiveQuota,
+  hasEntityEntryThisWeek,
   loadProactiveState,
   saveProactiveState,
   type ProactiveConfig,
@@ -604,6 +607,8 @@ v2Router.get('/notes', async (req, res) => {
     const state = typeof req.query.state === 'string' ? (req.query.state as 'draft' | 'active' | 'archived') : undefined;
     const kind = typeof req.query.kind === 'string' ? (req.query.kind as 'quick' | 'daily' | 'meeting' | 'project' | 'reference' | 'general') : undefined;
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    // WP-45: svc.list merges read-only v1 legacy notes into the v2 list;
+    // every item carries `origin` ('v1'|'v2') and `writable`.
     const notes = await svc.list({ state, kind, q });
     res.json({ notes, total: notes.length });
   } catch (err) {
@@ -626,6 +631,12 @@ v2Router.get('/notes/:id', async (req, res) => {
   try {
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
+    // WP-45: `v1_*` ids are read-only projections of the legacy v1 Notes/
+    // tree. Served straight from disk; nothing under Notes/ is ever written.
+    if (req.params.id.startsWith('v1_')) {
+      const note = await svc.getV1(req.params.id);
+      return res.json({ note });
+    }
     const note = await svc.get(req.params.id);
     // Keep reads side-effect free. The former fire-and-forget
     // touchLastOpened() rewrote the whole Markdown document without
@@ -641,8 +652,21 @@ v2Router.get('/notes/:id', async (req, res) => {
   }
 });
 
+/** WP-45: v1 legacy notes are surfaced read-only — mutation is rejected. */
+function rejectV1NoteWrite(id: string, res: Response): boolean {
+  if (!id.startsWith('v1_')) return false;
+  res.status(405).json({
+    error: {
+      code: 'v1_note_read_only',
+      message: `Note ${id} lives in the legacy v1 Notes/ folder and is read-only. Migrate it to v2 to edit.`,
+    },
+  });
+  return true;
+}
+
 v2Router.patch('/notes/:id', async (req, res) => {
   try {
+    if (rejectV1NoteWrite(req.params.id, res)) return;
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
     const note = await svc.update(req.params.id, req.body ?? {});
@@ -654,6 +678,7 @@ v2Router.patch('/notes/:id', async (req, res) => {
 
 v2Router.delete('/notes/:id', async (req, res) => {
   try {
+    if (rejectV1NoteWrite(req.params.id, res)) return;
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
     const ok = await svc.delete(req.params.id);
@@ -666,6 +691,7 @@ v2Router.delete('/notes/:id', async (req, res) => {
 
 v2Router.post('/notes/:id/archive', async (req, res) => {
   try {
+    if (rejectV1NoteWrite(req.params.id, res)) return;
     const { repo } = getV2(res);
     const svc = new NoteService(repo);
     const expectedAutoSaveVersion = z.number().int().nonnegative().parse(
@@ -900,7 +926,7 @@ v2Router.get('/agents', (_req, res) => {
   res.json({ agents: listAgentDefinitions() });
 });
 
-/** Create a reviewable AgentRun context for a Note; no summary is generated yet. */
+/** DEBT-004：会议笔记 agent 入口已下线 —— 运行时收敛到 Event Operator，本路由只回 501。 */
 v2Router.post('/notes/:id/agents/run', async (req, res) => {
   try {
     const { repo, ctx } = getV2(res);
@@ -908,6 +934,18 @@ v2Router.post('/notes/:id/agents/run', async (req, res) => {
     const run = await startAgentRun(repo, ctx.workspaceId, parsed);
     res.status(202).json({ run, status: 'awaiting_agent_runtime' });
   } catch (err) {
+    // DEBT-004: startAgentRun now refuses with `not_implemented`; surface it
+    // as 501 (the shared handleError table has no 501 mapping and must not
+    // be touched from this work package).
+    if (err && typeof err === 'object' && (err as { code?: unknown }).code === 'not_implemented') {
+      res.status(501).json({
+        error: {
+          code: 'not_implemented',
+          message: err instanceof Error ? err.message : 'This agent entry point is no longer available.',
+        },
+      });
+      return;
+    }
     handleError(err, res);
   }
 });
@@ -2102,14 +2140,17 @@ v2Router.get('/proactive/scan', async (req, res) => {
     const channel = (req.query.channel as ProactiveChannel) || 'today_load';
     const cfg = await loadProactiveConfig();
     const state = await loadProactiveState();
-    const proposals = await scanProactiveProposals(repo, cfg, state, channel);
+    const now = new Date();
+    const proposals = await scanProactiveProposals(repo, cfg, state, channel, { now });
     // Fire-and-forget history update — the user has now seen these.
+    // C10/C11: the dedup key is entityId, not proposalId — proposal ids
+    // are regenerated on every scan, so the old proposalId check never
+    // hit and every scan re-counted the same entity against the quota.
+    let next = state;
     if (proposals.length > 0) {
-      let next = state;
       for (const p of proposals) {
-        // Skip if already counted this week.
-        const already = next.entries.find(e => e.proposalId === p.id);
-        if (already) continue;
+        // Skip if this entity already has an entry this week.
+        if (hasEntityEntryThisWeek(next, p.entityId, now)) continue;
         next = {
           entries: [
             ...next.entries,
@@ -2127,7 +2168,29 @@ v2Router.get('/proactive/scan', async (req, res) => {
         await saveProactiveState(next);
       }
     }
-    res.json({ proposals });
+    // Contract 2: the scan response always carries the weekly quota
+    // snapshot. Computed AFTER the show-write so the entities the user is
+    // about to see are already billed (per distinct entity).
+    const quota = computeProactiveQuota(next, cfg, now);
+    res.json({ proposals, quota });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+/**
+ * C11 / contract 2: batch-dismiss proactive proposals by entity id.
+ * The dismiss-all path — proposal ids are regenerated per scan, so the
+ * client references entities instead. Idempotent: entities already
+ * resolved this week are not re-recorded.
+ */
+v2Router.post('/proposals/dismiss-batch', async (req, res) => {
+  try {
+    const body = z.object({
+      entityIds: z.array(z.string().trim().min(1)).max(500),
+    }).parse(req.body ?? {});
+    const { dismissed } = await dismissProactiveEntities(body.entityIds);
+    res.json({ dismissed });
   } catch (err) {
     handleError(err, res);
   }

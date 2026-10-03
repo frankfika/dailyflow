@@ -2,17 +2,53 @@
 // healingFetch resolves the shell-assigned sidecar port and rewrites request
 // URLs at send time, so the literal below is just a build-time default; the
 // live value comes from the Rust shell (see src/api/base.ts).
-import { healingFetch as fetch } from './base';
+import { healingFetch as rawFetch } from './base';
 const API_BASE = import.meta.env.DEV
   ? '/api'
   : `${import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:47832'}/api`;
 
 /**
- * Build an Error that carries the HTTP status code so call sites can decide
- * whether to retry, resync, or surface the error. Server-supplied error
- * messages are preferred when present.
+ * v1 错误模型（契约 5，与 `V2ApiError` 同形）：
+ * - `.code`   机器可读，`'network'`（fetch 本身失败）或 `'http_<status>'`（如 `'http_404'`）；
+ * - `.status` HTTP 响应状态（网络错误时缺省）；
+ * - `.message` 文案与旧 plain `Error` 完全一致 —— 既有消费方只读 `.message`
+ *   弹 toast，行为不变。
  */
-async function httpError(res: Response, fallback: string): Promise<Error> {
+export class V1ApiError extends Error {
+  code: string;
+  status?: number;
+  constructor(message: string, options: { code: string; status?: number }) {
+    super(message);
+    this.code = options.code;
+    this.status = options.status;
+  }
+}
+
+/**
+ * Thin wrapper over the healing fetch: network-level rejections (sidecar
+ * down, offline, …) used to escape as a raw `TypeError`; they now surface as
+ * a `V1ApiError` with `code: 'network'` and the SAME message (e.g.
+ * "Failed to fetch"). Abort must keep propagating untouched — callers branch
+ * on `error.name === 'AbortError'` to treat cancellation as non-error.
+ */
+async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await rawFetch(input, init);
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
+    const message = err instanceof Error ? err.message : 'Network request failed';
+    throw new V1ApiError(message, { code: 'network' });
+  }
+}
+
+/**
+ * Build a V1ApiError that carries the HTTP status plus a machine-readable
+ * `http_<status>` code so call sites can decide whether to retry, resync, or
+ * surface the error. Server-supplied error messages are preferred when
+ * present; the message text is unchanged from the previous plain-`Error`
+ * behaviour.
+ */
+async function httpError(res: Response, fallback: string): Promise<V1ApiError> {
   let message = fallback;
   try {
     const body = await res.json();
@@ -22,9 +58,7 @@ async function httpError(res: Response, fallback: string): Promise<Error> {
   } catch {
     // body was not JSON; stick with the fallback message
   }
-  const err = new Error(message) as Error & { status?: number };
-  err.status = res.status;
-  return err;
+  return new V1ApiError(message, { code: `http_${res.status}`, status: res.status });
 }
 
 // Inline types that match the server API responses
@@ -476,7 +510,7 @@ export const eventsApi = {
       method: 'DELETE',
     });
     if (res.status === 204) return;
-    if (res.status === 404) throw new Error('Event not found');
+    if (res.status === 404) throw new V1ApiError('Event not found', { code: 'http_404', status: 404 });
     throw await httpError(res, 'Failed to delete event');
   },
   /**
@@ -1662,11 +1696,14 @@ export interface AiActionResponse {
  */
 export const aiApi = {
   async summarize(req: AISummarizeRequest): Promise<AISummarizeResponse> {
+    // The AbortSignal must NOT ride inside the JSON body — the server schema
+    // is strict and would 400 on the serialized `{}` (regression from C15).
+    const { signal, ...body } = req;
     const res = await fetch(`${API_BASE}/ai/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-      signal: req.signal,
+      body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -1677,11 +1714,13 @@ export const aiApi = {
 
   /** Structured AI actions — the server owns the prompts and JSON parsing. */
   async action(req: AiActionRequest): Promise<AiActionResponse> {
+    // Same as summarize: keep the AbortSignal out of the JSON body.
+    const { signal, ...body } = req;
     const res = await fetch(`${API_BASE}/ai/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-      signal: req.signal,
+      body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -1832,6 +1871,18 @@ export interface ProactiveProposal {
   suggestions: ProactiveSuggestion[];
 }
 
+/** C10 quota shape returned by GET /v2/proactive/scan. */
+export interface ProactiveQuota {
+  used: number;
+  max: number;
+  resetAt: string;
+}
+
+export interface ProactiveScanResult {
+  proposals: ProactiveProposal[];
+  quota: ProactiveQuota | null;
+}
+
 export const proactiveApi = {
   async getConfig(): Promise<ProactiveConfig> {
     const res = await fetch(`${API_BASE}/v2/proactive/config`);
@@ -1849,11 +1900,27 @@ export const proactiveApi = {
     const body = await res.json();
     return body.config as ProactiveConfig;
   },
-  async scan(channel: ProactiveChannel = 'today_load'): Promise<ProactiveProposal[]> {
+  async scan(channel: ProactiveChannel = 'today_load'): Promise<ProactiveScanResult> {
     const res = await fetch(`${API_BASE}/v2/proactive/scan?channel=${encodeURIComponent(channel)}`);
     if (!res.ok) throw await httpError(res, 'Failed to scan proactive proposals');
     const body = await res.json();
-    return (body.proposals ?? []) as ProactiveProposal[];
+    // C10: keep the quota the server computed — older servers may omit it.
+    return {
+      proposals: (body.proposals ?? []) as ProactiveProposal[],
+      quota: (body.quota ?? null) as ProactiveQuota | null,
+    };
+  },
+
+  /** C11: batch-dismiss by entity id (the "Dismiss all" path). */
+  async dismissBatch(entityIds: string[]): Promise<{ dismissed: number }> {
+    const res = await fetch(`${API_BASE}/v2/proposals/dismiss-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entityIds }),
+    });
+    if (!res.ok) throw await httpError(res, 'Failed to dismiss proposals');
+    const body = await res.json();
+    return { dismissed: body.dismissed ?? 0 };
   },
   async recordAction(id: string, action: 'accepted' | 'dismissed'): Promise<void> {
     const res = await fetch(`${API_BASE}/v2/proactive/${encodeURIComponent(id)}/action`, {

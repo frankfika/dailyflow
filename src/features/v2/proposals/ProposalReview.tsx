@@ -47,6 +47,9 @@ export function ProposalReview({
       selection: Array.from(selected),
       userOverride: edits,
     }),
+    // C18: the response used to be discarded — a partially_accepted apply
+    // (some changes rejected server-side) looked identical to a full
+    // success. Keep it so the rejected changes + reasons can be surfaced.
     onSuccess: onChanged,
   });
   const reject = useMutation({
@@ -62,6 +65,16 @@ export function ProposalReview({
     }
     return map;
   }, [proposal.changes, resolvedEvidence]);
+
+  // C18/P3: no silent partial failure. `rejected` carries { changeId,
+  // reason } per the proposalService contract (proposalService.ts
+  // applyProposalUnlocked); status becomes partially_accepted when at
+  // least one change landed but not all did.
+  const applyResult = apply.data;
+  const rejectedChanges = applyResult?.rejected ?? [];
+  const isPartialOutcome =
+    applyResult?.proposal.status === 'partially_accepted' || rejectedChanges.length > 0;
+  const acceptedCount = applyResult?.proposal.acceptedChangeIds?.length ?? 0;
 
   const busy = apply.isPending || reject.isPending;
   return (
@@ -134,6 +147,32 @@ export function ProposalReview({
           {(apply.error || reject.error || details.error) && (
             <div className="text-xs text-red-600">
               {(apply.error || reject.error || details.error as Error)?.message}
+            </div>
+          )}
+          {isPartialOutcome && (
+            <div
+              role="status"
+              data-testid="proposal-partial-result"
+              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+            >
+              <p className="font-medium">
+                {isZh
+                  ? `部分应用：${acceptedCount} 项已生效，${rejectedChanges.length} 项被拒绝`
+                  : `Partially applied: ${acceptedCount} change(s) landed, ${rejectedChanges.length} rejected`}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {rejectedChanges.map(item => {
+                  const change = proposal.changes.find(c => c.changeId === item.changeId);
+                  return (
+                    <li key={item.changeId} data-testid="proposal-rejected-change">
+                      <span className="font-medium">
+                        {change ? changeLabel(change, isZh) : item.changeId}
+                      </span>
+                      <span className="text-amber-700/80"> — {item.reason}</span>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
         </div>

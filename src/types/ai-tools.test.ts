@@ -25,10 +25,14 @@ describe('AI tool exposure and parsing', () => {
   it('includes today\'s date and confirmation rules in the instructions', () => {
     const en = buildToolInstructions('en', '2026-07-28');
     expect(en).toContain('Today is 2026-07-28');
-    expect(en).toContain('confirm:true');
+    // C1 human gate: the model can no longer self-confirm with `confirm:true` —
+    // the instructions must describe the app-side confirmation dialog instead.
+    expect(en).not.toContain('confirm:true');
+    expect(en).toMatch(/confirmation dialog/i);
     const zh = buildToolInstructions('zh', '2026-07-28');
     expect(zh).toContain('今天是 2026-07-28');
-    expect(zh).toContain('confirm:true');
+    expect(zh).not.toContain('confirm:true');
+    expect(zh).toContain('确认框');
   });
 
   it('preserves malformed tool markup instead of silently blanking the reply', () => {

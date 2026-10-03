@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect, useRef } from 'react';
+import { ConfirmDialog } from './ConfirmDialog';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Pencil, Trash2, Check, Loader2, Zap, Upload, Download, Tag, Info,
@@ -96,6 +97,7 @@ interface SkillManagerProps {
 }
 
 export function SkillManager({ language }: SkillManagerProps) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [skills, setSkills] = useState<PromptTemplateData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'marketplace' | 'installed'>('marketplace');
@@ -372,8 +374,8 @@ export function SkillManager({ language }: SkillManagerProps) {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(language === 'zh' ? '删除此 Skill？' : 'Delete this skill?')) return;
+  const handleDelete = (id: string) => setPendingDeleteId(id);
+  const executeDelete = async (id: string) => {
     try {
       await promptsApi.delete(id);
       await load();
@@ -500,6 +502,7 @@ export function SkillManager({ language }: SkillManagerProps) {
   };
 
   return (
+    <>
     <div className="flex h-full min-h-0 flex-col">
       {/* Top bar */}
       <div className="px-5 py-3 border-b border-border space-y-3">
@@ -839,5 +842,18 @@ export function SkillManager({ language }: SkillManagerProps) {
         )}
       </div>
     </div>
+      <ConfirmDialog
+        show={pendingDeleteId !== null}
+        title={language === 'zh' ? '删除此 Skill？' : 'Delete this skill?'}
+        message={language === 'zh'
+          ? '删除后该 Skill 的提示词将无法恢复。'
+          : 'Deleting removes this skill and its prompt permanently.'}
+        confirmText={language === 'zh' ? '删除' : 'Delete'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        variant="danger"
+        onConfirm={() => { if (pendingDeleteId) void executeDelete(pendingDeleteId); setPendingDeleteId(null); }}
+        onCancel={() => setPendingDeleteId(null)}
+      />
+    </>
   );
 }

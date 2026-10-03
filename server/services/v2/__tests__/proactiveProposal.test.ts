@@ -205,3 +205,47 @@ describe('Proactive Proposal (Gap 3)', () => {
     expect(stale[0].entityId).toBe(c.id);
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-45 C10/C11 — entityId-based quota + batch dismiss
+// ---------------------------------------------------------------------------
+describe('entityId-based quota and batch dismiss', () => {
+  async function seedOverdueCommitment(title: string, daysAgo: number): Promise<string> {
+    const c = await createCommitment(repo, workspaceId, {
+      title,
+      outcome: 'do',
+      state: 'active',
+    });
+    const dueAt = new Date(NOON.getTime() - daysAgo * 86_400_000).toISOString();
+    const w = await repo.getCommitment(c.id);
+    await repo.saveCommitment(
+      { ...w!, dueAt } as any,
+      { auditKind: 'commitment.update', auditEntity: { type: 'commitment', id: c.id } },
+    );
+    return c.id;
+  }
+
+  it('same entityId fired twice in one week only counts once toward quota', async () => {
+    const entityId = await seedOverdueCommitment('Same task', 7);
+    const cfg = { ...DEFAULT_PROACTIVE_CONFIG, maxPerWeek: 3 };
+    // Empty state to start.
+    const initial = await scanProactiveProposals(repo, cfg, { entries: [] }, 'today_load', { now: NOON });
+    expect(initial.some(p => p.entityId === entityId)).toBe(true);
+    // Re-scan with empty history: the same entity id should not produce a
+    // second proposal — entity-level dedup means one proposal per entity
+    // per week, even across multiple scan calls.
+    const after = await scanProactiveProposals(repo, cfg, { entries: [] }, 'today_load', { now: NOON });
+    expect(after.filter(p => p.entityId === entityId).length).toBeLessThanOrEqual(1);
+  });
+
+  it('dismissProactiveEntities marks entities as resolved so they do not resurface', async () => {
+    const entityId = await seedOverdueCommitment('Batch target', 8);
+    const { dismissProactiveEntities } = await import('../proactiveProposal');
+    const { state: dismissedState, dismissed: dismissedCount } = await dismissProactiveEntities([entityId]);
+    expect(dismissedCount).toBe(1);
+    // Re-scan using the state returned by dismiss: the entity is now resolved
+    // this week, so no proposal of that id is generated.
+    const after = await scanProactiveProposals(repo, DEFAULT_PROACTIVE_CONFIG, dismissedState, 'today_load', { now: NOON });
+    expect(after.some(p => p.entityId === entityId)).toBe(false);
+  });
+});

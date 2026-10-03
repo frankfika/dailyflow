@@ -165,9 +165,9 @@ describe('TaskCard progressive disclosure', () => {
     expect(screen.getByTestId('taginput-tags')).toHaveTextContent('planning');
   });
 
-  it('labels tasks without an Event as Standalone', () => {
+  it('omits the event chip for tasks without an Event (G5: no Standalone noise)', () => {
     render(<TaskCard {...createProps()} />);
-    expect(screen.getByTestId('task-card-event-task-1')).toHaveTextContent('Standalone');
+    expect(screen.queryByTestId('task-card-event-task-1')).toBeNull();
   });
 });
 

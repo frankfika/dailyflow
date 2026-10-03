@@ -4,6 +4,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  Brain,
   CalendarDays,
   ChevronDown,
   Command,
@@ -12,7 +13,6 @@ import {
   ListTodo,
   MessageCircle,
   MoreHorizontal,
-  Search,
   Settings,
   Briefcase,
   Heart,
@@ -392,7 +392,11 @@ export function Sidebar({
     persistToggle(true);
   };
 
-  const isAdvancedTab = activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'team';
+  // G3: AI chat is a destination inside the More disclosure, not a primary
+  // tab — so an open AI overlay keeps the More branch expanded (and the
+  // More row accented) to preserve "where am I".
+  const isAdvancedTab =
+    activeTab === 'calendar' || activeTab === 'memory' || activeTab === 'team' || activeTab === 'ai-chat';
   const [showMore, setShowMore] = useState(isAdvancedTab);
 
   useEffect(() => {
@@ -592,26 +596,20 @@ export function Sidebar({
             </div>
           )}
 
-          {/* UX S10: ⌘K sits at the top of the icon rail — the design's
-              "│ ⌘K │ 今 │ 事 │ 笔 │ AI │" order. Calendar / memory / team /
-              settings stay one keystroke away via the palette; the More
-              disclosure below remains the visible fallback. */}
+          {/* UX S10 / G12: ⌘K stays at the top of the rail, but as a pure
+              icon button — the design spec demotes the labelled "Search /
+              commands" text button (P5: the palette is one path, not a
+              nav item). The ⌘K hint lives in the title / hover tooltip. */}
           {onOpenCommandPalette && (
             <button
               type="button"
               onClick={onOpenCommandPalette}
               data-testid="sidebar-command-palette"
-              className={`mb-2 mx-1 flex items-center rounded-lg border border-border/80 bg-background/60 text-text-muted transition-colors hover:border-border-strong hover:text-text-heading ${isCompact ? 'justify-center p-2' : 'gap-2 px-2.5 py-1.5'} ${isMobile ? 'min-h-[44px]' : ''}`}
-              title={isCompact ? (language === 'zh' ? '搜索 / 命令 ⌘K' : 'Search / commands ⌘K') : undefined}
-              aria-label={language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
+              className="mb-2 mx-1 flex items-center justify-center rounded-lg border border-border/80 bg-background/60 p-2 text-text-muted transition-colors hover:border-border-strong hover:text-text-heading"
+              title={language === 'zh' ? '搜索 / 命令 ⌘K' : 'Search / commands ⌘K'}
+              aria-label={language === 'zh' ? '搜索 / 命令 ⌘K' : 'Search / commands ⌘K'}
             >
               <Command className="w-4 h-4 shrink-0" aria-hidden="true" />
-              {!isCompact && (
-                <span className="flex-1 overflow-hidden whitespace-nowrap text-left">
-                  {language === 'zh' ? '搜索 / 命令' : 'Search / commands'}
-                </span>
-              )}
-              {!isCompact && <kbd className="rounded border border-border/70 bg-black/[0.03] px-1 py-0.5 text-[11px] text-text-muted">⌘K</kbd>}
             </button>
           )}
 
@@ -623,7 +621,6 @@ export function Sidebar({
                 { tab: 'today', label: language === 'zh' ? '今天' : 'Today', icon: ListTodo, action: goToToday },
                 { tab: 'events', label: language === 'zh' ? '事件' : 'Events', icon: Sparkles, action: () => handleNavClick('events') },
                 { tab: 'notes', label: language === 'zh' ? '笔记' : 'Notes', icon: FileText, action: () => onOpenNotesSurface ? onOpenNotesSurface('notes') : handleNavClick('notes') },
-                { tab: 'ai-chat', label: language === 'zh' ? '问 AI' : 'Ask AI', icon: MessageCircle, action: () => handleNavClick('ai-chat') },
               ] as const).map(({ tab, label, icon: Icon, action }) => {
                 const active = tab === 'today'
                   ? activeTab === 'today' && currentFileDate === getTodayStr()
@@ -697,9 +694,37 @@ export function Sidebar({
                   className="mt-1 overflow-hidden pl-2"
                 >
                   <ul className="space-y-0.5 border-l border-border/70 pl-2 text-[12px]">
+                    {/* G3: Ask AI lives at the top of the More disclosure
+                        (label carries the ⌘J shortcut; the keybinding itself
+                        is registered in the keyBindings registry, not here).
+                        App passes `activeOverlay ?? activeTab`, so this item
+                        lights up while the AI chat overlay is open. */}
+                    <li>
+                      <button
+                        onClick={() => handleNavClick('ai-chat')}
+                        data-testid="nav-ai-chat"
+                        data-active={activeTab === 'ai-chat'}
+                        aria-label={language === 'zh' ? '问 AI ⌘J' : 'Ask AI ⌘J'}
+                        className={`relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${activeTab === 'ai-chat' ? 'font-medium text-accent' : 'text-text-muted hover:bg-black/[0.03] hover:text-text-main'}`}
+                      >
+                        {activeTab === 'ai-chat' && (
+                          <motion.span
+                            layoutId="sidebar-nav-active"
+                            className="absolute inset-0 rounded-md bg-accent/10"
+                            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <MessageCircle className="relative h-3.5 w-3.5" aria-hidden="true" />
+                        <span className="relative flex-1 overflow-hidden whitespace-nowrap">
+                          {language === 'zh' ? '问 AI' : 'Ask AI'}
+                        </span>
+                        <kbd className="relative rounded border border-border/70 bg-black/[0.03] px-1 py-0.5 text-[10px] text-text-muted">⌘J</kbd>
+                      </button>
+                    </li>
                     {([
                       { tab: 'calendar', label: language === 'zh' ? '日历' : 'Calendar', icon: CalendarDays },
-                      { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Search },
+                      { tab: 'memory', label: language === 'zh' ? '记忆' : 'Memory', icon: Brain },
                       { tab: 'team', label: language === 'zh' ? '团队' : 'Team', icon: Users },
                     ] as const).map(({ tab, label, icon: Icon }) => {
                       const active = activeTab === tab;
@@ -793,9 +818,11 @@ export function Sidebar({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between px-1 text-[11px] text-text-muted/80">
+                {/* A16: the brand name already sits next to the logo at the
+                    top — the footer keeps only the version to avoid encoding
+                    "DailyFlow" twice (P5). */}
+                <div className="px-1 text-[11px] text-text-muted/80">
                   <span className="font-mono">v{__APP_VERSION__}</span>
-                  <span>{language === 'zh' ? 'DailyFlow' : 'DailyFlow'}</span>
                 </div>
               </motion.div>
             )}

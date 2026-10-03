@@ -42,7 +42,7 @@ export function Button({
   };
   const variants = {
     primary: 'bg-[var(--color-accent)] text-white hover:opacity-90',
-    secondary: 'bg-black/5 dark:bg-white/10 text-[var(--color-text)] hover:bg-black/10 dark:hover:bg-white/15',
+    secondary: 'bg-black/5 dark:bg-white/10 text-[var(--color-text-main)] hover:bg-black/10 dark:hover:bg-white/15',
     danger: 'bg-red-500/10 text-red-600 hover:bg-red-500/20',
     ghost: 'text-[var(--color-text-muted)] hover:bg-black/5 dark:hover:bg-white/10',
   };
@@ -78,7 +78,7 @@ export function Badge({ children, tone = 'default' }: { children: React.ReactNod
 export function EmptyState({ title, body, action }: { title: string; body?: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
-      <div className="text-base font-semibold text-[var(--color-text)]">{title}</div>
+      <div className="text-base font-semibold text-[var(--color-text-main)]">{title}</div>
       {body && <div className="max-w-md text-sm text-[var(--color-text-muted)]">{body}</div>}
       {action}
     </div>

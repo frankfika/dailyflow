@@ -33,6 +33,7 @@ import {
 import { relativeTime } from './relativeTime';
 import { useWorkspaceScope } from '../../../workspaceScope';
 import { queryKeys } from '../../../queryKeys';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { MeetingNotePanel } from './MeetingNotePanel';
 import { MeetingEventLauncher } from './MeetingEventLauncher';
 import { useBrowserTts } from '../hooks/useBrowserTts';
@@ -337,6 +338,9 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   const bodyRef = useRef(note?.body ?? '');
   const markdownEditorRef = useRef<LiveMarkdownEditorHandle | null>(null);
   const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A8: delete confirmation drives the shared ConfirmDialog, not a native
+  // confirm() that blocks the renderer.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [taskDraft, setTaskDraft] = useState('');
   const [isLinkingTask, setIsLinkingTask] = useState(false);
@@ -449,12 +453,22 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
   // markdown stripping — so a 200-word doc with frontmatter shows
   // the same count the user sees in their editor.
   const words = renderedBody.trim().split(/\s+/).filter(Boolean).length;
-  const deleteCurrentNote = async () => {
-    if (!confirm(t.deleteConfirm)) return;
+  const deleteCurrentNote = () => {
+    setConfirmingDelete(true);
+  };
+  const executeDeleteCurrentNote = async () => {
     const saved = await autosave.flush();
-    if (!saved) return;
-    await del.mutateAsync(note.id);
-    onDeleted?.(note.id);
+    if (!saved) {
+      setConfirmingDelete(false);
+      return;
+    }
+    try {
+      await del.mutateAsync(note.id);
+      setConfirmingDelete(false);
+      onDeleted?.(note.id);
+    } catch {
+      setConfirmingDelete(false);
+    }
   };
   const saveMetadata = async (patch: Parameters<typeof autosave.schedule>[0]) => {
     autosave.schedule(patch);
@@ -977,6 +991,17 @@ export function NoteEditor({ noteId, language = 'en', className = '', layout = '
           }}
         />
       )}
+      <ConfirmDialog
+        show={confirmingDelete}
+        title={language === 'zh' ? '删除笔记？' : 'Delete note?'}
+        message={t.deleteConfirm}
+        confirmText={t.delete}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={del.isPending || autosave.status === 'saving'}
+        variant="danger"
+        onConfirm={() => void executeDeleteCurrentNote()}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { newId } from '../../domain/v2/ulid.js';
 import {
   AgentDefinitionSchema,
-  AgentRunSchema,
   type AgentDefinition,
   type AgentRun,
 } from '../../domain/v2/types.js';
@@ -32,35 +30,22 @@ export function listAgentDefinitions(): AgentDefinition[] {
 }
 
 /**
- * Creates an auditable run context only. The future agent worker will consume
- * this run and write a proposal/result; no summary is generated here.
+ * DEBT-004：会议笔记 agent 运行时已收敛到 Event Operator（DeepSeek Harness
+ * sidecar，见 server/services/harness/）。此入口不再可用。
+ *
+ * The route handler keeps calling this so a stray client gets a well-formed
+ * error envelope instead of a 404; the repository is never touched.
  */
 export async function startAgentRun(
-  repo: V2Repository,
-  workspaceId: string,
-  input: AgentInvocationInput,
+  _repo: V2Repository,
+  _workspaceId: string,
+  _input: AgentInvocationInput,
 ): Promise<AgentRun> {
-  const agentId = input.agentId ?? MEETING_NOTES_AGENT.id;
-  const definition = listAgentDefinitions().find(item => item.id === agentId);
-  if (!definition) throw new Error(`Unknown agent definition: ${agentId}`);
-  const note = await repo.getNoteDocument(input.noteId);
-  if (!note) throw new Error('Note not found');
-  if (note.workspaceId !== workspaceId) throw new Error('Note workspace mismatch');
-  if (note.kind !== 'meeting') throw new Error('Meeting Notes agent requires a meeting note');
-  const sourceIds = input.sourceIds ?? note.sourceIds;
-  const run = AgentRunSchema.parse({
-    id: newId('run'), schemaVersion: 1, createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(), createdBy: 'user', workspaceId,
-    agent: 'meeting_notes', agentDefinitionId: definition.id,
-    modelProvider: 'pending', model: 'pending', promptVersion: `${definition.id}/pending`,
-    inputEntityIds: [note.id, ...sourceIds], status: 'running',
-    result: { state: 'awaiting_agent_runtime', noteId: note.id, sourceIds },
-  });
-  await repo.saveAgentRun(run, {
-    auditKind: 'process', auditEntity: { type: 'run', id: run.id },
-    auditData: { agentDefinitionId: definition.id, noteId: note.id, sourceIds },
-  });
-  return run;
+  // DEBT-004：会议笔记 agent 运行时已收敛到 Event Operator（DeepSeek Harness sidecar，见 server/services/harness/）。此入口不再可用。
+  throw Object.assign(
+    new Error('Meeting Notes agent runtime has converged to the Event Operator; this entry point is no longer available.'),
+    { code: 'not_implemented', status: 501 },
+  );
 }
 
 // ---------------------------------------------------------------------------

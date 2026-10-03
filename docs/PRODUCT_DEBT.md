@@ -245,3 +245,4 @@
 前者让"AI Agent"卖点无法演示；后者让"0 字节上传"承诺变成营销口号。
 
 下一步：在 Sprint 1 把这两条打掉，再挑 DEBT-005/006 让 Calendar 能 demo，最后做 DEBT-007 的 privacy mode 开关作为路演锚点。
+- 2026-10-03: DEBT-004 ✅ 已结清 —— 会议笔记 agent 入口移除，agent 运行时统一收敛到 Event Operator（server/services/harness/ DeepSeek Harness sidecar）。

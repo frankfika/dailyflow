@@ -36,6 +36,8 @@ export interface ChatMessage {
   // Metadata for assistant messages
   modelName?: string;
   skillName?: string;
+  /** Skill id this turn ran with — retry restores the same skill context (C7). */
+  matchedSkillId?: string;
   contextSnapshot?: ContextItem[]; // captured at send time
   /** Tools this assistant turn executed (real CRUD actions). */
   toolCalls?: ChatToolRecord[];

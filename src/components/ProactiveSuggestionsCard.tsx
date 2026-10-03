@@ -25,12 +25,15 @@ import { ChevronDown, ChevronUp, Lightbulb, Sparkles, X } from 'lucide-react';
 import {
   proactiveApi,
   type ProactiveProposal,
+  type ProactiveQuota,
   type ProactiveSuggestion as Suggestion,
 } from '../api/client';
 
 interface ProactiveSuggestionsCardProps {
   language: 'en' | 'zh';
   proposals: ProactiveProposal[];
+  /** C10: weekly quota the server computed; null when the server omits it. */
+  quota?: ProactiveQuota | null;
   /** Called when the user accepts a suggestion ("move to today", etc.). */
   onApplySuggestion?: (
     proposal: ProactiveProposal,
@@ -60,6 +63,7 @@ const ACTION_BUTTON_CLS: Record<Suggestion['action'], string> = {
 export function ProactiveSuggestionsCard({
   language,
   proposals,
+  quota = null,
   onApplySuggestion,
   onDismissAll,
 }: ProactiveSuggestionsCardProps) {
@@ -82,8 +86,14 @@ export function ProactiveSuggestionsCard({
       if (suggestion.action === 'dismiss') {
         await proactiveApi.recordAction(proposal.id, 'dismissed');
       } else if (onApplySuggestion) {
-        await onApplySuggestion(proposal, suggestion);
-        await proactiveApi.recordAction(proposal.id, 'accepted');
+        // C12: onApplySuggestion rejects when the user cancels the confirm
+        // dialog or the write fails — only then is the action 'accepted'.
+        try {
+          await onApplySuggestion(proposal, suggestion);
+          await proactiveApi.recordAction(proposal.id, 'accepted');
+        } catch {
+          // Cancelled / failed: the proposal stays for another decision.
+        }
       }
     } finally {
       setBusyId(null);
@@ -93,6 +103,13 @@ export function ProactiveSuggestionsCard({
   const headerText = isZh
     ? `Agent 建议 (${proposals.length})`
     : `Agent suggestions (${proposals.length})`;
+  // C10: surface the weekly quota right in the header so "how many more will
+  // I see this week" is never a silent number.
+  const quotaText = quota
+    ? (isZh
+      ? `本周剩余 ${Math.max(0, quota.max - quota.used)}/${quota.max}`
+      : `${Math.max(0, quota.max - quota.used)}/${quota.max} left this week`)
+    : null;
   const collapseLabel = isZh ? '折叠' : 'Collapse';
   const expandLabel = isZh
     ? `展开其余 ${hidden} 条`
@@ -109,6 +126,14 @@ export function ProactiveSuggestionsCard({
         <div className="flex items-center gap-2">
           <Sparkles className="today-proactive-icon h-3.5 w-3.5" aria-hidden="true" />
           <h2 className="text-xs font-semibold text-text-heading">{headerText}</h2>
+          {quotaText && (
+            <span
+              data-testid="proactive-quota"
+              className="rounded-full bg-black/[0.04] px-1.5 py-0.5 text-[11px] text-text-muted"
+            >
+              {quotaText}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {collapsed ? (

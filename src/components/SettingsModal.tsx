@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Eye, EyeOff, Loader2, Download, CheckCircle, AlertCircle, Copy, ExternalLink, Upload, Trash2, CalendarDays, RefreshCw, Bot, Mic, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ModelLibrary } from './ModelLibrary';
+import { ConfirmDialog } from './ConfirmDialog';
 import { TeamSettings } from './TeamSettings';
 import { persistProviderConfigsToBackend } from '../types/models';
 import { open } from '@tauri-apps/plugin-shell';
@@ -162,6 +163,27 @@ export function SettingsModal({
   setIpfsGateway,
   showToast,
 }: SettingsModalProps) {
+  // A8: one promise-based confirm replaces every native confirm() in this
+  // panel. Awaiting keeps the existing linear handler flow readable while
+  // giving us an accessible, automatable dialog.
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    variant?: 'danger' | 'accent';
+    resolve: (ok: boolean) => void;
+  } | null>(null);
+  const ask = (
+    title: string,
+    message: string,
+    opts?: { confirmText?: string; variant?: 'danger' | 'accent' },
+  ) => new Promise<boolean>(resolve => {
+    setConfirmState({ title, message, confirmText: opts?.confirmText, variant: opts?.variant, resolve });
+  });
+  const settleConfirm = (ok: boolean) => {
+    if (confirmState) confirmState.resolve(ok);
+    setConfirmState(null);
+  };
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -447,9 +469,13 @@ export function SettingsModal({
   };
 
   const handleDisconnectFeishu = async () => {
-    const confirmed = window.confirm(language === 'zh'
-      ? '断开 DailyFlow 中的飞书账号？这只会清除本机登录状态，不会撤销飞书服务端的应用授权。'
-      : 'Disconnect Feishu from DailyFlow? This clears the local login only and does not revoke the app in Feishu.');
+    const confirmed = await ask(
+      language === 'zh' ? '断开飞书账号？' : 'Disconnect Feishu?',
+      language === 'zh'
+        ? '这只会清除本机登录状态，不会撤销飞书服务端的应用授权。'
+        : 'This clears the local login only and does not revoke the app in Feishu.',
+      { confirmText: language === 'zh' ? '断开' : 'Disconnect', variant: 'danger' },
+    );
     if (!confirmed) return;
     setFeishuLoading(true);
     setFeishuMessage('');
@@ -668,9 +694,13 @@ export function SettingsModal({
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!confirm(language === 'zh'
-      ? '导入将合并或覆盖当前工作区中的数据。是否继续？'
-      : 'Importing will merge or overwrite data in your current workspace. Continue?')) {
+    if (!(await ask(
+      language === 'zh' ? '导入数据？' : 'Import data?',
+      language === 'zh'
+        ? '导入将合并或覆盖当前工作区中的数据。'
+        : 'Importing will merge or overwrite data in your current workspace.',
+      { confirmText: language === 'zh' ? '导入' : 'Import', variant: 'accent' },
+    ))) {
       e.target.value = '';
       return;
     }
@@ -724,14 +754,22 @@ export function SettingsModal({
       setDataStatus({ type: 'error', message: language === 'zh' ? '请先设置工作区路径' : 'Please set a workspace path first' });
       return;
     }
-    if (!confirm(language === 'zh'
-      ? '⚠ 这将删除所有笔记 / 承诺 / 决策 / 证据。是否继续？'
-      : '⚠ This will delete all notes / commitments / decisions / evidence. Continue?')) {
+    if (!(await ask(
+      language === 'zh' ? '⚠ 重置工作区' : '⚠ Reset workspace',
+      language === 'zh'
+        ? '这将删除所有笔记 / 承诺 / 决策 / 证据。'
+        : 'This will delete all notes / commitments / decisions / evidence.',
+      { confirmText: language === 'zh' ? '继续' : 'Continue', variant: 'danger' },
+    ))) {
       return;
     }
-    if (!confirm(language === 'zh'
-      ? '最后确认: 此操作不可撤销。确定重置当前工作区？'
-      : 'Final confirmation: this action cannot be undone. Reset the workspace now?')) {
+    if (!(await ask(
+      language === 'zh' ? '最后确认' : 'Final confirmation',
+      language === 'zh'
+        ? '此操作不可撤销。确定重置当前工作区？'
+        : 'This action cannot be undone. Reset the workspace now?',
+      { confirmText: language === 'zh' ? '重置' : 'Reset', variant: 'danger' },
+    ))) {
       return;
     }
     setIsResetting(true);
@@ -878,6 +916,7 @@ export function SettingsModal({
   };
 
   return (
+    <>
     <AnimatePresence>
     {showSettings && (
     <motion.div
@@ -2346,5 +2385,16 @@ export function SettingsModal({
     </motion.div>
     )}
     </AnimatePresence>
+      <ConfirmDialog
+        show={confirmState !== null}
+        title={confirmState?.title ?? ''}
+        message={confirmState?.message ?? ''}
+        confirmText={confirmState?.confirmText}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        variant={confirmState?.variant ?? 'danger'}
+        onConfirm={() => settleConfirm(true)}
+        onCancel={() => settleConfirm(false)}
+      />
+    </>
   );
 }

@@ -29,7 +29,15 @@ export interface SharedStore {
   providers: ProviderConfig[];
   activeProviderId: string | null;
   skills: PromptTemplateData[];
+  /**
+   * Pending skill of the ACTIVE session. Kept in sync with
+   * `pendingSkillBySession` — see setStore — so consumers (useAiSession)
+   * keep working with a single scalar while the record itself is per
+   * session (C8).
+   */
   pendingSkillId: string | null;
+  /** C8: pending skill per session id. Runtime-only, never persisted. */
+  pendingSkillBySession: Record<string, string | null>;
 }
 
 let store: SharedStore = {
@@ -39,6 +47,7 @@ let store: SharedStore = {
   activeProviderId: null,
   skills: [],
   pendingSkillId: null,
+  pendingSkillBySession: {},
 };
 
 let initialized = false;
@@ -54,10 +63,23 @@ function persistSessions() {
 
 export type SetStoreInput = Partial<SharedStore> | ((prev: SharedStore) => Partial<SharedStore>);
 
+const NO_SESSION_KEY = '__none__';
+
 export function setStore(patch: SetStoreInput) {
   const resolved = typeof patch === 'function' ? patch(store) : patch;
   const changed = 'sessions' in resolved || 'activeSessionId' in resolved;
-  store = { ...store, ...resolved };
+  const next: SharedStore = { ...store, ...resolved };
+  // C8: pendingSkillId is scoped to a session, but consumers still read the
+  // scalar. Writes go to the per-session record; switching the active session
+  // restores that session's own pending skill.
+  if ('pendingSkillId' in resolved) {
+    const sessionId = ('activeSessionId' in resolved ? resolved.activeSessionId : store.activeSessionId) || NO_SESSION_KEY;
+    next.pendingSkillBySession = { ...store.pendingSkillBySession, [sessionId]: resolved.pendingSkillId ?? null };
+  }
+  if ('activeSessionId' in resolved && (resolved.activeSessionId || null) !== (store.activeSessionId || null)) {
+    next.pendingSkillId = next.pendingSkillBySession[resolved.activeSessionId || NO_SESSION_KEY] ?? null;
+  }
+  store = next;
   emit();
   // 仅在 session 字段变化时持久化; providers / skills / pendingSkillId 走各自的存储
   if (changed) persistSessions();
@@ -65,6 +87,21 @@ export function setStore(patch: SetStoreInput) {
 
 export function getStore(): SharedStore {
   return store;
+}
+
+/** C8: read the pending skill recorded for one specific session. */
+export function getPendingSkillForSession(sessionId: string | null): string | null {
+  return store.pendingSkillBySession[sessionId || NO_SESSION_KEY] ?? null;
+}
+
+/** C8: record the pending skill for one specific session (keeps the active scalar in sync). */
+export function setPendingSkillForSession(sessionId: string | null, skillId: string | null) {
+  const key = sessionId || NO_SESSION_KEY;
+  const patch: Partial<SharedStore> = {
+    pendingSkillBySession: { ...store.pendingSkillBySession, [key]: skillId },
+  };
+  if (store.activeSessionId === sessionId) patch.pendingSkillId = skillId;
+  setStore(patch);
 }
 
 export function ensureInitialized(): SharedStore {

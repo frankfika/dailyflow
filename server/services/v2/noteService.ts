@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import crypto from 'crypto';
 import type { V2Repository } from '../../repositories/v2/repository.js';
+import type { NoteWithOrigin } from '../../repositories/v2/repository.js';
 import { newId } from '../../domain/v2/ulid.js';
 import {
   NoteDocumentSchema,
@@ -34,6 +35,11 @@ import { serializeNoteDocument } from '../../repositories/v2/markdownSerializer.
 // Re-export the repository's error so callers can `instanceof` check
 // against the same class the routes layer catches.
 export { RepoConcurrentModificationError as ConcurrentModificationError };
+
+// Re-export the origin-annotated note shape (WP-45 interface contract 4):
+// every note served by list/get carries `origin: 'v1' | 'v2'` and
+// `writable: boolean`; v1 items are read-only legacy projections.
+export type { NoteWithOrigin };
 
 // ---------------------------------------------------------------------------
 // Inputs / outputs
@@ -150,6 +156,17 @@ function inferTitle(body: string, explicit?: string): string | undefined {
   return line.length > 200 ? line.slice(0, 200) : line;
 }
 
+/**
+ * Search text for a v1 note: title + the first N body lines (WP-45
+ * interface contract 4 — "title + 内容前若干行匹配"). Keeps legacy
+ * long-form files from dominating scan cost while still matching on the
+ * content a user would look for.
+ */
+function v1SearchHaystack(n: NoteWithOrigin): string {
+  const head = n.body.split('\n').slice(0, 40).join('\n');
+  return `${n.title ?? ''}\n${head}`;
+}
+
 export class NoteService {
   constructor(private readonly repo: V2Repository) {}
 
@@ -196,23 +213,48 @@ export class NoteService {
     return note;
   }
 
+  /**
+   * Fetch a v1 legacy note by its deterministic `v1_` id (WP-45 contract 4).
+   * Read-only projection of the legacy `Notes/` tree (YYYY/MM subfolders of
+   * markdown files) — full body, `writable: false`. Throws NoteNotFoundError
+   * for unknown/foreign ids.
+   */
+  async getV1(id: string): Promise<NoteWithOrigin> {
+    const note = await this.repo.getV1NoteDocument(id);
+    if (!note) throw new NoteNotFoundError(id);
+    return note;
+  }
+
   async tryGet(id: string): Promise<NoteDocument | null> {
     return this.repo.getNoteDocument(id);
   }
 
-  async list(opts: { state?: NoteState; kind?: NoteKind; q?: string } = {}): Promise<NoteDocument[]> {
+  async list(opts: { state?: NoteState; kind?: NoteKind; q?: string } = {}): Promise<NoteWithOrigin[]> {
     const all = await this.repo.listNoteDocuments({ state: opts.state });
-    let out = all;
+    let out: NoteWithOrigin[] = all.map((n) => ({ ...n, origin: 'v2' as const, writable: true }));
+    // WP-45 read-only aggregation: surface legacy v1 notes (QuickNote /
+    // AI-chat saves) alongside v2 notes so nothing the user wrote is
+    // invisible. v1 files have no draft/archived lifecycle, so they only
+    // appear in the default and active views.
+    if (!opts.state || opts.state === 'active') {
+      const v1 = await this.repo.listV1NoteDocuments();
+      out = out.concat(v1);
+    }
     if (opts.kind) out = out.filter((n) => n.kind === opts.kind);
     if (opts.q) {
       const needle = opts.q.toLowerCase();
-      out = out.filter(
-        (n) =>
+      out = out.filter((n) => {
+        // v1 items match on title + the first N body lines (contract 4);
+        // v2 keeps its full title/body matching unchanged.
+        if (n.origin === 'v1') return v1SearchHaystack(n).toLowerCase().includes(needle);
+        return (
           (n.title && n.title.toLowerCase().includes(needle)) ||
-          (n.body && n.body.toLowerCase().includes(needle)),
-      );
+          (n.body && n.body.toLowerCase().includes(needle))
+        );
+      });
     }
-    // Pinned first, then most-recently-updated.
+    // Pinned first, then most-recently-updated. v1 items are never pinned,
+    // so they sort naturally among the non-pinned notes by mtime.
     out.sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       return b.updatedAt.localeCompare(a.updatedAt);

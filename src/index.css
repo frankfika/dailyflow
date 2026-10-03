@@ -21,7 +21,8 @@
 
   --color-text-main: #34413E;
   --color-text-heading: #17211F;
-  --color-text-muted: #78827F;
+  /* Muted text: ≥4.5:1 on --color-background (A13; was #78827F ≈3.6:1). */
+  --color-text-muted: #5A625F;
 
   --color-accent: #5E7C6B;
   --color-accent-light: rgba(94, 124, 107, 0.09);
@@ -53,6 +54,36 @@
   --ease-native: cubic-bezier(0.25, 0.1, 0.25, 1.0);
 }
 
+/* Global non-color tokens — the single definition site (WP-1 contract).
+   `--color-danger/success/warning` live in the `@theme` block above, which
+   Tailwind v4 compiles into `:root` variables; everything else is declared
+   here so BOTH the default (work) and `data-context="life"` roots consume
+   the same values. They used to live only in the life block, silently
+   no-op'ing under the default work context (A7).
+
+   --tabbar-height backs MobileTabBar sizing and every bottom-inset
+   avoidance computation (A1): consume `var(--tabbar-height)` +
+   `var(--safe-bottom, 0px)` instead of hardcoding 56px / h-14.
+
+   Safe-area insets — iOS notch / Dynamic Island / macOS notch.
+   Defaults are 0px so desktop/macOS Tauri windows behave normally.
+   Tauri automatically reports the actual insets; on the web they
+   default to 0 when no viewport-fit=cover is set. */
+:root {
+  --tabbar-height: 56px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Easing tokens for native-feeling transitions. `--ease-native` is in the
+     `@theme` block above; `--ease-spring` mirrors Apple/iOS spring curves for
+     content that should "snap" into place; `--ease-quick` is for tiny
+     micro-interactions (hover, press). */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-quick: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Dark mode is not a designed feature: nothing ever sets `.dark` on the root,
    so all `dark:` variants are inert and the app stays consistently light.
    Flip this to a class toggle + token overrides when dark mode is designed. */
@@ -69,7 +100,8 @@
 
   --color-text-main: #3D3A36;
   --color-text-heading: #2C2A26;
-  --color-text-muted: #9A9590;
+  /* Muted text: ≥4.5:1 on --color-background (A13; was #9A9590 ≈2.8:1). */
+  --color-text-muted: #6E6660;
 
   --color-accent: #5E7C6B;
   --color-accent-light: rgba(94, 124, 107, 0.09);
@@ -92,21 +124,9 @@
 
   --life-brightness: 1;
 
-  /* Safe-area insets — iOS notch / Dynamic Island / macOS notch.
-     Defaults are 0px so desktop/macOS Tauri windows behave normally.
-     Tauri automatically reports the actual insets; on the web they
-     default to 0 when no viewport-fit=cover is set. */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-
-  /* Easing tokens for native-feeling transitions. `--ease-native` is the
-     default; `--ease-spring` mirrors Apple/iOS spring curves for content
-     that should "snap" into place; `--ease-quick` is for tiny micro-interactions
-     (hover, press). */
-  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-quick: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Colors only — layout/safe-area/easing tokens (--tabbar-height,
+     --safe-*, --ease-spring/quick) are defined once at :root above and
+     are context-independent, so they are NOT repeated here (A7). */
 }
 
 html {
@@ -691,9 +711,9 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .today-planning-mark { width: 1.8rem; height: 1.8rem; border-radius: 0.5rem; }
 .today-planning-node { width: 1.65rem; height: 1.65rem; border-radius: 0.45rem; }
-.today-planning-eyebrow { margin: 0; color: var(--color-text-muted); font-size: 0.64rem; font-weight: 600; }
+.today-planning-eyebrow { margin: 0; color: var(--color-text-muted); font-size: 0.6875rem; font-weight: 600; }
 .today-planning-title { margin: 0.12rem 0 0; color: var(--color-text-heading); font-size: 0.9rem; font-weight: 650; }
-.today-planning-summary { color: var(--color-text-muted); font-size: 0.68rem; font-weight: 600; }
+.today-planning-summary { color: var(--color-text-muted); font-size: 0.6875rem; font-weight: 600; }
 .today-planning-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.55rem; }
 .today-planning-group {
   min-width: 0;
@@ -706,8 +726,8 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-planning-group:hover { border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); background: var(--color-surface-elevated); }
 .today-planning-group-header { display: flex; min-width: 0; align-items: center; gap: 0.5rem; padding: 0.1rem 0.1rem 0.5rem; }
 .today-planning-group-title { overflow: hidden; color: var(--color-text-heading); font-size: 0.76rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.today-planning-progress { color: var(--color-text-muted); font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.today-planning-open-map { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.2rem; border-radius: 0.35rem; padding: 0.25rem 0.35rem; color: var(--color-accent); font-size: 0.64rem; font-weight: 650; }
+.today-planning-progress { color: var(--color-text-muted); font-size: 0.6875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.today-planning-open-map { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.2rem; border-radius: 0.35rem; padding: 0.25rem 0.35rem; color: var(--color-accent); font-size: 0.6875rem; font-weight: 650; }
 .today-planning-open-map:hover { background: var(--color-accent-light); }
 .today-planning-task-list { display: flex; flex-direction: column; gap: 0.15rem; }
 .today-planning-task { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr) auto; align-items: center; gap: 0.45rem; border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); padding: 0.42rem 0.2rem; }
@@ -716,7 +736,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-planning-task.is-done .today-planning-task-check { border-color: var(--color-success); background: var(--color-success); }
 .today-planning-task-title { min-width: 0; overflow: hidden; color: var(--color-text-main); font-size: 0.7rem; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .today-planning-task.is-done .today-planning-task-title { color: var(--color-text-muted); text-decoration: line-through; }
-.today-planning-task-time { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--color-text-muted); font-size: 0.61rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.today-planning-task-time { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--color-text-muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .today-planning-empty { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px dashed var(--color-border-strong); border-radius: 0.6rem; background: transparent; padding: 0.65rem 0.75rem; color: var(--color-text-muted); font-size: 0.7rem; line-height: 1.45; text-align: left; cursor: pointer; }
 .today-planning-empty:hover { border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border)); color: var(--color-text-heading); }
 .today-planning-empty-action { display: inline-flex; align-items: center; gap: 0.3rem; flex: 0 0 auto; color: var(--color-accent); font-weight: 650; }
@@ -754,7 +774,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border-radius: 999px;
   background: var(--color-border);
   color: var(--color-text-muted);
-  font-size: 0.62rem;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 .today-filter-pill.is-active {
@@ -779,7 +799,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border-radius: 0.45rem;
   background: transparent;
   border: 1px solid transparent;
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -860,7 +880,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border-radius: 999px;
   background: var(--color-border);
   color: var(--color-text-muted);
-  font-size: 0.65rem;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 .today-group.is-overdue .today-group-count { background: var(--color-danger-light); color: var(--color-danger); }
@@ -1036,7 +1056,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border-radius: 9999px;
   background: var(--color-accent-light);
   color: var(--color-accent);
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   font-weight: 650;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -1157,7 +1177,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   color: #fff;
 }
 .today-event-tab.is-active .today-event-icon { color: #fff; }
-.today-event-tab .today-event-count { font-size: 0.65rem; }
+.today-event-tab .today-event-count { font-size: 0.6875rem; }
 .today-event-icon {
   height: 0.85rem;
   width: 0.85rem;
@@ -1580,7 +1600,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .today-focus-order {
   flex-shrink: 0;
   color: var(--color-accent);
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1598,6 +1618,14 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.9rem;
   box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+}
+
+/* A1 / G2: on phones the sticky bar overlapped the bottom tab bar —
+   push it above the tabbar by the same token the bar itself uses for height. */
+@media (max-width: 640px) {
+  .today-input-bar {
+    bottom: calc(var(--tabbar-height) + var(--safe-bottom, 0px) + 0.5rem);
+  }
 }
 .today-input-row {
   display: flex;
@@ -1635,7 +1663,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border: 1px solid transparent;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   transition: background 0.15s var(--ease-native), color 0.15s var(--ease-native);
 }
 .today-input-chipbtn:hover { background: rgba(0, 0, 0, 0.05); color: var(--color-text-main); }
@@ -1674,7 +1702,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   border-radius: 999px;
   background: var(--color-accent-light);
   color: var(--color-accent);
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   cursor: pointer;
 }
 .today-input-pop {
@@ -1687,7 +1715,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
   background: var(--color-surface-white);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
 }
-.today-input-pophead { font-size: 0.68rem; color: var(--color-text-muted); }
+.today-input-pophead { font-size: 0.6875rem; color: var(--color-text-muted); }
 .today-input-popitem {
   display: flex;
   align-items: center;
@@ -1815,7 +1843,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .cmdk-section { margin-bottom: 0.3rem; }
 .cmdk-sectiontitle {
   padding: 0.3rem 0.5rem 0.15rem;
-  font-size: 0.64rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1838,7 +1866,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 }
 .cmdk-item.is-active { background: var(--color-accent-light); color: var(--color-accent); }
 .cmdk-item-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmdk-item-hint { flex-shrink: 0; font-size: 0.68rem; color: var(--color-text-muted); }
+.cmdk-item-hint { flex-shrink: 0; font-size: 0.6875rem; color: var(--color-text-muted); }
 .cmdk-item.is-active .cmdk-item-hint { color: var(--color-accent); }
 /* S6: brainstorm preview + `?` answer panels */
 .today-focus-head-actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
@@ -1861,7 +1889,7 @@ h1, h2, h3, h4, h5, h6, .editorial-hero {
 .cmdk-foot {
   padding: 0.45rem 0.9rem;
   border-top: 1px solid var(--color-border);
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   color: var(--color-text-muted);
 }
 

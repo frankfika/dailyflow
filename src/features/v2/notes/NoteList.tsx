@@ -30,6 +30,7 @@ import { createPortal } from 'react-dom';
 import { useNotes, useCreateNote, useSetNoteArchived, useDeleteNote } from '../hooks/useNotes';
 import type { NoteDocument, NoteKind } from '../api/client';
 import { Button, EmptyState, Spinner } from '../components/States';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { Archive, ArchiveRestore, ChevronLeft, FilePlus2, Mic, Minimize2, Search, Star, Trash2 } from 'lucide-react';
 import { relativeTime } from './relativeTime';
 
@@ -135,6 +136,9 @@ export function NoteList({
   const create = useCreateNote();
   const setArchived = useSetNoteArchived();
   const del = useDeleteNote();
+  // A8: pending-delete drives the shared ConfirmDialog instead of a native
+  // confirm() that blocks the whole renderer and breaks e2e automation.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const lastArchiveNoticeRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -558,11 +562,7 @@ export function NoteList({
                       )}
                       {!isSelected && (
                         <button
-                          onClick={() => {
-                            if (confirm('Delete this note? This also removes its evidence.')) {
-                              del.mutate(n.id);
-                            }
-                          }}
+                          onClick={() => setPendingDelete({ id: n.id, title })}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-50 hover:text-danger"
                           title="Delete"
                           aria-label={`Delete ${title}`}
@@ -578,6 +578,24 @@ export function NoteList({
           </ul>
         )}
       </div>
+      <ConfirmDialog
+        show={pendingDelete !== null}
+        title={language === 'zh' ? '删除这条笔记？' : 'Delete this note?'}
+        message={language === 'zh'
+          ? `「${pendingDelete?.title}」将被永久删除，相关证据也会一并移除。`
+          : `"${pendingDelete?.title}" will be permanently deleted, along with its evidence.`}
+        confirmText={language === 'zh' ? '删除' : 'Delete'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        isLoading={del.isPending}
+        variant="danger"
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          del.mutate(pendingDelete.id, {
+            onSettled: () => setPendingDelete(null),
+          });
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

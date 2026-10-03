@@ -27,6 +27,8 @@ test.describe('DailyFlow Smoke Tests', () => {
     const firstRun = page.getByRole('heading', { name: /Commit to three things a day|每天承诺三件事/i });
     if (await firstRun.isVisible().catch(() => false)) return;
 
+    // WP-C: Ask AI lives inside the More disclosure (G3) — expand it first.
+    await page.getByTestId('nav-more').click();
     const entry = page.getByTestId('nav-ai-chat');
     await expect(entry).toBeVisible();
     await entry.click();

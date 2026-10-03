@@ -39,7 +39,8 @@ interface TodayInputBarProps {
   onBrainPreviewCancel: () => void;
   rewritingPreviewId: string | null;
   /** `?`-prefixed input routes here (design v3.1 §5). */
-  onAsk: (question: string) => void;
+  /** A4: may return a promise — the bar awaits it for a real loading state. */
+  onAsk: (question: string) => void | Promise<void>;
   aiAnswer: AiAnswer | null;
   onAnswerAdopt?: (title: string) => void;
   /** §5.1 — copy the answer to the clipboard. */
@@ -167,7 +168,8 @@ export function TodayInputBar({
     if (asking) return;
     setAsking(true);
     try {
-      onAsk(question);
+      // A4: await the ask so the loading state is real, not cosmetic.
+      await onAsk(question);
     } finally {
       setAsking(false);
     }
