@@ -120,6 +120,9 @@ describe('EventOutline rendering', () => {
     };
     renderOutline({
       selectedId: 'root', editingId: null,
+      // Date chip is the reschedule affordance; only render when a handler
+      // is provided. The real app always does; the test mirrors that.
+      onScheduleTask: vi.fn(async () => undefined),
       event: { ...EVENT, nodes: [...EVENT.nodes, taskRow], edges: [...EVENT.edges, { id: 'edge-done', source: 'root', target: 'done' }] },
     });
     expect(screen.getByTestId('outline-task-date-done')).toHaveTextContent('09-03');
