@@ -382,6 +382,13 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadRevisionRef = useRef(0);
+  // Tracks whether `loadTasksForDate` has ever finished loading today's
+  // tasks at least once. Background refreshes (e.g. after `tasksChanged`
+  // events from the event canvas) must not flip the global `isLoading`
+  // gate — that would unmount EventsView and lose the user's selected
+  // event / focused node. The first paint still needs the full loading
+  // spinner so the workspace doesn't render against an empty cache.
+  const hasLoadedOnceRef = useRef(false);
   const initializedDaysRef = useRef(new Set<string>());
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
@@ -818,9 +825,14 @@ export default function App() {
   }, []);
 
   // Load current date's tasks from API
-  const loadTasksForDate = useCallback(async (date: string) => {
+  const loadTasksForDate = useCallback(async (date: string, opts: { showInitialLoading?: boolean } = {}) => {
     const revision = ++loadRevisionRef.current;
-    setIsLoading(true);
+    // Only the first load (or a retry after an error) flips the global
+    // loading state. Background refreshes triggered by `tasksChanged`
+    // keep the UI mounted so users stay on the page they were on —
+    // toggling isLoading would unmount EventsView (and other surfaces)
+    // and reset their local state (selected event, focused node, etc.).
+    if (opts.showInitialLoading) setIsLoading(true);
     setLoadError(null);
     try {
       // The packaged webview becomes interactive slightly before the bundled
@@ -871,12 +883,17 @@ export default function App() {
       console.error('Failed to load tasks', e);
       setLoadError('Failed to load tasks. Is the backend running?');
     } finally {
-      if (revision === loadRevisionRef.current) setIsLoading(false);
+      if (revision !== loadRevisionRef.current) return;
+      hasLoadedOnceRef.current = true;
+      // Only the initial / explicit loading path flips the global gate.
+      // Background refreshes (post-mount `tasksChanged` events) keep the
+      // workspace mounted so the user stays where they were.
+      if (opts.showInitialLoading) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadTasksForDate(currentFileDate);
+    loadTasksForDate(currentFileDate, { showInitialLoading: !hasLoadedOnceRef.current });
   }, [currentFileDate, loadTasksForDate]);
 
   // Today's task list is projected from the Event adapter's `today-items`
