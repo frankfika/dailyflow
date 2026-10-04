@@ -5,6 +5,21 @@ All notable changes to DailyFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0](https://github.com/frankfika/dailyflow/compare/v2.18.1...v2.19.0) (2026-10-04)
+
+
+### Features
+
+* **ai-agent:** human confirmation gate, cross-date task semantics, and UX hardening ([655a620](https://github.com/frankfika/dailyflow/commit/655a620e5da30139ad4324b495e902b1856ffa06))
+* **ai-chat:** v2 agent with CRUD tool execution and bilingual tool cards ([4bf64f7](https://github.com/frankfika/dailyflow/commit/4bf64f7ef3642b3c2466f7d5e46a0fd0f44df20d))
+* **events:** in-place schedule feedback and one-click reschedule ([e46df21](https://github.com/frankfika/dailyflow/commit/e46df2179d09857066488424830f867b4032a008))
+
+
+### Bug Fixes
+
+* **app:** stop background task refresh from unmounting the active surface ([3ccebf8](https://github.com/frankfika/dailyflow/commit/3ccebf842bbba47512465b91d211993a433656a9))
+* **events:** stop scheduling a task from ejecting the user out of the event ([d1b6a46](https://github.com/frankfika/dailyflow/commit/d1b6a46d2cc7b9d46fad38af7a5601f3bbd1f12e))
+
 ## [2.18.1](https://github.com/frankfika/dailyflow/compare/v2.18.0...v2.18.1) (2026-09-28)
 
 
