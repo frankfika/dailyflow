@@ -10,13 +10,17 @@
  * - a pipeline can only read/write sessions in its workspace;
  * - retrying the latest failed response replaces that response in place;
  * - retrying any older response forks a session and never truncates history;
- * - parsed write tools may create reviewable Proposals, never direct writes.
+ * - delete_* tools NEVER execute without a human confirmation: the executor
+ *   returns `pendingConfirmation`, the pipeline asks via aiConfirmBus and
+ *   re-runs the call with `userConfirmed: true` only after the user agrees;
+ * - ≥3 write tools in one assistant turn require one batch confirmation.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiApi, type PromptTemplateData, loadSkillUsage, recordSkillUse, sortSkillsByUsage } from '../api/client';
-import { buildToolInstructions, parseToolCalls, type AIToolResult } from '../types/ai-tools';
+import { buildToolInstructions, parseToolCalls, type AIToolCall, type AIToolResult } from '../types/ai-tools';
 import { getFriendlyAiErrorMessage } from '../utils/aiErrorMessage';
+import { requestAiConfirmation, cancelPendingAiConfirmations } from '../utils/aiConfirmBus';
 import { executeToolCall, type DataScope } from '../utils/aiToolExecutor';
 import { getTodayStr } from '../utils/date';
 import { generateShortId } from '../utils/idGenerator';
@@ -27,7 +31,12 @@ import {
   type ChatToolRecord,
   type ContextItem,
 } from '../types/chat';
-import { getStore, setStore } from './useAiSessionStore';
+import {
+  getStore,
+  setStore,
+  getPendingSkillForSession,
+  setPendingSkillForSession,
+} from './useAiSessionStore';
 import { buildContextText, buildAutoContextText } from './aiContextBuilders';
 
 export interface UseSendPipelineOptions {
@@ -49,7 +58,49 @@ interface RunMessageOptions {
   rawContent: string;
   sessionId?: string;
   reuseUserMessage?: ChatMessage;
+  /** C7: skill id restored from the retried message (matchedSkillId). */
+  reuseSkillId?: string | null;
   contextSnapshot?: ContextItem[];
+}
+
+// ── C3/C8: cross-instance send status (phase + owning session) ──────────────
+// Module-level (not the shared persisted store): purely runtime, and AIChat
+// instances subscribe via useAiSendStatus to render a phase-aware indicator
+// only for the session that is actually streaming.
+
+export type AiSendPhase = 'thinking' | 'executing-tools' | 'summarizing';
+
+export interface AiSendStatus {
+  sessionId: string;
+  phase: AiSendPhase;
+}
+
+let sendStatus: AiSendStatus | null = null;
+const sendStatusListeners = new Set<() => void>();
+
+function setSendStatus(next: AiSendStatus | null) {
+  sendStatus = next;
+  sendStatusListeners.forEach(listener => listener());
+}
+
+/** Observe which session is streaming and in which phase (C3/C8). */
+export function useAiSendStatus(): AiSendStatus | null {
+  const [status, setStatus] = useState<AiSendStatus | null>(sendStatus);
+  useEffect(() => {
+    const listener = () => setStatus(sendStatus);
+    sendStatusListeners.add(listener);
+    return () => { sendStatusListeners.delete(listener); };
+  }, []);
+  return status;
+}
+
+/** One human-readable line per write call, shown in the batch confirm dialog (C2). */
+function describeToolCall(call: AIToolCall): string {
+  const a = call.arguments || {};
+  const target = [a.new_title, a.title, a.title_query, a.event_title, a.event_id]
+    .find(v => typeof v === 'string' && v.trim());
+  const label = typeof target === 'string' ? `「${String(target).trim().slice(0, 60)}」` : '';
+  return `${call.name}${label ? ` ${label}` : ''}`;
 }
 
 export function useSendPipeline(opts: UseSendPipelineOptions) {
@@ -113,6 +164,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
     rawContent,
     sessionId,
     reuseUserMessage,
+    reuseSkillId,
     contextSnapshot: suppliedContext,
   }: RunMessageOptions) => {
     const content = rawContent.trim();
@@ -136,17 +188,29 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
     inFlightRef.current = true;
     setIsStreaming(true);
     const controller = new AbortController();
+    // A stop while a confirmation dialog is open must unwind the awaited
+    // pipeline instead of blocking it forever.
+    controller.signal.addEventListener('abort', cancelPendingAiConfirmations);
     abortRef.current = controller;
     const contextSnapshot = suppliedContext || [...session.contextItems];
+    const setPhase = (phase: AiSendPhase) => setSendStatus({ sessionId: session.id, phase });
     try {
-      const activeSkill = live.pendingSkillId
-        ? live.skills.find(candidate => candidate.id === live.pendingSkillId) || null
+      const sessionSkillId = getPendingSkillForSession(session.id);
+      const activeSkill = sessionSkillId
+        ? live.skills.find(candidate => candidate.id === sessionSkillId) || null
         : null;
+      // C7: a retried message restores the skill that was attached to it,
+      // instead of force-clearing the skill context.
       const resolved = reuseUserMessage
-        ? { content, matchedSkill: null }
+        ? {
+            content,
+            matchedSkill: reuseSkillId
+              ? live.skills.find(candidate => candidate.id === reuseSkillId) || null
+              : null,
+          }
         : resolveSlashCommand(content, live.skills);
       const skillForThisMessage = resolved.matchedSkill || activeSkill;
-      if (resolved.matchedSkill) setStore({ pendingSkillId: resolved.matchedSkill.id });
+      if (resolved.matchedSkill) setPendingSkillForSession(session.id, resolved.matchedSkill.id);
 
       const userMessage: ChatMessage = reuseUserMessage || {
         id: generateShortId('msg'),
@@ -158,7 +222,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         appendMessageToSession(session.id, userMessage, { retitle: true });
       }
 
-      if (!resolved.matchedSkill) setStore({ pendingSkillId: null });
+      if (!resolved.matchedSkill) setPendingSkillForSession(session.id, null);
       if (skillForThisMessage) updateSkillUsage(skillForThisMessage);
 
       const contextArgs = { language, tasks, notes, filesMap };
@@ -190,6 +254,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         : defaultSystemPrompt;
       const systemPrompt = baseSystemPrompt + buildToolInstructions(language, getTodayStr());
 
+      setPhase('thinking');
       const { summary } = await aiApi.summarize({
         apiKey: provider.apiKey,
         model: provider.model,
@@ -207,16 +272,66 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       // action that did not happen.
       const toolRecords: ChatToolRecord[] = [];
       const mutatedScopes = new Set<DataScope>();
-      for (const call of calls) {
-        const result: AIToolResult = await executeToolCall(call, {
-          currentDate: getTodayStr(),
-          activeContext,
+      const toolCtx = {
+        currentDate: getTodayStr(),
+        activeContext,
+        language,
+        tasks,
+        notes,
+        events,
+        showToast,
+        // C5: abort must stop in-flight/pending writes too.
+        signal: controller.signal,
+      };
+
+      // C2: ≥3 write tools in one turn require ONE batch confirmation
+      // before any of them runs.
+      const isWriteCall = (call: AIToolCall) => /^(create_|update_)/.test(call.name);
+      let batchApproved = true;
+      if (calls.filter(isWriteCall).length >= 3) {
+        setPhase('executing-tools');
+        batchApproved = await requestAiConfirmation({
+          kind: 'batch_write',
+          items: calls.filter(isWriteCall).map(describeToolCall),
           language,
-          tasks,
-          notes,
-          events,
-          showToast,
         });
+        if (controller.signal.aborted) return;
+      }
+
+      for (const call of calls) {
+        if (controller.signal.aborted) break;
+        setPhase('executing-tools');
+        if (isWriteCall(call) && !batchApproved) {
+          toolRecords.push({
+            name: call.name,
+            args: call.arguments,
+            success: false,
+            message: language === 'zh'
+              ? '用户取消了批量写入，本操作未执行'
+              : 'The user declined the batch write — action not executed',
+          });
+          continue;
+        }
+        let result: AIToolResult = await executeToolCall(call, toolCtx);
+        // C1: delete_* waits for the HUMAN. The model's confirm is ignored,
+        // so ask through the bus and only re-run after an explicit yes.
+        if (result.pendingConfirmation) {
+          const confirmed = await requestAiConfirmation({
+            kind: 'delete',
+            tool: result.pendingConfirmation.tool,
+            targetSummary: result.pendingConfirmation.targetSummary,
+            language,
+          });
+          if (controller.signal.aborted) break;
+          result = confirmed
+            ? await executeToolCall(call, { ...toolCtx, userConfirmed: true })
+            : {
+                success: false,
+                message: language === 'zh'
+                  ? '用户取消了这个删除操作，未删除任何数据'
+                  : 'The user declined this deletion — nothing was deleted',
+              };
+        }
         if (result.mutated) mutatedScopes.add(result.mutated);
         toolRecords.push({
           name: call.name,
@@ -226,42 +341,61 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         });
       }
 
+      const executedCount = toolRecords.filter(record => record.success).length;
+
       let finalContent = text;
       if (toolRecords.length > 0) {
         // Refresh before the second round so the UI already shows what the
         // model is about to describe.
         for (const scope of mutatedScopes) onDataChanged?.(scope);
 
-        const resultsBlock = toolRecords
-          .map(r => `<tool_result tool="${r.name}" status="${r.success ? 'success' : 'failure'}">${r.message}</tool_result>`)
-          .join('\n');
-        try {
-          const followup = await aiApi.summarize({
-            apiKey: provider.apiKey,
-            model: provider.model,
-            baseUrl: provider.baseUrl,
-            systemPrompt: systemPrompt + (language === 'zh'
-              ? '\n\n工具已真实执行完毕。请严格根据下面的执行结果向用户汇报：成功了什么、失败了什么、如需删除等后续操作请先与用户确认。不得编造未发生的操作。'
-              : '\n\nTools have really executed. Report strictly based on the results below: what succeeded, what failed, and confirm with the user before any destructive follow-up. Never fabricate actions that did not happen.'),
-            userPrompt: `${userPrompt}\n\n---\n${
-              language === 'zh' ? '工具执行结果（已真实生效）：' : 'Tool execution results (already applied):'
-            }\n${resultsBlock}`,
-            signal: controller.signal,
-          });
-          if (!controller.signal.aborted && followup.summary.trim()) {
-            finalContent = followup.summary;
+        if (!controller.signal.aborted) {
+          const resultsBlock = toolRecords
+            .map(r => `<tool_result tool="${r.name}" status="${r.success ? 'success' : 'failure'}">${r.message}</tool_result>`)
+            .join('\n');
+          setPhase('summarizing');
+          try {
+            const followup = await aiApi.summarize({
+              apiKey: provider.apiKey,
+              model: provider.model,
+              baseUrl: provider.baseUrl,
+              systemPrompt: systemPrompt + (language === 'zh'
+                ? '\n\n工具已真实执行完毕。请严格根据下面的执行结果向用户汇报：成功了什么、失败了什么、如需删除等后续操作请先与用户确认。不得编造未发生的操作。'
+                : '\n\nTools have really executed. Report strictly based on the results below: what succeeded, what failed, and confirm with the user before any destructive follow-up. Never fabricate actions that did not happen.'),
+              userPrompt: `${userPrompt}\n\n---\n${
+                language === 'zh' ? '工具执行结果（已真实生效）：' : 'Tool execution results (already applied):'
+              }\n${resultsBlock}`,
+              signal: controller.signal,
+            });
+            if (!controller.signal.aborted && followup.summary.trim()) {
+              finalContent = followup.summary;
+            }
+          } catch {
+            // Second round failed — fall through and keep round-1 text plus a
+            // structured summary so the executed actions are never lost.
           }
-        } catch {
-          // Second round failed — fall through and keep round-1 text plus a
-          // structured summary so the executed actions are never lost.
         }
-        if (controller.signal.aborted) return;
         if (finalContent === text) {
           const toolSummary = toolRecords
             .map(r => `${r.success ? '✓' : '✗'} **${r.name}**: ${r.message}`)
             .join('\n');
           finalContent = text ? `${text}\n\n---\n${toolSummary}` : toolSummary;
         }
+      }
+
+      // C5: a stop after real mutations must leave a trace in the chat.
+      if (controller.signal.aborted) {
+        if (executedCount > 0) {
+          appendMessageToSession(session.id, {
+            id: generateShortId('msg'),
+            role: 'system',
+            content: language === 'zh'
+              ? `已停止 · 已执行 ${executedCount} 项操作`
+              : `Stopped · ${executedCount} action(s) executed`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        return;
       }
 
       appendMessageToSession(session.id, {
@@ -271,13 +405,17 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         timestamp: new Date().toISOString(),
         modelName: provider.name,
         skillName: skillForThisMessage?.name,
+        // C7: remember the skill so retrying this message restores it.
+        matchedSkillId: skillForThisMessage?.id,
         contextSnapshot,
         toolCalls: toolRecords.length > 0 ? toolRecords : undefined,
       });
     } catch (error: any) {
       const rawError = error.message || String(error);
       if (!(rawError.toLowerCase().includes('abort') || error.name === 'AbortError')) {
-        const friendlyError = getFriendlyAiErrorMessage(rawError, language, provider.name);
+        // C6: httpError-carried status lets the mapper use the upstream
+        // category the server sanitized for us.
+        const friendlyError = getFriendlyAiErrorMessage(rawError, language, provider.name, error?.status);
         appendMessageToSession(session.id, {
           id: generateShortId('msg'),
           role: 'assistant',
@@ -293,6 +431,7 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       if (abortRef.current === controller) abortRef.current = null;
       inFlightRef.current = false;
       setIsStreaming(false);
+      setSendStatus(null);
     }
   }, [
     activeContext,
@@ -348,6 +487,8 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
         rawContent: userMessage.content,
         sessionId: session.id,
         reuseUserMessage: userMessage,
+        // C7: restore the skill context attached to the failed attempt.
+        reuseSkillId: target.matchedSkillId ?? null,
         contextSnapshot: target.contextSnapshot,
       });
       return;
@@ -366,6 +507,8 @@ export function useSendPipeline(opts: UseSendPipelineOptions) {
       rawContent: userMessage.content,
       sessionId: fork.id,
       reuseUserMessage: userMessage,
+      // C7: restore the skill context attached to the forked attempt.
+      reuseSkillId: target.matchedSkillId ?? null,
       contextSnapshot: target.contextSnapshot,
     });
   }, [language, runMessage, workspaceId]);

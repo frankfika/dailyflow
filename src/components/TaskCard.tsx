@@ -194,11 +194,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     closeComment();
   };
 
+  // G5/P5: a task with no event carries no badge at all — "Standalone" was
+  // noise on every ungrouped task. Null means the whole chip is skipped.
   const eventLabel = spaceTitle
     ? (language === 'zh' ? `事件 · ${spaceTitle}` : `Event · ${spaceTitle}`)
     : (task.spaceId || task.originMindmapId
     ? (language === 'zh' ? '来自事件' : 'From event')
-    : (language === 'zh' ? '独立任务' : 'Standalone'));
+    : null);
   const isOverdue = Boolean(task.deadline && !isDone && task.deadline < getTodayStr());
   const deadlineLabel = task.deadline ? formatTaskDeadline(task.deadline, language) : '';
 
@@ -258,7 +260,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
             {/* Event chip — clicking the label opens the event; the trailing × unlinks.
                 Keeping the unlink affordance next to its indicator (was buried at the
-                bottom of the expanded panel, easy to miss and read as "just another tag"). */}
+                bottom of the expanded panel, easy to miss and read as "just another tag").
+                Skipped entirely for event-less tasks (G5: no "Standalone" noise). */}
+            {eventLabel && (
             <span
               className={`inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium ${spaceTitle ? 'border-accent/15 bg-accent/10 text-accent' : 'border-transparent text-text-muted'}`}
             >
@@ -295,6 +299,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </button>
               )}
             </span>
+            )}
             {task.sourcePath && task.sourcePath.length > 0 && (
               <span className="inline-flex min-w-0 items-center gap-0.5 text-text-muted/80" data-testid={`task-card-path-${task.id}`}>
                 {task.sourcePath.map((segment, index) => (

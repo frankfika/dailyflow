@@ -10,21 +10,23 @@ describe('agentService', () => {
     expect(agent.modelRequirements.type).toBe('chat');
   });
 
-  it('creates an auditable pending runtime context for a meeting note', async () => {
+  it('refuses the run entry point even for a valid meeting note (converged to Event Operator)', async () => {
     const note = {
       id: 'note_123456', workspaceId: 'ws', kind: 'meeting', sourceIds: ['src_123456'],
     };
     const saveAgentRun = vi.fn().mockResolvedValue(undefined);
     const repo = { getNoteDocument: vi.fn().mockResolvedValue(note), saveAgentRun } as any;
-    const run = await startAgentRun(repo, 'ws', { noteId: note.id });
-    expect(run.agent).toBe('meeting_notes');
-    expect(run.status).toBe('running');
-    expect(run.result).toMatchObject({ state: 'awaiting_agent_runtime', noteId: note.id });
-    expect(saveAgentRun).toHaveBeenCalledOnce();
+    // DEBT-004: the dead entry point now answers 501 semantics instead of
+    // writing an `awaiting_agent_runtime` stub run.
+    await expect(startAgentRun(repo, 'ws', { noteId: note.id })).rejects.toMatchObject({
+      code: 'not_implemented',
+      status: 501,
+    });
+    expect(saveAgentRun).not.toHaveBeenCalled();
   });
 
-  it('rejects non-meeting notes', async () => {
+  it('refuses non-meeting notes with the same not-implemented semantics', async () => {
     const repo = { getNoteDocument: vi.fn().mockResolvedValue({ id: 'note_123456', workspaceId: 'ws', kind: 'general', sourceIds: [] }) } as any;
-    await expect(startAgentRun(repo, 'ws', { noteId: 'note_123456' })).rejects.toThrow('meeting note');
+    await expect(startAgentRun(repo, 'ws', { noteId: 'note_123456' })).rejects.toMatchObject({ code: 'not_implemented' });
   });
 });

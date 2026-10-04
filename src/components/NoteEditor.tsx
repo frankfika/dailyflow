@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ConfirmDialog } from './ConfirmDialog';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, FileText, Mic, Sparkles, Calendar, Clock, Check,
@@ -86,6 +87,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const [type, setType] = useState<NoteData['type']>(note?.type || defaultType || 'note');
+  const [confirmSendToChat, setConfirmSendToChat] = useState(false);
   const [title, setTitle] = useState(note?.title || defaultTitle || '');
   const [body, setBody] = useState(note?.body || defaultBody || '');
   const [date, setDate] = useState(note?.date || defaultDate || today);
@@ -110,6 +112,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showAiEditPanel, setShowAiEditPanel] = useState(false);
   const [aiEditResult, setAiEditResult] = useState('');
   const [isAiEditing, setIsAiEditing] = useState(false);
+  // C13: AI formatting/smart actions land in the SAME preview flow as inline
+  // edits; a smart action that would also change the note type surfaces that
+  // explicitly in the preview instead of silently calling setType.
+  const [pendingAiType, setPendingAiType] = useState<NoteData['type'] | null>(null);
   const aiEditBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -182,7 +188,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         userPrompt,
       });
 
-      setBody(summary);
+      // C13: never write the body directly — route into the aiEditResult
+      // preview so the user applies or discards explicitly.
+      setPendingAiType(null);
+      setAiEditResult(summary);
+      setShowAiEditPanel(true);
     } catch (err: any) {
       console.error('Format failed:', err);
       setFormatError(err.message || String(err));
@@ -301,14 +311,36 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         systemPrompt,
         userPrompt,
       });
-      setBody(summary);
-      if (nextType !== type) setType(nextType);
+      // C13: preview first — the result is applied from the preview panel
+      // (which also shows the type change this smart action implies).
+      setPendingAiType(nextType !== type ? nextType : null);
+      setAiEditResult(summary);
+      setShowAiEditPanel(true);
     } catch (err: any) {
       console.error('Smart action failed:', err);
       setFormatError(err.message || String(err));
     } finally {
       setIsFormatting(false);
     }
+  };
+
+  /** C13: apply the previewed AI result (and any implied type change). */
+  const applyAiEditResult = (mode: 'replace' | 'append') => {
+    if (!aiEditResult.trim()) return;
+    if (mode === 'replace') {
+      setBody(aiEditResult);
+    } else {
+      setBody(prev => prev ? `${prev}\n\n${aiEditResult}` : aiEditResult);
+    }
+    if (pendingAiType && pendingAiType !== type) setType(pendingAiType);
+    setAiEditResult('');
+    setPendingAiType(null);
+    setShowAiEditPanel(false);
+  };
+
+  const discardAiEditResult = () => {
+    setAiEditResult('');
+    setPendingAiType(null);
   };
 
   const hasUnsavedChanges = note
@@ -331,12 +363,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const handleSendToChat = () => {
     if (!onSendToChat) return;
     if (hasUnsavedChanges) {
-      const ok = window.confirm(
-        language === 'zh'
-          ? '笔记有未保存的修改，确定要发送到对话吗？'
-          : 'This note has unsaved changes. Send to chat anyway?'
-      );
-      if (!ok) return;
+      // A8: shared confirm instead of a blocking native confirm().
+      setConfirmSendToChat(true);
+      return;
     }
     onSendToChat({ title, body, type, noteId: note?.id });
   };
@@ -544,32 +573,35 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       <p className="text-[11px] uppercase tracking-wide text-text-muted font-bold px-2 py-1">
                         {language === 'zh' ? 'AI 编辑结果' : 'AI Edit Result'}
                       </p>
+                      {pendingAiType && pendingAiType !== type && (
+                        <p
+                          data-testid="ai-type-change-hint"
+                          className="mx-2 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-[12px] font-bold text-amber-800"
+                        >
+                          {language === 'zh'
+                            ? `应用后将把类型改为「${typeOptions.find(o => o.value === pendingAiType)?.labelZh ?? pendingAiType}」`
+                            : `Applying will also change type to "${typeOptions.find(o => o.value === pendingAiType)?.label ?? pendingAiType}"`}
+                        </p>
+                      )}
                       <div className="px-2 py-1.5 max-h-48 overflow-y-auto text-xs text-text-heading bg-surface rounded border border-border whitespace-pre-wrap font-mono">
                         {aiEditResult}
                       </div>
                       <div className="flex items-center gap-1.5 px-2 pt-1">
                         <button
-                          onClick={() => {
-                            setBody(aiEditResult);
-                            setAiEditResult('');
-                            setShowAiEditPanel(false);
-                          }}
+                          onClick={() => applyAiEditResult('replace')}
+                          data-testid="ai-edit-apply"
                           className="px-2.5 py-1 text-[12px] font-bold bg-accent text-white rounded hover:bg-accent/90 transition-colors"
                         >
                           {language === 'zh' ? '替换' : 'Replace'}
                         </button>
                         <button
-                          onClick={() => {
-                            setBody(prev => prev + '\n\n' + aiEditResult);
-                            setAiEditResult('');
-                            setShowAiEditPanel(false);
-                          }}
+                          onClick={() => applyAiEditResult('append')}
                           className="px-2.5 py-1 text-[12px] font-bold border border-border rounded hover:border-accent/50 hover:text-accent transition-colors"
                         >
                           {language === 'zh' ? '追加' : 'Append'}
                         </button>
                         <button
-                          onClick={() => { setAiEditResult(''); }}
+                          onClick={discardAiEditResult}
                           className="px-2.5 py-1 text-[12px] text-text-muted hover:text-text-heading transition-colors"
                         >
                           {language === 'zh' ? '返回' : 'Back'}
@@ -892,6 +924,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        show={confirmSendToChat}
+        title={language === 'zh' ? '发送到对话？' : 'Send to chat?'}
+        message={language === 'zh'
+          ? '笔记有未保存的修改，发送到对话会丢失这些修改。'
+          : 'This note has unsaved changes. Sending it to chat will discard them.'}
+        confirmText={language === 'zh' ? '仍然发送' : 'Send anyway'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        variant="accent"
+        onConfirm={() => {
+          setConfirmSendToChat(false);
+          onSendToChat?.({ title, body, type, noteId: note?.id });
+        }}
+        onCancel={() => setConfirmSendToChat(false)}
+      />
     </div>
   );
 };

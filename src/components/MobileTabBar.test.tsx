@@ -70,7 +70,7 @@ describe('MobileTabBar', () => {
     expect(screen.getByText('问 AI')).toBeTruthy();
   });
 
-  it('shows the add-task affordance when onAddTask is provided', () => {
+  it('omits the floating add-task FAB (G2/A1 — sink the input bar above the tab bar instead)', () => {
     const onAddTask = vi.fn();
     render(
       <MobileTabBar
@@ -81,9 +81,8 @@ describe('MobileTabBar', () => {
         onAddTask={onAddTask}
       />,
     );
-    const addBtn = screen.getByTestId('mobile-tab-add-task');
-    expect(addBtn).toBeTruthy();
-    fireEvent.click(addBtn);
-    expect(onAddTask).toHaveBeenCalledOnce();
+    // The FAB was removed: the TodayInputBar is the single capture path now
+    // and sinks above the tab bar on phones, so no separate "+ Add task" button.
+    expect(screen.queryByTestId('mobile-tab-add-task')).toBeNull();
   });
 });

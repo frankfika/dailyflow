@@ -48,27 +48,27 @@ export function UpdateNotificationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="update-modal-title" className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg border border-stone-200 bg-white p-6 shadow-lg dark:border-stone-700 dark:bg-stone-800">
+      <div role="dialog" aria-modal="true" aria-labelledby="update-modal-title" className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg border border-border bg-surface-white p-6 shadow-lg">
         <button
           onClick={onClose}
           aria-label={language === 'zh' ? '关闭' : 'Close'}
-          className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+          className="absolute top-4 right-4 text-text-muted hover:text-text-heading"
         >
           <X size={20} />
         </button>
 
         <div className="mb-4">
-          <h2 id="update-modal-title" className="text-xl font-semibold text-stone-900 dark:text-stone-100">
+          <h2 id="update-modal-title" className="text-xl font-semibold text-text-heading">
             {language === 'zh' ? '发现新版本' : 'New Update Available'}
           </h2>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+          <p className="mt-1 text-sm text-text-muted">
             {language === 'zh' ? `DailyFlow ${updateInfo.latestVersion} 现已可用` : `DailyFlow ${updateInfo.latestVersion} is now available`}
           </p>
         </div>
 
         {updateInfo.releaseNotes && (
-          <div className="mb-4 max-h-48 overflow-y-auto rounded border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
-            <div className="prose prose-sm dark:prose-invert">
+          <div className="mb-4 max-h-48 overflow-y-auto rounded border border-border bg-background p-3 text-sm text-text-main">
+            <div className="prose prose-sm">
               {updateInfo.releaseNotes.split('\n').map((line, i) => (
                 <p key={i} className="mb-1">
                   {line}
@@ -79,7 +79,7 @@ export function UpdateNotificationModal({
         )}
 
         {alreadyDownloaded && !isDownloading && (
-          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <div className="mb-4 rounded border border-success/30 bg-success-light p-3 text-sm text-success">
             {language === 'zh'
               ? '更新包已在后台下载完成，点击「重启更新」即可生效。'
               : 'The update has been downloaded in the background. Click "Restart & Update" to apply.'}
@@ -89,33 +89,33 @@ export function UpdateNotificationModal({
         {isDownloading && !alreadyDownloaded && (
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-stone-600 dark:text-stone-400">{language === 'zh' ? '正在下载…' : 'Downloading...'}</span>
-              <span className="font-medium text-stone-900 dark:text-stone-100">
+              <span className="text-text-muted">{language === 'zh' ? '正在下载…' : 'Downloading...'}</span>
+              <span className="font-medium text-text-heading">
                 {downloadProgress}%
               </span>
             </div>
-            <div role="progressbar" aria-label={language === 'zh' ? '下载进度' : 'Download progress'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={downloadProgress} className="h-2 w-full overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
+            <div role="progressbar" aria-label={language === 'zh' ? '下载进度' : 'Download progress'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={downloadProgress} className="h-2 w-full overflow-hidden rounded-full bg-border">
               <div
-                className="h-full bg-blue-500 transition-all duration-300"
+                className="h-full bg-accent transition-all duration-300"
                 style={{ width: `${downloadProgress}%` }}
               />
             </div>
           </div>
         )}
 
-        {errorMessage && <div role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+        {errorMessage && <div role="alert" className="mb-4 rounded border border-danger/30 bg-danger-light p-3 text-sm text-danger">{errorMessage}</div>}
 
         <div className="flex gap-3">
           <button
             onClick={onSkipVersion}
-            className="flex-1 rounded border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+            className="flex-1 rounded border border-border bg-surface-white px-4 py-2 text-sm font-medium text-text-main hover:bg-surface"
             disabled={isDownloading}
           >
             {language === 'zh' ? '跳过此版本' : 'Skip This Version'}
           </button>
           <button
             onClick={handleUpdate}
-            className="flex-1 rounded bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            className="flex-1 rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-warm disabled:opacity-50"
             disabled={isDownloading}
           >
             {isDownloading
@@ -128,7 +128,7 @@ export function UpdateNotificationModal({
 
         <button
           onClick={onClose}
-          className="mt-3 w-full text-center text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+          className="mt-3 w-full text-center text-sm text-text-muted hover:text-text-heading"
           disabled={isDownloading}
         >
           {language === 'zh' ? '稍后提醒' : 'Remind Me Later'}

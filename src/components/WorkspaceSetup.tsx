@@ -131,7 +131,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
             <span className="text-xl font-semibold">3</span>
           </div>
           <h1 className="text-2xl font-bold mb-2">{t.title}</h1>
-          <p className="text-muted-foreground text-sm">{t.subtitle}</p>
+          <p className="text-text-muted text-sm">{t.subtitle}</p>
         </div>
 
         {/* Form */}
@@ -206,7 +206,7 @@ export function WorkspaceSetup({ onComplete, language }: WorkspaceSetupProps) {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-stone-600">
+            <div className="flex items-center gap-2 text-sm text-danger" role="alert">
               <AlertCircle className="w-4 h-4" />
               {error}
             </div>

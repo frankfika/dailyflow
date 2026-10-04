@@ -92,6 +92,22 @@ export interface WorkspaceContext {
   workspaceId: string;
 }
 
+/**
+ * A v2 note annotated with its storage origin (WP-45 / interface contract 4).
+ *
+ * `origin: 'v2'` items are native NoteDocuments in `.dailyflow/notes/` and
+ * writable. `origin: 'v1'` items are read-only projections of legacy v1
+ * files under `<workspaceRoot>/Notes/` (YYYY/MM subfolders) — never
+ * written by v2.
+ */
+export type NoteOrigin = 'v1' | 'v2';
+
+export type NoteWithOrigin = NoteDocument & {
+  origin: NoteOrigin;
+  writable: boolean;
+};
+
+
 export interface WriteOptions {
   /** expectedHash from the previous read; triggers conflict if mismatched. */
   expectedHash?: string;
@@ -554,6 +570,130 @@ export class V2Repository {
       entity: { type: 'note', id },
     });
     return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // V1 legacy notes — read-only aggregation (WP-45 / interface contract 4)
+  // -------------------------------------------------------------------------
+  //
+  // v1 QuickNote data lives in `<workspaceRoot>/Notes/YYYY/MM/*.md` and is
+  // physically isolated from the v2 `.dailyflow/notes/` tree. Until the
+  // migration sprint happens, the v2 notes list surfaces those files as
+  // READ-ONLY projections so users can see (and search) everything they
+  // wrote before. Hard rules, mirrored by the tests:
+  //   - never write, move, rename, or delete anything under Notes/
+  //   - ids are deterministic (`v1_<sha256 of the workspace-relative path>`)
+  //     so the same file always maps to the same read-only id
+  //   - title comes from the YAML frontmatter `title`, else the file name
+  //   - createdAt/updatedAt come from the file mtime
+
+  /** Cap on how many v1 files the list aggregation walks (moderate default). */
+  static readonly V1_NOTE_SCAN_LIMIT = 500;
+  /** Cap on the body text carried by list items; GET single returns full text. */
+  static readonly V1_NOTE_LIST_BODY_CHARS = 5000;
+  /** Body lines indexed for v1 search (contract 4: "title + first N lines"). */
+  static readonly V1_NOTE_SEARCH_BODY_LINES = 40;
+
+  private v1NotesDir(): string {
+    return path.join(this.layout.root, 'Notes');
+  }
+
+  /** Deterministic read-only id for a v1 note file (posix-normalised rel path). */
+  private v1NoteId(notesDir: string, filePath: string): string {
+    const rel = path.relative(notesDir, filePath).split(path.sep).join('/');
+    return `v1_${sha256(rel).slice(0, 24)}`;
+  }
+
+  /**
+   * Walk the legacy `Notes/` tree recursively (skipping dot-files/dirs),
+   * most recent first. Read-only: readdir + stat only.
+   */
+  private async listV1NoteFiles(limit: number = V2Repository.V1_NOTE_SCAN_LIMIT): Promise<Array<{ id: string; filePath: string; mtimeMs: number }>> {
+    const notesDir = this.v1NotesDir();
+    const files = await listFilesRecursive(notesDir, ['.md']);
+    const out: Array<{ id: string; filePath: string; mtimeMs: number }> = [];
+    for (const f of files) {
+      const rel = path.relative(notesDir, f);
+      // Skip hidden files/directories, mirroring v1's scanNotesRecursive.
+      if (rel.split(path.sep).some((seg) => seg.startsWith('.'))) continue;
+      try {
+        const st = await fs.stat(f);
+        out.push({ id: this.v1NoteId(notesDir, f), filePath: f, mtimeMs: st.mtimeMs });
+      } catch {
+        // File vanished mid-scan — skip.
+      }
+    }
+    out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return out.slice(0, limit);
+  }
+
+  /**
+   * Parse one v1 note file into a NoteDocument-compatible read-only
+   * projection. Returns null for unreadable files (never throws — the
+   * aggregation must not break the v2 list over one bad legacy file).
+   */
+  private async readV1NoteFile(notesDir: string, filePath: string): Promise<NoteWithOrigin | null> {
+    try {
+      const [text, st] = await Promise.all([fs.readFile(filePath, 'utf8'), fs.stat(filePath)]);
+      const { data, body } = parseFrontmatter(text);
+      const frontmatterTitle = typeof (data as Record<string, unknown>).title === 'string'
+        ? ((data as Record<string, unknown>).title as string).trim()
+        : '';
+      const fileName = path.basename(filePath, '.md');
+      const title = (frontmatterTitle || fileName).slice(0, 500);
+      const mtimeIso = st.mtime.toISOString();
+      const doc: NoteWithOrigin = {
+        id: this.v1NoteId(notesDir, filePath),
+        schemaVersion: 1,
+        createdAt: mtimeIso,
+        updatedAt: mtimeIso,
+        createdBy: 'user',
+        workspaceId: this.workspaceId,
+        title,
+        body: body.replace(/\s+$/, ''),
+        kind: 'general',
+        state: 'active',
+        projectIds: [],
+        personIds: [],
+        sourceIds: [],
+        pinned: false,
+        autoSaveVersion: 0,
+        contentHash: sha256(body),
+        commitmentIds: [],
+        origin: 'v1',
+        writable: false,
+      };
+      return doc;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Read-only v1 notes for list views. Bodies are truncated; see GET single. */
+  async listV1NoteDocuments(): Promise<NoteWithOrigin[]> {
+    const notesDir = this.v1NotesDir();
+    const files = await this.listV1NoteFiles();
+    const out: NoteWithOrigin[] = [];
+    for (const f of files) {
+      const doc = await this.readV1NoteFile(notesDir, f.filePath);
+      if (!doc) continue;
+      out.push({
+        ...doc,
+        body: doc.body.slice(0, V2Repository.V1_NOTE_LIST_BODY_CHARS),
+      });
+    }
+    return out;
+  }
+
+  /** Full-text read-only lookup of a single v1 note by its `v1_` id. */
+  async getV1NoteDocument(id: string): Promise<NoteWithOrigin | null> {
+    if (!id.startsWith('v1_')) return null;
+    const notesDir = this.v1NotesDir();
+    // Uncapped: a v1 file beyond the list cap must still be openable by id.
+    const files = await this.listV1NoteFiles(Number.POSITIVE_INFINITY);
+    const match = files.find((f) => f.id === id);
+    if (!match) return null;
+    return this.readV1NoteFile(notesDir, match.filePath);
   }
 
   // -------------------------------------------------------------------------

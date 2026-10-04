@@ -197,11 +197,55 @@ function startOfWeek(now: Date): number {
   return d.getTime();
 }
 
+/**
+ * C10 — weekly quota is billed per distinct entity, not per fired record:
+ * the same entity firing several times this week counts once. Resolved
+ * (accepted/dismissed) entities keep their own hasResolvedEntityThisWeek
+ * suppression, unchanged.
+ */
 export function countThisWeek(state: ProactiveState, now: Date, channel?: ProactiveChannel): number {
   const weekStart = startOfWeek(now);
-  return state.entries.filter(
-    e => new Date(e.firedAt).getTime() >= weekStart && (channel === undefined || e.channel === channel),
-  ).length;
+  const entityIds = new Set<string>();
+  for (const e of state.entries) {
+    if (new Date(e.firedAt).getTime() < weekStart) continue;
+    if (channel !== undefined && e.channel !== channel) continue;
+    // Entries recorded without an entity (recordProposalAction's fallback)
+    // each bill their own empty-id slot so show-based history still counts.
+    entityIds.add(e.entityId);
+  }
+  return entityIds.size;
+}
+
+/** True if the entity already has any history entry fired this week. */
+export function hasEntityEntryThisWeek(state: ProactiveState, entityId: string, now: Date): boolean {
+  const weekStart = startOfWeek(now);
+  return state.entries.some(
+    e => e.entityId === entityId && new Date(e.firedAt).getTime() >= weekStart,
+  );
+}
+
+export interface ProactiveQuota {
+  /** Distinct entities billed this week. */
+  used: number;
+  /** maxPerWeek from the proactive config. */
+  max: number;
+  /** ISO instant of next Monday 00:00 local time — when the quota resets. */
+  resetAt: string;
+}
+
+/**
+ * C10 / interface contract 2: quota snapshot for the scan response.
+ * `used` counts distinct entities this week; `resetAt` is next Monday
+ * 00:00 local time (serialized as ISO — the instant is local midnight).
+ */
+export function computeProactiveQuota(state: ProactiveState, config: ProactiveConfig, now: Date): ProactiveQuota {
+  const nextWeekStart = new Date(startOfWeek(now));
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+  return {
+    used: countThisWeek(state, now),
+    max: config.maxPerWeek,
+    resetAt: nextWeekStart.toISOString(),
+  };
 }
 
 export function hasResolvedEntityThisWeek(state: ProactiveState, entityId: string, now: Date): boolean {
@@ -240,7 +284,9 @@ export async function scanProactiveProposals(
   if (isInQuietHours(now, config)) return [];
 
   // Limit 3 — weekly cap (across channels; per-channel is also enforced
-  // because the client typically only fires from one channel.)
+  // because the client typically only fires from one channel).
+  // C10: the counter is per distinct entity, so re-showing the same
+  // overdue task within the week does not burn the remaining quota.
   const firedThisWeek = countThisWeek(state, now);
   if (firedThisWeek >= config.maxPerWeek) return [];
 
@@ -388,4 +434,60 @@ export async function recordProposalAction(
   const next: ProactiveState = { entries };
   await saveProactiveState(next);
   return next;
+}
+
+/**
+ * C11 — dismiss a batch of proposals by entity id (the dismiss-all path).
+ *
+ * Proposal ids are regenerated on every scan, so the client can only
+ * reliably reference entities. For each unique entityId:
+ *   1. any open (unresolved) history entries are marked `dismissed`;
+ *   2. if the entity has no history at all, a synthetic dismissed entry
+ *      is appended so per-entity suppression still holds;
+ *   3. entities already resolved this week are left untouched (idempotent
+ *      repeats don't duplicate records).
+ *
+ * Returns the next state and how many distinct entities were processed.
+ */
+export async function dismissProactiveEntities(
+  entityIds: string[],
+  stateInput?: ProactiveState,
+): Promise<{ state: ProactiveState; dismissed: number }> {
+  const state = stateInput ?? (await loadProactiveState());
+  const unique = [...new Set(entityIds.map(id => id.trim()).filter(id => id.length > 0))];
+  if (unique.length === 0) return { state, dismissed: 0 };
+
+  const nowIso = new Date().toISOString();
+  const weekStart = startOfWeek(new Date(nowIso));
+  const entries = [...state.entries];
+  for (const entityId of unique) {
+    let touchedOpenEntry = false;
+    let resolvedThisWeek = false;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i]!;
+      if (e.entityId !== entityId) continue;
+      if (e.outcome) {
+        if (e.resolvedAt && new Date(e.resolvedAt).getTime() >= weekStart) {
+          resolvedThisWeek = true;
+        }
+        continue;
+      }
+      entries[i] = { ...e, outcome: 'dismissed', resolvedAt: nowIso };
+      touchedOpenEntry = true;
+    }
+    if (!touchedOpenEntry && !resolvedThisWeek) {
+      entries.push({
+        proposalId: `pp_${newId('prop')}`,
+        kind: 'overdue_task',
+        entityId,
+        channel: 'today_load',
+        firedAt: nowIso,
+        outcome: 'dismissed',
+        resolvedAt: nowIso,
+      });
+    }
+  }
+  const next: ProactiveState = { entries };
+  await saveProactiveState(next);
+  return { state: next, dismissed: unique.length };
 }

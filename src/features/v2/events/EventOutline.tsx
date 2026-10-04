@@ -20,6 +20,7 @@ type Copy = {
   pickDate: string;
   confirm: string;
   cancel: string;
+  changeDate: string;
 };
 
 const COPY: Record<'en' | 'zh', Copy> = {
@@ -38,6 +39,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     pickDate: 'Pick date',
     confirm: 'Schedule',
     cancel: 'Cancel',
+    changeDate: 'Click to change date',
   },
   zh: {
     addChild: '添加子节点',
@@ -54,6 +56,7 @@ const COPY: Record<'en' | 'zh', Copy> = {
     pickDate: '选择日期',
     confirm: '安排',
     cancel: '取消',
+    changeDate: '点击改日期',
   },
 };
 
@@ -91,6 +94,9 @@ interface EventOutlineProps {
   /** T9: pulse highlight the row matching pulseNodeId when pulseTick bumps. */
   pulseNodeId?: string | null;
   pulseTick?: number;
+  /** Just-scheduled node id — drives an in-place accent pulse (green flash)
+      so the user has a visible anchor for the "Add to Task" → "Today" click. */
+  recentlyScheduledNodeId?: string | null;
 }
 
 function buildRows(event: EventDetail, collapsed: Set<string>): OutlineRow[] {
@@ -151,6 +157,7 @@ export function EventOutline({
   onUpdateNodeKind,
   pulseNodeId,
   pulseTick,
+  recentlyScheduledNodeId,
 }: EventOutlineProps) {
   const copy = COPY[language];
   const rows = useMemo(() => buildRows(event, collapsedIds), [event, collapsedIds]);
@@ -381,6 +388,7 @@ export function EventOutline({
             text={textFor(root)}
             isDragging={dragNodeId === root.node.id}
             isDropTarget={dropTargetId === root.node.id && dragNodeId !== null && dragNodeId !== root.node.id}
+            recentlyScheduledNodeId={recentlyScheduledNodeId}
             onSelect={() => onSelect(root.node.id)}
             onStartEdit={() => onStartEdit(root.node.id)}
             onToggleCollapse={() => onToggleCollapse(root.node.id)}
@@ -393,7 +401,7 @@ export function EventOutline({
             }}
             onAddChild={() => void onAddChild(root.node.id, '').then(onStartEdit)}
             onDelete={undefined}
-            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === root.node.id ? null : { nodeId: root.node.id, date: today })) : undefined}
+            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === root.node.id ? null : { nodeId: root.node.id, date: root.node.execution?.scheduledDate ?? today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === root.node.id}
             schedulePicker={schedulePicker?.nodeId === root.node.id ? (
               <ScheduleDatePopover
@@ -433,6 +441,7 @@ export function EventOutline({
             text={textFor(row)}
             isDragging={dragNodeId === row.node.id}
             isDropTarget={dropTargetId === row.node.id && dragNodeId !== null && dragNodeId !== row.node.id}
+            recentlyScheduledNodeId={recentlyScheduledNodeId}
             onSelect={() => onSelect(row.node.id)}
             onStartEdit={() => onStartEdit(row.node.id)}
             onToggleCollapse={() => onToggleCollapse(row.node.id)}
@@ -446,7 +455,7 @@ export function EventOutline({
             onAddChild={() => void onAddChild(row.node.id, '').then(onStartEdit)}
             onAddSibling={() => void onAddSibling(row.node.id, '').then(onStartEdit)}
             onDelete={onDelete}
-            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === row.node.id ? null : { nodeId: row.node.id, date: today })) : undefined}
+            onOpenSchedulePicker={onScheduleTask ? () => setSchedulePicker((prev) => (prev?.nodeId === row.node.id ? null : { nodeId: row.node.id, date: row.node.execution?.scheduledDate ?? today })) : undefined}
             schedulePickerOpen={schedulePicker?.nodeId === row.node.id}
             schedulePicker={schedulePicker?.nodeId === row.node.id ? (
               <ScheduleDatePopover
@@ -460,7 +469,7 @@ export function EventOutline({
                 shiftDate={shiftDate}
                 testId="outline-schedule-popover"
                 language={language}
-                showExtras
+                showExtras={!row.node.execution}
               />
             ) : undefined}
             onDragStart={() => setDragNodeId(row.node.id)}
@@ -523,6 +532,7 @@ interface OutlineItemProps {
   text: string;
   isDragging: boolean;
   isDropTarget: boolean;
+  recentlyScheduledNodeId?: string | null;
   onSelect: () => void;
   onStartEdit: () => void;
   onToggleCollapse: () => void;
@@ -552,6 +562,7 @@ function OutlineItem({
   text,
   isDragging,
   isDropTarget,
+  recentlyScheduledNodeId,
   onSelect,
   onStartEdit,
   onToggleCollapse,
@@ -577,7 +588,7 @@ function OutlineItem({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 px-2 py-0.5 transition-[padding] duration-150 hover:pr-[104px] ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''}`}
+      className={`group relative flex items-center gap-1 px-2 py-0.5 transition-[padding] duration-150 hover:pr-[104px] ${isSelected ? 'bg-accent/8' : isTaskRow ? 'bg-accent/[0.04] hover:bg-accent/[0.07]' : 'hover:bg-black/[0.02]'} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'ring-2 ring-accent ring-inset' : ''} ${recentlyScheduledNodeId === row.node.id ? 'outline-row-just-scheduled' : ''}`}
       style={{ paddingLeft: `${12 + row.depth * 18}px` }}
       data-testid={`outline-row-${row.node.id}`}
       data-task-row={isTaskRow || undefined}
@@ -616,14 +627,18 @@ function OutlineItem({
         </span>
       )}
 
-      {isTaskRow && (
-        <span
-          className="ml-auto flex shrink-0 items-center gap-1 pr-1 text-[11px] tabular-nums text-gray-400"
+      {isTaskRow && onOpenSchedulePicker && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
+          className="relative z-20 flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] tabular-nums text-gray-400 transition-colors hover:bg-accent/10 hover:text-accent"
+          title={copy.changeDate}
+          aria-label={`${copy.changeDate}: ${row.node.execution!.scheduledDate}`}
           data-testid={`outline-task-date-${row.node.id}`}
         >
           <ListTodo className="h-3 w-3" aria-hidden="true" />
           {row.node.execution!.scheduledDate.slice(5)}
-        </span>
+        </button>
       )}
 
       {isEditing ? (
@@ -656,19 +671,21 @@ function OutlineItem({
           // text being typed — hide it (and make it unclickable) until blur.
           schedulePickerOpen ? 'opacity-100' : isEditing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
       >
-        {!isRoot && !row.node.execution && onOpenSchedulePicker && (
+        {!isRoot && onOpenSchedulePicker && (
           <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent hover:bg-accent/20"
-              title={copy.addToTask}
-              aria-label={copy.addToTask}
-              aria-expanded={schedulePickerOpen}
-              data-testid={`outline-add-task-${row.node.id}`}
-            >
-              <ListTodo className="h-3 w-3" />
-            </button>
+            {!row.node.execution && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onOpenSchedulePicker(); }}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent hover:bg-accent/20"
+                title={copy.addToTask}
+                aria-label={copy.addToTask}
+                aria-expanded={schedulePickerOpen}
+                data-testid={`outline-add-task-${row.node.id}`}
+              >
+                <ListTodo className="h-3 w-3" />
+              </button>
+            )}
             {schedulePickerOpen && schedulePicker}
           </div>
         )}

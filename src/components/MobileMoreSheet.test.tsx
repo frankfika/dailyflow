@@ -16,7 +16,7 @@ describe('MobileMoreSheet', () => {
     expect(container.querySelector('[data-testid="mobile-more-sheet"]')).toBeNull();
   });
 
-  it('renders all four items when open in English', () => {
+  it('renders all five items when open in English, with Ask AI first (G3)', () => {
     render(
       <MobileMoreSheet
         open
@@ -26,14 +26,19 @@ describe('MobileMoreSheet', () => {
         onSelectTab={vi.fn()}
       />,
     );
+    expect(screen.getByTestId('mobile-more-ai-chat')).toBeTruthy();
     expect(screen.getByTestId('mobile-more-calendar')).toBeTruthy();
     expect(screen.getByTestId('mobile-more-memory')).toBeTruthy();
     expect(screen.getByTestId('mobile-more-team')).toBeTruthy();
     expect(screen.getByTestId('mobile-more-settings')).toBeTruthy();
+    expect(screen.getByText('Ask AI')).toBeTruthy();
     expect(screen.getByText('Calendar')).toBeTruthy();
     expect(screen.getByText('Memory')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByText('Settings')).toBeTruthy();
+    // Ask AI leads the More sheet, mirroring the desktop sidebar.
+    const list = screen.getByRole('list');
+    expect(list.firstElementChild).toBe(screen.getByTestId('mobile-more-ai-chat').closest('li'));
   });
 
   it('renders Chinese labels when language=zh', () => {
@@ -46,10 +51,28 @@ describe('MobileMoreSheet', () => {
         onSelectTab={vi.fn()}
       />,
     );
+    expect(screen.getByText('问 AI')).toBeTruthy();
     expect(screen.getByText('日历')).toBeTruthy();
     expect(screen.getByText('记忆')).toBeTruthy();
     expect(screen.getByText('团队')).toBeTruthy();
     expect(screen.getByText('设置')).toBeTruthy();
+  });
+
+  it('routes to ai-chat when the Ask AI row is clicked', () => {
+    const onSelectTab = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <MobileMoreSheet
+        open
+        onClose={onClose}
+        language="en"
+        activeTab="today"
+        onSelectTab={onSelectTab}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('mobile-more-ai-chat'));
+    expect(onSelectTab).toHaveBeenCalledWith('ai-chat');
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('calls onSelectTab with the picked tab and closes on item click', () => {

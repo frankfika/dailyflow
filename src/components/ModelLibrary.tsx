@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   Plus, Pencil, Trash2, Check, Loader2, Sparkles, Play, CheckCircle2,
@@ -17,7 +17,9 @@ import {
   type ProviderTemplate,
 } from '../types/models';
 import { aiApi, DOMAIN_EVENTS } from '../api/client';
+import { classifyAiError, type AiErrorCategory } from '../utils/aiErrorMessage';
 import { ProviderIcon } from './ProviderIcon';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ModelLibraryProps {
   language: 'en' | 'zh';
@@ -27,20 +29,68 @@ interface ModelLibraryProps {
 type CategoryFilter = 'all' | 'official' | 'aggregator' | 'custom';
 type ModelRoles = NonNullable<ProviderConfigStore['roles']>;
 
+interface TestResult {
+  id: string;
+  status: 'success' | 'error';
+  message: string;
+  /** WP-3 contract category (either carried by the error object or derived
+   *  through the shared aiErrorMessage classifier). */
+  category?: AiErrorCategory;
+}
+
+/**
+ * C16: the four error categories the WP-3 contract guarantees get short,
+ * actionable copy plus an "open settings" escape hatch. Categories outside
+ * this map (bad_request / timeout / unknown) fall back to the raw server
+ * message. Copy matches the server contract `{ error, category }` — the
+ * category itself is resolved with the shared classifyAiError helper instead
+ * of a local re-implementation.
+ */
+const ACTIONABLE_ERROR_COPY: Partial<Record<AiErrorCategory, { zh: string; en: string }>> = {
+  auth: {
+    zh: 'API Key 无效 · 请检查 Key 设置',
+    en: 'Invalid API key · Check your key settings',
+  },
+  not_found: {
+    zh: '模型 ID 或 Base URL 不正确 · Base URL 常需以 /v1 结尾',
+    en: 'Wrong model ID or Base URL · The Base URL usually needs to end with /v1',
+  },
+  rate_limit: {
+    zh: '触发限流 · 请稍后再试',
+    en: 'Rate limited · Please try again later',
+  },
+  network: {
+    zh: '网络不可达 · 检查代理或离线状态',
+    en: 'Network unreachable · Check your proxy or offline status',
+  },
+};
+
+/** How long the "已保存 / Saved" confirmation stays visible (C18). */
+const SAVE_TOAST_MS = 1500;
+
 export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps) {
   const [configs, setConfigs] = useState<ProviderConfig[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [roles, setRoles] = useState<ModelRoles>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<ProviderConfig>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<CategoryFilter>('all');
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ id: string; status: 'success' | 'error'; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [syncError, setSyncError] = useState<string | null>(null);
+  // C18: saving used to close the drawer with zero feedback — the user could
+  // not tell whether the click landed. A short inline confirmation covers it
+  // (the component has no toast prop and its parents are outside this WP).
+  const [saveToastVisible, setSaveToastVisible] = useState(false);
+  const saveToastTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (saveToastTimerRef.current !== null) window.clearTimeout(saveToastTimerRef.current);
+  }, []);
 
   // Backend persistence is the source of truth for server-side AI. Surface
   // sync failures instead of letting users believe a save reached the server.
@@ -162,10 +212,19 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
       if (newActiveId === newConfig.id) onProviderActivate?.(newConfig);
     }
     closeDrawer();
+    // C18: confirm the save survived (the drawer closing alone reads as
+    // "did anything happen?"). Auto-dismisses after 1.5s.
+    setSaveToastVisible(true);
+    if (saveToastTimerRef.current !== null) window.clearTimeout(saveToastTimerRef.current);
+    saveToastTimerRef.current = window.setTimeout(() => {
+      saveToastTimerRef.current = null;
+      setSaveToastVisible(false);
+    }, SAVE_TOAST_MS);
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm(language === 'zh' ? '确定删除此供应商配置？' : 'Delete this provider config?')) return;
+  // A8: stage the delete behind the shared ConfirmDialog.
+  const handleDelete = (id: string) => setPendingDeleteId(id);
+  const executeDelete = (id: string) => {
     const updated = configs.filter(c => c.id !== id);
     let newActiveId = activeId;
     if (activeId === id) {
@@ -216,15 +275,50 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
         message: language === 'zh' ? `连接成功: ${summary.slice(0, 50)}` : `Connected: ${summary.slice(0, 50)}`,
       });
     } catch (err: any) {
+      const rawMessage = err?.message || String(err);
+      // Prefer the WP-3 contract field when the error object carries it;
+      // otherwise reuse the shared aiErrorMessage classifier on the
+      // sanitized text + HTTP status (401/404/429 come through as
+      // V1ApiError.status from the sidecar).
+      const contractCategory: AiErrorCategory | undefined =
+        typeof err?.category === 'string' ? (err.category as AiErrorCategory) : undefined;
+      const status = typeof err?.upstreamStatus === 'number'
+        ? err.upstreamStatus
+        : typeof err?.status === 'number'
+          ? err.status
+          : undefined;
+      const category = contractCategory ?? classifyAiError(rawMessage, status).category;
       setTestResult({
         id: key,
         status: 'error',
-        message: err.message || String(err),
+        message: rawMessage,
+        category,
       });
     } finally {
       setTestingId(null);
     }
   };
+
+  /**
+   * C16: "open settings" escape hatch for actionable test errors. For a
+   * saved provider it reuses the existing edit-drawer flow (where the API
+   * key / Base URL live); when the failure came from the drawer form
+   * itself, focus the offending field instead.
+   */
+  const openErrorSettings = (result: TestResult) => {
+    if (result.id !== '_new') {
+      const config = configs.find(c => c.id === result.id);
+      if (config) {
+        openEditDrawer(config);
+        return;
+      }
+    }
+    const fieldId = result.category === 'auth' ? 'model-library-input-api-key' : 'model-library-input-base-url';
+    document.getElementById(fieldId)?.focus();
+  };
+
+  const isActionableError = (result: TestResult): boolean =>
+    result.status === 'error' && result.category !== undefined && ACTIONABLE_ERROR_COPY[result.category] !== undefined;
 
   const filteredTemplates = useMemo(() => {
     if (filterCategory === 'all') return PROVIDER_TEMPLATES;
@@ -256,6 +350,16 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
               ? `配置已保存在本机，但同步到后端失败（${syncError}）。会议纪要、Inbox 智能提取等服务端 AI 功能可能仍显示"AI 未配置"，请检查后端服务后重试。`
               : `Saved locally, but syncing to the backend failed (${syncError}). Server-side AI features may still report "AI not configured".`}
           </span>
+        </div>
+      )}
+      {!drawerOpen && saveToastVisible && (
+        <div
+          role="status"
+          data-testid="model-library-save-toast"
+          className="mx-5 mt-3 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+          {language === 'zh' ? '已保存' : 'Saved'}
         </div>
       )}
       {!drawerOpen && (
@@ -413,7 +517,11 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                         : 'bg-red-50 text-red-700'
                     }`}
                   >
-                    {testResult.message}
+                    <TestResultBody
+                      result={testResult}
+                      language={language}
+                      onOpenSettings={() => openErrorSettings(testResult)}
+                    />
                   </motion.div>
                 )}
               </motion.div>
@@ -567,6 +675,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                 </label>
                 <input
                   type="text"
+                  id="model-library-input-base-url"
                   value={form.baseUrl || ''}
                   onChange={e => setForm({ ...form, baseUrl: e.target.value })}
                   onBlur={() => setTouched(prev => ({ ...prev, baseUrl: true }))}
@@ -602,6 +711,7 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                   <div className="relative">
                     <input
                       type={showApiKey ? 'text' : 'password'}
+                      id="model-library-input-api-key"
                       value={form.apiKey || ''}
                       onChange={e => setForm({ ...form, apiKey: e.target.value })}
                       onBlur={() => setTouched(prev => ({ ...prev, apiKey: true }))}
@@ -660,7 +770,11 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
                       testResult.status === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
                     }`}
                   >
-                    {testResult.message}
+                    <TestResultBody
+                      result={testResult}
+                      language={language}
+                      onOpenSettings={() => openErrorSettings(testResult)}
+                    />
                   </motion.div>
                 )}
               </div>
@@ -685,6 +799,60 @@ export function ModelLibrary({ language, onProviderActivate }: ModelLibraryProps
             </button>
           </div>
         </div>
+      )}
+      <ConfirmDialog
+        show={pendingDeleteId !== null}
+        title={language === 'zh' ? '删除供应商配置？' : 'Delete provider config?'}
+        message={(() => {
+          const target = configs.find(c => c.id === pendingDeleteId);
+          return language === 'zh'
+            ? `「${target?.name ?? pendingDeleteId}」将从本机移除；正在使用它的角色会回退到其它配置。`
+            : `"${target?.name ?? pendingDeleteId}" will be removed from this device; roles using it fall back to another config.`;
+        })()}
+        confirmText={language === 'zh' ? '删除' : 'Delete'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        variant="danger"
+        onConfirm={() => {
+          if (pendingDeleteId) executeDelete(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        onCancel={() => setPendingDeleteId(null)}
+      />
+    </div>
+  );
+}
+
+/**
+ * C16: body of a connection-test result. Actionable categories render the
+ * contract copy plus an "open settings" CTA (P3: feedback must be
+ * operable); everything else keeps the raw server message.
+ */
+function TestResultBody({
+  result,
+  language,
+  onOpenSettings,
+}: {
+  result: TestResult;
+  language: 'en' | 'zh';
+  onOpenSettings: () => void;
+}) {
+  const copy = result.status === 'error' && result.category
+    ? ACTIONABLE_ERROR_COPY[result.category]
+    : undefined;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span data-testid="test-result-message">
+        {copy ? copy[language] : result.message}
+      </span>
+      {copy && (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          data-testid="test-error-open-settings"
+          className="ml-auto inline-flex items-center gap-1 rounded border border-black/10 bg-white/70 px-1.5 py-0.5 text-[11px] font-bold transition-colors hover:bg-black/5"
+        >
+          {language === 'zh' ? '打开设置' : 'Open settings'}
+        </button>
       )}
     </div>
   );

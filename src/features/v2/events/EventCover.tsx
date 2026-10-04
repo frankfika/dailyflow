@@ -42,8 +42,13 @@ export function EventCover({ id, title }: { id: string; title: string }) {
       <div className={`absolute -bottom-24 -left-16 h-56 w-56 rounded-full border-[10px] ${p.ink} opacity-60`} />
       <div className={`absolute -bottom-16 -left-8 h-40 w-40 rounded-full border-[8px] ${p.ink} opacity-40`} />
       <div className="absolute -bottom-6 left-2 h-24 w-24 rounded-full bg-black/[0.06] dark:bg-white/10" />
-      {/* Ghost monogram anchors the right side. */}
-      <span className={`absolute -bottom-5 right-1 select-none text-[110px] font-bold leading-none tracking-tighter ${p.ink}`}>
+      {/* G5/P6: small monogram badge in the top-right as a recognition
+          anchor — the title below the cover is the actual primary visual;
+          the previous 110px ghost monogram was decorative noise. */}
+      <span
+        aria-hidden="true"
+        className={`absolute right-1.5 top-1.5 select-none text-[28px] font-semibold leading-none opacity-30 ${p.ink}`}
+      >
         {letter}
       </span>
     </div>

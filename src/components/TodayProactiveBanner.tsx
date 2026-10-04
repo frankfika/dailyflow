@@ -14,6 +14,7 @@ import { ProactiveSuggestionsCard } from './ProactiveSuggestionsCard';
 import {
   proactiveApi,
   type ProactiveProposal,
+  type ProactiveQuota,
   type ProactiveSuggestion,
 } from '../api/client';
 
@@ -44,6 +45,7 @@ export function TodayProactiveBanner({
   onDismissAll,
 }: TodayProactiveBannerProps) {
   const [proposals, setProposals] = useState<ProactiveProposal[]>([]);
+  const [quota, setQuota] = useState<ProactiveQuota | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -52,9 +54,10 @@ export function TodayProactiveBanner({
     let cancelled = false;
     proactiveApi
       .scan('today_load')
-      .then(items => {
+      .then(({ proposals: items, quota: q }) => {
         if (cancelled) return;
         setProposals(items);
+        setQuota(q);
         setLoaded(true);
       })
       .catch(() => {
@@ -70,18 +73,29 @@ export function TodayProactiveBanner({
 
   // Optimistic update: drop the proposal from the local list once the
   // user acts so the card disappears without a full refetch.
+  // Drop the proposal only after the action truly succeeded — C12 gates
+  // move_to_today / mark_done behind a confirm dialog, and a cancel (or a
+  // failed write) must leave the card in place for another decision.
   const handleApplySuggestion = async (
     proposal: ProactiveProposal,
     suggestion: ProactiveSuggestion,
   ) => {
-    setProposals(prev => prev.filter(p => p.id !== proposal.id));
     if (onApplySuggestion) {
       await onApplySuggestion(proposal, suggestion);
     }
+    setProposals(prev => prev.filter(p => p.id !== proposal.id));
   };
 
+  // A5: the corner X must actually dismiss — C11 batch-dismiss every visible
+  // proposal by entity id (proposal ids rotate per scan, entity ids don't).
   const handleDismissAll = () => {
+    const entityIds = proposals.map(p => p.entityId).filter(Boolean);
     setProposals([]);
+    if (entityIds.length > 0) {
+      // Fire-and-forget: the optimistic clear above keeps the UI snappy; the
+      // parent refreshKey bump refetches the now-empty list either way.
+      void proactiveApi.dismissBatch(entityIds).catch(() => {});
+    }
     if (onDismissAll) onDismissAll();
   };
 
@@ -91,6 +105,7 @@ export function TodayProactiveBanner({
     <ProactiveSuggestionsCard
       language={language}
       proposals={proposals}
+      quota={quota}
       onApplySuggestion={handleApplySuggestion}
       onDismissAll={handleDismissAll}
     />

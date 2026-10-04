@@ -712,6 +712,11 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
   const [contextPreviewOpen, setContextPreviewOpen] = useState(false);
   const [runContextRefs, setRunContextRefs] = useState<ContextRef[]>([]);
   const [autoStartRun, setAutoStartRun] = useState(false);
+  // Brief in-place highlight on a node right after it gets scheduled —
+  // gives the user a visible anchor for the action without taking them
+  // out of the event detail (the previous behaviour of popping back to
+  // the events list felt like the page jumped on a single click).
+  const [recentlyScheduledNodeId, setRecentlyScheduledNodeId] = useState<string | null>(null);
   const [graphProposal, setGraphProposal] = useState<EventGraphProposal | null>(null);
   const [proposalSelection, setProposalSelection] = useState<Set<string>>(() => new Set());
   const [activeProposalChangeId, setActiveProposalChangeId] = useState<string | null>(null);
@@ -1050,6 +1055,14 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
       });
       scheduled = true;
     }, language === 'zh' ? '已安排' : 'Scheduled');
+    // Brief in-place highlight so the user sees *which* node they just
+    // scheduled (toast alone is too far from the action to be readable).
+    if (scheduled) {
+      setRecentlyScheduledNodeId(node.id);
+      window.setTimeout(() => {
+        setRecentlyScheduledNodeId((current) => (current === node.id ? null : current));
+      }, 1500);
+    }
     if (!scheduled || !extras?.recurrence) return;
     // Parity with the Today composer: a repeat rule creates a recurring-task
     // template on top of the scheduled task (best effort — the task itself
@@ -1294,6 +1307,7 @@ function EventDetailView({ eventId, language, onBack, onNotice, onRequestedEvent
           editingId={activeNodeId}
           pulseNodeId={activeNodeId}
           pulseTick={pulseTick}
+          recentlyScheduledNodeId={recentlyScheduledNodeId}
           collapsedIds={collapsedIds}
           onToggleCollapse={toggleCollapse}
           onSelect={activateNode}

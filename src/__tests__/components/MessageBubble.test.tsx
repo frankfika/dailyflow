@@ -10,7 +10,7 @@
  *   • the user-message path is unchanged.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 vi.mock('motion/react', () => ({
@@ -165,5 +165,46 @@ describe('MessageBubble — user messages', () => {
     );
     expect(screen.queryByTestId('ai-tool-cards')).not.toBeInTheDocument();
     expect(screen.getByText('hello')).toBeInTheDocument();
+  });
+});
+
+describe('MessageBubble — error retry (C4)', () => {
+  it('shows a retry key on failed bubbles and triggers onRetry', () => {
+    const onRetry = vi.fn();
+    render(
+      <MessageBubble
+        message={{ ...baseMessage, content: '', error: 'Upstream AI error (401)' }}
+        language="en" notes={[]} activeContext="work" showToast={noop} onRetry={onRetry} onSaveAsNote={noop} onOpenSettings={noop}
+      />,
+    );
+    const retry = screen.getByTestId('message-retry');
+    expect(retry).toHaveTextContent('Retry');
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps only the retry key visible for errors (no copy / save / propose)', () => {
+    render(
+      <MessageBubble
+        message={{ ...baseMessage, content: '', error: 'boom' }}
+        language="en" notes={[]} activeContext="work" showToast={noop} onRetry={noop} onSaveAsNote={noop} onOpenSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('message-retry')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save as note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propose items' })).not.toBeInTheDocument();
+    // Settings stays reachable from the error box itself.
+    expect(screen.getByRole('button', { name: 'Open Model Settings' })).toBeInTheDocument();
+  });
+
+  it('localizes the error retry key in Chinese', () => {
+    render(
+      <MessageBubble
+        message={{ ...baseMessage, content: '', error: 'boom' }}
+        language="zh" notes={[]} activeContext="work" showToast={noop} onRetry={noop} onSaveAsNote={noop} onOpenSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('message-retry')).toHaveTextContent('重试');
   });
 });

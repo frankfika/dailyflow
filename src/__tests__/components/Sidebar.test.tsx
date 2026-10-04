@@ -22,6 +22,7 @@ vi.mock('motion/react', () => ({
 vi.mock('lucide-react', () => {
   const Icon = () => React.createElement('span');
   return {
+    Brain: Icon,
     CalendarDays: Icon,
     ChevronDown: Icon,
     Clock3: Icon,
@@ -31,7 +32,6 @@ vi.mock('lucide-react', () => {
     ListTodo: Icon,
     MessageCircle: Icon,
     MoreHorizontal: Icon,
-    Search: Icon,
     Settings: Icon,
     Briefcase: Icon,
     Heart: Icon,
@@ -45,14 +45,24 @@ vi.mock('../../api/client', () => ({
   filesApi: { create: vi.fn() },
 }));
 
-function SidebarHarness({ onOpenSettings, onOpenCommandPalette }: { onOpenSettings?: () => void; onOpenCommandPalette?: () => void } = {}) {
-  const [open, setOpen] = useState(false);
+function SidebarHarness({
+  onOpenSettings,
+  onOpenCommandPalette,
+  activeTab = 'today',
+  open = false,
+}: {
+  onOpenSettings?: () => void;
+  onOpenCommandPalette?: () => void;
+  activeTab?: 'today' | 'ai-chat' | 'memory';
+  open?: boolean;
+} = {}) {
+  const [isOpen, setOpen] = useState(open);
   return (
     <Sidebar
       language="en"
-      isSidebarOpen={open}
+      isSidebarOpen={isOpen}
       setIsSidebarOpen={setOpen}
-      activeTab="today"
+      activeTab={activeTab}
       setActiveTab={vi.fn()}
       currentFileDate="2026-08-09"
       setCurrentFileDate={vi.fn()}
@@ -86,20 +96,26 @@ describe('Sidebar desktop compact mode', () => {
     expect(navigation).toHaveStyle({ width: '60px' });
     expect(screen.getByTestId('sidebar-inner')).toHaveStyle({ width: '60px' });
     expect(screen.getByRole('button', { name: 'Today' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'More' })).toBeVisible();
   });
 
-  it('keeps Events directly reachable and does not show legacy Mind maps', () => {
+  it('G3: collapses primary nav to Today/Events/Notes/More with Ask AI inside More', () => {
     render(<SidebarHarness onOpenSettings={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Mind Notes' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
+    // Ask AI is no longer a primary tab — it lives behind the More disclosure.
+    expect(screen.queryByRole('button', { name: 'Ask AI ⌘J' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-ai-chat')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    const askAi = screen.getByTestId('nav-ai-chat');
+    expect(screen.getByRole('button', { name: 'Ask AI ⌘J' })).toBeVisible();
+    // Ask AI is the FIRST item of the More menu.
+    const submenuList = askAi.closest('ul');
+    expect(submenuList?.firstElementChild).toBe(askAi.closest('li'));
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
@@ -108,12 +124,29 @@ describe('Sidebar desktop compact mode', () => {
     expect(screen.queryByTestId('nav-mindmap')).not.toBeInTheDocument();
   });
 
-  it('UX S10: exposes the ⌘K palette trigger at the top of the rail', () => {
+  it('G3: marks Ask AI active while the AI chat overlay is open (activeTab=ai-chat)', () => {
+    // Desktop stored as expanded so the More branch is visible on mount.
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: { getItem: vi.fn().mockReturnValue('false'), setItem: vi.fn() },
+    });
+    render(<SidebarHarness activeTab="ai-chat" open />);
+
+    const askAi = screen.getByTestId('nav-ai-chat');
+    expect(askAi).toHaveAttribute('data-active', 'true');
+    // The More branch stays discoverable while the AI overlay owns the screen.
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('G12: keeps the ⌘K trigger as an icon-only button with a hover hint', () => {
     const onOpenCommandPalette = vi.fn();
     render(<SidebarHarness onOpenCommandPalette={onOpenCommandPalette} />);
 
     const trigger = screen.getByTestId('sidebar-command-palette');
     expect(trigger).toBeVisible();
+    expect(trigger).toHaveAttribute('title', 'Search / commands ⌘K');
+    expect(trigger).toHaveAttribute('aria-label', 'Search / commands ⌘K');
+    expect(trigger.textContent).not.toContain('Search / commands');
     fireEvent.click(trigger);
     expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });

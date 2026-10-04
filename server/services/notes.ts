@@ -91,10 +91,28 @@ function generateFrontmatter(note: Omit<Note, 'body' | 'filePath'>): string {
   if (note.time) lines.push(`time: "${note.time}"`);
   if (note.endTime) lines.push(`end_time: "${note.endTime}"`);
   lines.push(`context: ${note.context}`);
-  if (note.tags.length > 0) lines.push(`tags: [${note.tags.join(', ')}]`);
-  if (note.mentions.length > 0) lines.push(`mentions: [${note.mentions.join(', ')}]`);
-  if (note.linkedTaskIds.length > 0) lines.push(`linked_tasks: [${note.linkedTaskIds.join(', ')}]`);
-  if (note.linkedProjectIds.length > 0) lines.push(`linked_projects: [${note.linkedProjectIds.join(', ')}]`);
+  // Persist the user's title: without it the list falls back to the first
+  // body heading, so a note titled "AI: Weekly plan" would resurface as
+  // "Plan". Escaping order matters (backslash first), and newlines would
+  // break the one-value-per-line frontmatter format — flatten them.
+  if (note.title) {
+    const escaped = String(note.title)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
+    if (escaped) lines.push(`title: "${escaped}"`);
+  }
+  // Tolerate callers that omit optional collections: a partially specified
+  // POST /api/notes must not 500 on `undefined.length`.
+  const tags = note.tags ?? [];
+  const mentions = note.mentions ?? [];
+  const linkedTaskIds = note.linkedTaskIds ?? [];
+  const linkedProjectIds = note.linkedProjectIds ?? [];
+  if (tags.length > 0) lines.push(`tags: [${tags.join(', ')}]`);
+  if (mentions.length > 0) lines.push(`mentions: [${mentions.join(', ')}]`);
+  if (linkedTaskIds.length > 0) lines.push(`linked_tasks: [${linkedTaskIds.join(', ')}]`);
+  if (linkedProjectIds.length > 0) lines.push(`linked_projects: [${linkedProjectIds.join(', ')}]`);
   if (note.participants && note.participants.length > 0) {
     lines.push(`participants: [${note.participants.join(', ')}]`);
   }
@@ -118,9 +136,18 @@ export function parseNoteFile(content: string, filePath: string): Note {
   const participants = Array.isArray(meta.participants) ? meta.participants : [];
   const allMentions = [...new Set([...frontmatterMentions, ...bodyMentions])];
 
+  // Frontmatter title wins; the first "# heading" is only a fallback for
+  // notes written before titles were persisted. Unescape in one
+  // left-to-right pass so write-side escaping round-trips exactly.
+  const fmTitle = typeof meta.title === 'string'
+    ? meta.title.trim().replace(/\\(["\\])/g, '$1')
+    : '';
+
   return {
     id: fileName,
-    title: body.split('\n').find(l => l.startsWith('# '))?.replace(/^#\s+/, '') || fileName,
+    title: fmTitle
+      ? fmTitle
+      : (body.split('\n').find((l: string) => l.startsWith('# '))?.replace(/^#\s+/, '') || fileName),
     body,
     type: (meta.type as NoteType) || 'note',
     date: meta.date || fileName.slice(0, 10),
@@ -272,6 +299,11 @@ export async function createNote(
     const id = `${data.date}-${slug}${suffix === 1 ? '' : `-${suffix}`}`;
     const note: Note = {
       ...data,
+      // Normalize the optional collections so the created note (and its
+      // frontmatter) always carries arrays, even if the caller omitted them.
+      tags: data.tags ?? [],
+      linkedTaskIds: data.linkedTaskIds ?? [],
+      linkedProjectIds: data.linkedProjectIds ?? [],
       id,
       mentions: allMentions,
       createdAt: now,

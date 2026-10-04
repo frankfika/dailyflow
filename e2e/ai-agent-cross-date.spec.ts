@@ -71,22 +71,39 @@ async function seedTask(
     data: { date, task: { title, status: 'todo', ...extra } },
   });
   expect(res.ok(), `seed task ${title} on ${date}: ${res.status()} ${await res.text()}`).toBeTruthy();
-  const body = await res.json();
-  const id = body.task?.id ?? body.id ?? body.taskId;
-  return String(id);
+  // POST /api/tasks does not echo the generated id — resolve it from the
+  // date's list instead (titles are unique per test scenario).
+  const list = await api.get(`/api/tasks/${date}`);
+  const tasks = (await list.json()).tasks as Array<{ id: string; title: string }>;
+  const hit = tasks.filter((t) => t.title === title).at(-1);
+  expect(hit, `seeded task "${title}" resolved on ${date}`).toBeTruthy();
+  return String(hit!.id);
 }
 
 /** Inject the stub provider into localStorage before the React app boots. */
 async function installStubProvider(page: Page, stub: AiStub): Promise<void> {
-  await page.addInitScript((seed) => {
-    window.localStorage.setItem('df_model_center', seed);
-  }, providerConfigSeed(stub.url));
+  const seed = providerConfigSeed(stub.url);
+  // `hydrateModelCenterFromBackend` (src/types/models.ts) lets the *durable*
+  // backend config win over the localStorage cache at boot. Without writing
+  // the fresh stub URL server-side, test 2+ would hydrate the previous test's
+  // now-closed stub port and every AI call would fail as a network error.
+  const current = await (await fetch(`${FRONTEND_BASE}/api/config`)).json();
+  await fetch(`${FRONTEND_BASE}/api/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version: current.version, patch: { modelCenter: seed, providerConfigs: null } }),
+  });
+  await page.addInitScript((value) => {
+    window.localStorage.setItem('df_model_center', value);
+  }, seed);
 }
 
 async function openAiChat(page: Page): Promise<void> {
   // The seeded workspace is already active so the first-run flow is
   // bypassed and we land directly on the Today tab.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // WP-C: Ask AI lives inside the More disclosure — expand it first.
+  await page.getByTestId('nav-more').click();
   await page.getByTestId('nav-ai-chat').click();
   await expect(page.getByTestId('full-ai-chat')).toBeVisible();
   await expect(page.getByTestId('chat-message-scroll-region')).toBeVisible();
@@ -100,7 +117,9 @@ async function sendAndWait(page: Page, message: string): Promise<void> {
 }
 
 async function waitForCardCount(page: Page, n: number, timeout = 10_000): Promise<void> {
-  await expect(page.locator('[data-testid="ai-tool-cards"]')).toBeVisible({ timeout });
+  // Multiple assistant messages can each own a cards container — .first()
+  // keeps the visibility check strict-safe; the count poll below scans all.
+  await expect(page.locator('[data-testid="ai-tool-cards"]').first()).toBeVisible({ timeout });
   await expect
     .poll(
       async () =>

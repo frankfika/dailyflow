@@ -9,6 +9,7 @@ import {
   mindmapsApi,
   rolloverApi,
   tasksApi,
+  V1ApiError,
   type ConfigData,
 } from './client';
 
@@ -215,6 +216,56 @@ describe('API Client', () => {
         .catch((caught: Error & { status?: number }) => caught);
       expect(error).toBeInstanceOf(Error);
       expect((error as Error & { status?: number }).status).toBe(409);
+    });
+  });
+
+  describe('v1 error model (B5 / contract 5)', () => {
+    it('tags non-2xx responses with V1ApiError code http_<status>, message unchanged', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        status: 409,
+        ok: false,
+        json: () => Promise.resolve({ error: 'Config changed since it was loaded' }),
+      });
+      const error = await configApi.update({ activeContext: 'life' }, 'stale').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(V1ApiError);
+      expect((error as V1ApiError).code).toBe('http_409');
+      expect((error as V1ApiError).status).toBe(409);
+      expect((error as V1ApiError).message).toBe('Config changed since it was loaded');
+    });
+
+    it('falls back to the default message when the error body is not JSON', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 500, ok: false });
+      const error = await filesApi.get('2026-05-05').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(V1ApiError);
+      expect((error as V1ApiError).code).toBe('http_500');
+      expect((error as V1ApiError).message).toBe('Failed to fetch file');
+    });
+
+    it('keeps the explicit 404 branch of eventsApi.delete on the same error model', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 404, ok: false });
+      const error = await eventsApi.delete('ev_missing').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(V1ApiError);
+      expect((error as V1ApiError).code).toBe('http_404');
+      expect((error as V1ApiError).status).toBe(404);
+      expect((error as V1ApiError).message).toBe('Event not found');
+    });
+
+    it('surfaces network-level failures as V1ApiError code network with the original message', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      const error = await filesApi.get('2026-05-05').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(V1ApiError);
+      expect((error as V1ApiError).code).toBe('network');
+      expect((error as V1ApiError).status).toBeUndefined();
+      expect((error as V1ApiError).message).toBe('Failed to fetch');
+    });
+
+    it('lets AbortError propagate untouched so callers can detect cancellation', async () => {
+      const abort = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      global.fetch = vi.fn().mockRejectedValue(abort);
+      const error = await filesApi.get('2026-05-05').catch((caught: unknown) => caught);
+      expect(error).toBe(abort);
+      expect(error).not.toBeInstanceOf(V1ApiError);
+      expect((error as Error).name).toBe('AbortError');
     });
   });
 

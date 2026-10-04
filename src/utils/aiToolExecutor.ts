@@ -7,14 +7,19 @@
  * can refresh the affected queries, keeping the chat and the UI consistent.
  *
  * Safety model:
- * - destructive tools (delete_*) require `confirm: true` which the model may
- *   only set after the user agreed in the conversation;
+ * - destructive tools (delete_*) are gated by a HUMAN confirmation: any
+ *   `confirm: true` the model passes is ignored. Without
+ *   `ToolContext.userConfirmed` (set only after the user clicks confirm in
+ *   AiConfirmDialog) they return a `pendingConfirmation` result and never
+ *   touch the API;
+ * - every write checks the caller's AbortSignal first, so a stopped request
+ *   cannot keep mutating data;
  * - title-based lookups must be unique — ambiguity returns candidate lists
  *   instead of guessing, so the model asks the user to disambiguate.
  */
 
 import { tasksApi, notesApi, eventsApi, type EditNodeTaskInput } from '../api/client';
-import { requiresConfirmation, type AIToolCall, type AIToolResult } from '../types/ai-tools';
+import type { AIToolCall, AIToolResult } from '../types/ai-tools';
 
 export type DataScope = 'tasks' | 'notes' | 'events';
 
@@ -29,6 +34,13 @@ export interface ToolContext {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   /** Called (aggregated) by the send pipeline after any tool mutated data. */
   onDataChanged?: (scope: DataScope) => void;
+  /**
+   * C1: set to true ONLY after the user confirmed in AiConfirmDialog. The
+   * model's own `confirm: true` argument is always ignored for delete_*.
+   */
+  userConfirmed?: boolean;
+  /** C5: abort signal from the send pipeline — abort stops further writes. */
+  signal?: AbortSignal;
 }
 
 interface TaskLike {
@@ -107,7 +119,9 @@ async function resolveTask(args: Record<string, any>, ctx: ToolContext): Promise
     tags: t.tags,
     deadline: t.deadline,
     priority: t.priority,
-    source_date: t.source_date,
+    // Projection tasks live in today's note: stamp the current date so
+    // ambiguity cards and search results always show where a hit lives.
+    source_date: t.source_date || ctx.currentDate,
     host_date: t.host_date,
     scheduledDate: t.scheduledDate,
     kind: t.kind,
@@ -121,8 +135,12 @@ async function resolveTask(args: Record<string, any>, ctx: ToolContext): Promise
   const match = (pool: TaskLike[]): TaskLookup => {
     const taskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
     if (taskId) {
-      const byId = pool.find(t => t.id === taskId);
-      return byId ? { kind: 'ok', task: byId } : { kind: 'not-found' };
+      // Task ids are deterministic per date file, so the same id can exist
+      // on several dates — more than one hit is ambiguity, not a target.
+      const byId = pool.filter(t => t.id === taskId);
+      if (byId.length === 1) return { kind: 'ok', task: byId[0] };
+      if (byId.length > 1) return { kind: 'ambiguous', candidates: byId };
+      return { kind: 'not-found' };
     }
     const query = typeof args.title_query === 'string' ? args.title_query.trim().toLowerCase() : '';
     if (!query) return { kind: 'not-found' };
@@ -136,12 +154,18 @@ async function resolveTask(args: Record<string, any>, ctx: ToolContext): Promise
   };
 
   const local = match(localPool);
-  if (local.kind !== 'not-found') return local;
 
-  // Cross-date fallback via the server's task index: an id or title
+  // Cross-date resolution via the server's task index: an id or title
   // returned by search_tasks is always actionable afterwards.
+  //
+  // Neither a local id hit nor a local title hit is authoritative: task ids
+  // are deterministic per date file, so the same id can exist on several
+  // dates. Always merge the cross-date hits — duplicates collapse on the
+  // id@source_date key, and a real collision turns the lookup ambiguous
+  // instead of silently resolving to today's copy.
+  const taskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
+
   try {
-    const taskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
     const query = typeof args.title_query === 'string' ? args.title_query.trim() : '';
     if (!taskId && !query) return local;
     const remote = await (taskId ? tasksApi.searchById(taskId) : tasksApi.search(query));
@@ -154,8 +178,12 @@ async function resolveTask(args: Record<string, any>, ctx: ToolContext): Promise
       priority: t.priority,
       source_date: t.source_date,
     })).filter(t => t.id && t.title);
-    const known = new Set(localPool.map(t => t.id));
-    const merged = [...localPool, ...remotePool.filter(t => !known.has(t.id))];
+    // Same id can live on multiple dates — dedupe on id + source_date so
+    // same-titled tasks on other dates survive the merge and trip the
+    // ambiguity check instead of being silently swallowed.
+    const key = (t: TaskLike) => `${t.id}@${t.source_date ?? ''}`;
+    const known = new Set(localPool.map(key));
+    const merged = [...localPool, ...remotePool.filter(t => !known.has(key(t)))];
     if (merged.length === localPool.length) return local;
     return match(merged);
   } catch {
@@ -189,12 +217,30 @@ function lookupFailure(lookup: TaskLookup, language: 'en' | 'zh'): AIToolResult 
   };
 }
 
-function confirmationRequired(name: string, language: 'en' | 'zh'): AIToolResult {
+/**
+ * C1: the refusal returned for any delete_* the human has not confirmed.
+ * The model's `confirm` argument is deliberately never read here.
+ */
+function pendingUserConfirmation(
+  tool: string,
+  targetSummary: string,
+  args: Record<string, unknown>,
+  language: 'en' | 'zh'
+): AIToolResult {
   return {
     success: false,
     message: language === 'zh'
-      ? `「${name}」是破坏性操作：你没有传 confirm:true，未执行任何删除。请先在对话中向用户确认，得到明确同意后再调用并设置 confirm:true。`
-      : `"${name}" is destructive: confirm:true was missing, nothing was deleted. Confirm with the user in the conversation first, then call again with confirm:true.`,
+      ? `等待用户确认：「${tool}」目标 ${targetSummary}。删除是破坏性操作，已弹出确认框等待用户决定，在用户确认前不会执行任何删除。`
+      : `Waiting for user confirmation: "${tool}" on ${targetSummary}. Deletion is destructive — a confirmation dialog is open; nothing will be deleted until the user agrees.`,
+    pendingConfirmation: { tool, targetSummary, args },
+  };
+}
+
+/** C5: a stopped request must never keep writing. */
+function abortedResult(language: 'en' | 'zh'): AIToolResult {
+  return {
+    success: false,
+    message: language === 'zh' ? '请求已停止，未执行该操作' : 'Request stopped — action not executed',
   };
 }
 
@@ -233,27 +279,35 @@ export async function executeToolCall(
         const query = String(call.arguments.query ?? '').trim();
         if (!query) return { success: false, message: 'Query is required' };
         const q = query.toLowerCase();
-        const local = (ctx.tasks || []).filter((t: any) =>
-          t.title?.toLowerCase().includes(q) ||
-          t.tags?.some((tag: string) => tag.toLowerCase().includes(q))
-        );
+        // Local matches live in today's file, so stamp them with today's date
+        // — the cross-date list must show a date for every hit.
+        const local: TaskLike[] = (ctx.tasks || [])
+          .filter((t: any) =>
+            t.title?.toLowerCase().includes(q) ||
+            t.tags?.some((tag: string) => tag.toLowerCase().includes(q))
+          )
+          .map((t: any) => ({ ...t, source_date: taskHostDate(t, currentDate) }));
+        // Cross-date contract: only today's tasks are in the visible
+        // projection, so always ask the server for the historical matches and
+        // merge them with the local ones (local wins on id collisions because
+        // it carries the freshest status).
         let matches: TaskLike[] = local;
-        // Fallback: tasks on other dates are not in the visible projection;
-        // the server-side cross-date search covers them.
-        if (matches.length === 0) {
-          try {
-            const remote = await tasksApi.search(query);
-            matches = (remote || []).map((t: any) => ({
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              tags: t.tags,
-              deadline: t.deadline,
-              priority: t.priority,
-              source_date: t.source_date,
-            }));
-          } catch { /* offline moment — local results only */ }
-        }
+        try {
+          const remote = await tasksApi.search(query);
+          const remoteMatches: TaskLike[] = (remote || []).map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            tags: t.tags,
+            deadline: t.deadline,
+            priority: t.priority,
+            source_date: t.source_date,
+          }));
+          // Dedupe on id + date: task ids repeat across date files.
+          const key = (t: TaskLike) => `${t.id}@${t.source_date ?? ''}`;
+          const seen = new Set(local.map(key));
+          matches = [...local, ...remoteMatches.filter(t => !seen.has(key(t)))];
+        } catch { /* offline moment — local results only */ }
         if (matches.length === 0) {
           return { success: true, message: language === 'zh' ? '未找到匹配的任务' : 'No matching tasks found', data: [] };
         }
@@ -267,6 +321,7 @@ export async function executeToolCall(
 
       // ── Tasks: write ─────────────────────────────────────────────────────
       case 'create_task': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const title = String(call.arguments.title ?? '').trim();
         if (!title) return { success: false, message: language === 'zh' ? '任务标题不能为空' : 'Task title is required' };
         const date = normalizeDate(call.arguments.date, currentDate);
@@ -286,6 +341,7 @@ export async function executeToolCall(
       }
 
       case 'update_task': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const lookup = await resolveTask(call.arguments, ctx);
         if (lookup.kind !== 'ok') return lookupFailure(lookup, language);
         const task = lookup.task;
@@ -336,6 +392,7 @@ export async function executeToolCall(
       }
 
       case 'complete_task': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const lookup = await resolveTask(call.arguments, ctx);
         if (lookup.kind !== 'ok') return lookupFailure(lookup, language);
         const task = lookup.task;
@@ -354,12 +411,14 @@ export async function executeToolCall(
       }
 
       case 'delete_task': {
-        if (requiresConfirmation('delete_task') && call.arguments.confirm !== true) {
-          return confirmationRequired('delete_task', language);
-        }
+        if (ctx.signal?.aborted) return abortedResult(language);
         const lookup = await resolveTask(call.arguments, ctx);
         if (lookup.kind !== 'ok') return lookupFailure(lookup, language);
         const task = lookup.task;
+        // C1 human gate — the model's confirm:true is ignored by design.
+        if (!ctx.userConfirmed) {
+          return pendingUserConfirmation('delete_task', task.title, { ...call.arguments }, language);
+        }
         const date = taskHostDate(task, currentDate);
         if (isEventNodeTask(task)) {
           const eventNode = eventNodeIds(task)!;
@@ -399,6 +458,7 @@ export async function executeToolCall(
       }
 
       case 'create_note': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const title = String(call.arguments.title ?? '').trim();
         const body = String(call.arguments.body ?? '');
         if (!title || !body.trim()) {
@@ -422,17 +482,21 @@ export async function executeToolCall(
       }
 
       case 'delete_note': {
-        if (requiresConfirmation('delete_note') && call.arguments.confirm !== true) {
-          return confirmationRequired('delete_note', language);
-        }
+        if (ctx.signal?.aborted) return abortedResult(language);
         const noteId = String(call.arguments.note_id ?? '').trim();
         if (!noteId) return { success: false, message: language === 'zh' ? '缺少 note_id，请先用 search_notes 查询' : 'note_id is required; use search_notes first' };
+        // C1 human gate — the model's confirm:true is ignored by design.
+        if (!ctx.userConfirmed) {
+          const known = (ctx.notes || []).find((n: any) => (n.id || n.noteId) === noteId);
+          return pendingUserConfirmation('delete_note', known?.title ? known.title : noteId, { ...call.arguments }, language);
+        }
         await notesApi.delete(noteId);
         return { success: true, mutated: 'notes', message: language === 'zh' ? '已删除该笔记' : 'Note deleted', data: { id: noteId } };
       }
 
       // ── Events / topic spaces ────────────────────────────────────────────
       case 'create_event': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const title = String(call.arguments.title ?? '').trim();
         if (!title) return { success: false, message: language === 'zh' ? '事件标题不能为空' : 'Event title is required' };
         const detail = await eventsApi.create({ title, context: activeContext });
@@ -445,6 +509,7 @@ export async function executeToolCall(
       }
 
       case 'add_task_to_event': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const eventQuery = String(call.arguments.event_title ?? '').trim().toLowerCase();
         const title = String(call.arguments.title ?? '').trim();
         if (!eventQuery || !title) {
@@ -476,6 +541,7 @@ export async function executeToolCall(
       }
 
       case 'update_event': {
+        if (ctx.signal?.aborted) return abortedResult(language);
         const eventId = String(call.arguments.event_id ?? '').trim();
         const titleQuery = String(call.arguments.title_query ?? '').trim().toLowerCase();
         let event: any = null;
@@ -505,9 +571,7 @@ export async function executeToolCall(
       }
 
       case 'delete_event': {
-        if (requiresConfirmation('delete_event') && call.arguments.confirm !== true) {
-          return confirmationRequired('delete_event', language);
-        }
+        if (ctx.signal?.aborted) return abortedResult(language);
         const eventId = String(call.arguments.event_id ?? '').trim();
         const titleQuery = String(call.arguments.title_query ?? '').trim().toLowerCase();
         let event: any = null;
@@ -519,6 +583,10 @@ export async function executeToolCall(
         }
         if (!event?.id) {
           return { success: false, message: language === 'zh' ? '未找到目标事件，请先提供准确的事件标题或 id' : 'Target event not found; provide an exact event title or id first' };
+        }
+        // C1 human gate — the model's confirm:true is ignored by design.
+        if (!ctx.userConfirmed) {
+          return pendingUserConfirmation('delete_event', event.title || event.id, { ...call.arguments }, language);
         }
         await eventsApi.delete(event.id);
         return {

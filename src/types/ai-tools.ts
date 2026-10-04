@@ -7,9 +7,13 @@
  * read surfaces — tasks (create/search/update/complete/delete), notes
  * (create/search/delete), and events / topic spaces (create/add-task/rename/
  * complete/delete). Writes execute against the real APIs; the executor tags
- * every mutation with a data scope so the send pipeline can refresh the UI,
- * and destructive tools require an explicit `confirm: true` argument that the
- * model may only set after the user agrees in the conversation.
+ * every mutation with a data scope so the send pipeline can refresh the UI.
+ *
+ * Safety model (C1): delete_* tools NEVER trust the model. Any `confirm`
+ * argument the model passes is ignored — the executor returns a
+ * `pendingConfirmation` result instead, the send pipeline shows the human a
+ * confirmation dialog (aiConfirmBus → AiConfirmDialog), and the call is only
+ * re-executed with `userConfirmed: true` after the user agrees.
  */
 
 export interface AIToolParameter {
@@ -30,15 +34,35 @@ export interface AIToolCall {
   arguments: Record<string, any>;
 }
 
+/**
+ * A destructive tool refused to run because the human has not confirmed yet.
+ * The send pipeline turns this into an AiConfirmDialog request; on user
+ * agreement the same call is re-executed with `userConfirmed: true`.
+ */
+export interface AIPendingConfirmation {
+  tool: string;
+  /** Human-readable target, e.g. `任务「Doomed task」` or a note/event title. */
+  targetSummary: string;
+  /** Original call arguments, re-used verbatim for the confirmed retry. */
+  args: Record<string, unknown>;
+}
+
 export interface AIToolResult {
   success: boolean;
   message: string;
   data?: any;
   /** Which UI dataset the write touched, so the caller can refresh it. */
   mutated?: 'tasks' | 'notes' | 'events' | null;
+  /** Set when a delete_* call is waiting for the human confirmation gate. */
+  pendingConfirmation?: AIPendingConfirmation;
 }
 
-/** Destructive tools refuse to run without `confirm: true` from the model. */
+/**
+ * Tools whose execution is gated behind an explicit human confirmation.
+ * The model cannot satisfy this gate — `confirm: true` from the model is
+ * always ignored; only `ToolContext.userConfirmed` (set after the user clicks
+ * "confirm" in AiConfirmDialog) lets these run.
+ */
 const CONFIRM_REQUIRED_TOOLS = new Set(['delete_task', 'delete_note', 'delete_event']);
 
 export function requiresConfirmation(toolName: string): boolean {
@@ -98,11 +122,11 @@ export const AVAILABLE_TOOLS: AITool[] = [
   },
   {
     name: 'delete_task',
-    description: 'Permanently delete a task. DESTRUCTIVE: only set confirm=true after the user explicitly agreed in the conversation; otherwise ask first.',
+    description: 'Permanently delete a task. The app always shows the user a confirmation dialog before this runs — call it once you know the exact target; never claim it succeeded before the tool result says so.',
     parameters: {
       task_id: { type: 'string', description: 'Task id (preferred)' },
       title_query: { type: 'string', description: 'Exact or unique substring of the task title' },
-      confirm: { type: 'boolean', description: 'Must be true; the user must have agreed to this exact deletion' },
+      confirm: { type: 'boolean', description: 'Ignored. Confirmation is requested from the user by the app itself.' },
     },
   },
   // ── Notes ────────────────────────────────────────────────────────────────
@@ -126,10 +150,10 @@ export const AVAILABLE_TOOLS: AITool[] = [
   },
   {
     name: 'delete_note',
-    description: 'Permanently delete a note by id. DESTRUCTIVE: only set confirm=true after the user explicitly agreed; otherwise ask first.',
+    description: 'Permanently delete a note by id. The app always shows the user a confirmation dialog before this runs — call it once you know the exact note id.',
     parameters: {
       note_id: { type: 'string', description: 'Note id from search_notes (required)' },
-      confirm: { type: 'boolean', description: 'Must be true; the user must have agreed to this exact deletion' },
+      confirm: { type: 'boolean', description: 'Ignored. Confirmation is requested from the user by the app itself.' },
     },
     required: ['note_id'],
   },
@@ -164,11 +188,11 @@ export const AVAILABLE_TOOLS: AITool[] = [
   },
   {
     name: 'delete_event',
-    description: 'Delete an event (its canvas stays on disk but it disappears from the UI). DESTRUCTIVE: only set confirm=true after the user explicitly agreed; otherwise ask first.',
+    description: 'Delete an event (its canvas stays on disk but it disappears from the UI). The app always shows the user a confirmation dialog before this runs.',
     parameters: {
       event_id: { type: 'string', description: 'Event id (preferred)' },
       title_query: { type: 'string', description: 'Exact or unique substring of the event title' },
-      confirm: { type: 'boolean', description: 'Must be true; the user must have agreed to this exact deletion' },
+      confirm: { type: 'boolean', description: 'Ignored. Confirmation is requested from the user by the app itself.' },
     },
   },
 ];
@@ -204,14 +228,14 @@ export function buildToolInstructions(language: 'en' | 'zh', today?: string): st
         '操作规则：',
         '1. 工具会真实读写用户数据。执行写操作后，系统会把真实结果返回给你，你必须基于结果作答，不得编造或声称未发生的操作。',
         '2. 更新/完成/删除前先用 search 或 list 拿到准确的 task_id；按标题匹配时必须是唯一匹配，有歧义就列出候选让用户选择。',
-        '3. delete_* 是破坏性操作：只有当用户在对话中明确同意删除该具体对象时才传 confirm:true，否则先用文字向用户确认。',
+        '3. delete_* 由应用自动向用户弹出确认框，你无法代替用户确认（confirm 参数会被忽略）。调用后以工具返回结果为准：等待确认时请告知用户正在等待其确认，用户拒绝则不得再尝试。',
         '4. 一次只输出工具调用所需的参数，不要输出多余字段。',
       ].join('\n')
     : [
         'Operating rules:',
         '1. Tools really read/write the user\'s data. After a write, the real result is returned to you — answer based on it; never fabricate or claim actions that did not happen.',
         '2. Before update/complete/delete, use search or list to obtain the exact task_id. When matching by title, it must be unique; if ambiguous, list candidates and ask the user to choose.',
-        '3. delete_* tools are destructive: pass confirm:true only when the user explicitly agreed to that specific deletion in the conversation; otherwise confirm in plain text first.',
+        '3. delete_* tools trigger a confirmation dialog shown to the user by the app itself — you cannot confirm on their behalf (the confirm argument is ignored). Rely on the tool result: while confirmation is pending, tell the user you are waiting; if the user declines, do not retry.',
         '4. Only include the arguments a tool needs.',
       ].join('\n'));
   return lines.join('\n');

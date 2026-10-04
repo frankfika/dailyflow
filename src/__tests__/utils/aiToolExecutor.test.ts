@@ -103,22 +103,43 @@ describe('executeToolCall — task CRUD', () => {
     expect(tasksApi.edit).toHaveBeenCalledWith('t1', '2026-07-28', { title: 'New title', priority: 'high' });
   });
 
-  it('refuses delete_task without confirm and performs no mutation', async () => {
+  it('refuses delete_task without user confirmation and performs no mutation (C1)', async () => {
     const ctx = { ...baseContext(), tasks: [{ id: 't1', title: 'Doomed task', status: 'todo' }] };
     const result = await executeToolCall({ name: 'delete_task', arguments: { title_query: 'Doomed task' } }, ctx);
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain('confirm');
+    expect(result.message).toContain('confirmation');
+    expect(result.pendingConfirmation).toEqual({
+      tool: 'delete_task',
+      targetSummary: 'Doomed task',
+      args: { title_query: 'Doomed task' },
+    });
     expect(tasksApi.delete).not.toHaveBeenCalled();
   });
 
-  it('deletes a task when the user confirmed via the model', async () => {
+  it('ignores the model-supplied confirm:true — only userConfirmed executes (C1)', async () => {
     const ctx = { ...baseContext(), tasks: [{ id: 't1', title: 'Doomed task', status: 'todo' }] };
-    const result = await executeToolCall({ name: 'delete_task', arguments: { title_query: 'Doomed task', confirm: true } }, ctx);
+    const modelOnly = await executeToolCall({ name: 'delete_task', arguments: { title_query: 'Doomed task', confirm: true } }, ctx);
+    expect(modelOnly.success).toBe(false);
+    expect(modelOnly.pendingConfirmation?.tool).toBe('delete_task');
+    expect(tasksApi.delete).not.toHaveBeenCalled();
 
-    expect(result.success).toBe(true);
-    expect(result.mutated).toBe('tasks');
+    const humanConfirmed = await executeToolCall(
+      { name: 'delete_task', arguments: { title_query: 'Doomed task', confirm: true } },
+      { ...ctx, userConfirmed: true },
+    );
+    expect(humanConfirmed.success).toBe(true);
+    expect(humanConfirmed.mutated).toBe('tasks');
     expect(tasksApi.delete).toHaveBeenCalledWith('t1', '2026-07-28');
+  });
+
+  it('stops before any write when the abort signal fired (C5)', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const ctx = { ...baseContext(), signal: controller.signal };
+    const result = await executeToolCall({ name: 'create_task', arguments: { title: 'Too late' } }, ctx);
+    expect(result.success).toBe(false);
+    expect(tasksApi.create).not.toHaveBeenCalled();
   });
 
   it('resolves tasks that only exist on other dates via the server search fallback', async () => {
@@ -167,8 +188,8 @@ describe('executeToolCall — task CRUD', () => {
       }],
     };
     const result = await executeToolCall({
-      name: 'delete_task', arguments: { task_id: 'nt2', confirm: true },
-    }, ctx);
+      name: 'delete_task', arguments: { task_id: 'nt2' },
+    }, { ...ctx, userConfirmed: true });
     expect(result.success).toBe(true);
     expect(eventsApi.unscheduleNodeTask).toHaveBeenCalledWith({
       taskId: 'nt2', scheduledDate: '2026-09-29', mindmapId: 'mm_2', nodeId: 'node_2',
@@ -287,21 +308,28 @@ describe('executeToolCall — notes', () => {
     expect(notesApi.create).toHaveBeenCalledWith(expect.objectContaining({ type: 'note' }));
   });
 
-  it('refuses delete_note without confirm', async () => {
+  it('refuses delete_note without the human confirmation gate (C1)', async () => {
     const result = await executeToolCall({ name: 'delete_note', arguments: { note_id: 'n1' } }, baseContext());
     expect(result.success).toBe(false);
+    expect(result.pendingConfirmation).toMatchObject({ tool: 'delete_note', targetSummary: 'n1' });
     expect(notesApi.delete).not.toHaveBeenCalled();
   });
 
-  it('deletes a note after the user confirms', async () => {
-    const result = await executeToolCall({ name: 'delete_note', arguments: { note_id: 'n1', confirm: true } }, baseContext());
+  it('deletes a note only after userConfirmed', async () => {
+    const result = await executeToolCall(
+      { name: 'delete_note', arguments: { note_id: 'n1' } },
+      { ...baseContext(), userConfirmed: true },
+    );
     expect(result.success).toBe(true);
     expect(result.mutated).toBe('notes');
     expect(notesApi.delete).toHaveBeenCalledWith('n1');
   });
 
   it('rejects delete_note when no note_id is provided', async () => {
-    const result = await executeToolCall({ name: 'delete_note', arguments: { confirm: true } }, baseContext());
+    const result = await executeToolCall(
+      { name: 'delete_note', arguments: {} },
+      { ...baseContext(), userConfirmed: true },
+    );
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/note_id is required/);
     expect(notesApi.delete).not.toHaveBeenCalled();
@@ -370,18 +398,20 @@ describe('executeToolCall — events', () => {
     expect(eventsApi.update).not.toHaveBeenCalled();
   });
 
-  it('refuses delete_event without confirm', async () => {
+  it('refuses delete_event without the human confirmation gate (C1)', async () => {
     const ctx = { ...baseContext(), events: [{ id: 'evt_1', title: 'Launch v3' }] };
     const result = await executeToolCall({ name: 'delete_event', arguments: { title_query: 'Launch v3' } }, ctx);
     expect(result.success).toBe(false);
+    expect(result.pendingConfirmation).toMatchObject({ tool: 'delete_event', targetSummary: 'Launch v3' });
     expect(eventsApi.delete).not.toHaveBeenCalled();
   });
 
-  it('deletes an event after the user confirms', async () => {
+  it('deletes an event only after userConfirmed', async () => {
     const ctx = { ...baseContext(), events: [{ id: 'evt_1', title: 'Launch v3' }] };
-    const result = await executeToolCall({
-      name: 'delete_event', arguments: { title_query: 'Launch v3', confirm: true },
-    }, ctx);
+    const result = await executeToolCall(
+      { name: 'delete_event', arguments: { title_query: 'Launch v3' } },
+      { ...ctx, userConfirmed: true },
+    );
     expect(result.success).toBe(true);
     expect(result.mutated).toBe('events');
     expect(eventsApi.delete).toHaveBeenCalledWith('evt_1');

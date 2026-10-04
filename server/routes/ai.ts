@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response as ExpressResponse } from 'express';
 import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import { z } from 'zod';
@@ -8,6 +8,49 @@ const router = Router();
 const MAX_PROMPT_BYTES = 2 * 1024 * 1024;
 const MAX_UPSTREAM_BYTES = 2 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 120_000;
+
+// ── C16: machine-readable error categories (global contract #3) ────────────
+// Every failed response is `{ error, category, upstreamStatus? }`. `error`
+// keeps the sanitized, key-free wording; `category` lets the UI map each
+// failure to actionable guidance.
+type AiErrorCategory = 'auth' | 'not_found' | 'rate_limit' | 'network' | 'bad_request' | 'unknown';
+
+const CATEGORY_BY_UPSTREAM_STATUS: Record<number, AiErrorCategory> = {
+  400: 'bad_request',
+  401: 'auth',
+  403: 'auth',
+  404: 'not_found',
+  408: 'network',
+  429: 'rate_limit',
+};
+
+function categoryForUpstreamStatus(status: number): AiErrorCategory {
+  return CATEGORY_BY_UPSTREAM_STATUS[status] ?? 'unknown';
+}
+
+function categorizeLocalError(error: any): AiErrorCategory {
+  const message = String(error?.message || '');
+  if (error?.code === 'AI_RESPONSE_TOO_LARGE') return 'unknown';
+  if (message.startsWith('Invalid URL')) return 'bad_request';
+  if (message.includes('did not resolve')) return 'network';
+  if (error?.name === 'AbortError' || error?.name === 'TimeoutError') return 'network';
+  // Node's undici surfaces connection/DNS/TLS failures as TypeError with a
+  // `cause` (getaddrinfo ENOTFOUND, ECONNREFUSED, …).
+  if (error instanceof TypeError && error?.cause) return 'network';
+  return 'unknown';
+}
+
+function sendAiError(
+  res: ExpressResponse,
+  status: number,
+  error: string,
+  category: AiErrorCategory,
+  upstreamStatus?: number
+): void {
+  const body: { error: string; category: AiErrorCategory; upstreamStatus?: number } = { error, category };
+  if (typeof upstreamStatus === 'number') body.upstreamStatus = upstreamStatus;
+  res.status(status).json(body);
+}
 
 const SummarizeBodySchema = z.object({
   apiKey: z.string().trim().min(1).max(8_192),
@@ -122,12 +165,12 @@ router.post('/summarize', async (req, res) => {
   try {
     const parsedBody = SummarizeBodySchema.safeParse(req.body);
     if (!parsedBody.success) {
-      return res.status(400).json({ error: 'Invalid AI request' });
+      return sendAiError(res, 400, 'Invalid AI request', 'bad_request');
     }
     const body = parsedBody.data;
     if (Buffer.byteLength(body.userPrompt, 'utf8') > MAX_PROMPT_BYTES
       || Buffer.byteLength(body.systemPrompt ?? '', 'utf8') > MAX_PROMPT_BYTES) {
-      return res.status(413).json({ error: 'AI prompt exceeds the 2 MiB limit' });
+      return sendAiError(res, 413, 'AI prompt exceeds the 2 MiB limit', 'bad_request');
     }
 
     const url = resolveAiUrl(body.baseUrl);
@@ -153,7 +196,7 @@ router.post('/summarize', async (req, res) => {
       });
     } catch (err: any) {
       if (err?.upstreamStatus) {
-        return res.status(err.upstreamStatus).json({ error: err.message });
+        return sendAiError(res, err.upstreamStatus, err.message, categoryForUpstreamStatus(err.upstreamStatus), err.upstreamStatus);
       }
       throw err;
     }
@@ -164,7 +207,7 @@ router.post('/summarize', async (req, res) => {
     // Log only a bounded class/message. Request bodies, credentials and raw
     // provider payloads are deliberately excluded.
     console.error('AI summarize failed:', String(message).slice(0, 300));
-    res.status(aborted ? 504 : 500).json({ error: message });
+    sendAiError(res, aborted ? 504 : 500, message, categorizeLocalError(error));
   }
 });
 
@@ -176,14 +219,25 @@ interface ProviderChatRequest {
   userPrompt: string;
   maxTokens: number;
   abortSignal?: AbortSignal;
+  /** True when the caller parses the answer as JSON → strip code fences. */
+  parseJson?: boolean;
 }
 
-/** Strip code fences / <think> blocks and return the model's text answer. */
-export function cleanModelText(raw: string): string {
+/**
+ * Strip <think> blocks and (optionally) code fences, returning the model's
+ * text answer.
+ *
+ * C14: the code-fence strip exists to unwrap JSON payloads, so it only runs
+ * on the JSON-parsing branch (`{ stripCodeFences: true }`, i.e. /action).
+ * Plain Markdown transcriptions keep the user's own code fences intact.
+ */
+export function cleanModelText(raw: string, opts: { stripCodeFences?: boolean } = {}): string {
   let text = raw.trim();
   // Some reasoning models (e.g. MiniMax-M2) emit <think>…</think> inline.
   text = text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
-  text = text.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '').trim();
+  if (opts.stripCodeFences) {
+    text = text.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '').trim();
+  }
   return text;
 }
 
@@ -220,7 +274,9 @@ async function callProviderChat(req: ProviderChatRequest): Promise<string> {
   }
 
   const data = JSON.parse(await readBoundedText(upstream, MAX_UPSTREAM_BYTES)) as any;
-  const content = cleanModelText(String(data?.choices?.[0]?.message?.content ?? ''));
+  const content = cleanModelText(String(data?.choices?.[0]?.message?.content ?? ''), {
+    stripCodeFences: req.parseJson === true,
+  });
   if (!content) {
     throw Object.assign(new Error('Empty response from AI provider'), { upstreamStatus: 502 });
   }
@@ -249,11 +305,30 @@ const ACTION_PROMPTS: Record<string, string> = {
   pick_focus: 'You pick the 3 most important tasks to focus on today given deadlines, priorities and context. Output ONLY a valid JSON object: {"ids": string[]} with at most 3 ids chosen from the provided list. No markdown.',
 };
 
+// C15: one zod schema per action, validated server-side so clients never
+// have to defensively re-parse model output. Unknown keys are stripped;
+// structurally invalid answers fail the request.
+const SubtaskSchema = z.object({
+  title: z.string().min(1),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+const ACTION_RESULT_SCHEMAS: Record<string, z.ZodTypeAny> = {
+  split_tasks: z.array(SubtaskSchema).min(1),
+  rewrite_task: z.object({ title: z.string().min(1), description: z.string().optional() }),
+  summarize_task: z.object({ summary: z.string().min(1) }),
+  ask: z.object({
+    answer: z.string().min(1),
+    suggestedTask: z.object({ title: z.string().min(1) }).optional(),
+  }),
+  pick_focus: z.object({ ids: z.array(z.string()).max(3) }),
+};
+
 router.post('/action', async (req, res) => {
   try {
     const parsedBody = ActionBodySchema.safeParse(req.body);
     if (!parsedBody.success) {
-      return res.status(400).json({ error: 'Invalid AI action request' });
+      return sendAiError(res, 400, 'Invalid AI action request', 'bad_request');
     }
     const body = parsedBody.data;
     const model = body.model || 'default';
@@ -273,25 +348,36 @@ router.post('/action', async (req, res) => {
         userPrompt: `${body.input}${contextBlock}`,
         maxTokens: 4096,
         abortSignal: clientAbort.signal,
+        // JSON branch: code fences are stripped here only.
+        parseJson: true,
       });
     } catch (err: any) {
       if (err?.upstreamStatus) {
-        return res.status(err.upstreamStatus).json({ error: err.message });
+        return sendAiError(res, err.upstreamStatus, err.message, categoryForUpstreamStatus(err.upstreamStatus), err.upstreamStatus);
       }
       throw err;
     }
 
+    let parsed: unknown;
     try {
-      const result = JSON.parse(content);
-      res.json({ result, model });
+      parsed = JSON.parse(content);
     } catch {
-      res.status(502).json({ error: 'AI response was not valid JSON' });
+      return sendAiError(res, 502, 'AI response was not valid JSON', 'unknown');
     }
+    const schema = ACTION_RESULT_SCHEMAS[body.action];
+    if (schema) {
+      const checked = schema.safeParse(parsed);
+      if (!checked.success) {
+        return sendAiError(res, 400, `AI response failed schema validation for ${body.action}`, 'bad_request');
+      }
+      return res.json({ result: checked.data, model });
+    }
+    res.json({ result: parsed, model });
   } catch (error: any) {
     const aborted = error?.name === 'AbortError' || error?.name === 'TimeoutError';
     const message = aborted ? 'AI provider request timed out' : (error?.message || String(error));
     console.error('AI action failed:', String(message).slice(0, 300));
-    res.status(aborted ? 504 : 500).json({ error: message });
+    sendAiError(res, aborted ? 504 : 500, message, categorizeLocalError(error));
   }
 });
 

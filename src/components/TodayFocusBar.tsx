@@ -9,6 +9,8 @@ interface TodayFocusBarProps {
   isToday: boolean;
   /** UX S6: AI picks the 3 focus tasks. Omit to hide the button. */
   onAiPick?: () => Promise<void>;
+  /** A3: surface AI-pick failures (no provider, AI picked nothing, network). */
+  onError?: (message: string) => void;
 }
 
 const MAX_FOCUS = 3;
@@ -18,9 +20,10 @@ const MAX_FOCUS = 3;
  * Expanding reveals an inline picker over today's open tasks, plus an
  * "AI 帮我选" shortcut (S6) that lets the configured provider pick the three.
  */
-export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday, onAiPick }: TodayFocusBarProps) {
+export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday, onAiPick, onError }: TodayFocusBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
 
   if (!isToday) return null;
 
@@ -77,12 +80,28 @@ export function TodayFocusBar({ tasks, focusTaskIds, onChange, language, isToday
               disabled={picking}
               onClick={() => {
                 setPicking(true);
-                void onAiPick().finally(() => setPicking(false));
+                setPickError(null);
+                // A3: failures used to vanish (void + finally only). Catch and
+                // show inline + bubble to the parent's toast when provided.
+                void onAiPick()
+                  .catch((err: unknown) => {
+                    const message = err instanceof Error && err.message
+                      ? err.message
+                      : t('AI 选择失败，请稍后再试', 'AI pick failed, please try again');
+                    setPickError(message);
+                    if (onError) onError(message);
+                  })
+                  .finally(() => setPicking(false));
               }}
             >
               <Bot className="h-3.5 w-3.5" aria-hidden="true" />
               {picking ? t('AI 选择中…', 'AI picking…') : t('AI 帮我选', 'AI pick')}
             </button>
+          )}
+          {pickError && (
+            <span role="alert" data-testid="focus-ai-pick-error" className="text-[12px] text-red-600">
+              {pickError}
+            </span>
           )}
           <button type="button" className="today-focus-save" onClick={() => setExpanded(false)}>
             {t('保存', 'Save')}

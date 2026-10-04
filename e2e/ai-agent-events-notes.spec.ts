@@ -46,20 +46,35 @@ async function seedNote(api: APIRequestContext, title: string, body: string, con
   const res = await api.post('/api/notes', {
     data: { title, body, type: 'note', date: TODAY, context, tags: [] },
   });
-  expect(res.ok(), `seed note ${title}`).toBeTruthy();
+  if (!res.ok()) {
+    throw new Error(`seed note ${title} failed: ${res.status()} ${await res.text()}`);
+  }
   const note = await res.json();
   return String(note.id);
 }
 
 /** Inject the stub provider into localStorage before the React app boots. */
 async function installStubProvider(page: Page, stub: AiStub) {
-  await page.addInitScript((seed) => {
-    window.localStorage.setItem('df_model_center', seed);
-  }, providerConfigSeed(stub.url));
+  const seed = providerConfigSeed(stub.url);
+  // `hydrateModelCenterFromBackend` (src/types/models.ts) lets the *durable*
+  // backend config win over the localStorage cache at boot. Without writing
+  // the fresh stub URL server-side, test 2+ would hydrate the previous test's
+  // now-closed stub port and every AI call would fail as a network error.
+  const current = await (await fetch(`${FRONTEND_BASE}/api/config`)).json();
+  await fetch(`${FRONTEND_BASE}/api/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version: current.version, patch: { modelCenter: seed, providerConfigs: null } }),
+  });
+  await page.addInitScript((value) => {
+    window.localStorage.setItem('df_model_center', value);
+  }, seed);
 }
 
 async function openAiChat(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // WP-C: Ask AI lives inside the More disclosure — expand it first.
+  await page.getByTestId('nav-more').click();
   await page.getByTestId('nav-ai-chat').click();
   await expect(page.getByTestId('full-ai-chat')).toBeVisible();
   await expect(page.getByTestId('chat-message-scroll-region')).toBeVisible();
@@ -67,8 +82,10 @@ async function openAiChat(page: Page) {
 
 /** Click "New Chat" between scenarios so messages don't accumulate. */
 async function startNewChat(page: Page) {
-  // The "New Chat" button has either the English or Chinese label.
-  const btn = page.locator('[data-testid="full-ai-chat"]').getByRole('button', { name: /New Chat|新对话/ });
+  // Anchored regex = exact accessible-name match, so we hit the primary
+  // "New Chat" button and not the session rows ("New Chat. Press F2 to
+  // rename") or their delete buttons ("Delete chat: New Chat").
+  const btn = page.locator('[data-testid="full-ai-chat"]').getByRole('button', { name: /^(New Chat|新对话)$/ });
   await btn.click();
 }
 
@@ -80,7 +97,9 @@ async function sendAndWait(page: Page, message: string) {
 }
 
 async function waitForCardCount(page: Page, n: number, timeout = 10_000) {
-  await expect(page.locator('[data-testid="ai-tool-cards"]')).toBeVisible({ timeout });
+  // Multiple assistant messages can each own a cards container — .first()
+  // keeps the visibility check strict-safe; the count poll below scans all.
+  await expect(page.locator('[data-testid="ai-tool-cards"]').first()).toBeVisible({ timeout });
   await expect
     .poll(
       async () =>
@@ -261,13 +280,11 @@ test.describe('AI agent — events + notes CRUD', () => {
     await startNewChat(page);
     await sendAndWait(page, 'Delete the doomed event');
 
-    await waitForCardCount(page, 1);
+    // WP-3 C1: the missing confirm opens the human gate. Cancelling must
+    // leave the event untouched.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-cancel').click();
     await waitForStreamingToStop(page);
-
-    const failCard = page.locator('[data-testid="ai-tool-card-delete_event"]');
-    await expect(failCard).toBeVisible();
-    await expect(failCard).toContainText(/confirm/i);
-    await expect(failCard).toHaveAttribute('class', /amber-/);
 
     // Event still on disk.
     const after1 = await api.get('/api/events');
@@ -282,13 +299,22 @@ test.describe('AI agent — events + notes CRUD', () => {
     ]);
     await sendAndWait(page, 'Yes, delete it');
 
-    await waitForCardCount(page, 2);
+    // WP-3 C1: the delete pauses at the human-confirm dialog (model-supplied
+    // confirm:true is ignored by design). Approve it to let the pipeline
+    // finish, then the entity should be gone.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-confirm').click();
+
     await waitForStreamingToStop(page);
 
-    const after2 = await api.get('/api/events');
-    const ev2 = await after2.json();
-    const events2: Array<{ title: string }> = Array.isArray(ev2) ? ev2 : (ev2.events ?? []);
-    expect(events2.some((e) => e.title === 'AI: Doomed'), 'event removed after confirmed delete').toBe(false);
+    await expect
+      .poll(async () => {
+        const res = await api.get('/api/events');
+        const json = await res.json();
+        const list: Array<{ title: string }> = Array.isArray(json) ? json : (json.events ?? []);
+        return list.some((e) => e.title === 'AI: Doomed');
+      }, { timeout: 8000 })
+      .toBe(false);
 
     await api.dispose();
   });
@@ -393,16 +419,14 @@ test.describe('AI agent — events + notes CRUD', () => {
     await startNewChat(page);
     await sendAndWait(page, 'Delete the doomed note');
 
-    await waitForCardCount(page, 1);
+    // WP-3 C1: the missing confirm opens the human gate; cancelling leaves
+    // the note in place.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-cancel').click();
     await waitForStreamingToStop(page);
 
-    const failCard = page.locator('[data-testid="ai-tool-card-delete_note"]');
-    await expect(failCard).toBeVisible();
-    await expect(failCard).toContainText(/confirm/i);
-
-    // Note still exists.
     const after1 = await api.get(`/api/notes/${encodeURIComponent(noteId)}`);
-    expect(after1.ok(), 'note still present after refused delete').toBeTruthy();
+    expect(after1.ok(), 'note still present after cancelled delete').toBeTruthy();
 
     // Round 2: explicit confirm.
     stub.enqueue([
@@ -411,12 +435,18 @@ test.describe('AI agent — events + notes CRUD', () => {
     ]);
     await sendAndWait(page, 'Yes, delete it');
 
-    await waitForCardCount(page, 2);
+    // WP-3 C1: the delete pauses at the human-confirm dialog (model-supplied
+    // confirm:true is ignored by design). Approve it to let the pipeline
+    // finish, then the entity should be gone.
+    await expect(page.getByTestId('ai-confirm-dialog')).toBeVisible();
+    await page.getByTestId('ai-confirm-confirm').click();
+
     await waitForStreamingToStop(page);
 
     // After a successful delete, GET /api/notes/:id returns 404.
-    const after2 = await api.get(`/api/notes/${encodeURIComponent(noteId)}`);
-    expect(after2.status(), 'GET /api/notes/:id after delete').toBe(404);
+    await expect
+      .poll(async () => (await api.get(`/api/notes/${encodeURIComponent(noteId)}`)).status(), { timeout: 8000 })
+      .toBe(404);
 
     // And the note no longer surfaces in the notes list.
     const listRes = await api.get(`/api/notes?startDate=${TODAY}&endDate=${TODAY}`);

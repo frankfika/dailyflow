@@ -8,7 +8,10 @@ import { Plus, Sparkles, Settings, Trash2, MessageSquare, PanelLeftClose, PanelL
 import { persistProviderConfigsToBackend } from '../types/models';
 import { type ChatMessage, type ContextItem } from '../types/chat';
 import { useAiSession } from '../hooks/useAiSession';
+import { useAiSendStatus, type AiSendPhase } from '../hooks/useAiSessionSend';
 import type { DataScope } from '../utils/aiToolExecutor';
+import { AiConfirmDialog } from './AiConfirmDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 import { ChatSettingsPanel } from './ChatSettingsPanel';
 import { ContextPicker } from './ContextPicker';
 import { SaveNoteModal } from './SaveNoteModal';
@@ -36,6 +39,18 @@ interface AIChatProps {
   onOpenFullChat?: () => void;
 }
 
+/** C3: per-phase status line for the streaming indicator. */
+function phaseLabel(phase: AiSendPhase, language: 'en' | 'zh'): string {
+  switch (phase) {
+    case 'executing-tools':
+      return language === 'zh' ? '正在执行操作…' : 'Executing actions…';
+    case 'summarizing':
+      return language === 'zh' ? '正在整理回答…' : 'Summarizing…';
+    default:
+      return language === 'zh' ? '思考中…' : 'Thinking…';
+  }
+}
+
 export function AIChat({ workspaceId = 'default', language, activeContext = 'work', tasks, notes, filesMap, showToast, initialDraft, onDraftConsumed, onCreateMeetingNote, onNoteCreated, events, onDataChanged, compact = false, onClose, onOpenFullChat }: AIChatProps) {
   const {
     sessions, activeSession, setActiveSessionId, createSession, prepareSessionForDraft, deleteSession, renameSession,
@@ -45,10 +60,16 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
     addContext, removeContext,
   } = useAiSession({ workspaceId, language, tasks, notes, filesMap, activeContext, showToast, events, onDataChanged });
 
+  // C3/C8: observe the pipeline phase, filtered to the session actually open.
+  const sendStatus = useAiSendStatus();
+  const activePhase: AiSendPhase | null =
+    sendStatus && sendStatus.sessionId === (activeSession?.id ?? null) ? sendStatus.phase : null;
+
   // UI 状态 (本地)
   const [inputValue, setInputValue] = useState('');
   const [isComposing, setIsComposing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [pendingDeleteSessionId, setPendingDeleteSessionId] = useState<string | null>(null);
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [draftSourceTitle, setDraftSourceTitle] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -247,7 +268,7 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                     </span>
                   )}
                   <button
-                    onClick={(e) => { e.stopPropagation(); if (confirm(language === 'zh' ? '删除此对话？' : 'Delete this chat?')) deleteSession(session.id); }}
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteSessionId(session.id); }}
                     aria-label={language === 'zh' ? `删除对话：${session.title}` : `Delete chat: ${session.title}`}
                     className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 p-0.5 text-text-muted hover:text-red-500 transition-all"
                   >
@@ -451,13 +472,13 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
                 ))}
               </AnimatePresence>
 
-              {isStreaming && (
-                <div className="flex items-start gap-4">
+              {activePhase && (
+                <div className="flex items-start gap-4" data-testid="chat-phase-indicator" data-phase={activePhase}>
                   <div className="w-9 h-9 rounded-xl bg-surface-white border border-border flex items-center justify-center">
                     <Loader2 className="w-4 h-4 animate-spin text-accent" />
                   </div>
                   <div className="text-[15px] text-text-muted pt-1.5">
-                    {language === 'zh' ? '思考中…' : 'Thinking…'}
+                    {phaseLabel(activePhase, language)}
                   </div>
                 </div>
               )}
@@ -498,6 +519,8 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
 
       {/* Modals */}
       <AnimatePresence>
+        {/* C1: human confirmation gate for AI delete / batch-write tools. */}
+        <AiConfirmDialog />
         {showSettings && (
           <ChatSettingsPanel
             language={language}
@@ -536,6 +559,23 @@ export function AIChat({ workspaceId = 'default', language, activeContext = 'wor
           />
         )}
       </AnimatePresence>
+      {/* A8: shared confirm instead of a native confirm() that blocks the
+          renderer and cannot be automated by e2e. */}
+      <ConfirmDialog
+        show={pendingDeleteSessionId !== null}
+        title={language === 'zh' ? '删除此对话？' : 'Delete this chat?'}
+        message={language === 'zh'
+          ? '该对话及其全部消息将被删除，且无法恢复。'
+          : 'This chat and all of its messages will be deleted permanently.'}
+        confirmText={language === 'zh' ? '删除' : 'Delete'}
+        cancelText={language === 'zh' ? '取消' : 'Cancel'}
+        variant="danger"
+        onConfirm={() => {
+          if (pendingDeleteSessionId) deleteSession(pendingDeleteSessionId);
+          setPendingDeleteSessionId(null);
+        }}
+        onCancel={() => setPendingDeleteSessionId(null)}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@
  */
 import { motion, AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
-import { Brain, Calendar, Settings, Users, X } from 'lucide-react';
+import { Brain, Calendar, MessageCircle, Settings, Users, X } from 'lucide-react';
 import type { AppTab } from '../App';
 
 export interface MobileMoreSheetProps {
@@ -33,7 +33,7 @@ export interface MobileMoreSheetProps {
 }
 
 interface MoreItem {
-  id: 'calendar' | 'memory' | 'team' | 'settings';
+  id: 'ai-chat' | 'calendar' | 'memory' | 'team' | 'settings';
   label: { en: string; zh: string };
   icon: typeof Calendar;
   /** When set, the item routes to this AppTab and the row highlights
@@ -41,7 +41,11 @@ interface MoreItem {
   tab?: AppTab;
 }
 
+// G3: Ask AI leads the More sheet so the phone's secondary destinations
+// mirror the desktop sidebar's collapsed More menu. (No ⌘J hint here —
+// hardware shortcuts don't apply to touch.)
 const MORE_ITEMS: ReadonlyArray<MoreItem> = [
+  { id: 'ai-chat', label: { en: 'Ask AI', zh: '问 AI' }, icon: MessageCircle, tab: 'ai-chat' },
   { id: 'calendar', label: { en: 'Calendar', zh: '日历' }, icon: Calendar, tab: 'calendar' },
   { id: 'memory', label: { en: 'Memory', zh: '记忆' }, icon: Brain, tab: 'memory' },
   { id: 'team', label: { en: 'Team', zh: '团队' }, icon: Users, tab: 'team' },
